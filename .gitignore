@@ -1,0 +1,27 @@
+# R Package internals
+inst/doc
+/doc/
+/Meta/
+
+# RStudio files
+*.Rproj
+.Rproj.user
+.Rbuildignore
+.Rhistory
+.RData
+.Ruserdata
+
+# Documentation and Config
+cran-comments.md
+IMPORTANT_FILES
+
+# Custom Data and Folders
+manual_synthesis
+data-raw
+app
+simulations
+web/
+
+# Tests and Artifacts
+tests_save
+SUMMARY_TESTS.xlsx

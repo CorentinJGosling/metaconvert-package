@@ -1,0 +1,179 @@
+---
+title: "Vignette 1. General guidance about metaConvert"
+author: "Gosling CJ, Cortese S, Solmi M, Haza B, Vieta E, Delorme R, Fusar-Poli P, Radua J"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Vignette 1. General guidance about metaConvert}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{=html}
+<style type="text/css">
+
+*{
+  font-family: "Gill Sans", sans-serif;
+}
+
+h1.title {
+  font-weight: 700;
+  font-size: 2.2rem;
+  padding-top: 0rem;
+  margin-top: 0rem;
+  border-top: none;
+}
+
+#TOC {
+  width: 100%;
+}
+
+h1{
+  font-weight: 550;
+  font-size: 1.9rem;
+  border-top: 1px solid black;
+  margin-top: 3rem;
+  padding-top: 2rem;
+}
+
+
+p{
+  line-height: 1.4rem;
+}
+</style>
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+library(metaConvert)
+library(DT)
+```
+
+
+# Step 1. Protocol stage
+
+If you have not yet registered your protocol, you can benefit of our tools to select **a priori** the type of input data that could be extracted to estimate an effect size. 
+
+- start by determining the effect size measure (SMD, OR, RR, etc.) you plan to estimate
+- then, identify all types of input data that can be used to estimate this effect size measure
+```{r, eval = FALSE}
+see_input_data(measure = "or")
+```
+
+```{r, echo=FALSE}
+DT::datatable(see_input_data(measure = "or", type_of_measure = "natural", extension="data.frame"), options = list(  
+    scrollX = TRUE,
+    dom = c('t'),
+    scrollY = "300px", 
+    pageLength = 500,
+    ordering = FALSE,
+    rownames = FALSE,
+    columnDefs = list(
+                  list(width = '130px',
+                       targets = "_all"),
+                  list(className = 'dt-center', 
+                                     targets = "_all"))))
+```
+
+<br><br>
+
+- last, generate a data extraction sheet for this effect size measure
+```{r, eval = FALSE}
+data_extraction_sheet(measure = "or")
+```
+
+```{r, echo=FALSE}
+DT::datatable(data_extraction_sheet(measure = "or", extension="data.frame"), options = list(  
+    scrollX = TRUE,
+    dom = c('t'),
+   ordering = FALSE,
+    rownames = FALSE,
+    columnDefs = list(
+                  list(width = '130px',
+                       targets = "_all"),
+                  list(className = 'dt-center', 
+                                     targets = "_all"))))
+```
+
+
+# Step 2. Dataset comparison
+
+When data extraction has been performed in duplicate, our tools offer the possibility to flag the differences between the two datasets. For this example, we will use two datasets (df.compare1 and df.compare2) distributed with metaConvert. 
+```{r, message=FALSE, fig.width= 11}
+compare_df(
+    df_extractor_1 = df.compare1,
+    df_extractor_2 = df.compare2,
+    output = "html")
+```
+
+In grey, values that are consistent between the two data extractors. In green/red, the values that differ.  
+
+Only rows with differences between the two datasets are identified, and you can easily retrieve the row number by looking at the ID in the rowname column. If your dataset have rows in a different order (like in the example above), you can automatically reorder your datasets by indicating to the function the columns that store this information
+
+```{r, message=FALSE, fig.width= 11}
+compare_df(
+    df_extractor_1 = df.compare1,
+    df_extractor_2 = df.compare2,
+    ordering_columns = c("author", "year"),
+    output = "html")
+```
+
+
+# Step 3. Effect size computation
+
+## Basic usage
+
+To generate an effect size from a dataset that contains approriate column names and information, you simply need to :<ul>
+<li> pass this dataset to the **convert_df()** function </li>
+<li> indicate the effect size measure that should be estimated </li>
+</ul>
+
+For this example, we will generate effect sizes from the **df.short** dataset, and we will estimate Hedges' g.
+
+```{r, message=FALSE}
+res = convert_df(x = df.short, measure = "g")
+```
+
+```{r, eval= FALSE}
+summary(res)
+```
+
+```{r echo=FALSE}
+DT::datatable(summary(res), options = list(  
+    scrollX = TRUE,
+    dom = c('t'),
+    ordering = FALSE,
+    rownames = FALSE,
+    scrollY = "300px", 
+    pageLength = 100,
+    columnDefs = list(
+                  list(width = '130px',
+                       targets = "_all"),
+                  list(className = 'dt-center', 
+                                     targets = "_all"))))
+```
+
+To know more about the information stored in each column, refer to documentation of the summary.metaConvert function, available in the R manual of this package.
+
+## More advanced usage
+
+A tutorial on a more advanced usage will be proposed in the companion paper of this tool; the link will be inserted as soon as the paper will be published.
+
+For now, you can refer to the documentation of the convert_df function in the R manual of this package, in which all options are described.
+
+# I do not like R
+
+If you prefer having a graphical user interface (GUI) when performing data analysis, 
+we are please to introduce you to our web-app that enables to perform ALL calculations of this
+package using an interactive GUI <a href="https://metaconvert.org/" target="_blank">https://metaconvert.org/</a>
+
+---
+
