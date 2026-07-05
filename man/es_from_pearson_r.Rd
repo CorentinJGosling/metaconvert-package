@@ -97,7 +97,7 @@ es_from_pearson_r(
 \references{
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 
-Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16–e18. https://doi.org/10.1097/EDE.0000000000001105
+Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16-e18. https://doi.org/10.1097/EDE.0000000000001105
 
-Viechtbauer W (2010). “Conducting meta-analyses in R with the metafor package.” Journal of Statistical Software, 36(3), 1–48. doi:10.18637/jss.v036.i03.
+Viechtbauer W (2010). "Conducting meta-analyses in R with the metafor package." Journal of Statistical Software, 36(3), 1-48. doi:10.18637/jss.v036.i03.
 }

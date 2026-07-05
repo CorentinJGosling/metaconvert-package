@@ -252,7 +252,7 @@
 
     some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
     var_sim <- ifelse(some_zero,
-      1 / ((n_exp + 1) - (n_controls_exp_sim + 0.5) + 1 / (n_controls_exp_sim + 0.5) + 1 / ((n_nexp + 1) - (n_controls_nexp_sim + 0.5)) + 1 / (n_controls_nexp_sim + 0.5)),
+      1 / ((n_exp + 1) - (n_controls_exp_sim + 0.5)) + 1 / (n_controls_exp_sim + 0.5) + 1 / ((n_nexp + 1) - (n_controls_nexp_sim + 0.5)) + 1 / (n_controls_nexp_sim + 0.5),
       1 / (n_exp - n_controls_exp_sim) + 1 / n_controls_exp_sim + 1 / (n_nexp - n_controls_nexp_sim) + 1 / n_controls_nexp_sim
     )
 
@@ -418,9 +418,6 @@
         1 / n_cases_nexp_sim + 1 / (n_cases_nexp_sim + n_controls_nexp_sim)
     )
 
-    var_sim <- 1 / (n_cases - n_cases_nexp_sim) + 1 / (n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim)) +
-      1 / n_cases_nexp_sim + 1 / (n_cases_nexp_sim + n_controls_nexp_sim)
-
     best <- order((var_sim - logrr_se^2)^2)[1]
     n_cases_nexp <- n_cases_nexp_sim[best]
     n_controls_nexp <- n_controls_nexp_sim[best]
@@ -446,7 +443,7 @@
 
 
 ################# 2x2 to R/Z ###################
-.contigency_to_cor <- function(n_cases_exp, n_controls_exp, n_cases_nexp, n_controls_nexp,
+.contingency_to_cor <- function(n_cases_exp, n_controls_exp, n_cases_nexp, n_controls_nexp,
                                table_2x2_to_cor, reverse_2x2) {
 
   if (table_2x2_to_cor == "lipsey") {
@@ -744,76 +741,288 @@
                              mean_nexp, mean_sd_nexp,
                              n_exp, n_nexp,
                              r_pre_post_exp, r_pre_post_nexp,
-                             pre_post_to_smd) {
+                             pre_post_to_smd,
+                             pool_sd = FALSE) {
+  # pool_sd = TRUE: standardizing SD pooled across groups (Harrer et al. 2025)
+  if (pool_sd) {
+    return(.pooled_pre_post_to_smd(
+      mean_pre_exp = mean_pre_exp, mean_pre_sd_exp = mean_pre_sd_exp,
+      mean_exp = mean_exp, mean_sd_exp = mean_sd_exp,
+      mean_pre_nexp = mean_pre_nexp, mean_pre_sd_nexp = mean_pre_sd_nexp,
+      mean_nexp = mean_nexp, mean_sd_nexp = mean_sd_nexp,
+      n_exp = n_exp, n_nexp = n_nexp,
+      r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
+      pre_post_to_smd = pre_post_to_smd
+    ))
+  }
+
+  res_exp <- .single_group_pre_post_to_smd(
+    mean_pre = mean_pre_exp, mean_post = mean_exp,
+    mean_pre_sd = mean_pre_sd_exp, mean_post_sd = mean_sd_exp,
+    n = n_exp, r_pre_post = r_pre_post_exp,
+    pre_post_to_smd = pre_post_to_smd
+  )
+
+  res_nexp <- .single_group_pre_post_to_smd(
+    mean_pre = mean_pre_nexp, mean_post = mean_nexp,
+    mean_pre_sd = mean_pre_sd_nexp, mean_post_sd = mean_sd_nexp,
+    n = n_nexp, r_pre_post = r_pre_post_nexp,
+    pre_post_to_smd = pre_post_to_smd
+  )
+
+  d_final <- res_exp[,"d"] - res_nexp[,"d"]
+  g_final <- res_exp[,"g"] - res_nexp[,"g"]
+  vd_final <- res_exp[,"var_d"] + res_nexp[,"var_d"]
+  vg_final <- res_exp[,"var_g"] + res_nexp[,"var_g"]
+
+  d_ci_lo <- d_final - sqrt(vd_final) * qt(.975, n_exp + n_nexp - 2)
+  d_ci_up <- d_final + sqrt(vd_final) * qt(.975, n_exp + n_nexp - 2)
+  g_ci_lo <- g_final - sqrt(vg_final) * qt(.975, n_exp + n_nexp - 2)
+  g_ci_up <- g_final + sqrt(vg_final) * qt(.975, n_exp + n_nexp - 2)
+
+  res <- cbind(
+    d_final, vd_final, d_ci_lo, d_ci_up,
+    g_final, vg_final, g_ci_lo, g_ci_up
+  )
+
+  return(res)
+}
+
+################# POOLED TWO-GROUP PRE POST to SMD ##############
+#' Between-group SMD with the standardizing SD pooled across groups (Morris 2007; Harrer et al. 2025)
+#'
+#' @noRd
+.pooled_pre_post_to_smd <- function(mean_pre_exp, mean_pre_sd_exp,
+                                     mean_exp, mean_sd_exp,
+                                     mean_pre_nexp, mean_pre_sd_nexp,
+                                     mean_nexp, mean_sd_nexp,
+                                     n_exp, n_nexp,
+                                     r_pre_post_exp, r_pre_post_nexp,
+                                     pre_post_to_smd) {
+  if (pre_post_to_smd == "cooper") {
+    pre_post_to_smd <- "morris_drm"
+  }
+
+  N <- n_exp + n_nexp
+  m <- N - 2 # pooled degrees of freedom
+  J <- .d_j(m)
+
+  change_exp <- mean_exp - mean_pre_exp
+  change_nexp <- mean_nexp - mean_pre_nexp
+  mean_diff <- change_exp - change_nexp
+
+  r_avg <- (n_exp * r_pre_post_exp + n_nexp * r_pre_post_nexp) / N
+
   if (pre_post_to_smd == "bonett") {
-    J_exp <- .d_j(n_exp - 1)
-    var_exp <- mean_pre_sd_exp^2 + mean_sd_exp^2 -
-      2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp
-    d_exp <- (mean_pre_exp - mean_exp) / mean_pre_sd_exp
-    g_exp <- d_exp * J_exp
-    var_g_exp <- var_exp / (mean_pre_sd_exp^2 * (n_exp - 1)) + g_exp^2 / (2 * (n_exp - 1))
-    var_d_exp <-  var_g_exp / (J_exp^2)
+    # baseline SDs pooled across groups (Harrer SMD_CS/BL)
+    sd_pooled <- sqrt(((n_exp - 1) * mean_pre_sd_exp^2 +
+                       (n_nexp - 1) * mean_pre_sd_nexp^2) / m)
 
-    J_nexp <- .d_j(n_nexp - 1)
-    var_nexp <- mean_pre_sd_nexp^2 + mean_sd_nexp^2 - 2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp
-    d_nexp <- (mean_pre_nexp - mean_nexp) / mean_pre_sd_nexp
-    g_nexp <- d_nexp * J_nexp
-    var_g_nexp <- var_nexp / (mean_pre_sd_nexp^2 * (n_nexp - 1)) + g_nexp^2 / (2 * (n_nexp - 1))
-    var_d_nexp <-  var_g_nexp / (J_nexp^2)
+    d <- mean_diff / sd_pooled
+    g <- d * J
 
-    d_bonett <- d_exp - d_nexp
-    g_bonett <- g_exp - g_nexp
-    vd_bonett <- var_d_exp + var_d_nexp
-    vg_bonett <- var_g_exp + var_g_nexp
-    d_lo_bonett <- d_bonett - sqrt(vd_bonett) * qt(.975, n_exp + n_nexp - 2)
-    d_up_bonett <- d_bonett + sqrt(vd_bonett) * qt(.975, n_exp + n_nexp - 2)
-    g_lo_bonett <- g_bonett - sqrt(vg_bonett) * qt(.975, n_exp + n_nexp - 2)
-    g_up_bonett <- g_bonett + sqrt(vg_bonett) * qt(.975, n_exp + n_nexp - 2)
+    # Morris (2007) variance, Harrer eq. 14
+    if (m > 2) {
+      var_g <- 2 * J^2 * (1 - r_avg) * (N / (n_exp * n_nexp)) * (m / (m - 2)) *
+               (1 + (n_exp * n_nexp / N) * g^2 / (2 * (1 - r_avg))) - g^2
+    } else {
+      var_g <- NA_real_
+    }
+    var_d <- var_g / J^2
+
+  } else if (pre_post_to_smd == "morris_dz") {
+    # change SDs pooled across groups (Harrer SMD_CS/CS)
+    sd_change_exp <- sqrt(mean_pre_sd_exp^2 + mean_sd_exp^2 -
+                          2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
+    sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
+                           2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
+    sd_pooled <- sqrt(((n_exp - 1) * sd_change_exp^2 +
+                       (n_nexp - 1) * sd_change_nexp^2) / m)
+
+    d <- mean_diff / sd_pooled
+    g <- d * J
+
+    # Harrer eq. 13
+    var_g <- J^2 * (2 * (1 - r_avg) * N / (n_exp * n_nexp) + g^2 / (2 * m))
+    var_d <- var_g / J^2
+
+  } else if (pre_post_to_smd == "morris_drm") {
+    # change SDs pooled, raw-score correction
+    sd_change_exp <- sqrt(mean_pre_sd_exp^2 + mean_sd_exp^2 -
+                          2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
+    sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
+                           2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
+    sd_pooled <- sqrt(((n_exp - 1) * sd_change_exp^2 +
+                       (n_nexp - 1) * sd_change_nexp^2) / m)
+
+    d <- (mean_diff / sd_pooled) * sqrt(2 * (1 - r_avg))
+    g <- d * J
+
+    # Harrer eq. 13
+    var_g <- J^2 * (2 * (1 - r_avg) * N / (n_exp * n_nexp) + g^2 / (2 * m))
+    var_d <- var_g / J^2
+
+  } else if (pre_post_to_smd == "morris_dav") {
+    # average SDs pooled across groups
+    sd_av_exp <- sqrt((mean_pre_sd_exp^2 + mean_sd_exp^2) / 2)
+    sd_av_nexp <- sqrt((mean_pre_sd_nexp^2 + mean_sd_nexp^2) / 2)
+    sd_pooled <- sqrt(((n_exp - 1) * sd_av_exp^2 +
+                       (n_nexp - 1) * sd_av_nexp^2) / m)
+
+    d <- mean_diff / sd_pooled
+    g <- d * J
+
+    # Variance analogous to Harrer eq. 13 with (1+r^2)/4 correction
+    var_g <- J^2 * (2 * (1 - r_avg) * N / (n_exp * n_nexp) +
+                    g^2 * (1 + r_avg^2) / (4 * m))
+    var_d <- var_g / J^2
+  }
+
+  d_ci_lo <- d - sqrt(var_d) * qt(.975, m)
+  d_ci_up <- d + sqrt(var_d) * qt(.975, m)
+  g_ci_lo <- g - sqrt(var_g) * qt(.975, m)
+  g_ci_up <- g + sqrt(var_g) * qt(.975, m)
+
+  res <- cbind(
+    d, var_d, d_ci_lo, d_ci_up,
+    g, var_g, g_ci_lo, g_ci_up
+  )
+
+  return(res)
+}
+
+################# SINGLE GROUP PRE POST to SMD ##############
+#' Calculate within-group standardized mean difference for a single group
+#'
+#' @param mean_pre mean at baseline (pre-test)
+#' @param mean_post mean at follow-up (post-test)
+#' @param mean_pre_sd standard deviation at baseline
+#' @param mean_post_sd standard deviation at follow-up
+#' @param n sample size
+#' @param r_pre_post pre-post correlation
+#' @param pre_post_to_smd method to use: "bonett" or "cooper"
+#'
+#' @return matrix with columns: d, var_d, d_ci_lo, d_ci_up, g, var_g, g_ci_lo, g_ci_up
+#'
+#' @noRd
+.single_group_pre_post_to_smd <- function(mean_pre, mean_post,
+                                           mean_pre_sd, mean_post_sd,
+                                           n, r_pre_post,
+                                           pre_post_to_smd) {
+  # "cooper" alias kept for direct internal calls
+  if (pre_post_to_smd == "cooper") {
+    pre_post_to_smd <- "morris_drm"
+  }
+
+  if (pre_post_to_smd == "bonett") {
+    # Bonett method: standardize by baseline SD
+    # Matches metafor SMCRH (heteroscedastic-robust variance formula)
+    J <- .d_j(n - 1)
+
+    var_change <- mean_pre_sd^2 + mean_post_sd^2 - 2 * r_pre_post * mean_pre_sd * mean_post_sd
+
+    d <- (mean_post - mean_pre) / mean_pre_sd
+    g <- d * J
+
+    # metafor SMCRH heteroscedastic variance formula (Bonett 2008)
+    # var = sd_change^2 / (sd1i^2 * (n-1)) + g^2 / (2 * (n-1))
+    var_g <- var_change / (mean_pre_sd^2 * (n - 1)) + g^2 / (2 * (n - 1))
+    var_d <- var_g / (J^2)
+
+    d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
+    d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
+    g_ci_lo <- g - sqrt(var_g) * qt(.975, n - 1)
+    g_ci_up <- g + sqrt(var_g) * qt(.975, n - 1)
 
     res <- cbind(
-      d_bonett, vd_bonett, d_lo_bonett, d_up_bonett,
-      g_bonett, vg_bonett, g_lo_bonett, g_up_bonett
+      d = d, var_d = var_d, d_ci_lo = d_ci_lo, d_ci_up = d_ci_up,
+      g = g, var_g = var_g, g_ci_lo = g_ci_lo, g_ci_up = g_ci_up
     )
 
     return(res)
-  } else if (pre_post_to_smd == "cooper") {
-    J_exp <- .d_j(n_exp - 1)
-    J_nexp <- .d_j(n_nexp - 1)
+  } else if (pre_post_to_smd == "morris_drm") {
+    # Morris d_rm (alias "cooper"): standardize by change SD, raw-score correction
+    # nb: the mean_change wrappers pass sd_change through mean_pre_sd
+    # (mean_post = 0, so sd_diff reduces to sd_change)
+    J <- .d_j(n - 1)
 
-    sd_diff_exp <- sqrt(mean_pre_sd_exp^2 + mean_sd_exp^2 -
-      (2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp))
+    sd_diff <- sqrt(mean_pre_sd^2 + mean_post_sd^2 -
+                    (2 * r_pre_post * mean_pre_sd * mean_post_sd))
 
-    sd_diff_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
-      (2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp))
+    d <- (mean_post - mean_pre) / sd_diff * sqrt(2 * (1 - r_pre_post))
+    g <- d * J
 
-    d_exp <- (mean_pre_exp - mean_exp) / sd_diff_exp * sqrt(2 * (1 - r_pre_post_exp))
-    g_exp <- d_exp * J_exp
+    # Viechtbauer corrected formula
+    var_d <- 2 * (1 - r_pre_post) / n + d^2 / (2 * n)
+    var_g <- J^2 * var_d
 
-    d_nexp <- (mean_pre_nexp - mean_nexp) / sd_diff_nexp * sqrt(2 * (1 - r_pre_post_nexp))
-    g_nexp <- d_nexp * J_nexp
-
-    # COR  vi[i] <- (2*(1-ri[i])/ni[i] + di[i]^2 / (2*ni[i]))
-    # WRONG vi[i] <- 2*(1-ri[i]) * (1/ni[i] + di[i]^2 / (2*ni[i]))
-    # corrected formula by W Viechtbauer
-    d_var_exp <- 2 * (1 - r_pre_post_exp)/n_exp + d_exp^2 / (2*n_exp)
-    d_var_nexp <- 2 * (1 - r_pre_post_nexp)/n_nexp + d_nexp^2 / (2*n_nexp)
-
-    var_g_exp <- J_exp^2 * d_var_exp
-    var_g_nexp <- J_nexp^2 * d_var_nexp
-
-    d_cooper <- d_exp - d_nexp
-    g_cooper <- g_exp - g_nexp
-    vd_cooper <- d_var_exp + d_var_nexp
-    vg_cooper <- var_g_exp + var_g_nexp
-    d_lo_cooper <- d_cooper - sqrt(vd_cooper) * qt(.975, n_exp + n_nexp - 2)
-    d_up_cooper <- d_cooper + sqrt(vd_cooper) * qt(.975, n_exp + n_nexp - 2)
-    g_lo_cooper <- g_cooper - sqrt(vg_cooper) * qt(.975, n_exp + n_nexp - 2)
-    g_up_cooper <- g_cooper + sqrt(vg_cooper) * qt(.975, n_exp + n_nexp - 2)
+    d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
+    d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
+    g_ci_lo <- g - sqrt(var_g) * qt(.975, n - 1)
+    g_ci_up <- g + sqrt(var_g) * qt(.975, n - 1)
 
     res <- cbind(
-      d_cooper, vd_cooper, d_lo_cooper, d_up_cooper,
-      g_cooper, vg_cooper, g_lo_cooper, g_up_cooper
+      d = d, var_d = var_d, d_ci_lo = d_ci_lo, d_ci_up = d_ci_up,
+      g = g, var_g = var_g, g_ci_lo = g_ci_lo, g_ci_up = g_ci_up
     )
+
+    return(res)
+  } else if (pre_post_to_smd == "morris_dz") {
+    # Morris & DeShon d_z: standardize by change score SD
+    # Matches metafor SMCC (change score standardization)
+    # Most conservative when r is high
+    J <- .d_j(n - 1)
+
+    sd_diff <- sqrt(mean_pre_sd^2 + mean_post_sd^2 -
+                    2 * r_pre_post * mean_pre_sd * mean_post_sd)
+
+    d <- (mean_post - mean_pre) / sd_diff
+    g <- d * J
+
+    # metafor SMCC variance formula (uses corrected g, not d)
+    # var = 1/n + g^2/(2n)
+    var_g <- 1 / n + g^2 / (2 * n)
+    var_d <- var_g / (J^2)
+
+    d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
+    d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
+    g_ci_lo <- g - sqrt(var_g) * qt(.975, n - 1)
+    g_ci_up <- g + sqrt(var_g) * qt(.975, n - 1)
+
+    res <- cbind(
+      d = d, var_d = var_d, d_ci_lo = d_ci_lo, d_ci_up = d_ci_up,
+      g = g, var_g = var_g, g_ci_lo = g_ci_lo, g_ci_up = g_ci_up
+    )
+
+    return(res)
+  } else if (pre_post_to_smd == "morris_dav") {
+    # Morris & DeShon d_av: standardize by average SD
+    # Recommended by Morris (2008) as general-purpose measure
+    # Robust to variance heterogeneity
+    # modified df mi = 2*(n-1)/(1+r^2), matches metafor::escalc(measure = "SMCRP")
+    mi <- 2 * (n - 1) / (1 + r_pre_post^2)
+    J <- .d_j(mi)
+
+    sd_av <- sqrt((mean_pre_sd^2 + mean_post_sd^2) / 2)
+
+    d <- (mean_post - mean_pre) / sd_av
+    g <- d * J
+
+    # Variance formula from metafor SMCRP (uses corrected g in formula)
+    # vi = 2*(1-r)/n + g^2*(1+r^2)/(4*n)
+    var_g <- 2 * (1 - r_pre_post) / n + g^2 * (1 + r_pre_post^2) / (4 * n)
+    var_d <- var_g / (J^2)
+
+    d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
+    d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
+    g_ci_lo <- g - sqrt(var_g) * qt(.975, n - 1)
+    g_ci_up <- g + sqrt(var_g) * qt(.975, n - 1)
+
+    res <- cbind(
+      d = d, var_d = var_d, d_ci_lo = d_ci_lo, d_ci_up = d_ci_up,
+      g = g, var_g = var_g, g_ci_lo = g_ci_lo, g_ci_up = g_ci_up
+    )
+
     return(res)
   }
 }
@@ -843,9 +1052,111 @@
     return(res)
   } else if (cor_to_smd == "cooper") {
     d <- 2 * r / sqrt(1 - r^2)
-    d_se <- sqrt(4 * sqrt(r_se) / ((1 - r^2)^3))
+    d_se <- sqrt(4 * r_se^2 / ((1 - r^2)^3))
     res <- cbind(d, d_se)
 
     return(res)
   }
 }
+
+
+
+.validate_pre_post_to_smd <- function(pre_post_to_smd, allowed_methods, context, func_name) {
+  pre_post_to_smd_normalized <- ifelse(pre_post_to_smd == "cooper", "morris_drm", pre_post_to_smd)
+
+  invalid <- !pre_post_to_smd_normalized %in% allowed_methods
+  if (any(invalid)) {
+    stop(paste0(
+      "Invalid 'pre_post_to_smd' argument in ", func_name, "().\n\n",
+      "Provided: '", paste(unique(pre_post_to_smd[invalid]), collapse = "', '"), "'\n",
+      "Allowed methods: '", paste(allowed_methods, collapse = "', '"), "'\n\n",
+      .get_method_restriction_rationale(context)
+    ), call. = FALSE)
+  }
+
+  return(pre_post_to_smd_normalized)
+}
+
+.get_method_restriction_rationale <- function(context) {
+  if (context == "mean_change") {
+    paste0(
+      "For mean change data, two standardization methods are available:\n\n",
+      "  - 'morris_drm' (alias: 'cooper'): Raw score standardizer [DEFAULT]\n",
+      "      d_rm = (mean_change / sd_change) * sqrt(2*(1-r))\n",
+      "      REQUIRES pre-post correlation (r). Converts d_z to d_rm.\n\n",
+      "  - 'morris_dz': Change score standardizer\n",
+      "      d_z = mean_change / sd_change\n",
+      "      INDEPENDENT of r. Direct standardization by change SD.\n\n",
+      "Other methods not applicable:\n",
+      "  - 'bonett': requires baseline SD (not available with mean change data)\n",
+      "  - 'morris_dav': requires separate pre/post SDs (not available)\n\n",
+      "See Morris & DeShon (2002) for guidance on choosing between d_rm and d_z."
+    )
+  } else if (context == "paired_t") {
+    paste0(
+      "For paired t-test data, two standardization methods are available:\n\n",
+      "  - 'morris_drm' (alias: 'cooper'): Raw score standardizer [DEFAULT]\n",
+      "      d_rm = t * sqrt(2*(1-r)/n)\n",
+      "      REQUIRES pre-post correlation (r). Most common in meta-analysis.\n\n",
+      "  - 'morris_dz': Change score standardizer\n",
+      "      d_z = t / sqrt(n)\n",
+      "      INDEPENDENT of r. Use when correlation is unknown or when\n",
+      "      synthesizing with other d_z estimates.\n\n",
+      "Note: d_rm and d_z are on different scales. See Morris & DeShon (2002)\n",
+      "for guidance on choosing between them."
+    )
+  } else if (context == "pre_post_means") {
+    paste0(
+      "For pre-post means data, four standardization methods are available:\n\n",
+      "  - 'bonett': Baseline SD standardizer (conservative)\n",
+      "  - 'morris_drm' (alias: 'cooper'): Raw score standardizer [COMMON]\n",
+      "  - 'morris_dz': Change score standardizer (r-independent)\n",
+      "  - 'morris_dav': Average SD standardizer [RECOMMENDED]\n\n",
+      "See Morris & DeShon (2002) and Bonett (2008) for detailed comparisons.\n",
+      "Default is 'bonett' but 'morris_dav' is often recommended for robustness."
+    )
+  } else {
+    ""
+  }
+}
+
+
+# tryCatch({
+#   validate_positive(n_cases_exp, n_cases_nexp, n_controls_exp, n_controls_nexp,
+#                     error_message = "The number of cases/controls in the exposed/non-exposed groups should be >0.")
+# }, error = function(e) {
+#   stop("Validation failed:", conditionMessage(e), "\n")
+# })
+#
+#
+# tryCatch({
+#   validate_ci_symmetry(value, ci_lo, ci_up, func = "example_function",
+#                        max_asymmetry_percent = 5)
+# }, error = function(e) {
+#   stop("Validation failed:", conditionMessage(e), "\n")
+# })
+#
+
+
+# **A.** First, Cooper et al. (2019) - \code{table_2x2_to_cor = "cooper"} -
+# proposes to convert the
+# 2x2 table into a OR (formula above), to convert this OR into a SMD
+# (see formula in \code{\link{es_from_or_se}()}), and to convert this
+# SMD into a correlation coefficient (see formula in \code{\link{es_from_cohen_d}()},
+# with the option \code{"smd_to_cor = 'lipsey_cooper'"}).
+#
+# **B.** Second, a correlation coefficient (more precisely - a phi coefficient)
+# can be obtained from the contingency table using the formula given in
+# Lipsey and Wilson (2001) - \code{table_2x2_to_cor = "lipsey"}.
+# The formulas used to estimate the r and z are:
+# \deqn{r = \frac{(n\_cases\_exp*n\_controls\_nexp - n\_controls\_exp*n\_cases\_nexp)}{\sqrt{(n\_exp) * (n\_nexp) * (n\_cases) * (n\_controls\_exp+n\_cases\_nexp)}}}
+# \deqn{z = atanh(r)}
+# \deqn{z\_se = logor\_se^2 * \frac{z^2}{\log(or)^2}}
+# \deqn{z\_ci\_lo = z - qnorm(.975)*z\_se}
+# \deqn{z\_ci\_up = z + qnorm(.975)*z\_se}
+# \deqn{r\_ci\_lo = tanh(z\_ci\_lo)}
+# \deqn{r\_ci\_up = tanh(z\_ci\_up)}
+# \deqn{effective\_n = \frac{1}{z\_se^2 + 3}}
+# \deqn{r\_se = \frac{(1 - r^2)^2}{effective\_n - 1}}
+
+

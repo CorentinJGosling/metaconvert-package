@@ -7,7 +7,7 @@
 #' @param n_controls number of controls/no-event
 #' @param n_exp number of participants in the exposed group
 #' @param n_nexp number of participants in the non-exposed group
-#' @param baseline_risk proportion of cases in the non-exposed group
+#' @param baseline_risk proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)
 #' @param reverse_rr a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param smd_to_cor formula used to convert the SMD value (converted from RR) into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
@@ -52,13 +52,13 @@
 #' \deqn{nnt = \frac{1}{br * (1 - rr)}}
 #'
 #' @references
-#' Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299–2322. https://doi.org/10.1002/sim.2287
+#' Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299-2322. https://doi.org/10.1002/sim.2287
 #'
 #' Gosling, C. J., Solanes, A., Fusar-Poli, P., & Radua, J. (2023). metaumbrella: the first comprehensive suite to perform data analysis in umbrella reviews with stratification of the evidence. BMJ mental health, 26(1), e300534. https://doi.org/10.1136/bmjment-2022-300534
 #'
 #' Grant R. L. (2014). Converting an odds ratio to a range of plausible relative risks for better communication of research findings. BMJ (Clinical research ed.), 348, f7450. https://doi.org/10.1136/bmj.f7450
 #'
-#' Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78–94. https://doi.org/10.1002/jrsm.1061
+#' Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78-94. https://doi.org/10.1002/jrsm.1061
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -66,7 +66,7 @@
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab RR\cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab OR + NNT\cr
+#'  \code{converted effect size measure} \tab OR + NNT + RD\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 3. Risk Ratio'\cr
 #'  \tab https://metaconvert.org/input.html\cr
@@ -115,16 +115,6 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
                 Possible inputs are: 'metaumbrella', 'transpose', 'grant', 'dipietrantonj'"))
   }
 
-
-  tryCatch({
-    .validate_positive(logrr_se, baseline_risk, n_exp, n_nexp, n_cases, n_controls,
-                       error_message = paste0("The number of people exposed/non-exposed, cases/controls, total sample size, ",
-                                              "baseline risk, standard error of the logRR",
-                                              "should be >0."),
-                       func = "es_from_rr_se")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   rr <- ifelse(is.na(rr) & !is.na(logrr), exp(logrr), rr)
   # rr <- ifelse(reverse_rr, 1 / rr, rr)
@@ -178,8 +168,26 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
     es$logor_ci_up[nn_miss] <- ifelse(reverse_rr[nn_miss], res_or[, 3], res_or[, 4])
   }
 
-  es$nnt <- 1 / (baseline_risk * (1 - rr))
+  # Risk difference from RR + baseline_risk
+  rd <- baseline_risk * (1 - rr)
+
+  es$rd <- ifelse(reverse_rr, -rd, rd)
+  # delta method
+  rd_se <- baseline_risk * rr * logrr_se
+  es$rd_se <- rd_se
+  es$rd_ci_lo <- es$rd - qnorm(.975) * rd_se
+  es$rd_ci_up <- es$rd + qnorm(.975) * rd_se
+
+  es$nnt <- ifelse(rd == 0, NA, 1 / rd)
   es$nnt <- ifelse(reverse_rr, -es$nnt, es$nnt)
+  es$nnt_se <- ifelse(rd == 0, NA, rd_se / rd^2)
+  rd_ci_lo_raw <- rd - qnorm(.975) * rd_se
+  rd_ci_up_raw <- rd + qnorm(.975) * rd_se
+  crosses_zero <- (rd_ci_lo_raw < 0 & rd_ci_up_raw > 0) | rd == 0
+  es$nnt_ci_lo <- ifelse(crosses_zero, NA,
+                          ifelse(reverse_rr, -1 / rd_ci_lo_raw, 1 / rd_ci_up_raw))
+  es$nnt_ci_up <- ifelse(crosses_zero, NA,
+                          ifelse(reverse_rr, -1 / rd_ci_up_raw, 1 / rd_ci_lo_raw))
 
   es$info_used <- "rr_se"
   return(es)
@@ -276,31 +284,6 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
   }
   reverse_rr[is.na(reverse_rr)] <- FALSE
 
-  tryCatch({
-    .validate_positive(baseline_risk, n_exp, n_nexp, n_cases, n_controls,
-                       error_message = paste0("The number of people exposed/non-exposed, cases/controls, total sample size, ",
-                                              "baseline risk, standard error of the logRR",
-                                              "should be >0."),
-                       func = "es_from_rr_ci")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
-  tryCatch({
-    .validate_ci_symmetry(logrr, logrr_ci_lo, logrr_ci_up,
-                          func = "es_from_rr_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
-  tryCatch({
-    .validate_ci_symmetry(log(rr), log(rr_ci_lo), log(rr_ci_up),
-                          func = "es_from_rr_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
-
   rr <- ifelse(is.na(rr) & !is.na(logrr), exp(logrr), rr)
   logrr_ci_lo <- ifelse(is.na(logrr_ci_lo) & !is.na(rr_ci_lo), log(rr_ci_lo), logrr_ci_lo)
   logrr_ci_up <- ifelse(is.na(logrr_ci_up) & !is.na(rr_ci_up), log(rr_ci_up), logrr_ci_up)
@@ -387,16 +370,6 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
   }
   if (missing(reverse_rr_pval)) reverse_rr_pval <- rep(FALSE, length(rr))
   reverse_rr_pval[is.na(reverse_rr_pval)] <- FALSE
-
-  tryCatch({
-    .validate_positive(rr_pval, baseline_risk, n_exp, n_nexp, n_cases, n_controls,
-                       error_message = paste0("The number of people exposed/non-exposed, cases/controls, total sample size, ",
-                                              "baseline risk, p-value of the OR",
-                                              "should be >0."),
-                       func = "es_from_rr_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   rr <- ifelse(is.na(rr) & !is.na(logrr), exp(logrr), rr)
   z_rr <- sign(log(rr)) * qnorm(rr_pval / 2, lower.tail = FALSE)

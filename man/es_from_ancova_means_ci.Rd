@@ -15,7 +15,6 @@ es_from_ancova_means_ci(
   ancova_mean_ci_up_nexp,
   cov_outcome_r,
   n_cov_ancova,
-  max_asymmetry = 10,
   smd_to_cor = "viechtbauer",
   reverse_ancova_means
 )
@@ -40,8 +39,6 @@ es_from_ancova_means_ci(
 \item{cov_outcome_r}{correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
-
-\item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 
 \item{smd_to_cor}{formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).}
 
@@ -69,8 +66,8 @@ into a standard error,
 and then relies on the calculations of the \code{\link{es_from_ancova_means_se}()} function.
 
 \strong{To convert the 95\% CIs into standard errors,} the following formula is used (table 12.3 in Cooper):
-\deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_ci\_up\_exp - ancova\_mean\_ci\_lo\_exp}{2 * qt(0.975, df = n\_exp - 1)}}
-\deqn{ancova\_mean\_se\_nexp = \frac{ancova\_mean\_ci\_up\_nexp - ancova\_mean\_ci\_lo\_nexp}{2 * qt(0.975, df = n\_nexp - 1)}}
+\deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_ci\_up\_exp - ancova\_mean\_ci\_lo\_exp}{2 * qt(0.975, df = n\_exp + n\_nexp - 2 - n\_cov\_ancova)}}
+\deqn{ancova\_mean\_se\_nexp = \frac{ancova\_mean\_ci\_up\_nexp - ancova\_mean\_ci\_lo\_nexp}{2 * qt(0.975, df = n\_exp + n\_nexp - 2 - n\_cov\_ancova)}}
 Calculations of the \code{\link{es_from_ancova_means_se}()} are then applied.
 }
 \examples{

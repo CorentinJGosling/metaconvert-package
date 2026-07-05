@@ -53,7 +53,7 @@ This function estimates and converts between several effect size measures.
 \tabular{ll}{
 \code{natural effect size measure} \tab OR\cr
 \tab \cr
-\code{converted effect size measure} \tab RR + NNT\cr
+\code{converted effect size measure} \tab RR + NNT + RD\cr
 \code{} \tab D + G + R + Z\cr
 \tab \cr
 \code{required input data} \tab See 'Section 2. Odds Ratio'\cr
@@ -114,7 +114,9 @@ This argument requires (or + logor_ci_lo + logor_ci_lo) to generate a RR. Inform
 Di Pietrantonj (2006).
 
 \strong{To estimate the NNT, the formulas used are :}
-\deqn{\frac{(1 - br * (1 - or))}{(1 - br) * (br * (1 - or))}}
+\deqn{treatment\_risk = \frac{or \times br}{1 - br + or \times br}}
+\deqn{rd = br - treatment\_risk}
+\deqn{nnt = \frac{1}{rd} = \frac{1 - br \times (1 - or)}{br \times (1 - br)}}
 
 \strong{To estimate a correlation coefficient, various formulas can be used.}
 
@@ -126,7 +128,7 @@ If it is not the case, formulas can produce slightly less accurate results.
 
 \deqn{c = \frac{1}{2}}
 \deqn{r = \cos{\frac{\pi}{1+or^c}}}
-\deqn{r\_se = logor\_se * ((\pi * c * or^c) * \frac{\sin(\pi / (1+or^c))}{1+or^c})^2}
+\deqn{r\_se = logor\_se * (\pi * c * or^c) * \frac{\sin(\pi / (1+or^c))}{(1+or^c)^2}}
 \deqn{or\_ci\_lo = exp(log(or) - qnorm(.975)*logor\_se)}
 \deqn{or\_ci\_up = exp(log(or) + qnorm(.975)*logor\_se)}
 \deqn{r\_ci\_lo = cos(\frac{\pi}{1 + or\_ci\_lo^c})}
@@ -144,7 +146,7 @@ If it is not the case, formulas can produce slightly less accurate results.
 
 \deqn{c = \frac{3}{4}}
 \deqn{r = \frac{or^c - 1}{or^c + 1}}
-\deqn{r\_se = \sqrt{\frac{c^2}{4} * (1 - r^2)^2 * logor\_se}}
+\deqn{r\_se = \sqrt{\frac{c^2}{4} * (1 - r^2)^2 * logor\_se^2}}
 \deqn{z = atanh(r)}
 \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
 \deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se}}
@@ -159,7 +161,7 @@ If it is not the case, formulas can produce slightly less accurate results.
 
 \deqn{c = \frac{\frac{1 - |n\_exp - n\_cases|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
 \deqn{r = \cos{\frac{\pi}{1+or^c}}}
-\deqn{r\_se = logor\_se * ((\pi * c * or^c) * \frac{\sin(\frac{\pi}{1+or^c})}{1+or^c})^2}
+\deqn{r\_se = logor\_se * (\pi * c * or^c) * \frac{\sin(\frac{\pi}{1+or^c})}{(1+or^c)^2}}
 \deqn{or\_ci\_lo = exp(log(or) - qnorm(.975)*logor\_se)}
 \deqn{or\_ci\_up = exp(log(or) + qnorm(.975)*logor\_se)}
 \deqn{r\_ci\_lo = cos(\frac{\pi}{1 + or\_ci\_lo^c})}
@@ -181,11 +183,11 @@ es_from_or_se(or = 2.12, logor_se = 0.242, n_exp = 120, n_nexp = 44)
 \references{
 Bonett, Douglas G. and Robert M. Price. (2005). Inferential Methods for the Tetrachoric Correlation Coefficient. Journal of Educational and Behavioral Statistics 30:213-25.
 
-Bonett, D. G., & Price, R. M. (2007). Statistical inference for generalized Yule coefficients in 2× 2 contingency tables. Sociological methods & research, 35(3), 429-446.
+Bonett, D. G., & Price, R. M. (2007). Statistical inference for generalized Yule coefficients in 2* 2 contingency tables. Sociological methods & research, 35(3), 429-446.
 
 Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 
-Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299–2322. https://doi.org/10.1002/sim.2287
+Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299-2322. https://doi.org/10.1002/sim.2287
 
 Digby, Peter G. N. (1983). Approximating the Tetrachoric Correlation Coefficient. Biometrics 39:753-7.
 
@@ -195,5 +197,5 @@ Grant R. L. (2014). Converting an odds ratio to a range of plausible relative ri
 
 Pearson, K. (1900). Mathematical Contributions to the Theory of Evolution. VII: On the Correlation of Characters Not Quantitatively Measurable. Philosophical Transactions of the Royal Statistical Society of London, Series A 19:1-47
 
-Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78–94. https://doi.org/10.1002/jrsm.1061
+Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78-94. https://doi.org/10.1002/jrsm.1061
 }

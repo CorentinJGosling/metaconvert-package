@@ -2,40 +2,73 @@
 % Please edit documentation in R/es_from_USER.R
 \name{es_from_user_adj}
 \alias{es_from_user_adj}
-\title{Directly input an adjusted value + variance of an effect size measure}
+\title{Directly input an adjusted effect size value + variance, with optional conversion}
 \usage{
 es_from_user_adj(
-  measure,
-  user_es_measure_adj,
+  user_es_original_measure_adj,
   user_es_adj,
   user_se_adj,
   user_ci_lo_adj,
   user_ci_up_adj,
-  max_asymmetry = 10
+  user_es_target_measure_adj = "g",
+  n_exp,
+  n_nexp,
+  n_sample,
+  n_cases,
+  n_controls,
+  baseline_risk,
+  small_margin_prop,
+  or_to_rr = "metaumbrella_cases",
+  or_to_cor = "pearson",
+  smd_to_cor = "viechtbauer",
+  cor_to_smd = "viechtbauer",
+  rr_to_or = "metaumbrella"
 )
 }
 \arguments{
-\item{measure}{the effect size measure used in calculations (must be one of the 11 effect size measures available in metaConvert)}
-
-\item{user_es_measure_adj}{the name of the effect size measure that will appear when this function is called by the \link{convert_df} function (can be any character string)}
+\item{user_es_original_measure_adj}{the type of effect size entered (see details).}
 
 \item{user_es_adj}{adjusted effect size value}
 
-\item{user_se_adj}{adjusted standard error of the effect size}
+\item{user_se_adj}{adjusted standard error of the effect size (on the log scale for the or/rr/irr/hr measures)}
 
 \item{user_ci_lo_adj}{adjusted lower bound of the 95\% CI around the effect size value}
 
 \item{user_ci_up_adj}{adjusted upper bound of the 95\% CI around the effect size value}
 
-\item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
+\item{user_es_target_measure_adj}{the effect size measure of the output (automatically set to the \code{measure} argument when called by the \code{\link{convert_df}} function)}
+
+\item{n_exp}{number of participants in the exposed group}
+
+\item{n_nexp}{number of participants in the non-exposed group}
+
+\item{n_sample}{total number of participants in the sample}
+
+\item{n_cases}{number of cases/events across exposed/non-exposed groups}
+
+\item{n_controls}{number of controls/no-event across exposed/non-exposed groups}
+
+\item{baseline_risk}{proportion of cases in the non-exposed group}
+
+\item{small_margin_prop}{smallest margin proportion of cases/events in the underlying 2x2 table}
+
+\item{or_to_rr}{formula used to convert an odds ratio value into a risk ratio (see \code{\link{es_from_or_se}}).}
+
+\item{or_to_cor}{formula used to convert an odds ratio value into a correlation coefficient (see \code{\link{es_from_or_se}}).}
+
+\item{smd_to_cor}{formula used to convert a SMD value into a coefficient correlation (see \code{\link{es_from_cohen_d}}).}
+
+\item{cor_to_smd}{formula used to convert a correlation coefficient value into a SMD (see \code{\link{es_from_pearson_r}}).}
+
+\item{rr_to_or}{formula used to convert a risk ratio value into an odds ratio (see \code{\link{es_from_rr_se}}).}
 }
 \value{
-This function allows to directly input any of the 11 effect size measures
+This function allows to directly input any of the available effect size measures
 
 \tabular{ll}{
-\code{natural effect size measure} \tab Any of the 11 available measures\cr
+\code{natural effect size measure} \tab Any of the available measures\cr
 \tab \cr
-\code{converted effect size measure} \tab No conversion performed\cr
+\code{converted effect size measure} \tab Depends on the entered measure (see details)\cr
 \tab \cr
 \code{required input data} \tab See 'Section 24. User's input (adjusted)'\cr
 \tab https://metaconvert.org/input.html\cr
@@ -43,15 +76,24 @@ This function allows to directly input any of the 11 effect size measures
 }
 }
 \description{
-Directly input an adjusted value + variance of an effect size measure
+Directly input an adjusted effect size value + variance, with optional conversion
 }
 \details{
 This function is a generic function allowing to include any adjusted effect size measure value + variance.
-Importantly, with this function, no conversions are performed (i.e., the effect size value + variance
-you enter is the value + variance exported by this function).
+Importantly, when the \code{user_es_original_measure_adj} is one of the known measures
+(d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, r, z, rd, nnt),
+conversions towards the other effect size measures are performed.
+Otherwise, no conversion is performed (the effect size value + variance you enter is
+the value + variance exported by this function) and a warning is issued.
+The sample sizes and baseline risk are used only to perform the conversions.
+
+For the or/rr/irr/hr measures, the standard error you enter must be on the log scale.
+If you indicate the 95\% CI bounds instead of the standard error, the log-transformation
+is applied automatically.
 }
 \examples{
-dat = data.frame(measure = "OR", user_es_measure_adj = "adjusted OR",
-                 user_es_adj = -0.04, user_se_adj = 0.2)
-summary(convert_df(dat, measure="logor"))
+dat = data.frame(user_es_original_measure_adj = "or", user_es_adj = 2.5,
+                 user_ci_lo_adj = 1.2, user_ci_up_adj = 5.2,
+                 n_exp = 120, n_nexp = 44)
+summary(convert_df(dat, measure = "g"))
 }

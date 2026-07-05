@@ -12,6 +12,7 @@ es_from_paired_t(
   r_pre_post_exp,
   r_pre_post_nexp,
   smd_to_cor = "viechtbauer",
+  pre_post_to_smd = "cooper",
   reverse_paired_t
 )
 }
@@ -29,6 +30,8 @@ es_from_paired_t(
 \item{r_pre_post_nexp}{pre-post correlation in the non-experimental/non-exposed group}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{pre_post_to_smd}{formula used to convert the paired t-test value into a SMD (see details).}
 
 \item{reverse_paired_t}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -60,6 +63,15 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \deqn{cohen\_d = d\_exp - d\_nexp}
 \deqn{d\_se = \sqrt{cohen\_d\_se\_exp^2 + cohen\_d\_se\_nexp^2}}
 
+When \code{pre_post_to_smd = "morris_dz"}, the mean difference is standardized by the standard deviation
+of the change score and the pre-post correlation is no longer involved (Morris & DeShon, 2002):
+\deqn{cohen\_d\_exp = \frac{paired\_t\_exp}{\sqrt{n\_exp}}}
+\deqn{cohen\_d\_nexp = \frac{paired\_t\_nexp}{\sqrt{n\_nexp}}}
+
+Note that the Cohen's d obtained from a paired t-test strongly depends on the pre-post correlation.
+When \code{r_pre_post_exp} / \code{r_pre_post_nexp} are not indicated, a value of 0.8 is assumed and
+users should conduct sensitivity analyses with other plausible values.
+
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d}()} are applied.
 }
@@ -68,4 +80,6 @@ es_from_paired_t(paired_t_exp = 2.1, paired_t_nexp = 4.2, n_exp = 20, n_nexp = 2
 }
 \references{
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 }

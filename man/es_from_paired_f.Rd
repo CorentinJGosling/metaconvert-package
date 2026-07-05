@@ -12,6 +12,7 @@ es_from_paired_f(
   r_pre_post_exp,
   r_pre_post_nexp,
   smd_to_cor = "viechtbauer",
+  pre_post_to_smd = "cooper",
   reverse_paired_f
 )
 }
@@ -29,6 +30,8 @@ es_from_paired_f(
 \item{r_pre_post_nexp}{pre-post correlation in the non-experimental/non-exposed group}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{pre_post_to_smd}{formula used to convert the paired t-test value into a SMD (see details).}
 
 \item{reverse_paired_f}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -65,4 +68,6 @@ es_from_paired_f(paired_f_exp = 2.1, paired_f_nexp = 4.2, n_exp = 20, n_nexp = 2
 }
 \references{
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 }

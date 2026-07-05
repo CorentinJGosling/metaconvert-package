@@ -30,7 +30,7 @@ es_from_2x2(
 This function estimates and converts between several effect size measures.
 
 \tabular{ll}{
-\code{natural effect size measure} \tab OR + RR + NNT\cr
+\code{natural effect size measure} \tab OR + RR + NNT + RD\cr
 \tab \cr
 \code{converted effect size measure} \tab D + G + R + Z \cr
 \tab \cr
@@ -45,6 +45,7 @@ Convert a 2x2 table into several effect size measures
 \details{
 This function first computes (log) odds ratio (OR), (log) risk ratio (RR) and number needed to treat (NNT)
 from the 2x2 table. Note that if a cell is equal to 0, we applied the typical adjustment (add 0.5) to all cells.
+This adjustment is used for the OR/RR only; the RD and NNT are obtained from the raw cell counts.
 Cohen's d (D), Hedges' g (G) and correlation coefficients (R/Z) are then estimated from the OR.
 
 \strong{To estimate an OR}, the formulas used (Box 6.4.a in the Cochrane Handbook) are:
@@ -55,11 +56,15 @@ Cohen's d (D), Hedges' g (G) and correlation coefficients (R/Z) are then estimat
 \deqn{logrr = log(\frac{n\_cases\_exp / n\_exp}{n\_cases\_nexp / n\_nexp})}
 \deqn{logrr\_se = \sqrt{\frac{1}{n\_cases\_exp} - \frac{1}{n\_exp} + \frac{1}{n\_cases\_nexp} - \frac{1}{n\_nexp}}}
 
-\strong{To estimate a NNT}, the formulas used are (Sedwick, 2013) :
+\strong{To estimate a risk difference (RD) and NNT}, the formulas used are (Wen et al., 2005; Altman, 1998):
 \deqn{pt = \frac{n\_cases\_exp}{n\_cases\_exp + n\_controls\_exp}}
 \deqn{pc = \frac{n\_cases\_nexp}{n\_cases\_nexp + n\_controls\_nexp}}
-\deqn{AAR = pc - pt}
-\deqn{nnt = \frac{1}{AAR}}
+\deqn{rd = pc - pt}
+\deqn{rd\_se = \sqrt{\frac{pt(1-pt)}{n\_exp} + \frac{pc(1-pc)}{n\_nexp}}}
+\deqn{nnt = \frac{1}{rd}}
+\deqn{nnt\_se = \frac{rd\_se}{rd^2}}
+Note that NNT confidence intervals are set to NA when the RD confidence interval crosses zero
+(discontinuous CI; Altman, 1998).
 
 \strong{To convert the 2x2 table into a SMD},
 the function estimates an OR value from the 2x2 table (formula above)
@@ -87,4 +92,8 @@ Higgins JPT, Thomas J, Chandler J, Cumpston M, Li T, Page MJ, Welch VA (editors)
 Lipsey, M. W., & Wilson, D. B. (2001). Practical meta-analysis. Sage Publications, Inc.
 
 Sedgwick, P. (2013). What is number needed to treat (NNT)? Bmj, 347.
+
+Altman, D. G. (1998). Confidence intervals for the number needed to treat. BMJ, 317(7168), 1309-1312.
+
+Wen, S., Zhang, L., & Yang, B. (2005). Two approaches to incorporate clinical data uncertainty into number needed to treat. Journal of Clinical Pharmacy and Therapeutics, 30(2), 105-109.
 }

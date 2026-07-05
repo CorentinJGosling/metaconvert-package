@@ -100,7 +100,7 @@ Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of rese
 
 Borenstein, M., Hedges, L. V., Higgins, J. P., & Rothstein, H. R. (2021). Introduction to meta-analysis. John Wiley & Sons.
 
-Hedges LV (1981): Distribution theory for Glass’s estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107–28
+Hedges LV (1981): Distribution theory for Glass's estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107-28
 
-Jacobs, P., & Viechtbauer, W. (2017). Estimation of the biserial correlation and its sampling variance for use in meta-analysis. Research synthesis methods, 8(2), 161–180.
+Jacobs, P., & Viechtbauer, W. (2017). Estimation of the biserial correlation and its sampling variance for use in meta-analysis. Research synthesis methods, 8(2), 161-180.
 }

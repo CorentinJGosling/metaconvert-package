@@ -169,6 +169,50 @@ A tutorial on a more advanced usage will be proposed in the companion paper of t
 
 For now, you can refer to the documentation of the convert_df function in the R manual of this package, in which all options are described.
 
+## Risk difference and NNT
+
+Since version 1.1.0 the package natively supports **risk difference** (`measure = "rd"`) and **number needed to treat** (`measure = "nnt"`) alongside ratio measures. Both carry a proper standard error and a confidence interval. When the RD CI crosses zero, the NNT CI is set to NA to preserve the Altman (1998) discontinuous-CI convention — the point estimate and SE remain available.
+
+```{r, message=FALSE}
+res_rd <- convert_df(df.haza, measure = "rd")
+head(summary(res_rd)[, c("row_id", "es_crude", "se_crude",
+                         "es_ci_lo_crude", "es_ci_up_crude", "info_used_crude")])
+```
+
+## Quality flags and missing-data guidance
+
+`summary()` can surface two diagnostic layers. `flags = TRUE` adds a `flags_crude` / `flags_adjusted` column with validation errors (Tier 1: input integrity checks such as negative SDs or inverted CIs) and plausibility warnings (Tier 2: e.g. implausibly large SMD, RD outside `[-1, 1]`, ES/SE outliers across rows). `guidance = TRUE` adds an `es_guidance_crude` column that, for rows where the effect size could not be estimated, explains which input columns the user would need to add to unlock additional estimators.
+
+```{r, message=FALSE}
+res_flags <- convert_df(df.short, measure = "g")
+s_flags <- summary(res_flags, flags = TRUE, guidance = TRUE)
+head(s_flags[, c("row_id", "es_crude", "info_used_crude",
+                 "flags_crude", "es_guidance_crude")])
+```
+
+## Correction for attenuation due to measurement error
+
+`es_disattenuate()` corrects an observed correlation for unreliability in one or both measures (Spearman, 1904; Hunter & Schmidt, 2004) and propagates the uncertainty into the corrected SE and Fisher's z SE via the delta method. Apply it **after** `summary(convert_df(..., measure = "r"))`:
+
+```{r, message=FALSE}
+# Observed correlation with known scale reliabilities
+es_disattenuate(r = 0.45, r_se = 0.08,
+                reliability_x = 0.82, reliability_y = 0.78)
+```
+
+Set `reliability_y = 1.0` if only one side of the correlation needs correcting (e.g. a reliable criterion measure).
+
+## Psychometric utilities: SEM and SDC
+
+Standalone functions compute the **standard error of measurement** and the **smallest detectable change** for meta-analyses of measurement properties. They chain naturally:
+
+```{r}
+sem_res <- compute_sem(sd = 10, icc = 0.85, n_sample = 100)
+sdc_res <- compute_sdc(sem = sem_res$sem, sem_se = sem_res$sem_se)
+sem_res
+sdc_res
+```
+
 # I do not like R
 
 If you prefer having a graphical user interface (GUI) when performing data analysis, 

@@ -47,15 +47,6 @@ es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer"
   if (length(reverse_pt_bis_r) == 1) reverse_pt_bis_r = c(rep(reverse_pt_bis_r, length(pt_bis_r)))
   if (length(reverse_pt_bis_r) != length(pt_bis_r)) stop("The length of the 'reverse_pt_bis_r' argument is incorrectly specified.")
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "should be >0."),
-                       func = "es_from_pt_bis_r")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
   df <- n_exp + n_nexp - 2
   h <- df / n_exp + df / n_nexp
   p <- n_exp / (n_exp + n_nexp)
@@ -112,15 +103,6 @@ es_from_pt_bis_r_pval <- function(pt_bis_r_pval, n_exp, n_nexp,
                                   smd_to_cor = "viechtbauer", reverse_pt_bis_r_pval) {
   if (missing(reverse_pt_bis_r_pval)) reverse_pt_bis_r_pval <- rep(FALSE, length(n_exp))
   reverse_pt_bis_r_pval[is.na(reverse_pt_bis_r_pval)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, and p-values ",
-                                              "should be >0."),
-                       func = "es_from_pt_bis_r_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   t <- qt(p = pt_bis_r_pval / 2, df = n_exp + n_nexp - 2, lower.tail = FALSE)
 

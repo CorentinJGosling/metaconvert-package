@@ -1,0 +1,741 @@
+---
+title: "Vignette 2. Psychometric meta-analysis with metaConvert (COSMIN framework)"
+author: "Gosling CJ, Cortese S, Solmi M, Haza B, Vieta E, Delorme R, Fusar-Poli P, Radua J"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Vignette 2. Psychometric meta-analysis with metaConvert (COSMIN framework)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{=html}
+<style type="text/css">
+
+*{
+  font-family: "Gill Sans", sans-serif;
+}
+
+h1.title {
+  font-weight: 700;
+  font-size: 2.2rem;
+  padding-top: 0rem;
+  margin-top: 0rem;
+  border-top: none;
+}
+
+#TOC {
+  width: 100%;
+}
+
+h1{
+  font-weight: 550;
+  font-size: 1.9rem;
+  border-top: 1px solid black;
+  margin-top: 3rem;
+  padding-top: 2rem;
+}
+
+
+p{
+  line-height: 1.4rem;
+}
+</style>
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+library(metaConvert)
+library(metafor)
+library(DT)
+```
+
+# Introduction
+
+The **COSMIN** (COnsensus-based Standards for the selection of health Measurement INstruments) framework provides a standardised taxonomy of measurement properties for evaluating patient-reported outcome measures (PROMs). Conducting a **meta-analysis of measurement properties** requires computing, transforming, and pooling a variety of effect sizes that are specific to psychometric studies.
+
+The `metaConvert` package provides functions for several COSMIN measurement properties. The table below summarises the coverage:
+
+| COSMIN property | Coverage | metaConvert function(s) |
+|:---|:---:|:---|
+| Internal consistency | Full | `convert_df(measure = "alpha")` |
+| Test-retest reliability | Full | `convert_df(measure = "icc")` |
+| Measurement error | Full | `compute_sem()`, `compute_sdc()` |
+| Criterion validity | Full | `convert_df(measure = "r")` + `es_disattenuate()` |
+| Construct validity | Full | `convert_df(measure = "r")` + `es_disattenuate()` |
+| Responsiveness | Full | `reliability_change_score()` + `es_disattenuate()` |
+| Floor/ceiling effects | Full | `convert_df(measure = "prop")` |
+| Structural validity | Not covered | Requires OSMASEM (metaSEM / OpenMx) |
+| Diagnostic accuracy | Not covered | Requires bivariate GLMM (mada / lme4) |
+| Cross-cultural validity | Partial | DIF log-odds via OR pipeline; invariance is descriptive |
+| Interpretability (MIC) | Partial | Raw MIC via user-provided ES columns |
+
+Throughout this vignette, we use the **`df.psychom`** dataset distributed with metaConvert. It simulates a COSMIN systematic review of a fictional 9-item self-report PROM called the **Mental Health Wellbeing Scale (MHWS)**, scored 0--27, validated across multiple populations and languages.
+
+```{r}
+data(df.psychom)
+```
+
+```{r, eval=FALSE}
+str(df.psychom)
+```
+
+```{r, echo=FALSE}
+DT::datatable(df.psychom, options = list(
+    scrollX = TRUE,
+    dom = c('t'),
+    scrollY = "300px",
+    pageLength = 50,
+    ordering = FALSE,
+    rownames = FALSE,
+    columnDefs = list(
+                  list(width = '130px',
+                       targets = "_all"),
+                  list(className = 'dt-center',
+                                     targets = "_all"))))
+```
+
+<br>
+
+Each row represents one study reporting one measurement property. The `outcome` column identifies the COSMIN property assessed. Columns not relevant to a study's property are `NA`, reflecting the typical sparsity of real-world data extraction sheets.
+
+# Data preparation
+
+Before data extraction, you can generate a template extraction sheet for each psychometric measure. These templates list all column names that `metaConvert` recognises.
+
+```{r, eval=FALSE}
+# Extraction sheet for Cronbach's alpha
+data_extraction_sheet(measure = "alpha", extension = "data.frame")
+
+# Extraction sheet for ICC
+data_extraction_sheet(measure = "icc", extension = "data.frame")
+
+# Extraction sheet for correlations (Pearson or Spearman)
+data_extraction_sheet(measure = "r", extension = "data.frame")
+
+# Extraction sheet for proportions
+data_extraction_sheet(measure = "prop", extension = "data.frame")
+```
+
+The key psychometric columns are:
+
+| Column | Type | Used by |
+|:---|:---|:---|
+| `cronbach_alpha` | numeric | `es_from_cronbach_alpha()` |
+| `n_items` | numeric | `es_from_cronbach_alpha()` |
+| `icc` | numeric | `es_from_icc()` |
+| `n_measurements` | numeric | `es_from_icc()` |
+| `icc_type` | character | `es_from_icc()` -- `"agreement"` or `"consistency"` |
+| `spearman_r` | numeric | `es_from_spearman_rho()` |
+| `prop` | numeric | `es_from_prop_single_group()` |
+| `n_cases` | numeric | `es_from_prop_single_group_counts()` |
+
+
+# Internal consistency
+
+Internal consistency is typically assessed using **Cronbach's alpha**. For meta-analysis, the **Bonett (2002) variance-stabilising transformation** is recommended:
+
+$$T(\alpha) = \ln(1 - \alpha), \quad \text{SE} = \sqrt{\frac{2k}{(k-1)(n-2)}}$$
+
+where $k$ is the number of items and $n$ is the sample size (Bonett, 2002). This transformation normalises the sampling distribution and stabilises the variance, which is particularly important when alpha values are close to 1.
+
+## Effect size computation
+
+```{r}
+# Subset internal consistency studies
+dat_alpha <- df.psychom[df.psychom$outcome == "internal_consistency", ]
+
+# Compute effect sizes with Bonett transformation (default)
+res_alpha <- convert_df(dat_alpha, measure = "alpha",
+                        verbose = FALSE, split_adjusted = FALSE)
+summary_alpha <- summary(res_alpha, flags = TRUE, guidance = TRUE)
+```
+
+```{r, eval=FALSE}
+summary_alpha[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")]
+```
+
+```{r, echo=FALSE}
+DT::datatable(summary_alpha[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")],
+              options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
+                             rownames = FALSE, pageLength = 50,
+                             columnDefs = list(
+                               list(width = '130px', targets = "_all"),
+                               list(className = 'dt-center', targets = "_all"))))
+```
+
+<br>
+
+The `es` column contains Bonett-transformed values $\ln(1 - \alpha)$, which are always negative (since $\alpha \in [0, 1)$). To **back-transform** for reporting:
+
+$$\hat{\alpha} = 1 - \exp(T)$$
+
+## Meta-analysis
+
+```{r, fig.width=7, fig.height=4}
+# Random-effects meta-analysis on Bonett-transformed scale
+ma_alpha <- metafor::rma(yi = es, sei = se, data = summary_alpha,
+                         method = "REML")
+
+# Forest plot
+metafor::forest(ma_alpha, slab = paste0(summary_alpha$author, " (", dat_alpha$year, ")"),
+                xlab = "Bonett-transformed alpha: ln(1 - alpha)",
+                header = TRUE)
+```
+
+```{r}
+# Back-transform pooled estimate and CI
+pooled_alpha    <- 1 - exp(ma_alpha$beta[1])
+pooled_alpha_lo <- 1 - exp(ma_alpha$ci.ub)
+pooled_alpha_up <- 1 - exp(ma_alpha$ci.lb)
+
+cat(sprintf("Pooled alpha = %.3f [%.3f, %.3f]\n",
+            pooled_alpha, pooled_alpha_lo, pooled_alpha_up))
+```
+
+Note that the CI bounds are **swapped** when back-transforming because $1 - \exp(x)$ is a decreasing function of $x$.
+
+The pooled reliability estimate can later serve as input for **disattenuation corrections** in criterion validity, construct validity, and responsiveness analyses (see below).
+
+## Alternative: raw alpha
+
+An alternative is to meta-analyse raw Cronbach's alpha values directly (`alpha_to_es = "raw"`), using the SE formula from Feldt et al. (1987). This is simpler to interpret but the sampling distribution may be skewed when alpha is close to 1. The Bonett transformation is generally recommended.
+
+```{r, eval=FALSE}
+# Raw alpha (not recommended for meta-analysis)
+res_alpha_raw <- convert_df(dat_alpha, measure = "alpha", alpha_to_es = "raw",
+                            verbose = FALSE, split_adjusted = FALSE)
+summary(res_alpha_raw)
+```
+
+
+# Test-retest reliability
+
+Test-retest reliability is assessed using the **intraclass correlation coefficient (ICC)**. The same **Bonett (2002) transformation** is applied:
+
+$$T(\text{ICC}) = \ln(1 - \text{ICC})$$
+
+The SE of the **transformed** ICC depends on the ICC model type. By the delta method, the $(1-\rho)^2$ term from the raw ICC variance cancels with the $1/(1-\rho)^2$ from the transformation derivative --- this cancellation is the variance-stabilising property of the Bonett transformation:
+
+- **ICC(2,1) -- absolute agreement** (`icc_type = "agreement"`):
+$$\text{SE}(T) = \sqrt{\frac{2(1+(k-1)\rho)^2}{k(k-1)(n-1)}}$$
+
+- **ICC(3,1) -- consistency** (`icc_type = "consistency"`):
+$$\text{SE}(T) = \sqrt{\frac{2}{(k-1)(n-1)}}$$
+
+where $k$ is the number of measurement occasions and $\rho$ is the ICC value. Note that for ICC(3,1), the SE is fully independent of $\rho$.
+
+**Technical note on the ICC(2,1) formula**: The SE formula labelled "ICC(2,1)" above is technically the analytical variance for the **one-way random ICC(1,1)** model (Shrout & Fleiss, 1979), as derived by Bonett (2002). The exact two-way random ICC(2,1) variance formula involves separate between-rater and residual variance components that are typically unavailable without the raw ANOVA mean squares. Using the one-way formula as a proxy for ICC(2,1) is standard practice in psychometric meta-analysis (see e.g., Bonett, 2002; Donner & Eliasziw, 1987) and provides a reasonable approximation.
+
+## Effect size computation
+
+```{r}
+# Subset test-retest studies
+dat_icc <- df.psychom[df.psychom$outcome == "test_retest", ]
+
+# Compute effect sizes with Bonett transformation (default)
+res_icc <- convert_df(dat_icc, measure = "icc",
+                      verbose = FALSE, split_adjusted = FALSE)
+summary_icc <- summary(res_icc, flags = TRUE)
+```
+
+```{r, eval=FALSE}
+summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
+                 "icc_type", "info_used")]
+```
+
+```{r, echo=FALSE}
+DT::datatable(summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
+                                "icc_type", "info_used")],
+              options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
+                             rownames = FALSE, pageLength = 50,
+                             columnDefs = list(
+                               list(width = '130px', targets = "_all"),
+                               list(className = 'dt-center', targets = "_all"))))
+```
+
+<br>
+
+Note that studies using different ICC models (agreement vs. consistency) can coexist in the same analysis. The SE is computed correctly for each study based on its `icc_type`. When pooling, `icc_type` can be examined as a **moderator** variable.
+
+## Meta-analysis
+
+```{r, fig.width=7, fig.height=4}
+# Random-effects meta-analysis
+ma_icc <- metafor::rma(yi = es, sei = se, data = summary_icc,
+                       method = "REML")
+
+# Forest plot
+metafor::forest(ma_icc, slab = paste0(summary_icc$author, " (", dat_icc$year, ")"),
+                xlab = "Bonett-transformed ICC: ln(1 - ICC)",
+                header = TRUE)
+```
+
+```{r}
+# Back-transform pooled estimate
+pooled_icc    <- 1 - exp(ma_icc$beta[1])
+pooled_icc_lo <- 1 - exp(ma_icc$ci.ub)
+pooled_icc_up <- 1 - exp(ma_icc$ci.lb)
+
+cat(sprintf("Pooled ICC = %.3f [%.3f, %.3f]\n",
+            pooled_icc, pooled_icc_lo, pooled_icc_up))
+```
+
+The pooled ICC will feed into the **measurement error** derivation (next section) and **disattenuation** corrections for validity and responsiveness.
+
+Studies that report only Pearson correlations for test-retest reliability (rather than ICC) can be pooled separately using `convert_df(..., measure = "r")`.
+
+
+# Measurement error
+
+Measurement error is characterised by the **standard error of measurement (SEM)** and the **smallest detectable change (SDC)**. These are not traditional effect sizes but are essential COSMIN measurement properties.
+
+The SEM is derived from matched ICC and SD data:
+
+$$\text{SEM} = \text{SD} \times \sqrt{1 - \text{ICC}}$$
+
+The SDC is derived from the SEM:
+
+$$\text{SDC} = 1.96 \times \sqrt{2} \times \text{SEM}$$
+
+These are computed using **standalone utility functions** (not `convert_df()`), because they require combining reliability and variability from the same sample.
+
+## Study-specific SEM and SDC
+
+```{r}
+# Use test-retest studies that report both ICC and SD
+dat_me <- df.psychom[df.psychom$outcome == "test_retest" &
+                     !is.na(df.psychom$sd_scores), ]
+
+# Compute SEM for each study (delta-method SE included)
+sem_results <- compute_sem(
+  sd       = dat_me$sd_scores,
+  icc      = dat_me$icc,
+  n_sample = dat_me$n_sample
+)
+
+# Chain to SDC
+sdc_results <- compute_sdc(
+  sem    = sem_results$sem,
+  sem_se = sem_results$sem_se
+)
+```
+
+```{r, eval=FALSE}
+# Combined measurement error table
+measurement_error <- data.frame(
+  study  = dat_me$study_id,
+  n      = dat_me$n_sample,
+  sd     = dat_me$sd_scores,
+  icc    = dat_me$icc,
+  sem    = round(sem_results$sem, 3),
+  sem_se = round(sem_results$sem_se, 3),
+  sdc    = round(sdc_results$sdc, 3),
+  sdc_se = round(sdc_results$sdc_se, 3)
+)
+measurement_error
+```
+
+```{r, echo=FALSE}
+measurement_error <- data.frame(
+  study  = dat_me$study_id,
+  n      = dat_me$n_sample,
+  sd     = dat_me$sd_scores,
+  icc    = dat_me$icc,
+  sem    = round(sem_results$sem, 3),
+  sem_se = round(sem_results$sem_se, 3),
+  sdc    = round(sdc_results$sdc, 3),
+  sdc_se = round(sdc_results$sdc_se, 3)
+)
+DT::datatable(measurement_error,
+              options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
+                             rownames = FALSE, pageLength = 50,
+                             columnDefs = list(
+                               list(width = '100px', targets = "_all"),
+                               list(className = 'dt-center', targets = "_all"))))
+```
+
+## Pooling SEM
+
+The study-specific SEM values can be pooled using inverse-variance random-effects meta-analysis, with the delta-method SE providing the sampling variance:
+
+```{r, fig.width=7, fig.height=4}
+ma_sem <- metafor::rma(yi = sem_results$sem, sei = sem_results$sem_se,
+                       method = "REML")
+
+metafor::forest(ma_sem,
+                slab = paste0(dat_me$author, " (", dat_me$year, ")"),
+                xlab = "Standard Error of Measurement (SEM)",
+                header = TRUE)
+```
+
+```{r}
+cat(sprintf("Pooled SEM = %.3f [%.3f, %.3f]\n",
+            ma_sem$beta[1], ma_sem$ci.lb, ma_sem$ci.ub))
+
+# Derive pooled SDC from pooled SEM
+pooled_sdc <- 1.96 * sqrt(2) * ma_sem$beta[1]
+cat(sprintf("Pooled SDC = %.3f\n", pooled_sdc))
+```
+
+For interpretability, the ratio of pooled SDC to pooled MIC (minimal important change) indicates whether the instrument can reliably detect changes that patients consider meaningful. A ratio $< 1$ (SDC < MIC) is desirable.
+
+**Important**: SEM and SDC are expressed in the **raw units of the measurement instrument**. Pooling is only valid when all primary studies use the exact same version of the instrument with the same scoring range. If some studies use the original 0--27 MHWS and others use a modified 0--100 version, their SEMs are on different scales and cannot be pooled directly. In such cases, consider standardising by the score SD (computing the coefficient of variation SEM/SD) or pooling only within homogeneous subgroups.
+
+
+# Criterion and construct validity
+
+Criterion and construct validity are assessed by pooling **correlations** between the MHWS and comparator instruments. Some studies report Pearson's $r$, others report Spearman's $\rho$. The `metaConvert` pipeline handles both: Spearman correlations are automatically converted to Pearson-equivalent values using the **Rupinski & Dunlap (1996)** formula:
+
+$$r_{\text{Pearson}} = 2 \sin\!\left(\frac{\pi}{6} \times r_{\text{Spearman}}\right)$$
+
+The SE is derived via the delta method, correctly propagating the uncertainty from the conversion.
+
+Results should be reported three ways:
+
+- **(a) Uncorrected**: observed correlations pooled directly
+- **(b) Individually corrected**: study-specific disattenuation, then pooled
+- **(c) Artifact-distribution corrected**: using the distribution of reliabilities across studies (Hunter & Schmidt method; see the `psychmeta` package)
+
+This vignette demonstrates approaches (a) and (b).
+
+## Effect size computation
+
+```{r}
+# Subset criterion and construct validity studies
+dat_validity <- df.psychom[df.psychom$outcome %in%
+                           c("criterion_validity", "construct_validity"), ]
+
+# convert_df automatically handles both Pearson r and Spearman rho
+res_r <- convert_df(dat_validity, measure = "r",
+                    verbose = FALSE, split_adjusted = FALSE)
+summary_r <- summary(res_r, flags = TRUE)
+```
+
+```{r, eval=FALSE}
+summary_r[, c("author", "es", "se", "info_used")]
+```
+
+```{r, echo=FALSE}
+DT::datatable(summary_r[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")],
+              options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
+                             rownames = FALSE, pageLength = 50,
+                             columnDefs = list(
+                               list(width = '130px', targets = "_all"),
+                               list(className = 'dt-center', targets = "_all"))))
+```
+
+<br>
+
+The `info_used` column distinguishes between `"pearson_r"` and `"spearman_r"` sources, providing traceability for each study's conversion pathway.
+
+## (a) Pooling uncorrected correlations
+
+Meta-analysis of correlations is typically performed on the **Fisher's z** scale, then back-transformed. Here, `convert_df` with `measure = "r"` returns correlations in the `es` column. The SE on the Fisher's z scale is derived via the delta method: $\text{SE}(z) = \text{SE}(r) / (1 - r^2)$, which correctly propagates the uncertainty from any upstream conversion (e.g., Spearman to Pearson):
+
+```{r, fig.width=7, fig.height=5}
+# Pool observed (uncorrected) correlations on Fisher's z scale
+z_obs <- atanh(summary_r$es)
+r_bounded <- pmin(pmax(summary_r$es, -0.9999), 0.9999)
+z_se  <- summary_r$se / (1 - r_bounded^2)
+
+ma_r_obs <- metafor::rma(yi = z_obs, sei = z_se, method = "REML")
+
+# Forest plot on correlation scale
+metafor::forest(ma_r_obs,
+                slab = paste0(summary_r$author, " (", dat_validity$year, ")"),
+                xlab = "Fisher's z (observed correlation)",
+                header = TRUE)
+```
+
+```{r}
+# Back-transform to correlation scale
+pooled_r_obs <- tanh(ma_r_obs$beta[1])
+pooled_r_lo  <- tanh(ma_r_obs$ci.lb)
+pooled_r_up  <- tanh(ma_r_obs$ci.ub)
+
+cat(sprintf("(a) Pooled uncorrected r = %.3f [%.3f, %.3f]\n",
+            pooled_r_obs, pooled_r_lo, pooled_r_up))
+```
+
+## (b) Individual disattenuation then pooling
+
+The `es_disattenuate()` function corrects each observed correlation for measurement error in both the target PROM and the comparator instrument:
+
+$$r_{\text{corrected}} = \frac{r_{\text{observed}}}{\sqrt{\text{rel}_X \times \text{rel}_Y}}$$
+
+```{r}
+# Disattenuate using study-specific reliabilities
+corrected <- es_disattenuate(
+  r             = summary_r$es,
+  r_se          = summary_r$se,
+  reliability_x = dat_validity$reliability_target,
+  reliability_y = dat_validity$reliability_comparator,
+  n_sample      = dat_validity$n_sample
+)
+```
+
+```{r, eval=FALSE}
+# Comparison table
+data.frame(
+  study              = dat_validity$study_id,
+  info_used          = summary_r$info_used,
+  r_observed         = round(summary_r$es, 3),
+  r_corrected        = round(corrected$r_corrected, 3),
+  attenuation_factor = round(corrected$attenuation_factor, 3)
+)
+```
+
+```{r, echo=FALSE}
+comp <- data.frame(
+  study              = dat_validity$study_id,
+  info_used          = summary_r$info_used,
+  r_observed         = round(summary_r$es, 3),
+  r_corrected        = round(corrected$r_corrected, 3),
+  attenuation_factor = round(corrected$attenuation_factor, 3)
+)
+DT::datatable(comp,
+              options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
+                             rownames = FALSE, pageLength = 50,
+                             columnDefs = list(
+                               list(width = '130px', targets = "_all"),
+                               list(className = 'dt-center', targets = "_all"))))
+```
+
+<br>
+
+The corrected correlations are systematically larger in magnitude, reflecting the removal of attenuation due to measurement error.
+
+**Note on bounds**: Because sampling error exists in both the observed correlation and the reliability estimates, `r_corrected` can occasionally exceed 1.0 in absolute value. When this happens, `es_disattenuate()` internally caps the corrected correlation at $\pm$0.9999 before computing Fisher's z, so the meta-analytic pipeline will not produce `NaN` values.
+
+However, a corrected correlation exceeding 1.0 is a **red flag** that warrants investigation. Common causes include: (1) the reliability coefficient was estimated from a different population than the study sample; (2) the reliability was based on a very small sample and is itself imprecise; or (3) range restriction artefacts interact with the correction. We recommend running a **sensitivity analysis** excluding studies where $|r_c| > 1$ and comparing results. If multiple studies produce impossible values, an artifact-distribution method (Hunter & Schmidt, 2004; see the `psychmeta` package) may be more appropriate than individual study-level correction, as it uses the *distribution* of reliability estimates rather than point values.
+
+```{r, fig.width=7, fig.height=5}
+# Pool corrected correlations on Fisher's z scale
+ma_r_corr <- metafor::rma(yi = corrected$z_corrected,
+                           sei = corrected$z_corrected_se,
+                           method = "REML")
+
+metafor::forest(ma_r_corr,
+                slab = paste0(summary_r$author, " (", dat_validity$year, ")"),
+                xlab = "Fisher's z (disattenuated correlation)",
+                header = TRUE)
+```
+
+```{r}
+pooled_r_corr <- tanh(ma_r_corr$beta[1])
+pooled_r_corr_lo <- tanh(ma_r_corr$ci.lb)
+pooled_r_corr_up <- tanh(ma_r_corr$ci.ub)
+
+cat(sprintf("(b) Pooled disattenuated r = %.3f [%.3f, %.3f]\n",
+            pooled_r_corr, pooled_r_corr_lo, pooled_r_corr_up))
+```
+
+## Using pooled reliability when study-specific data are unavailable
+
+When study-specific reliability data are unavailable, the pooled reliability estimates from the internal consistency (Section 2) and test-retest (Section 3) meta-analyses can be used:
+
+```{r, eval=FALSE}
+# Use pooled alpha and ICC from earlier sections as proxies
+es_disattenuate(
+  r = 0.65,
+  r_se = 0.08,
+  reliability_x = pooled_alpha,  # from Section 2
+  reliability_y = 0.85,          # from external published data
+  n_sample = 150
+)
+```
+
+
+# Responsiveness
+
+Responsiveness is assessed by correlating **change scores** on the MHWS with change scores on a comparator instrument (e.g., CGI-Change, PGIC). Because change scores have lower reliability than single-occasion scores, **disattenuation requires change-score reliability**, not single-occasion reliability.
+
+The **Lord (1963)** formula derives change-score reliability from single-occasion reliability and the pre-post correlation:
+
+$$\text{rel}_{\text{change}} = \frac{\text{rel} - r_{\text{pre-post}}}{1 - r_{\text{pre-post}}}$$
+
+## Effect size computation with change-score correction
+
+```{r}
+# Subset responsiveness studies
+dat_resp <- df.psychom[df.psychom$outcome == "responsiveness", ]
+
+# Step 1: Compute change-score reliability
+change_rel <- reliability_change_score(
+  reliability = dat_resp$single_occasion_reliability,
+  r_pre_post  = dat_resp$r_pre_post
+)
+
+# Step 2: Get responsiveness correlations via convert_df
+res_resp <- convert_df(dat_resp, measure = "r",
+                       verbose = FALSE, split_adjusted = FALSE)
+summary_resp <- summary(res_resp)
+
+# Step 3: Disattenuate using CHANGE-SCORE reliability
+corrected_resp <- es_disattenuate(
+  r             = summary_resp$es,
+  r_se          = summary_resp$se,
+  reliability_x = change_rel$rel_change,
+  reliability_y = dat_resp$reliability_comparator,
+  n_sample      = dat_resp$n_sample
+)
+```
+
+```{r, eval=FALSE}
+data.frame(
+  study        = dat_resp$study_id,
+  r_observed   = round(summary_resp$es, 3),
+  rel_single   = dat_resp$single_occasion_reliability,
+  r_pre_post   = dat_resp$r_pre_post,
+  rel_change   = round(change_rel$rel_change, 3),
+  r_corrected  = round(corrected_resp$r_corrected, 3)
+)
+```
+
+```{r, echo=FALSE}
+resp_table <- data.frame(
+  study        = dat_resp$study_id,
+  r_observed   = round(summary_resp$es, 3),
+  rel_single   = dat_resp$single_occasion_reliability,
+  r_pre_post   = dat_resp$r_pre_post,
+  rel_change   = round(change_rel$rel_change, 3),
+  r_corrected  = round(corrected_resp$r_corrected, 3)
+)
+DT::datatable(resp_table,
+              options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
+                             rownames = FALSE, pageLength = 50,
+                             columnDefs = list(
+                               list(width = '110px', targets = "_all"),
+                               list(className = 'dt-center', targets = "_all"))))
+```
+
+<br>
+
+Note that change-score reliability (`rel_change`) is always lower than single-occasion reliability (`rel_single`), which leads to a **larger disattenuation correction**.
+
+## Meta-analysis
+
+```{r, fig.width=7, fig.height=4}
+# Pool observed change-score correlations
+z_resp     <- atanh(summary_resp$es)
+r_resp_bounded <- pmin(pmax(summary_resp$es, -0.9999), 0.9999)
+z_resp_se  <- summary_resp$se / (1 - r_resp_bounded^2)
+
+ma_resp_obs <- metafor::rma(yi = z_resp, sei = z_resp_se, method = "REML")
+
+cat(sprintf("Pooled observed r = %.3f [%.3f, %.3f]\n",
+            tanh(ma_resp_obs$beta[1]),
+            tanh(ma_resp_obs$ci.lb),
+            tanh(ma_resp_obs$ci.ub)))
+
+# Pool disattenuated change-score correlations
+ma_resp_corr <- metafor::rma(yi = corrected_resp$z_corrected,
+                              sei = corrected_resp$z_corrected_se,
+                              method = "REML")
+
+cat(sprintf("Pooled disattenuated r = %.3f [%.3f, %.3f]\n",
+            tanh(ma_resp_corr$beta[1]),
+            tanh(ma_resp_corr$ci.lb),
+            tanh(ma_resp_corr$ci.ub)))
+```
+
+## Sensitivity analysis for unknown pre-post correlations
+
+When pre-post correlations are not reported, a sensitivity analysis using plausible values illustrates the impact on the corrected estimates:
+
+```{r}
+# Example: one study with r_observed = 0.50, rel_single = 0.85
+r_pre_post_grid <- c(0.20, 0.40, 0.60, 0.80)
+
+sensitivity <- data.frame(
+  r_pre_post = r_pre_post_grid,
+  rel_change = sapply(r_pre_post_grid, function(rpp) {
+    reliability_change_score(reliability = 0.85, r_pre_post = rpp)$rel_change
+  }),
+  r_corrected = sapply(r_pre_post_grid, function(rpp) {
+    rc <- reliability_change_score(reliability = 0.85, r_pre_post = rpp)$rel_change
+    es_disattenuate(r = 0.50, r_se = 0.08, reliability_x = rc,
+                    reliability_y = 0.80, n_sample = 100)$r_corrected
+  })
+)
+sensitivity
+```
+
+As the pre-post correlation increases, change-score reliability decreases, and the disattenuation correction becomes larger. This highlights why reporting pre-post correlations in primary studies is essential.
+
+
+# Floor and ceiling effects
+
+Floor and ceiling effects can be assessed by meta-analysing the **proportion** of respondents scoring at the minimum or maximum of the scale. Three transformations are available:
+
+- **`"raw"`** (default): raw proportion, SE = $\sqrt{p(1-p)/n}$. CIs bounded to [0, 1].
+- **`"logit"`**: logit transform $\log(p/(1-p))$, SE = $\sqrt{1/(np(1-p))}$
+- **`"freeman_tukey"`** (recommended): Freeman-Tukey double arcsine. Handles zero proportions naturally and stabilises variance.
+
+## Effect size computation and pooling
+
+```{r}
+# Subset floor/ceiling studies
+dat_prop <- df.psychom[df.psychom$outcome == "floor_ceiling", ]
+
+# Freeman-Tukey transformation (recommended)
+res_prop <- convert_df(dat_prop, measure = "prop", prop_to_es = "freeman_tukey",
+                       verbose = FALSE, split_adjusted = FALSE)
+summary_prop <- summary(res_prop)
+```
+
+```{r, fig.width=7, fig.height=3.5}
+ma_prop <- metafor::rma(yi = es, sei = se, data = summary_prop,
+                        method = "REML")
+
+metafor::forest(ma_prop,
+                slab = paste0(summary_prop$author, " (", dat_prop$year, ")"),
+                xlab = "Freeman-Tukey transformed proportion",
+                header = TRUE)
+```
+
+```{r}
+# Approximate back-transformation (for the pooled estimate)
+pooled_prop <- sin(ma_prop$beta[1])^2
+cat(sprintf("Pooled proportion (approx.) = %.3f\n", pooled_prop))
+```
+
+**Note on the Freeman-Tukey back-transformation**: The `sin(x)^2` formula is an approximation. Recent methodological work (Schwarzer et al., 2019, *Research Synthesis Methods*) has shown that the Freeman-Tukey double arcsine back-transformation can distort pooled results when sample sizes are heterogeneous across studies. For proportions near 0 or 1 (as is typical for floor/ceiling effects), a generalised linear mixed model (GLMM) with logit link --- available via `metafor::rma.glmm()` --- may be preferable as it avoids the transformation entirely and directly models the binomial counts.
+
+
+# Beyond metaConvert
+
+Several COSMIN measurement properties require specialised methods not covered by `metaConvert`:
+
+**Structural validity** requires meta-analytic structural equation modelling (OSMASEM; Jak & Cheung, 2020) to pool inter-item correlation matrices and fit confirmatory factor models. See the `metaSEM` and `OpenMx` packages.
+
+**Diagnostic and screening accuracy** requires the bivariate generalised linear mixed model (Chu & Cole, 2006) for jointly modelling sensitivity and specificity. See the `mada` and `lme4` packages, and the `HSROC` model for summary ROC curves.
+
+**Cross-cultural validity and measurement invariance** is primarily a descriptive synthesis (tabulating configural, metric, scalar invariance levels). When DIF statistics (log-odds ratios) are available, they can be pooled using metaConvert's existing OR pipeline via `convert_df(measure = "or")`.
+
+**Interpretability (MIC)** can be partially handled: if you have MIC estimates and their SEs, enter them as user-provided effect sizes via `user_es_measure_crude`, `user_es_crude`, and `user_se_crude` columns, then use `convert_df()` to organise them alongside other effect sizes.
+
+**Feasibility and acceptability** are synthesised narratively, without quantitative pooling.
+
+
+# Summary
+
+| COSMIN property | metaConvert step | Key function(s) |
+|:---|:---|:---|
+| Internal consistency | `convert_df(measure = "alpha")` | `es_from_cronbach_alpha()` |
+| Test-retest reliability | `convert_df(measure = "icc")` | `es_from_icc()` |
+| Measurement error | Standalone | `compute_sem()` + `compute_sdc()` |
+| Criterion / construct validity | `convert_df(measure = "r")` then `es_disattenuate()` | `es_from_pearson_r()`, `es_from_spearman_rho()`, `es_disattenuate()` |
+| Responsiveness | `reliability_change_score()` then `es_disattenuate()` | Full chain |
+| Floor/ceiling effects | `convert_df(measure = "prop")` | `es_from_prop_single_group()` |
+
+---

@@ -32,7 +32,7 @@ es_from_or(
 
 \item{small_margin_prop}{smallest margin proportion of the underlying 2x2 table}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group}
+\item{baseline_risk}{proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)}
 
 \item{n_exp}{number of participants in the exposed group}
 

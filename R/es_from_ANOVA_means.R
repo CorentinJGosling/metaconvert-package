@@ -61,18 +61,7 @@ es_from_means_sd <- function(mean_exp, mean_sd_exp, mean_nexp, mean_sd_nexp, n_e
   if (missing(reverse_means)) reverse_means <- rep(FALSE, length(mean_exp))
   reverse_means[is.na(reverse_means)] <- FALSE
   if (length(reverse_means) == 1) reverse_means = c(rep(reverse_means, length(mean_exp)))
-  if (length(reverse_means) != length(mean_exp)) stop("The length of the 'reverse_means' argument of incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       mean_sd_exp, mean_sd_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "as well as the SDs ",
-                                              "should be >0."),
-                       func = "es_from_means_sd")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (length(reverse_means) != length(mean_exp)) stop("The length of the 'reverse_means' argument is incorrectly specified.")
 
   pooled_sd <- sqrt(((n_exp - 1) * mean_sd_exp^2 + (n_nexp - 1) * mean_sd_nexp^2) / (n_exp + n_nexp - 2))
 
@@ -151,17 +140,6 @@ es_from_means_se <- function(mean_exp, mean_se_exp, mean_nexp, mean_se_nexp, n_e
   if (missing(reverse_means)) reverse_means <- rep(FALSE, length(mean_exp))
   reverse_means[is.na(reverse_means)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       mean_se_exp, mean_se_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "as well as the SEs ",
-                                              "should be >0."),
-                       func = "es_from_means_se")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
   sd_exp <- mean_se_exp * sqrt(n_exp)
   sd_nexp <- mean_se_nexp * sqrt(n_nexp)
 
@@ -238,18 +216,7 @@ es_from_means_sd_pooled <- function(mean_exp, mean_nexp, mean_sd_pooled, n_exp, 
   if (missing(reverse_means)) reverse_means <- rep(FALSE, length(mean_exp))
   reverse_means[is.na(reverse_means)] <- FALSE
   if (length(reverse_means) == 1) reverse_means = c(rep(reverse_means, length(mean_exp)))
-  if (length(reverse_means) != length(mean_exp)) stop("The length of the 'reverse_means' argument of incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       mean_sd_pooled,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "as well as pooled SD ",
-                                              "should be >0."),
-                       func = "es_from_means_sd_pooled")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (length(reverse_means) != length(mean_exp)) stop("The length of the 'reverse_means' argument is incorrectly specified.")
 
   d <- (mean_exp - mean_nexp) / mean_sd_pooled
 
@@ -328,29 +295,6 @@ es_from_means_ci <- function(mean_exp, mean_ci_lo_exp, mean_ci_up_exp,
                              reverse_means) {
   if (missing(reverse_means)) reverse_means <- rep(FALSE, length(mean_exp))
   reverse_means[is.na(reverse_means)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "should be >0."),
-                       func = "es_from_means_ci")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-  tryCatch({
-    .validate_ci_symmetry(mean_exp, mean_ci_lo_exp, mean_ci_up_exp,
-                          func = "es_from_means_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
-  tryCatch({
-    .validate_ci_symmetry(mean_nexp, mean_ci_lo_nexp, mean_ci_up_nexp,
-                          func = "es_from_means_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
 
   df_exp <- n_exp - 1
   df_nexp <- n_nexp - 1

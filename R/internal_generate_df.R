@@ -26,7 +26,14 @@
     (!is.na(x$logrr) & !is.na(x$logrr_se) & .quick_val_ci(x$logrr, x$logrr_ci_lo, x$logrr_ci_up)) |
     (!is.na(x$logirr) & !is.na(x$logirr_se) & .quick_val_ci(x$logirr, x$logirr_ci_lo, x$logirr_ci_up)) |
     (!is.na(x$logcvr) & !is.na(x$logcvr_se) & .quick_val_ci(x$logcvr, x$logcvr_ci_lo, x$logcvr_ci_up)) |
-    (!is.na(x$logvr) & !is.na(x$logvr_se) & .quick_val_ci(x$logvr, x$logvr_ci_lo, x$logvr_ci_up)))
+    (!is.na(x$logvr) & !is.na(x$logvr_se) & .quick_val_ci(x$logvr, x$logvr_ci_lo, x$logvr_ci_up)) |
+    (!is.na(x$rp) & !is.na(x$rp_se) & .quick_val_ci(x$rp, x$rp_ci_lo, x$rp_ci_up)) |
+    (!is.na(x$zp) & !is.na(x$zp_se) & .quick_val_ci(x$zp, x$zp_ci_lo, x$zp_ci_up)) |
+    ("nnt_se" %in% colnames(x) & !is.na(x$nnt) & !is.na(x$nnt_se)) |
+    ("rd_se" %in% colnames(x) & !is.na(x$rd) & !is.na(x$rd_se)) |
+    ("prop_se" %in% colnames(x) & !is.na(x$prop) & !is.na(x$prop_se)) |
+    ("alpha_se" %in% colnames(x) & !is.na(x$alpha) & !is.na(x$alpha_se)) |
+    ("icc_se" %in% colnames(x) & !is.na(x$icc) & !is.na(x$icc_se)))
   info <- rep(NA, nrow(x))
   if (length(row) > 0) {
     info[row] <- x$info_used[row]
@@ -140,6 +147,26 @@
         x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
       }
     }
+  } else if (measure == "loghr") {
+    if (exp) {
+      if ("loghr" %in% colnames(x)) {
+        x$value <- exp(as.numeric(as.character(x$loghr)))
+        x$se_value <- x$loghr_se
+        x$value_ci_lo <- exp(as.numeric(as.character(x$loghr_ci_lo)))
+        x$value_ci_up <- exp(as.numeric(as.character(x$loghr_ci_up)))
+      } else {
+        x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+      }
+    } else {
+      if ("loghr" %in% colnames(x)) {
+        x$value <- x$loghr
+        x$se_value <- x$loghr_se
+        x$value_ci_lo <- x$loghr_ci_lo
+        x$value_ci_up <- x$loghr_ci_up
+      } else {
+        x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+      }
+    }
   } else if (measure == "logcvr") {
     if ("logcvr" %in% colnames(x)) {
       x$value <- x$logcvr
@@ -170,9 +197,90 @@
   } else if (measure == "nnt") {
     if ("nnt" %in% colnames(x)) {
       x$value <- x$nnt
-      x$se_value <- rep(NA, nrow(x))
-      x$value_ci_lo <- rep(NA, nrow(x))
-      x$value_ci_up <- rep(NA, nrow(x))
+      x$se_value <- if ("nnt_se" %in% colnames(x)) x$nnt_se else rep(NA, nrow(x))
+      x$value_ci_lo <- if ("nnt_ci_lo" %in% colnames(x)) x$nnt_ci_lo else rep(NA, nrow(x))
+      x$value_ci_up <- if ("nnt_ci_up" %in% colnames(x)) x$nnt_ci_up else rep(NA, nrow(x))
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "rd") {
+    if ("rd" %in% colnames(x)) {
+      x$value <- x$rd
+      x$se_value <- if ("rd_se" %in% colnames(x)) x$rd_se else rep(NA, nrow(x))
+      x$value_ci_lo <- if ("rd_ci_lo" %in% colnames(x)) x$rd_ci_lo else rep(NA, nrow(x))
+      x$value_ci_up <- if ("rd_ci_up" %in% colnames(x)) x$rd_ci_up else rep(NA, nrow(x))
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "dw") {
+    if ("d" %in% colnames(x)) {
+      x$value <- x$d
+      x$se_value <- x$d_se
+      x$value_ci_lo <- x$d_ci_lo
+      x$value_ci_up <- x$d_ci_up
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "gw") {
+    if ("g" %in% colnames(x)) {
+      x$value <- x$g
+      x$se_value <- x$g_se
+      x$value_ci_lo <- x$g_ci_lo
+      x$value_ci_up <- x$g_ci_up
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "mdw") {
+    if ("mdw" %in% colnames(x)) {
+      x$value <- x$mdw
+      x$se_value <- x$mdw_se
+      x$value_ci_lo <- x$mdw_ci_lo
+      x$value_ci_up <- x$mdw_ci_up
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "rp") {
+    if ("rp" %in% colnames(x)) {
+      x$value <- x$rp
+      x$se_value <- x$rp_se
+      x$value_ci_lo <- x$rp_ci_lo
+      x$value_ci_up <- x$rp_ci_up
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "zp") {
+    if ("zp" %in% colnames(x)) {
+      x$value <- x$zp
+      x$se_value <- x$zp_se
+      x$value_ci_lo <- x$zp_ci_lo
+      x$value_ci_up <- x$zp_ci_up
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "prop") {
+    if ("prop" %in% colnames(x)) {
+      x$value <- x$prop
+      x$se_value <- x$prop_se
+      x$value_ci_lo <- x$prop_ci_lo
+      x$value_ci_up <- x$prop_ci_up
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "alpha") {
+    if ("alpha" %in% colnames(x)) {
+      x$value <- x$alpha
+      x$se_value <- x$alpha_se
+      x$value_ci_lo <- x$alpha_ci_lo
+      x$value_ci_up <- x$alpha_ci_up
+    } else {
+      x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "icc") {
+    if ("icc" %in% colnames(x)) {
+      x$value <- x$icc
+      x$se_value <- x$icc_se
+      x$value_ci_lo <- x$icc_ci_lo
+      x$value_ci_up <- x$icc_ci_up
     } else {
       x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
     }
@@ -189,6 +297,9 @@
                          measure, suffix = "",
                          es_selected,
                          exp, digits) {
+  # Early return if ordering is empty (e.g., no adjusted entries for single-group measures)
+  if (length(ordering) == 0) return(x)
+
   list_keep <- do.call(cbind, lapply(list_df, function(x) x$info_used))
   cols_keep <- which(as.character(list_keep[1, ]) %in% ordering)
   list_df_restrict <- list_df[cols_keep]
@@ -207,10 +318,10 @@
     # i = 1
     # print(i);
     # print(ordering[i]);
-    df_temp <- list_df_restrict[[which(df_info_min_max[1, ] == ordering[i])]]
+    df_temp <- list_df_restrict[[which(df_info_min_max[1, ] == ordering[i])[1]]]
     row <- which(
       # info non-missing in the selected results
-      !is.na(df_temp$value) & (!is.na(df_temp$se) | measure == "nnt") &
+      !is.na(df_temp$value) & (!is.na(df_temp$se_value) | measure == "nnt") &
       # info missing in user datasets
         ((((is.na(x[, paste0("es", suffix)]) | is.na(x[, paste0("se", suffix)]))) & measure != "nnt") |
         (is.na(x[, paste0("es", suffix)]) & measure == "nnt"))
@@ -292,8 +403,13 @@
   col_max <- apply(df_value_min_max, 1, function(x) which.max(x)[1])
 
   cols_equal = which(col_min == col_max)
-  col_min[cols_equal] <- apply(data.frame(df_ci_lo_min_max)[cols_equal, ], 1, function(x) which.min(x)[1])
-  col_max[cols_equal] <- apply(data.frame(df_ci_lo_min_max)[cols_equal, ], 1, function(x) which.max(x)[1])
+  if (length(cols_equal) > 0 && ncol(df_ci_lo_min_max) > 1) {
+    # drop = FALSE keeps the matrix/data.frame shape when df_ci_lo_min_max
+    # has 1 column (e.g. measure = "hr" with only user_input_crude),
+    # which otherwise collapses to a vector and breaks apply().
+    col_min[cols_equal] <- apply(data.frame(df_ci_lo_min_max)[cols_equal, , drop = FALSE], 1, function(x) which.min(x)[1])
+    col_max[cols_equal] <- apply(data.frame(df_ci_lo_min_max)[cols_equal, , drop = FALSE], 1, function(x) which.max(x)[1])
+  }
 
   for (i in 1:length(col_min)) {
     x[i, paste0("min_info", suffix)] <- df_info_min_max[i, col_min[i]]
@@ -315,14 +431,20 @@
                                                 "< 2 types of input data available"
   )
 
-  # This is for "overlap_min_max"
+  # This is for "overlap_min_max" -- intersection / union ratio of the two CIs.
+  # Always in [0, 1]: correctly handles nested CIs (one CI contained in the
+  # other) which the prior |max_lo - min_up| / |max_up - min_lo| formula
+  # mis-handled (could return values > 1 or hide nesting at 100%).
+  min_lo <- as.numeric(x[, paste0("min_es_ci_lo", suffix)])
+  min_up <- as.numeric(x[, paste0("min_es_ci_up", suffix)])
+  max_lo <- as.numeric(x[, paste0("max_es_ci_lo", suffix)])
+  max_up <- as.numeric(x[, paste0("max_es_ci_up", suffix)])
+  inter_w <- pmax(0, pmin(min_up, max_up) - pmax(min_lo, max_lo))
+  union_w <- pmax(min_up, max_up) - pmin(min_lo, max_lo)
+  overlap_val <- ifelse(is.finite(union_w) & union_w > 0, inter_w / union_w, 0)
   x[, paste0("overlap_min_max", suffix)] <- ifelse(
     x[, paste0("n_estimations", suffix)] > 1,
-    ifelse(x[, paste0("max_es_ci_lo", suffix)] > x[, paste0("min_es_ci_up", suffix)],
-           0,
-           abs(x[, paste0("max_es_ci_lo", suffix)] - x[, paste0("min_es_ci_up", suffix)]) /
-             abs(x[, paste0("max_es_ci_up", suffix)] - x[, paste0("min_es_ci_lo", suffix)])
-    ),
+    overlap_val,
     "< 2 types of input data available"
   )
   # This is for dispersion_es
@@ -349,11 +471,18 @@
   }
   dat_long = dat_long[(!is.na(dat_long$es) & !is.na(dat_long$se) &
                          !is.na(dat_long$es_ci_lo) & !is.na(dat_long$es_ci_up) &
-                         rep(measure, nrow(dat_long)) != "nnt") |
+                         measure != "nnt") |
                         (!is.na(dat_long$es) & measure == "nnt"), ]
   dat_long = dat_long[order(dat_long$row_id),]
 
-  res_dispersion = data.frame(tapply(dat_long$es, dat_long$row_id, sd))
+  # Cross-method dispersion (E1 signal). Uses the k-robust max-absolute-deviation
+  # -from-median (.dispersion_stat) rather than a raw sample SD: sd() shrinks
+  # ~1/sqrt(k) as agreeing methods are added, so a lone discordant estimate
+  # becomes progressively harder to flag in data-rich rows, and for k = 2 it
+  # collapses to |a - b|/sqrt(2), duplicating E3 with a mismatched threshold. The
+  # MaxAD is k-invariant and, because diff_max = 2*dispersion_max for every
+  # measure, coincides exactly with E3 at k = 2 while complementing it for k > 2.
+  res_dispersion = data.frame(tapply(dat_long$es, dat_long$row_id, .dispersion_stat))
   dispersion = data.frame(dispersion_es = res_dispersion[,1],
                           row_id = rownames(res_dispersion))
 
@@ -441,24 +570,8 @@
     suffix
   )] <- "< 2 types of input data available"
 
-  # this is for rounding
-  for (cols in paste0(
-    c(
-      "es", "se", "es_ci_lo", "es_ci_up",
-      "overlap_min_max", "diff_min_max", "dispersion_es",
-      "min_es_value", "min_es_se", "min_es_ci_lo", "min_es_ci_up",
-      "max_es_value", "max_es_se", "max_es_ci_lo", "max_es_ci_up"
-    ),
-    suffix
-  )) {
-    for (rows in which(x[, cols] != "< 2 types of input data available")) {
-      x[rows, cols] <- # as.numeric(as.character(
-        # sprintf(paste0("%.", digits, "f"),
-        round(as.numeric(as.character(
-          x[rows, cols]
-        )), digits) # )))
-    }
-  }
+  # Note: rounding was moved to summary() so that quality flags operate on
+  # full-precision values. See .round_numeric_cols() called after flag checks.
 
   return(x)
 }

@@ -53,15 +53,6 @@ es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
   if (missing(reverse_med)) reverse_med <- rep(FALSE, length(q1_exp))
   reverse_med[is.na(reverse_med)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "should be >0."),
-                       func = "es_from_med_quarts")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
 
   e <- c(
     0.990, 1.144, 1.206, 1.239, 1.260,
@@ -177,14 +168,6 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
   if (missing(reverse_med)) reverse_med <- rep(FALSE, length(min_exp))
   reverse_med[is.na(reverse_med)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "should be >0."),
-                       func = "es_from_med_min_max_quarts")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
   list1 <- c(
     0.000, 1.128, 1.693, 2.059, 2.326, 2.534, 2.704,
     2.847, 2.970, 3.078, 3.173, 3.259, 3.336, 3.407,
@@ -333,15 +316,6 @@ es_from_med_min_max <- function(min_exp, med_exp, max_exp, n_exp,
                                 smd_to_cor = "viechtbauer", reverse_med) {
   if (missing(reverse_med)) reverse_med <- rep(FALSE, length(min_exp))
   reverse_med[is.na(reverse_med)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "should be >0."),
-                       func = "es_from_med_min_max")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   list1 <- c(
     0.000, 1.128, 1.693, 2.059, 2.326, 2.534, 2.704,

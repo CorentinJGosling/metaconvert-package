@@ -22,7 +22,10 @@ es_from_chisq_pval(
 
 \item{n_exp}{total number of participants in the exposed group}
 
-\item{yates_chisq}{a logical value indicating whether the Chi square has been performed using Yate's correction for continuity.}
+\item{yates_chisq}{logical value (or vector of length \code{length(chisq_pval)})
+indicating whether the chi-square has been performed using Yates' correction
+for continuity. When a vector is supplied, each row is back-transformed using
+its own setting. Missing values are treated as \code{FALSE}.}
 
 \item{reverse_chisq_pval}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -47,7 +50,9 @@ This function converts a chi-square value (with one degree of freedom)
 into a chi-square coefficient (Section 3.12 in Lipsey et al., 2001):
 \deqn{chisq = qchisq(chisq\_pval, df = 1, lower.tail = FALSE)}
 
-Note that if \code{yates_chisq = "TRUE"}, a small correction is added.
+Note that if \code{yates_chisq = TRUE}, the chi-square value is interpreted
+as Yates-corrected when back-transforming to a 2x2 contingency table; this is
+propagated row by row when a vector is supplied.
 
 Then, the chisq coefficient is converted to other effect size measures (see \code{\link{es_from_chisq}}).
 }

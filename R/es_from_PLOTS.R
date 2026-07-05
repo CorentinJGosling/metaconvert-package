@@ -109,15 +109,6 @@ es_from_plot_means <- function(n_exp, n_nexp,
   if (missing(reverse_plot_means)) reverse_plot_means <- rep(FALSE, length(n_exp))
   reverse_plot_means[is.na(reverse_plot_means)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "should be >0."),
-                       func = "es_from_plot_means")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
   ## SD ------
   #### exp
   mean_sd_exp_lo <- plot_mean_exp - plot_mean_sd_lo_exp
@@ -293,17 +284,6 @@ es_from_plot_ancova_means <- function(n_exp, n_nexp,
 
   if (missing(reverse_plot_ancova_means)) reverse_plot_ancova_means <- rep(FALSE, length(n_exp))
   reverse_plot_ancova_means[is.na(reverse_plot_ancova_means)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       cov_outcome_r, n_cov_ancova,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "as well as the correlation and number of covariates in ANCOVA ",
-                                              "should be >0."),
-                       func = "es_from_plot_ancova_means")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   ## SD ------
   #### exp

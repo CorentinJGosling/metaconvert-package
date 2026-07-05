@@ -13,18 +13,30 @@
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio.
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient.
 #' @param pre_post_to_smd formula used to obtain a SMD from pre/post means and SD of two independent groups.
+#' @param pool_sd a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.
 #' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown)
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
-#' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yate's correction for continuity.
+#' @param prop_to_es method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).
+#' @param alpha_to_es method used to compute the effect size from Cronbach's alpha. Must be either "bonett" or "raw" (see \code{\link{es_from_cronbach_alpha}}).
+#' @param icc_to_es method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).
+#' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).
 #' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value" (see \code{\link{es_from_pearson_r}}).
-#' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
+#' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds. Asymmetric CIs are only flagged, not modified (see \code{\link{summary.metaConvert}}).
 #' @param verbose a logical variable indicating whether text outputs and messages should be generated. We recommend turning this option to FALSE only after having carefully read all the generated messages.
+#' @param correct_inputs a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'es_flags' column and kept in the data.
+#' @param flag_options a named list of thresholds used by the quality flags (see \code{\link{summary.metaConvert}} for the list of options and defaults).
 #'
 #' @details
-#' This function automatically computes or converts between 11 effect sizes
+#' This function automatically computes or converts between 14 effect sizes
 #' measures from any relevant type of input data stored in the
 #' dataset you pass to this function.
+#'
+#' ## Input validation
+#' Before the calculations, the input data are checked (negative sample
+#' sizes/SD/SE/p-values, inverted CI bounds, values outside their CI,
+#' asymmetric CI). By default invalid values are set to NA; issues appear
+#' in the 'es_flags' column of summary().
 #'
 #' ## Effect size measures
 #' Possible effect size measures are:
@@ -36,9 +48,12 @@
 #' 6. (log) incidence rate ratio ("irr" and "logirr")
 #' 7. correlation coefficient ("r")
 #' 8. transformed r-to-z correlation coefficient ("z")
-#' 9. log variability ratio ("logvr")
-#' 10. log coefficient of variation ("logcvr")
-#' 11. number needed to treat ("nnt")
+#' 9. partial correlation coefficient ("rp")
+#' 10. Fisher's z of partial correlation ("zp")
+#' 11. log variability ratio ("logvr")
+#' 12. log coefficient of variation ("logcvr")
+#' 13. number needed to treat ("nnt")
+#' 14. risk difference ("rd")
 #'
 #' ## Computation of a main effect size
 #' If you enter multiple types of input data
@@ -163,7 +178,21 @@
 #' 2.	Contingency table
 #' 3.	Odds ratio values
 #' 4.	Risk ratio values
-#' 5.	Phi/chi-square value
+#' 5.	Incidence rate ratio (person-time NNT, requires baseline_rate)
+#' 6.	Phi/chi-square value
+#'
+#' NNT values should not be pooled directly (the NNT confidence interval is
+#' disjoint when the risk difference crosses zero). You should pool RD/OR/RR
+#' values and convert the pooled estimate to NNT (Deeks, 2002; Cochrane
+#' Handbook, Chapter 15).
+#'
+#' #### Risk difference (\code{measure=c("rd")})
+#' 1.	User's input effect size value
+#' 2.	Contingency table
+#' 3.	Odds ratio values
+#' 4.	Risk ratio values
+#' 5.	Incidence rate ratio (requires baseline_rate)
+#' 6.	Phi/chi-square value
 #'
 #' ### Manual
 #'
@@ -176,7 +205,7 @@
 #' the means + SD, then the means + SE, then the Student's t-test to estimate the main effect
 #' size.
 #' - \code{hierarchy = "2x2 > or_se > phi"}, the convert_df function will prioritize
-#' the contigency table, then the odds ratio value + SE, then the phi coefficient to estimate
+#' the contingency table, then the odds ratio value + SE, then the phi coefficient to estimate
 #' the main effect size.
 #'
 #' Importantly, if none of the types of input data indicated in the \code{hierarchy} argument
@@ -220,14 +249,14 @@
 #' )
 #' summary(res)
 convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr",
-                                      "nnt", "r", "z", "logvr", "logcvr"),
+                                      "nnt", "rd", "r", "z", "rp", "zp", "logvr", "logcvr"),
                        main_es = TRUE,
                        es_selected = c("auto", "hierarchy", "minimum", "maximum"),
                        selection_auto = c("crude", "paired", "adjusted"),
                        split_adjusted = TRUE,
                        format_adjusted = c("wide", "long"),
                        verbose = TRUE,
-                       max_asymmetry = 10,
+                       max_asymmetry = 50,
                        hierarchy = "means_sd > means_se > means_ci",
                        table_2x2_to_cor = "tetrachoric",
                        rr_to_or = "metaumbrella",
@@ -235,10 +264,16 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
                        or_to_cor = "bonett",
                        smd_to_cor = "viechtbauer",
                        pre_post_to_smd = "bonett",
-                       r_pre_post = 0.5,
+                       r_pre_post = 0.8,
                        cor_to_smd = "viechtbauer",
                        unit_type = "raw_scale",
-                       yates_chisq = FALSE) {
+                       yates_chisq = FALSE,
+                       pool_sd = FALSE,
+                       prop_to_es = "raw",
+                       alpha_to_es = "bonett",
+                       icc_to_es = "bonett",
+                       correct_inputs = TRUE,
+                       flag_options = list()) {
   # @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contingency table.
   # table_2x2_to_cor = "tetrachoric",
   # x = dat
@@ -269,8 +304,11 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 
   x <- .check_data(x, split_adjusted = split_adjusted,
                    main_es = main_es, format = format_adjusted)
-  x[is.na(x[, "r_pre_post_exp"]), "r_pre_post_exp"] <- r_pre_post
-  x[is.na(x[, "r_pre_post_nexp"]), "r_pre_post_nexp"] <- r_pre_post
+  # rows with defaulted r_pre_post
+  .r_defaulted_exp <- is.na(x[, "r_pre_post_exp"])
+  .r_defaulted_nexp <- is.na(x[, "r_pre_post_nexp"])
+  x[.r_defaulted_exp, "r_pre_post_exp"] <- r_pre_post
+  x[.r_defaulted_nexp, "r_pre_post_nexp"] <- r_pre_post
   r_pre_post = rep(r_pre_post, nrow(x))
   for (i in c("rr_to_or",
               "or_to_rr",
@@ -293,10 +331,81 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     }
   }
 
+  # input validation
+  enable_info <- if (!is.null(flag_options$enable_informational)) {
+    flag_options$enable_informational
+  } else {
+    .default_flag_options()$enable_informational
+  }
+  sd_ratio_max_val <- if (!is.null(flag_options$sd_ratio_max)) {
+    flag_options$sd_ratio_max
+  } else {
+    .default_flag_options()$sd_ratio_max
+  }
+  sd_ratio_bl_ep_min_val <- if (!is.null(flag_options$sd_ratio_bl_ep_min)) {
+    flag_options$sd_ratio_bl_ep_min
+  } else {
+    .default_flag_options()$sd_ratio_bl_ep_min
+  }
+  baseline_imb_max_val <- if (!is.null(flag_options$baseline_imbalance_max)) {
+    flag_options$baseline_imbalance_max
+  } else {
+    .default_flag_options()$baseline_imbalance_max
+  }
+  enable_cross_row_val <- if (!is.null(flag_options$enable_cross_row)) {
+    flag_options$enable_cross_row
+  } else {
+    .default_flag_options()$enable_cross_row
+  }
+  templated_min_match_val <- if (!is.null(flag_options$templated_min_match)) {
+    flag_options$templated_min_match
+  } else {
+    .default_flag_options()$templated_min_match
+  }
+  paired_as_indep_tol_val <- if (!is.null(flag_options$paired_as_indep_tol)) {
+    flag_options$paired_as_indep_tol
+  } else {
+    .default_flag_options()$paired_as_indep_tol
+  }
+  validation <- .validate_input_data(x, max_asymmetry = max_asymmetry, verbose = verbose,
+                                      enable_informational = enable_info,
+                                      sd_ratio_max = sd_ratio_max_val,
+                                      sd_ratio_bl_ep_min = sd_ratio_bl_ep_min_val,
+                                      baseline_imbalance_max = baseline_imb_max_val,
+                                      enable_cross_row = enable_cross_row_val,
+                                      templated_min_match = templated_min_match_val,
+                                      measure = measure,
+                                      paired_as_indep_tol = paired_as_indep_tol_val,
+                                      correct_inputs = correct_inputs)
+  x <- validation$data
+
+  # V6: Flag rows where r_pre_post used the default value AND pre-post data is present
+  .pre_post_cols <- c(
+    "mean_pre_exp", "mean_post_exp", "mean_pre_nexp", "mean_post_nexp",
+    "mean_change_exp", "mean_change_nexp",
+    "mean_pre_single_group", "mean_post_single_group",
+    "mean_change_single_group", "paired_t", "paired_f"
+  )
+  .pre_post_cols <- intersect(.pre_post_cols, colnames(x))
+  .has_pre_post <- if (length(.pre_post_cols) > 0) {
+    rowSums(!is.na(x[, .pre_post_cols, drop = FALSE])) > 0
+  } else {
+    rep(FALSE, nrow(x))
+  }
+  .r_defaulted <- (.r_defaulted_exp | .r_defaulted_nexp) & .has_pre_post
+  for (i in which(.r_defaulted)) {
+    msg <- sprintf("[INFO] Default r_pre_post = %s used (not provided by user)", r_pre_post[1])
+    if (nzchar(validation$issues[i])) {
+      validation$issues[i] <- paste(validation$issues[i], msg, sep = "; ")
+    } else {
+      validation$issues[i] <- msg
+    }
+  }
+
   if (verbose) message("Calculations in progress, it may take up to 30 sec...")
   measure = tolower(measure)
-  if (!measure %in% c("d", "g", "md", "r", "z", "or", "rr", "irr", "logor", "logrr", "logirr", "logvr", "logcvr", "nnt")) {
-    stop(paste0("'", measure, "' not in tolerated measures. Possible inputs are: 'md', 'd', 'g', 'or', 'rr', 'irr', 'logor', 'logrr', 'logirr', 'r', 'z', 'logvr', 'logcvr', 'nnt'"))
+  if (!measure %in% c("d", "g", "md", "dw", "gw", "mdw", "r", "z", "rp", "zp", "or", "rr", "irr", "hr", "logor", "logrr", "logirr", "loghr", "logvr", "logcvr", "nnt", "rd", "prop", "alpha", "icc")) {
+    stop(paste0("'", measure, "' not in tolerated measures. Possible inputs are: 'md', 'd', 'g', 'dw', 'gw', 'mdw', 'or', 'rr', 'irr', 'hr', 'logor', 'logrr', 'logirr', 'loghr', 'r', 'z', 'rp', 'zp', 'logvr', 'logcvr', 'nnt', 'rd', 'prop', 'alpha', 'icc'"))
   } else if (!split_adjusted %in% c(TRUE, FALSE)) {
     stop(paste0("'", split_adjusted, "' not in tolerated values for the 'split_adjusted' argument. Should be a logical value (TRUE/FALSE)"))
   } else if (!format_adjusted %in% c("wide", "long")) {
@@ -307,7 +416,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     stop(paste0("'", main_es, "' not in tolerated values for the 'main_es' argument. Should be a logical value (TRUE/FALSE)"))
   }
 
-  if (measure %in% c("or", "rr", "irr")) {
+  if (measure %in% c("or", "rr", "irr", "hr")) {
     exp <- TRUE
     if (measure == "or") {
       measure <- "logor"
@@ -315,6 +424,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       measure <- "logrr"
     } else if (measure == "irr") {
       measure <- "logirr"
+    } else if (measure == "hr") {
+      measure <- "loghr"
     }
   } else {
     exp <- FALSE
@@ -364,6 +475,15 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     n_cases = n_cases, n_controls = n_controls, n_sample = n_sample,
     or_to_rr = or_to_rr, or_to_cor = or_to_cor, reverse_or_pval = reverse_or_pval
   ))
+  es_logreg_t <- with(x, es_from_logreg_t(
+    or = or, logor = logor, rr = rr, logrr = logrr,
+    logreg_t = logreg_t, small_margin_prop = small_margin_prop,
+    baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
+    n_cases = n_cases, n_controls = n_controls, n_sample = n_sample,
+    or_to_rr = or_to_rr, or_to_cor = or_to_cor,
+    rr_to_or = rr_to_or, smd_to_cor = smd_to_cor,
+    reverse_logreg_t = reverse_logreg_t
+  ))
   # R ----------------------------------------------
   es_pearson_r <- with(x, es_from_pearson_r(
     pearson_r = pearson_r, n_sample = n_sample,
@@ -378,6 +498,13 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     unit_increase_iv = unit_increase_iv,
     n_exp = n_exp, n_nexp = n_nexp, cor_to_smd = cor_to_smd,
     reverse_fisher_z = reverse_fisher_z
+  ))
+  es_spearman_r <- with(x, es_from_spearman_rho(
+    spearman_r = spearman_r, n_sample = n_sample,
+    sd_iv = sd_iv, unit_increase_iv = unit_increase_iv,
+    unit_type = unit_type,
+    n_exp = n_exp, n_nexp = n_nexp, cor_to_smd = cor_to_smd,
+    reverse_spearman_r = reverse_spearman_r
   ))
 
   # MEANS ----------------------------------------------
@@ -439,7 +566,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
       smd_to_cor = smd_to_cor, reverse_means_pre_post = reverse_means_pre_post,
-      pre_post_to_smd = pre_post_to_smd
+      pre_post_to_smd = pre_post_to_smd,
+      pool_sd = pool_sd
     )
   )
   es_means_se_pre_post <- with(
@@ -453,7 +581,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
       smd_to_cor = smd_to_cor, reverse_means_pre_post = reverse_means_pre_post,
-      pre_post_to_smd = pre_post_to_smd
+      pre_post_to_smd = pre_post_to_smd,
+      pool_sd = pool_sd
     )
   )
   es_means_ci_pre_post <- with(
@@ -470,9 +599,17 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 
       smd_to_cor = smd_to_cor, reverse_means_pre_post = reverse_means_pre_post,
       pre_post_to_smd = pre_post_to_smd,
+      pool_sd = pool_sd,
       max_asymmetry = max_asymmetry
     )
   )
+
+  # bonett/morris_dav need separate pre/post SDs, use cooper for mean change and paired t/f
+  pre_post_to_smd_restricted <- if (pre_post_to_smd %in% c("bonett", "morris_dav")) {
+    "cooper"
+  } else {
+    pre_post_to_smd
+  }
 
   es_means_change_sd <- with(x, es_from_mean_change_sd(
     n_exp = n_exp, n_nexp = n_nexp,
@@ -480,7 +617,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = mean_change_sd_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
-    smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change
+    smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    pool_sd = pool_sd
   ))
   es_mean_change_se <- with(x, es_from_mean_change_se(
     n_exp = n_exp, n_nexp = n_nexp,
@@ -488,7 +627,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     mean_change_nexp = mean_change_nexp, mean_change_se_nexp = mean_change_se_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
-    smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change
+    smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    pool_sd = pool_sd
   ))
   es_mean_change_ci <- with(x, es_from_mean_change_ci(
     n_exp = n_exp, n_nexp = n_nexp,
@@ -499,6 +640,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    pool_sd = pool_sd,
     max_asymmetry = max_asymmetry
   ))
   es_mean_change_pval <- with(x, es_from_mean_change_pval(
@@ -507,7 +650,104 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     mean_change_nexp = mean_change_nexp, mean_change_pval_nexp = mean_change_pval_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
-    smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change
+    smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    pool_sd = pool_sd
+  ))
+
+  # SINGLE-GROUP WITHIN-GROUP EFFECTS (experimental group only) --------------
+  es_means_pp_sg <- with(x, es_from_means_sd_pre_post_single_group(
+    mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
+    mean_pre_sd_exp = mean_pre_sd_exp, mean_sd_exp = mean_sd_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    pre_post_to_smd = pre_post_to_smd, smd_to_cor = smd_to_cor,
+    reverse_means_pre_post = reverse_means_pre_post
+  ))
+
+  es_means_se_pp_sg <- with(x, es_from_means_se_pre_post_single_group(
+    mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
+    mean_pre_se_exp = mean_pre_se_exp, mean_se_exp = mean_se_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    pre_post_to_smd = pre_post_to_smd, smd_to_cor = smd_to_cor,
+    reverse_means_pre_post = reverse_means_pre_post
+  ))
+
+  es_means_ci_pp_sg <- with(x, es_from_means_ci_pre_post_single_group(
+    mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
+    mean_pre_ci_lo_exp = mean_pre_ci_lo_exp, mean_pre_ci_up_exp = mean_pre_ci_up_exp,
+    mean_ci_lo_exp = mean_ci_lo_exp, mean_ci_up_exp = mean_ci_up_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    pre_post_to_smd = pre_post_to_smd, smd_to_cor = smd_to_cor,
+    max_asymmetry = max_asymmetry,
+    reverse_means_pre_post = reverse_means_pre_post
+  ))
+
+  es_mean_change_sg <- with(x, es_from_mean_change_sd_single_group(
+    mean_change_exp = mean_change_exp, mean_change_sd_exp = mean_change_sd_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    reverse_mean_change = reverse_mean_change
+  ))
+
+  es_mean_change_se_sg <- with(x, es_from_mean_change_se_single_group(
+    mean_change_exp = mean_change_exp, mean_change_se_exp = mean_change_se_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    reverse_mean_change = reverse_mean_change
+  ))
+
+  es_mean_change_ci_sg <- with(x, es_from_mean_change_ci_single_group(
+    mean_change_exp = mean_change_exp,
+    mean_change_ci_lo_exp = mean_change_ci_lo_exp, mean_change_ci_up_exp = mean_change_ci_up_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    smd_to_cor = smd_to_cor, max_asymmetry = max_asymmetry,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    reverse_mean_change = reverse_mean_change
+  ))
+
+  es_mean_change_pval_sg <- with(x, es_from_mean_change_pval_single_group(
+    mean_change_exp = mean_change_exp, mean_change_pval_exp = mean_change_pval_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd_restricted,
+    reverse_mean_change = reverse_mean_change
+  ))
+
+  es_paired_t_sg <- with(x, es_from_paired_t_single_group(
+    paired_t_exp = paired_t_exp,
+    n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_to_cor = smd_to_cor,
+    reverse_paired_t = reverse_paired_t
+  ))
+
+  # SINGLE-GROUP PROPORTIONS --------------
+  es_prop_sg <- with(x, es_from_prop_single_group(
+    prop = prop,
+    n_sample = n_sample,
+    prop_to_es = prop_to_es,
+    reverse_prop = reverse_prop
+  ))
+
+  es_prop_counts_sg <- with(x, es_from_prop_single_group_counts(
+    n_cases = n_cases,
+    n_sample = n_sample,
+    prop_to_es = prop_to_es,
+    reverse_prop = reverse_prop
+  ))
+
+  # CRONBACH'S ALPHA -----------------------------------------
+  es_alpha_sg <- with(x, es_from_cronbach_alpha(
+    cronbach_alpha = cronbach_alpha, n_sample = n_sample,
+    n_items = n_items, alpha_to_es = alpha_to_es
+  ))
+
+  # ICC -------------------------------------------------------
+  es_icc_sg <- with(x, es_from_icc(
+    icc = icc, n_sample = n_sample,
+    n_measurements = n_measurements, icc_type = icc_type,
+    icc_to_es = icc_to_es
   ))
 
   es_paired_t <- with(x, es_from_paired_t(
@@ -515,7 +755,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     n_exp = n_exp, n_nexp = n_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
-    smd_to_cor = smd_to_cor, reverse_paired_t = reverse_paired_t
+    smd_to_cor = smd_to_cor, reverse_paired_t = reverse_paired_t,
+    pre_post_to_smd = pre_post_to_smd_restricted
   ))
 
   es_paired_t_pval <- with(x, es_from_paired_t_pval(
@@ -524,14 +765,16 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     n_exp = n_exp, n_nexp = n_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
-    smd_to_cor = smd_to_cor, reverse_paired_t_pval = reverse_paired_t_pval
+    smd_to_cor = smd_to_cor, reverse_paired_t_pval = reverse_paired_t_pval,
+    pre_post_to_smd = pre_post_to_smd_restricted
   ))
 
   es_paired_f <- with(x, es_from_paired_f(paired_f_exp, paired_f_nexp,
     n_exp = n_exp, n_nexp = n_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
-    smd_to_cor = smd_to_cor, reverse_paired_f = reverse_paired_f
+    smd_to_cor = smd_to_cor, reverse_paired_f = reverse_paired_f,
+    pre_post_to_smd = pre_post_to_smd_restricted
   ))
 
   es_paired_f_pval <- with(x, es_from_paired_f_pval(
@@ -540,7 +783,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     n_exp = n_exp, n_nexp = n_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
-    smd_to_cor = smd_to_cor, reverse_paired_f_pval = reverse_paired_f_pval
+    smd_to_cor = smd_to_cor, reverse_paired_f_pval = reverse_paired_f_pval,
+    pre_post_to_smd = pre_post_to_smd_restricted
   ))
   # ANOVA, Student t-test  ----------------------------------------------
   es_t_student <- with(x, es_from_student_t(
@@ -622,8 +866,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     ancova_mean_ci_lo_exp = ancova_mean_ci_lo_exp, ancova_mean_ci_up_exp = ancova_mean_ci_up_exp,
     ancova_mean_ci_lo_nexp = ancova_mean_ci_lo_nexp, ancova_mean_ci_up_nexp = ancova_mean_ci_up_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means,
-    max_asymmetry = max_asymmetry
+    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
   ))
   es_ancova_means_sd_pooled_adj <- with(x, es_from_ancova_means_sd_pooled_adj(
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
@@ -665,8 +908,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
          cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
          n_exp = n_exp, n_nexp = n_nexp,
          smd_to_cor = smd_to_cor,
-         reverse_ancova_md = reverse_ancova_md,
-         max_asymmetry = max_asymmetry))
+         reverse_ancova_md = reverse_ancova_md))
   es_ancova_md_pval <- with(x, es_from_ancova_md_pval(
         ancova_md = ancova_md,
         ancova_md_pval = ancova_md_pval,
@@ -693,17 +935,21 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   ))
 
   # CHI-SQ + PHI --------------------------------------------------------
+  # yates_chisq column overrides the argument
+  yates_chisq_vec <- x$yates_chisq
+  yates_chisq_vec[is.na(yates_chisq_vec)] <- as.logical(yates_chisq)[1]
+
   es_chisq <- with(x, es_from_chisq(
     chisq = chisq, n_sample = n_sample,
     n_cases = n_cases, n_exp = n_exp,
-    yates_chisq = yates_chisq,
+    yates_chisq = yates_chisq_vec,
     reverse_chisq = reverse_chisq
   ))
 
   es_chisq_pval <- with(x, es_from_chisq_pval(
     chisq_pval = chisq_pval,
     n_cases = n_cases, n_exp = n_exp,
-    yates_chisq = yates_chisq,
+    yates_chisq = yates_chisq_vec,
     n_sample = n_sample, reverse_chisq_pval = reverse_chisq_pval
   ))
 
@@ -766,6 +1012,30 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     rr_to_or = rr_to_or, smd_to_cor = smd_to_cor, reverse_rr = reverse_rr_pval
   ))
 
+  # RD (risk difference) --------------------------------------------------------
+  es_rd_se <- with(x, es_from_rd_se(
+    rd = rd, rd_se = rd_se,
+    baseline_risk = baseline_risk,
+    n_exp = n_exp, n_nexp = n_nexp,
+    n_cases = n_cases, n_controls = n_controls, n_sample = n_sample,
+    reverse_rd = reverse_rd
+  ))
+  es_rd_ci <- with(x, es_from_rd_ci(
+    rd = rd,
+    rd_ci_lo = rd_ci_lo, rd_ci_up = rd_ci_up,
+    baseline_risk = baseline_risk,
+    n_exp = n_exp, n_nexp = n_nexp,
+    n_cases = n_cases, n_controls = n_controls, n_sample = n_sample,
+    reverse_rd = reverse_rd
+  ))
+  es_rd_pval <- with(x, es_from_rd_pval(
+    rd = rd, rd_pval = rd_pval,
+    baseline_risk = baseline_risk,
+    n_exp = n_exp, n_nexp = n_nexp,
+    n_cases = n_cases, n_controls = n_controls, n_sample = n_sample,
+    reverse_rd_pval = reverse_rd_pval
+  ))
+
   # regression
   es_std_beta <- with(x, es_from_beta_std(
     beta_std = beta_std, sd_dv = sd_dv, n_exp = n_exp, n_nexp = n_nexp,
@@ -776,29 +1046,73 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     smd_to_cor = smd_to_cor, reverse_beta_unstd = reverse_beta_unstd
   ))
 
+  # regression t-statistic (partial correlation)
+  es_linreg_t <- with(x, es_from_linreg_t(
+    linreg_t = linreg_t, n_sample = n_sample, n_covariates = n_covariates,
+    sd_iv = sd_iv, unit_increase_iv = unit_increase_iv, unit_type = unit_type,
+    n_exp = n_exp, n_nexp = n_nexp, cor_to_smd = cor_to_smd,
+    reverse_linreg_t = reverse_linreg_t
+  ))
+
+  # regression coefficient (partial correlation)
+  es_linreg_b_se <- with(x, es_from_linreg_b_se(
+    linreg_b = linreg_b, linreg_b_se = linreg_b_se,
+    n_sample = n_sample, n_covariates = n_covariates,
+    sd_iv = sd_iv, unit_increase_iv = unit_increase_iv, unit_type = unit_type,
+    n_exp = n_exp, n_nexp = n_nexp, cor_to_smd = cor_to_smd,
+    reverse_linreg_b = reverse_linreg_b
+  ))
+  es_linreg_b_ci <- with(x, es_from_linreg_b_ci(
+    linreg_b = linreg_b, linreg_b_ci_lo = linreg_b_ci_lo, linreg_b_ci_up = linreg_b_ci_up,
+    n_sample = n_sample, n_covariates = n_covariates,
+    sd_iv = sd_iv, unit_increase_iv = unit_increase_iv, unit_type = unit_type,
+    n_exp = n_exp, n_nexp = n_nexp, cor_to_smd = cor_to_smd,
+    reverse_linreg_b = reverse_linreg_b
+  ))
+  es_linreg_b_pval <- with(x, es_from_linreg_b_pval(
+    linreg_b = linreg_b, linreg_b_pval = linreg_b_pval,
+    n_sample = n_sample, n_covariates = n_covariates,
+    sd_iv = sd_iv, unit_increase_iv = unit_increase_iv, unit_type = unit_type,
+    n_exp = n_exp, n_nexp = n_nexp, cor_to_smd = cor_to_smd,
+    reverse_linreg_b_pval = reverse_linreg_b_pval
+  ))
+
   # user input
   es_user_crude <- es_from_user_crude(
-    measure = measure,
-    user_es_measure_crude = x$user_es_measure_crude,
+    user_es_original_measure_crude = x$user_es_original_measure_crude,
     user_es_crude = x$user_es_crude,
     user_se_crude = x$user_se_crude,
     user_ci_lo_crude = x$user_ci_lo_crude,
     user_ci_up_crude = x$user_ci_up_crude,
-    max_asymmetry = max_asymmetry
+    user_es_target_measure_crude = measure,
+    n_exp = x$n_exp, n_nexp = x$n_nexp, n_sample = x$n_sample,
+    n_cases = x$n_cases, n_controls = x$n_controls,
+    baseline_risk = x$baseline_risk,
+    small_margin_prop = x$small_margin_prop,
+    or_to_rr = or_to_rr, or_to_cor = or_to_cor,
+    smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
+    rr_to_or = rr_to_or
   )
   es_user_adj <- es_from_user_adj(
-    user_es_measure_adj = x$user_es_measure_adj,
+    user_es_original_measure_adj = x$user_es_original_measure_adj,
     user_es_adj = x$user_es_adj,
     user_se_adj = x$user_se_adj,
     user_ci_lo_adj = x$user_ci_lo_adj,
     user_ci_up_adj = x$user_ci_up_adj,
-    measure = measure,
-    max_asymmetry = max_asymmetry
+    user_es_target_measure_adj = measure,
+    n_exp = x$n_exp, n_nexp = x$n_nexp, n_sample = x$n_sample,
+    n_cases = x$n_cases, n_controls = x$n_controls,
+    baseline_risk = x$baseline_risk,
+    small_margin_prop = x$small_margin_prop,
+    or_to_rr = or_to_rr, or_to_cor = or_to_cor,
+    smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
+    rr_to_or = rr_to_or
   )
   # survival
   es_cases_time <- with(x, es_from_cases_time(
     n_cases_exp = n_cases_exp, n_cases_nexp = n_cases_nexp,
     time_exp = time_exp, time_nexp = time_nexp,
+    baseline_rate = baseline_rate,
     reverse_irr = reverse_irr
   ))
   # variability
@@ -828,19 +1142,24 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   or_list_L2 = list(es_odds_ratio = es_odds_ratio,
                  es_odds_ratio_se = es_odds_ratio_se,
                  es_odds_ratio_ci = es_odds_ratio_ci,
-                 es_odds_ratio_pval = es_odds_ratio_pval)
+                 es_odds_ratio_pval = es_odds_ratio_pval,
+                 es_logreg_t = es_logreg_t)
   rr_list_L3 = list(es_rr_se = es_rr_se,
                      es_rr_ci = es_rr_ci,
                      es_rr_pval = es_rr_pval)
+  rd_list_L30 = list(es_rd_se = es_rd_se,
+                     es_rd_ci = es_rd_ci,
+                     es_rd_pval = es_rd_pval)
   cor_list_L4 = list(es_pearson_r = es_pearson_r,
-                  es_fisher_z = es_fisher_z)
+                  es_fisher_z = es_fisher_z,
+                  es_spearman_r = es_spearman_r)
   irr_list_L5 = list(es_cases_time = es_cases_time)
 
   var_list_L6 = list(var_means_sd = var_means_sd,
                      var_means_se = var_means_se,
                      var_means_ci = var_means_ci)
 
-  contigency_list_L7 = list(es_2x2 = es_2x2,
+  contingency_list_L7 = list(es_2x2 = es_2x2,
                          es_2x2_sum = es_2x2_sum,
                          es_prop = es_prop)
 
@@ -868,6 +1187,10 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
                       es_med_min_max_quarts = es_med_min_max_quarts)
   regression_list_L13 = list(es_std_beta = es_std_beta,
                            es_unstd_beta = es_unstd_beta)
+  partial_cor_list_L27 = list(es_linreg_t = es_linreg_t,
+                               es_linreg_b_se = es_linreg_b_se,
+                               es_linreg_b_ci = es_linreg_b_ci,
+                               es_linreg_b_pval = es_linreg_b_pval)
 
   md_paired_list_L14 = list(es_means_change_sd = es_means_change_sd,
                    es_mean_change_se = es_mean_change_se,
@@ -904,6 +1227,22 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   user_raw_L23 = list(es_user_crude)
   es_user_adj_L24 = list(es_user_adj)
 
+  within_group_list_L25 = list(es_means_pp_sg = es_means_pp_sg,
+                               es_means_se_pp_sg = es_means_se_pp_sg,
+                               es_means_ci_pp_sg = es_means_ci_pp_sg,
+                               es_mean_change_sg = es_mean_change_sg,
+                               es_mean_change_se_sg = es_mean_change_se_sg,
+                               es_mean_change_ci_sg = es_mean_change_ci_sg,
+                               es_mean_change_pval_sg = es_mean_change_pval_sg,
+                               es_paired_t_sg = es_paired_t_sg)
+
+  prop_list_L26 = list(es_prop_sg = es_prop_sg,
+                       es_prop_counts_sg = es_prop_counts_sg)
+
+  alpha_list_L28 = list(es_alpha_sg = es_alpha_sg)
+
+  icc_list_L29 = list(es_icc_sg = es_icc_sg)
+
   USER_crude = user_raw_L23
   USER_adjusted = es_user_adj_L24
 
@@ -919,9 +1258,11 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 
   OR = c(or_list_L2)
 
-  CONT = contigency_list_L7
+  CONT = contingency_list_L7
 
   RR = rr_list_L3
+
+  RD_stand = rd_list_L30
 
   PHI = phi_chisq_list_L8
 
@@ -937,7 +1278,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 
       if (selection_auto == "crude") {
         res = c(USER_crude, SMD_post, SMD_paired, OR,
-                CONT, COR, PHI, SMD_adjusted,
+                CONT, RD_stand, COR, PHI, SMD_adjusted,
                 USER_adjusted,
                 #not used
                 RR, IRR, VAR)
@@ -945,13 +1286,13 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       } else if (selection_auto == "adjusted") {
         res = c(USER_adjusted, SMD_adjusted,
                 USER_crude, SMD_post,
-                SMD_paired, OR, CONT, COR,
+                SMD_paired, OR, CONT, RD_stand, COR,
                 PHI,
                 #not used
                 RR, IRR, VAR)
       } else if (selection_auto == "paired") {
         res = c(USER_crude, SMD_paired, SMD_post, SMD_adjusted,
-                USER_adjusted, OR, CONT, COR,
+                USER_adjusted, OR, CONT, RD_stand, COR,
                 PHI,
                 #not used
                 RR, IRR, VAR)
@@ -960,12 +1301,12 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       }
 
     } else if (measure %in% c("logor", "or")) {
-      res = c(USER_crude, OR, CONT, RR, PHI, COR, SMD_post, USER_adjusted,
+      res = c(USER_crude, OR, CONT, RR, RD_stand, PHI, COR, SMD_post, USER_adjusted,
               #not used
               SMD_paired, SMD_adjusted, IRR, VAR)
 
     } else if (measure %in% c("logrr", "rr")) {
-      res = c(USER_crude, RR, CONT, OR, PHI, USER_adjusted,
+      res = c(USER_crude, RR, CONT, OR, RD_stand, PHI, USER_adjusted,
               #not used
               SMD_post, SMD_paired,
               COR, SMD_adjusted,
@@ -976,34 +1317,73 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
               #not used
               SMD_post, SMD_paired, OR,
               CONT, COR, PHI, SMD_adjusted,
-              RR, VAR)
+              RR, RD_stand, VAR)
+
+    } else if (measure %in% c("loghr", "hr")) {
+      # HR: user input only
+      res = c(USER_crude, USER_adjusted)
 
     } else if (measure %in% c("nnt")) {
-      res = c(USER_crude, CONT, OR, RR, PHI, USER_adjusted,
+      res = c(USER_crude, RD_stand, CONT, OR, RR, IRR, PHI, USER_adjusted,
               #not used
               SMD_post, SMD_paired, COR, SMD_adjusted,
-              IRR, VAR)
+              VAR)
+
+    } else if (measure %in% c("rd")) {
+      res = c(USER_crude, RD_stand, CONT, OR, RR, IRR, PHI, USER_adjusted,
+              #not used
+              SMD_post, SMD_paired, COR, SMD_adjusted,
+              VAR)
 
     } else if (measure %in% c("r", "z")) {
       res = c(USER_crude, COR, CONT, OR, PHI, SMD_post,
               SMD_paired, USER_adjusted,
               #not used
               SMD_adjusted,
-              RR, IRR, VAR)
+              RR, RD_stand, IRR, VAR)
 
     } else if (measure %in% c("logvr", "logcvr")) {
-      res = c(USER_crude, VAR, SMD_post, SMD_paired,USER_adjusted,
+      res = c(USER_crude, VAR, SMD_post, SMD_paired, USER_adjusted,
               #not used
-              OR, CONT, COR, PHI, SMD_adjusted,
+              OR, CONT, RD_stand, COR, PHI, SMD_adjusted,
               RR, IRR)
+
+    } else if (measure %in% c("dw", "gw", "mdw")) {
+      res = c(USER_crude, within_group_list_L25)
+
+    } else if (measure == "prop") {
+      res = c(USER_crude, prop_list_L26)
+
+    } else if (measure == "alpha") {
+      res = c(USER_crude, alpha_list_L28)
+
+    } else if (measure == "icc") {
+      res = c(USER_crude, icc_list_L29)
+
+    } else if (measure %in% c("rp", "zp")) {
+      res = c(USER_crude, partial_cor_list_L27)
 
     }
   } else {
-    res = c(USER_crude, SMD_post, SMD_paired, OR,
-            CONT, COR, PHI, SMD_adjusted,
-            USER_adjusted,
-            #not used
-            RR, IRR, VAR)
+    if (measure %in% c("dw", "gw", "mdw")) {
+      res = c(USER_crude, within_group_list_L25)
+    } else if (measure == "prop") {
+      res = c(USER_crude, prop_list_L26)
+    } else if (measure == "alpha") {
+      res = c(USER_crude, alpha_list_L28)
+    } else if (measure == "icc") {
+      res = c(USER_crude, icc_list_L29)
+    } else if (measure %in% c("rp", "zp")) {
+      res = c(USER_crude, partial_cor_list_L27)
+    } else if (measure %in% c("loghr", "hr")) {
+      res = c(USER_crude, USER_adjusted)
+    } else {
+      res = c(USER_crude, SMD_post, SMD_paired, OR,
+              CONT, RD_stand, COR, PHI, SMD_adjusted,
+              USER_adjusted,
+              #not used
+              RR, IRR, VAR)
+    }
   }
 
   df_sq_list = list(
@@ -1030,8 +1410,20 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   if (warning_reverse & verbose) {
     warning("When you enter input data that cannot be negative (F-test, eta-squared, p-value, or chi-square values), do not forget to properly set up the direction of the generated effect size using corresponding reverse_* argument!")
   }
-  # print(length(res))
-  if (length(res) != 71) { stop ("failure to estimate all effect sizes (not expected, you trigerred a bug, please contact cgosling@parisnanterre.fr)") }
+  expected_length <- if (measure %in% c("dw", "gw", "mdw")) {
+    9
+  } else if (measure == "prop") {
+    3
+  } else if (measure %in% c("alpha", "icc", "loghr", "hr")) {
+    2
+  } else if (measure %in% c("rp", "zp")) {
+    5
+  } else {
+    76
+  }
+  if (length(res) != expected_length) {
+    stop ("failure to estimate all effect sizes (not expected, you trigerred a bug, please contact cgosling@parisnanterre.fr). Expected ", expected_length, ", got ", length(res))
+  }
   class(res) <- "metaConvert"
   attr(res, "raw_data") <- x
   attr(res, "exp") <- exp
@@ -1041,6 +1433,15 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   attr(res, "format_adjusted") <- format_adjusted
   attr(res, "hierarchy") <- hierarchy
   attr(res, "main_es") <- main_es
+  flag_opts <- .default_flag_options()
+  flag_opts[names(flag_options)] <- flag_options
+  attr(res, "flag_options") <- flag_opts
+  attr(res, "input_validation") <- validation$issues
+  # rows where r_pre_post was defaulted (used by the summary flags)
+  attr(res, "r_defaulted") <- .r_defaulted
+  attr(res, "alpha_to_es") <- alpha_to_es
+  attr(res, "icc_to_es") <- icc_to_es
+  attr(res, "prop_to_es") <- prop_to_es
   return(res)
 }
 # x_save2 = x; list_df = df_es; ordering = ordering_crude; digits = digits;

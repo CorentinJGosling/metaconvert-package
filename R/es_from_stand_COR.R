@@ -53,9 +53,9 @@
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 #'
-#' Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16–e18. https://doi.org/10.1097/EDE.0000000000001105
+#' Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16-e18. https://doi.org/10.1097/EDE.0000000000001105
 #'
-#' Viechtbauer W (2010). “Conducting meta-analyses in R with the metafor package.” Journal of Statistical Software, 36(3), 1–48. doi:10.18637/jss.v036.i03.
+#' Viechtbauer W (2010). "Conducting meta-analyses in R with the metafor package." Journal of Statistical Software, 36(3), 1-48. doi:10.18637/jss.v036.i03.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -105,15 +105,6 @@ es_from_pearson_r <- function(pearson_r, sd_iv, n_sample,
   if (missing(unit_type)) {
     unit_type <- rep(NA, length(pearson_r))
   }
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, sd_iv, n_sample,
-                       error_message = paste0("The number of people exposed/non-exposed, total sample size, and standard deviation  ",
-                                              "should be >0."),
-                       func = "es_from_pearson_r")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   if (!all(cor_to_smd %in% c("cooper", "mathur", "viechtbauer"))) {
     stop(paste0("'",
@@ -208,9 +199,9 @@ es_from_pearson_r <- function(pearson_r, sd_iv, n_sample,
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 #'
-#' Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16–e18. https://doi.org/10.1097/EDE.0000000000001105
+#' Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16-e18. https://doi.org/10.1097/EDE.0000000000001105
 #'
-#' Viechtbauer W (2010). “Conducting meta-analyses in R with the metafor package.” Journal of Statistical Software, 36(3), 1–48. doi:10.18637/jss.v036.i03.
+#' Viechtbauer W (2010). "Conducting meta-analyses in R with the metafor package." Journal of Statistical Software, 36(3), 1-48. doi:10.18637/jss.v036.i03.
 #'
 #' @md
 #'
@@ -256,15 +247,6 @@ es_from_fisher_z <- function(fisher_z, n_sample, unit_type = "raw_scale",
   if (missing(unit_type)) {
     unit_type <- rep(NA, length(fisher_z))
   }
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, sd_iv, n_sample,
-                       error_message = paste0("The number of people exposed/non-exposed, total sample size, and standard deviation  ",
-                                              "should be >0."),
-                       func = "es_from_fisher_z")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
   r <- tanh(fisher_z)
 
   es <- es_from_pearson_r(

@@ -7,6 +7,7 @@
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_t a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -20,6 +21,15 @@
 #' \deqn{cohen\_d\_se\_nexp = \sqrt{\frac{2 * (1 - r\_pre\_post\_nexp)}{n\_nexp} + \frac{d\_nexp^2}{2 * n\_nexp}}}
 #' \deqn{cohen\_d = d\_exp - d\_nexp}
 #' \deqn{d\_se = \sqrt{cohen\_d\_se\_exp^2 + cohen\_d\_se\_nexp^2}}
+#'
+#' When \code{pre_post_to_smd = "morris_dz"}, the mean difference is standardized by the standard deviation
+#' of the change score and the pre-post correlation is no longer involved (Morris & DeShon, 2002):
+#' \deqn{cohen\_d\_exp = \frac{paired\_t\_exp}{\sqrt{n\_exp}}}
+#' \deqn{cohen\_d\_nexp = \frac{paired\_t\_nexp}{\sqrt{n\_nexp}}}
+#'
+#' Note that the Cohen's d obtained from a paired t-test strongly depends on the pre-post correlation.
+#' When \code{r_pre_post_exp} / \code{r_pre_post_nexp} are not indicated, a value of 0.8 is assumed and
+#' users should conduct sensitivity analyses with other plausible values.
 #'
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
@@ -40,6 +50,8 @@
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 #'
+#' Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
+#'
 #' @export es_from_paired_t
 #'
 #' @md
@@ -48,39 +60,49 @@
 #' es_from_paired_t(paired_t_exp = 2.1, paired_t_nexp = 4.2, n_exp = 20, n_nexp = 22)
 es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
                              r_pre_post_exp, r_pre_post_nexp,
-                             smd_to_cor = "viechtbauer", reverse_paired_t) {
+                             smd_to_cor = "viechtbauer",
+                             pre_post_to_smd = "cooper",
+                             reverse_paired_t) {
   if (missing(reverse_paired_t)) reverse_paired_t <- rep(FALSE, length(paired_t_exp))
   reverse_paired_t[is.na(reverse_paired_t)] <- FALSE
   if (length(reverse_paired_t) == 1) reverse_paired_t = c(rep(reverse_paired_t, length(paired_t_exp)))
-  if (length(reverse_paired_t) != length(paired_t_exp)) stop("The length of the 'reverse_paired_t' argument of incorrectly specified.")
+  if (length(reverse_paired_t) != length(paired_t_exp)) stop("The length of the 'reverse_paired_t' argument is incorrectly specified.")
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "should be >0."),
-                       func = "es_from_paired_t")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  pre_post_to_smd <- .validate_pre_post_to_smd(
+    pre_post_to_smd,
+    allowed_methods = c("morris_drm", "morris_dz"),
+    context = "paired_t",
+    func_name = "es_from_paired_t"
+  )
 
-  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.5, length(paired_t_exp))
-  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.5
-  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.5, length(paired_t_exp))
-  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.5
+  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.8, length(paired_t_exp))
+  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.8
+  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(paired_t_exp))
+  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
   J_exp <- .d_j(n_exp - 1)
   J_nexp <- .d_j(n_nexp - 1)
 
-  d_exp <- paired_t_exp * sqrt((2 * (1 - r_pre_post_exp)) / n_exp)
-  d_nexp <- paired_t_nexp * sqrt((2 * (1 - r_pre_post_nexp)) / n_nexp)
+  if (all(pre_post_to_smd == "morris_dz")) {
+    # morris dz
+    d_exp <- paired_t_exp / sqrt(n_exp)
+    d_nexp <- paired_t_nexp / sqrt(n_nexp)
+
+    d_var_exp <- 1 / n_exp + d_exp^2 / (2 * n_exp)
+    d_var_nexp <- 1 / n_nexp + d_nexp^2 / (2 * n_nexp)
+  } else {
+    # morris drm
+    d_exp <- paired_t_exp * sqrt((2 * (1 - r_pre_post_exp)) / n_exp)
+    d_nexp <- paired_t_nexp * sqrt((2 * (1 - r_pre_post_nexp)) / n_nexp)
+
+    # d_var_exp <- (1/(n_exp) + d_exp^2/(2*n_exp)) * (2 * (1 - r_pre_post_exp))
+    # d_var_nexp <- (1/(n_nexp) + d_nexp^2/(2*n_nexp)) * (2 * (1 - r_pre_post_nexp))
+    d_var_exp <- 2 * (1 - r_pre_post_exp) / n_exp + d_exp^2 / (2 * n_exp)
+    d_var_nexp <- 2 * (1 - r_pre_post_nexp) / n_nexp + d_nexp^2 / (2 * n_nexp)
+  }
 
   g_exp <- J_exp * d_exp
   g_nexp <- J_nexp * d_nexp
-
-  # d_var_exp <- (1/(n_exp) + d_exp^2/(2*n_exp)) * (2 * (1 - r_pre_post_exp))
-  # d_var_nexp <- (1/(n_nexp) + d_nexp^2/(2*n_nexp)) * (2 * (1 - r_pre_post_nexp))
-  d_var_exp <- 2 * (1 - r_pre_post_exp) / n_exp + d_exp^2 / (2 * n_exp)
-  d_var_nexp <- 2 * (1 - r_pre_post_nexp) / n_nexp + d_nexp^2 / (2 * n_nexp)
 
   g_var_exp <- J_exp^2 * d_var_exp
   g_var_nexp <- J_nexp^2 * d_var_nexp
@@ -111,6 +133,7 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_t_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -127,6 +150,8 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
 #'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+#'
+#' Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -149,23 +174,15 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
 #' es_from_paired_t_pval(paired_t_pval_exp = 0.4, paired_t_pval_nexp = 0.01, n_exp = 19, n_nexp = 22)
 es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, n_nexp,
                                   r_pre_post_exp, r_pre_post_nexp,
-                                  smd_to_cor = "viechtbauer", reverse_paired_t_pval) {
+                                  smd_to_cor = "viechtbauer",
+                                  pre_post_to_smd = "cooper",
+                                  reverse_paired_t_pval) {
   if (missing(reverse_paired_t_pval)) reverse_paired_t_pval <- rep(FALSE, length(paired_t_pval_exp))
   reverse_paired_t_pval[is.na(reverse_paired_t_pval)] <- FALSE
-  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.5, length(paired_t_pval_exp))
-  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.5
-  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.5, length(paired_t_pval_exp))
-  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.5
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, paired_t_pval_exp, paired_t_pval_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "and p-values ",
-                                              "should be >0."),
-                       func = "es_from_paired_t_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.8, length(paired_t_pval_exp))
+  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.8
+  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(paired_t_pval_exp))
+  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
   paired_t_exp <- qt(p = paired_t_pval_exp / 2, df = n_exp - 1, lower.tail = FALSE)
 
@@ -175,7 +192,9 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
     paired_t_exp = paired_t_exp, paired_t_nexp = paired_t_nexp,
     n_exp = n_exp, n_nexp = n_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
-    smd_to_cor = smd_to_cor, reverse_paired_t = reverse_paired_t_pval
+    smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd,
+    reverse_paired_t = reverse_paired_t_pval
   )
 
   es$info_used <- "paired_t_pval"
@@ -191,6 +210,7 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_f a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -207,6 +227,8 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
 #'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+#'
+#' Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -229,23 +251,16 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
 #' es_from_paired_f(paired_f_exp = 2.1, paired_f_nexp = 4.2, n_exp = 20, n_nexp = 22)
 es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
                              r_pre_post_exp, r_pre_post_nexp,
-                             smd_to_cor = "viechtbauer", reverse_paired_f) {
+                             smd_to_cor = "viechtbauer",
+                             pre_post_to_smd = "cooper",
+                             reverse_paired_f) {
   if (missing(reverse_paired_f)) reverse_paired_f <- rep(FALSE, length(paired_f_exp))
   reverse_paired_f[is.na(reverse_paired_f)] <- FALSE
-  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.5, length(paired_f_exp))
-  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.5
-  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.5, length(paired_f_exp))
-  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.5
+  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.8, length(paired_f_exp))
+  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.8
+  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(paired_f_exp))
+  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, paired_f_exp, paired_f_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "should be >0."),
-                       func = "es_from_paired_f")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   paired_t_exp <- sqrt(paired_f_exp)
 
@@ -256,7 +271,9 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
     n_exp = n_exp, n_nexp = n_nexp,
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
-    smd_to_cor = smd_to_cor, reverse_paired_t = reverse_paired_f
+    smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd,
+    reverse_paired_t = reverse_paired_f
   )
 
   es$info_used <- "paired_f"
@@ -272,6 +289,7 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_f_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -288,6 +306,8 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
 #'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+#'
+#' Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -310,23 +330,15 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
 #' es_from_paired_f_pval(paired_f_pval_exp = 0.4, paired_f_pval_nexp = 0.01, n_exp = 19, n_nexp = 22)
 es_from_paired_f_pval <- function(paired_f_pval_exp, paired_f_pval_nexp, n_exp, n_nexp,
                                   r_pre_post_exp, r_pre_post_nexp,
-                                  smd_to_cor = "viechtbauer", reverse_paired_f_pval) {
+                                  smd_to_cor = "viechtbauer",
+                                  pre_post_to_smd = "cooper",
+                                  reverse_paired_f_pval) {
   if (missing(reverse_paired_f_pval)) reverse_paired_f_pval <- rep(FALSE, length(paired_f_pval_exp))
   reverse_paired_f_pval[is.na(reverse_paired_f_pval)] <- FALSE
-  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.5, length(paired_f_pval_exp))
-  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.5
-  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.5, length(paired_f_pval_exp))
-  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.5
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, paired_f_pval_exp, paired_f_pval_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "and p-values ",
-                                              "should be >0."),
-                       func = "es_from_paired_f_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.8, length(paired_f_pval_exp))
+  r_pre_post_nexp[is.na(r_pre_post_nexp)] <- 0.8
+  if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(paired_f_pval_exp))
+  r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
   es <- es_from_paired_t_pval(
     paired_t_pval_exp = paired_f_pval_exp,
@@ -335,6 +347,7 @@ es_from_paired_f_pval <- function(paired_f_pval_exp, paired_f_pval_nexp, n_exp, 
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd,
     reverse_paired_t_pval = reverse_paired_f_pval
   )
 

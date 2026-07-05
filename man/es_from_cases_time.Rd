@@ -4,7 +4,14 @@
 \alias{es_from_cases_time}
 \title{Convert the number of cases and the person-time of disease-free observation in two independent groups into an incidence rate ratio (IRR)}
 \usage{
-es_from_cases_time(n_cases_exp, n_cases_nexp, time_exp, time_nexp, reverse_irr)
+es_from_cases_time(
+  n_cases_exp,
+  n_cases_nexp,
+  time_exp,
+  time_nexp,
+  baseline_rate,
+  reverse_irr
+)
 }
 \arguments{
 \item{n_cases_exp}{number of cases in the exposed group}
@@ -15,13 +22,15 @@ es_from_cases_time(n_cases_exp, n_cases_nexp, time_exp, time_nexp, reverse_irr)
 
 \item{time_nexp}{person-time of disease-free observation in the non-exposed group}
 
+\item{baseline_rate}{incidence rate of events (per person-time) in the non-exposed group (n_cases_nexp / time_nexp is used when missing)}
+
 \item{reverse_irr}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
 \value{
-This function estimates IRR.
+This function estimates IRR and, when baseline rate information is available, NNT.
 
 \tabular{ll}{
-\code{natural effect size measure} \tab IRR\cr
+\code{natural effect size measure} \tab IRR + NNT\cr
 \tab \cr
 \code{converted effect size measure} \tab N/A\cr
 \tab \cr
@@ -40,6 +49,18 @@ the person-time of disease-free observation in two independent groups.
 \strong{The formula used to obtain the IRR and its standard error} are (Cochrane Handbook (section 6.7.1):
 \deqn{logirr = log(\frac{n\_cases\_exp / time\_exp}{n\_cases\_nexp / time\_nexp)}}
 \deqn{logirr\_se = \sqrt{\frac{1}{n\_cases\_exp} + \frac{1}{n\_cases\_nexp}}}
+
+\strong{To estimate a person-time NNT} (Mayne et al., 2006), the following formulas are used:
+\deqn{ird = baseline\_rate \times (1 - irr)}
+\deqn{nnt = \frac{1}{ird}}
+where \code{ird} is the incidence rate difference and \code{baseline_rate} is the
+incidence rate in the control group.
+
+\strong{To estimate the standard error of the IRD}, two formulas are used.
+When \code{baseline_rate} is missing:
+\deqn{ird\_se = \sqrt{\frac{n\_cases\_exp}{time\_exp^2} + \frac{n\_cases\_nexp}{time\_nexp^2}}}
+When \code{baseline_rate} is entered by users, the delta method is used:
+\deqn{ird\_se = baseline\_rate \times IRR \times logirr\_se}
 }
 \examples{
 es_from_cases_time(
@@ -49,4 +70,6 @@ es_from_cases_time(
 }
 \references{
 Higgins JPT, Thomas J, Chandler J, Cumpston M, Li T, Page MJ, Welch VA (editors). Cochrane Handbook for Systematic Reviews of Interventions version 6.3 (updated February 2022). Cochrane, 2022. Available from www.training.cochrane.org/handbook.
+
+Mayne, T. J., Whalen, E., & Rost, K. (2006). Annualized was found better than absolute risk reduction in the calculation of number needed to treat in chronic conditions. Journal of clinical epidemiology, 59(3), 217-223.
 }

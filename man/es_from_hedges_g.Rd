@@ -61,5 +61,5 @@ calculations of the \code{\link{es_from_cohen_d}()} are applied.
 es_from_hedges_g(hedges_g = 0.243, n_exp = 20, n_nexp = 20)
 }
 \references{
-Hedges LV (1981): Distribution theory for Glass’s estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107–28
+Hedges LV (1981): Distribution theory for Glass's estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107-28
 }

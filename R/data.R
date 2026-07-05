@@ -31,3 +31,24 @@
 #' Slightly different from \code{\link{df.compare2}}
 #'
 "df.compare2"
+
+#' Simulated dataset for a COSMIN-based systematic review of PROMs
+#'
+#' Simulated dataset of a systematic review evaluating measurement properties
+#' of a fictional patient-reported outcome measure (the Mental Health Wellbeing
+#' Scale, MHWS) following the COSMIN framework. Designed to demonstrate the
+#' psychometric functions of the metaConvert package.
+#'
+#' The dataset contains studies reporting:
+#' \itemize{
+#'   \item Internal consistency (Cronbach's alpha)
+#'   \item Test-retest reliability (ICC)
+#'   \item Criterion and construct validity (Pearson and Spearman correlations)
+#'   \item Responsiveness (change-score correlations)
+#'   \item Floor/ceiling effects (proportions)
+#' }
+#'
+#' Additional columns support standalone psychometric utility functions
+#' (SEM, SDC, disattenuation, change-score reliability).
+#'
+"df.psychom"

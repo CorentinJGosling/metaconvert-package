@@ -19,6 +19,7 @@ es_from_means_sd_pre_post(
   r_pre_post_nexp,
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "bonett",
+  pool_sd = FALSE,
   reverse_means_pre_post
 )
 }
@@ -51,6 +52,8 @@ es_from_means_sd_pre_post(
 
 \item{pre_post_to_smd}{formula used to convert the pre and post means/SD into a SMD (see details).}
 
+\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
+
 \item{reverse_means_pre_post}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
 \value{
@@ -73,9 +76,9 @@ Convert pre-post means of two independent groups into various effect size measur
 This function converts pre-post means of two independent groups into a Cohen's d (D) and Hedges' g (G).
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
-\strong{Two approaches can be used to compute the Cohen's d.}
+\strong{Four approaches can be used to compute the Cohen's d.}
 
-In these two approaches, the standard deviation of the difference within each group first needs to be obtained:
+In these approaches, the standard deviation of the difference within each group first needs to be obtained:
 \deqn{adj\_exp = 2*r\_pre\_post\_exp*mean\_pre\_sd\_exp*mean\_sd\_exp}
 \deqn{sd\_change\_exp = \sqrt{mean\_pre\_sd\_exp^2 + mean\_sd\_exp^2 - adj\_exp}}
 \deqn{adj\_nexp = 2*r\_pre\_post\_nexp*mean\_pre\_sd\_nexp*mean\_sd\_nexp}
@@ -83,15 +86,20 @@ In these two approaches, the standard deviation of the difference within each gr
 \enumerate{
 \item In the approach described by Bonett (\code{pre_post_to_smd = "bonett"}), one Cohen's d per group is obtained by
 standardizing the pre-post mean difference by the standard deviation at baseline (Bonett, 2008):
-\deqn{cohen\_d\_exp = \frac{mean\_pre\_exp - mean\_exp}{mean\_pre\_sd\_exp}}
-\deqn{cohen\_d\_nexp = \frac{mean\_pre\_nexp - mean\_nexp}{mean\_pre\_sd\_nexp}}
-\deqn{cohen\_d\_se\_exp = \sqrt{\frac{sd\_change\_exp^2}{mean\_pre\_sd\_exp^2 * (n\_exp - 1) + g\_exp^2 / (2 * (n\_exp - 1))}}}
-\deqn{cohen\_d\_se\_nexp = \sqrt{\frac{sd\_change\_nexp^2}{mean\_pre\_sd\_nexp^2 * (n\_nexp - 1) + g\_nexp^2 / (2 * (n\_nexp - 1))}}}
-\item In the approach described by Cooper (\code{pre_post_to_smd = "cooper"}), the following formulas are used:
-\deqn{cohen\_d\_exp = \frac{mean\_pre\_exp - mean\_exp}{sd\_change\_exp} * \sqrt{2 * (1 - r\_pre\_post\_exp)}}
-\deqn{cohen\_d\_nexp = \frac{mean\_pre\_nexp - mean\_nexp}{sd\_change\_nexp} * \sqrt{2 * (1 - r\_pre\_post\_nexp)}}
-\deqn{cohen\_d\_se\_exp = \frac{2 * (1 - r\_pre\_post\_exp)}{n\_exp} + \frac{cohen\_d\_exp^2}{2 * n\_exp}}
-\deqn{cohen\_d\_se\_nexp = \frac{2 * (1 - r\_pre\_post\_nexp)}{n\_nexp} + \frac{cohen\_d\_nexp^2}{2 * n\_nexp}}
+\deqn{cohen\_d\_exp = \frac{mean\_exp - mean\_pre\_exp}{mean\_pre\_sd\_exp}}
+\deqn{cohen\_d\_nexp = \frac{mean\_nexp - mean\_pre\_nexp}{mean\_pre\_sd\_nexp}}
+\item In the approach described by Cooper (\code{pre_post_to_smd = "cooper"} or \code{"morris_drm"}), the following
+formulas are used (Cooper et al., 2019; Morris & DeShon, 2002):
+\deqn{cohen\_d\_exp = \frac{mean\_exp - mean\_pre\_exp}{sd\_change\_exp} * \sqrt{2 * (1 - r\_pre\_post\_exp)}}
+\deqn{cohen\_d\_nexp = \frac{mean\_nexp - mean\_pre\_nexp}{sd\_change\_nexp} * \sqrt{2 * (1 - r\_pre\_post\_nexp)}}
+\item In the approach described by Morris & DeShon (\code{pre_post_to_smd = "morris_dz"}), the pre-post mean difference
+is standardized by the standard deviation of the change (Morris & DeShon, 2002):
+\deqn{cohen\_d\_exp = \frac{mean\_exp - mean\_pre\_exp}{sd\_change\_exp}}
+\deqn{cohen\_d\_nexp = \frac{mean\_nexp - mean\_pre\_nexp}{sd\_change\_nexp}}
+\item In the approach described by Morris (\code{pre_post_to_smd = "morris_dav"}, recommended), the pre-post mean
+difference is standardized by the average of the baseline and follow up SDs (Morris, 2008):
+\deqn{cohen\_d\_exp = \frac{mean\_exp - mean\_pre\_exp}{\sqrt{(mean\_pre\_sd\_exp^2 + mean\_sd\_exp^2)/2}}}
+\deqn{cohen\_d\_nexp = \frac{mean\_nexp - mean\_pre\_nexp}{\sqrt{(mean\_pre\_sd\_nexp^2 + mean\_sd\_nexp^2)/2}}}
 }
 
 Last, the Cohen's d reflecting the within-group change from baseline to follow-up are combined into one Cohen's d:
@@ -112,7 +120,11 @@ es_from_means_sd_pre_post(
 )
 }
 \references{
-Bonett, S. B. (2008). Estimating effect sizes from pretest-posttest-control group designs. Organizational Research Methods, 11(2), 364–386. https://doi.org/10.1177/1094428106291059
+Bonett, D. G. (2008). Confidence intervals for standardized linear contrasts of means. Psychological Methods, 13(2), 99-109.
+
+Morris, S. B. (2008). Estimating effect sizes from pretest-posttest-control group designs. Organizational Research Methods, 11(2), 364-386. https://doi.org/10.1177/1094428106291059
 
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 }

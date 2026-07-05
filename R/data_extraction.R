@@ -11,7 +11,7 @@
 #' that can be used by our tools to estimate various effect size measures.
 #'
 #' If you select a specific measure (e.g., \code{measure = "g"}), you will be presented only with most common
-#' information allowing to estimate this measure (e.g., you will not be provided with columns for contigency
+#' information allowing to estimate this measure (e.g., you will not be provided with columns for contingency
 #' tables if you request a data extraction sheet for \code{measure = "g"}).
 #'
 #'
@@ -42,8 +42,10 @@
 #'
 #' @examples
 #' data_extraction_sheet(measure = "md", extension = "data.frame")
-data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
-                                              "r", "z", "logvr", "logcvr", "irr"),
+data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
+                                              "or", "rr", "nnt", "rd",
+                                              "r", "z", "logvr", "logcvr", "irr",
+                                              "prop"),
                                   type_of_measure = c("natural", "natural+converted"),
                                   name = "mcv_data_extraction",
                                   extension = c("data.frame", ".txt", ".csv", ".xlsx"),
@@ -71,26 +73,30 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
   inf_cases = c("number of cases/events across exposed/non-exposed groups - numeric",
                 "number of controls/no-event across exposed/non-exposed groups - numeric")
 
-  cols_input_crude = c("user_es_measure_crude",
+  cols_input_crude = c("user_es_original_measure_crude",
+    "user_es_target_measure_crude",
     "user_es_crude",
     "user_se_crude",
     "user_ci_lo_crude",
     "user_ci_up_crude")
-  inf_input_crude = c("name of the (non-adjusted) effect size measure used - character",
+  inf_input_crude = c("type of ES provided: d, g, or, logor, rr, logrr, r, z, rd, etc. - character",
+                      "target ES for conversion (defaults to measure param) - character",
                       "value of an effect size - numeric",
                       "standard error of the effect size - numeric",
                       "lower bound of the 95% CI of the effect size measure - numeric",
                       "upper bound of the 95% CI of the effect size measure - numeric")
 
   cols_input_adjusted = c(
-    "user_es_measure_adj",
+    "user_es_original_measure_adj",
+    "user_es_target_measure_adj",
     "user_es_adj",
     "user_se_adj",
     "user_ci_lo_adj",
     "user_ci_up_adj")
-  inf_input_adjusted = c("name of the (adjusted) effect size measure used - character",
+  inf_input_adjusted = c("type of adjusted ES provided: d, g, or, logor, rr, logrr, r, z, rd, etc. - character",
+                      "target ES for conversion (defaults to measure param) - character",
                       "value of the adjusted effect size - numeric",
-                      "standard error of the effect size  - numeric",
+                      "standard error of the effect size - numeric",
                       "adjusted lower bound of the 95% CI of the effect size measure - numeric",
                       "adjusted upper bound of the 95% CI of the effect size measure - numeric")
 
@@ -217,6 +223,24 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
     "a non-standardized regression coefficient value (the predictor of interest must be binary) - numeric",
     "standard deviation of the dependent variable (not the standard deviation of the regression coefficient) - numeric")
 
+  cols_linreg = c("reverse_linreg_t", "linreg_t", "n_covariates")
+  inf_linreg = c(
+    "whether the direction of the effect size generated from the regression t should be flipped - logical",
+    "t-statistic from a linear regression model - numeric",
+    "number of covariates in the regression model (excluding predictor of interest) - numeric")
+
+  cols_linreg_b = c("reverse_linreg_b", "linreg_b", "linreg_b_se",
+                    "linreg_b_ci_lo", "linreg_b_ci_up",
+                    "reverse_linreg_b_pval", "linreg_b_pval")
+  inf_linreg_b = c(
+    "whether the direction of the effect size generated from the regression coefficient should be flipped - logical",
+    "unstandardized regression coefficient from a linear regression model - numeric",
+    "standard error of the regression coefficient - numeric",
+    "lower bound of the 95% CI of the regression coefficient - numeric",
+    "upper bound of the 95% CI of the regression coefficient - numeric",
+    "whether the direction of the effect size generated from the regression coefficient p-value should be flipped - logical",
+    "p-value of the regression coefficient - numeric")
+
   cols_pre_means = c("reverse_means_pre_post", "mean_pre_exp", "mean_pre_sd_exp", "mean_pre_se_exp", "mean_pre_se_nexp", "mean_pre_ci_lo_exp", "mean_pre_ci_up_exp",
                      "mean_pre_nexp", "mean_pre_sd_nexp", "mean_pre_ci_lo_nexp", "mean_pre_ci_up_nexp",
                      "reverse_mean_change", "mean_change_exp", "mean_change_nexp",
@@ -278,6 +302,11 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
   "p-value of the paired ANOVA-F of the experimental/exposed group - numeric",
   "p-value of the paired ANOVA-F of the non-experimental/non-exposed group - numeric")
 
+  cols_prop_single = c("reverse_prop", "prop", "n_cases")
+  inf_prop_single = c(
+    "whether the direction of the proportion should be flipped - logical",
+    "proportion in single group (0-1) - numeric",
+    "number of cases (alternative to proportion) - numeric")
 
   cols_ancova_mean = c(
     "reverse_ancova_means", "ancova_mean_sd_pooled", "cov_outcome_r", "n_cov_ancova",
@@ -372,6 +401,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
     "n_cases_exp", "n_cases_nexp", "n_controls_exp", "n_controls_nexp",
     "reverse_prop", "prop_cases_exp", "prop_cases_nexp",
     "reverse_chisq", "chisq", "reverse_chisq_pval", "chisq_pval",
+    "yates_chisq",
     "reverse_phi", "phi")
 
     inf_2x2 = c(
@@ -389,6 +419,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
       "chi-square value - numeric",
       "whether the direction of the effect size generated from the chi-square p-value should be flipped - logical",
       "chi-square p-value - numeric",
+      "whether the chi-square statistic/p-value reported in the primary was computed with Yates' continuity correction - logical (default FALSE)",
       "whether the direction of the effect size generated from the phi value should be flipped - logical",
       "phi value - numeric"
     )
@@ -396,7 +427,8 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
     cols_or = c(
     # or
     "reverse_or", "or", "logor", "logor_se", "or_ci_lo", "or_ci_up", "logor_ci_lo", "logor_ci_up",
-    "reverse_or_pval", "or_pval")
+    "reverse_or_pval", "or_pval",
+    "reverse_logreg_t", "logreg_t")
 
     inf_or = c(
       "whether the direction of the effect size generated from the odds ratio should be flipped - logical",
@@ -408,7 +440,9 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
       "lower bound of the 95% CI of the risk ratio - numeric",
       "upper bound of the 95% CI of the log risk ratio - numeric",
       "whether the direction of the cohen_d value should be flipped - logical",
-      "p-value of an odds ratio - numeric"
+      "p-value of an odds ratio - numeric",
+      "whether the direction of the effect size generated from the logistic regression t should be flipped - logical",
+      "Wald t-statistic from a logistic regression model - numeric"
     )
     cols_rr = c(
     # rr
@@ -427,28 +461,59 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
       "p-value of a risk ratio -  numeric"
     )
 
+    cols_rd = c(
+    # rd (risk difference)
+    "reverse_rd", "rd", "rd_se",
+    "rd_ci_lo", "rd_ci_up",
+    "reverse_rd_pval", "rd_pval")
+
+    inf_rd = c(
+      "whether the direction of the effect size generated from the risk difference should be flipped - logical",
+      "risk difference value (control risk minus treatment risk) - numeric",
+      "standard error of the risk difference - numeric",
+      "lower bound of the 95% CI of the risk difference - numeric",
+      "upper bound of the 95% CI of the risk difference - numeric",
+      "whether the direction of the effect size generated from the risk difference p-value should be flipped - logical",
+      "p-value of the risk difference - numeric"
+    )
+
     cols_r = c(
     "reverse_pearson_r", "pearson_r", "reverse_fisher_z",
-    "fisher_z", "unit_increase_iv", "unit_type", "sd_iv")
+    "fisher_z", "reverse_spearman_r", "spearman_r",
+    "unit_increase_iv", "unit_type", "sd_iv")
 
     inf_r = c(
       "whether the direction of the effect size generated from the Pearson's correlation should be flipped - logical",
       "Pearson's correlation coefficient value  - numeric",
       "whether the direction of the effect size generated from the Fisher's z should be flipped - logical",
       "Fisher's r-to-z transformed correlation coefficient - numeric",
+      "whether the direction of the effect size generated from the Spearman's correlation should be flipped - logical",
+      "Spearman's rank correlation coefficient - numeric",
       "a value of the independent variable that will be used to estimate the Cohen's d - numeric",
       "type of unit for the unit_increase_iv variable. Must be either 'sd' or 'value' - character",
       "standard deviation of the independent variable - numeric"
       )
 
+    cols_alpha = c("cronbach_alpha", "n_items")
+    inf_alpha = c(
+      "Cronbach's alpha reliability coefficient - numeric",
+      "number of items in the scale - numeric")
+
+    cols_icc = c("icc", "n_measurements", "icc_type")
+    inf_icc = c(
+      "intraclass correlation coefficient - numeric",
+      "number of measurements or raters - numeric",
+      "ICC type: 'agreement' (ICC(2,1)) or 'consistency' (ICC(3,1)) - character")
+
     cols_irr = c(
       # survival
-    "time_exp", "time_nexp", "reverse_irr")
+    "reverse_irr", "time_exp", "time_nexp", "baseline_rate")
 
     inf_irr = c(
       "whether the direction of the effect size generated from the number of cases & times should be flipped - logical",
       "person-time of disease-free observation in the exposed group - numeric",
-      "person-time of disease-free observation in the non-exposed group - numeric"
+      "person-time of disease-free observation in the non-exposed group - numeric",
+      "incidence rate of events in the non-exposed/control group (events per person-time) - numeric"
     )
 
 
@@ -496,17 +561,33 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
                            cols_pre_means, cols_med, cols_input_crude, cols_input_adjusted)
 
       }
+    } else if (measure %in% c("dw", "gw", "mdw")) {
+      if (type_of_measure == "natural") {
+        dat = data.frame(t(c(inf_req, inf_exposed, inf_pre_means, inf_paired_statistics,
+                             inf_input_crude, inf_input_adjusted)))
+        colnames(dat) <- c(cols_req, cols_exposed, cols_pre_means, cols_paired_statistics,
+                           cols_input_crude, cols_input_adjusted)
+      } else {
+        dat = data.frame(t(c(inf_req, inf_exposed, inf_pre_means, inf_paired_statistics,
+                             inf_means_post, inf_md, inf_anova, inf_regression,
+                             inf_ancova_mean, inf_ancova_stat, inf_med,
+                             inf_input_crude, inf_input_adjusted)))
+        colnames(dat) <- c(cols_req, cols_exposed, cols_pre_means, cols_paired_statistics,
+                           cols_means_post, cols_md, cols_anova, cols_regression,
+                           cols_ancova_mean, cols_ancova_stat, cols_med,
+                           cols_input_crude, cols_input_adjusted)
+      }
     } else if (measure %in% c("or")) {
       if (type_of_measure == "natural") {
       dat = data.frame(t(c(inf_req, inf_exposed, inf_cases, inf_2x2,
-                           inf_or, inf_rr,
+                           inf_or, inf_rr, inf_rd,
                            inf_input_crude, inf_input_adjusted)))
       colnames(dat) <- c(cols_req, cols_exposed, cols_cases, cols_2x2,
-                         cols_or, cols_rr,
+                         cols_or, cols_rr, cols_rd,
                          cols_input_crude, cols_input_adjusted)
       } else {
         dat = data.frame(t(c(inf_req, inf_exposed, inf_cases, inf_2x2,
-                             inf_or, inf_rr,
+                             inf_or, inf_rr, inf_rd,
                              inf_means_post,
                              inf_md, inf_anova, inf_regression,
                              inf_pre_means, inf_paired_statistics,
@@ -514,7 +595,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
                              inf_sample, inf_r,
                              inf_input_crude, inf_input_adjusted)))
         colnames(dat) <- c(cols_req, cols_exposed, cols_cases, cols_2x2,
-                           cols_or, cols_rr,
+                           cols_or, cols_rr, cols_rd,
                            cols_means_post,
                            cols_md, cols_anova, cols_regression,
                            cols_pre_means, cols_paired_statistics,
@@ -523,20 +604,20 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
                            cols_input_crude, cols_input_adjusted)
 
       }
-    } else if (measure %in% c("rr", "nnt")) {
+    } else if (measure %in% c("rr", "nnt", "rd")) {
       if (type_of_measure == "natural") {
         dat = data.frame(t(c(inf_req, inf_exposed, inf_cases, inf_2x2,
-                             inf_rr,
+                             inf_rr, inf_rd, inf_irr,
                              inf_input_crude, inf_input_adjusted)))
         colnames(dat) <- c(cols_req, cols_exposed, cols_cases, cols_2x2,
-                           cols_rr,
+                           cols_rr, cols_rd, cols_irr,
                            cols_input_crude, cols_input_adjusted)
       } else {
         dat = data.frame(t(c(inf_req, inf_exposed, inf_cases, inf_2x2,
-                             inf_or, inf_rr,
+                             inf_or, inf_rr, inf_rd, inf_irr,
                              inf_input_crude, inf_input_adjusted)))
         colnames(dat) <- c(cols_req, cols_exposed, cols_cases, cols_2x2,
-                           cols_or, cols_rr,
+                           cols_or, cols_rr, cols_rd, cols_irr,
                            cols_input_crude, cols_input_adjusted)
 
       }
@@ -564,6 +645,11 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
                            cols_input_crude, cols_input_adjusted)
 
       }
+    } else if (measure %in% c("rp", "zp")) {
+
+      dat = data.frame(t(c(inf_req, inf_sample, inf_linreg, inf_linreg_b, inf_r, inf_input_crude, inf_input_adjusted)))
+      colnames(dat) <- c(cols_req, cols_sample, cols_linreg, cols_linreg_b, cols_r, cols_input_crude, cols_input_adjusted)
+
     } else if (measure %in% c("logvr", "logcvr")) {
       if (type_of_measure == "natural") {
 
@@ -583,26 +669,54 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "or", "rr", "nnt",
       dat = data.frame(t(c(inf_req, inf_exposed, inf_irr, inf_input_crude, inf_input_adjusted)))
       colnames(dat) <- c(cols_req, cols_exposed, cols_irr, cols_input_crude, cols_input_adjusted)
 
+    } else if (measure %in% c("hr")) {
+
+      # HR can only enter via user_input_crude / user_input_adj (no raw-data
+      # methods, because HR requires per-subject time-to-event data).
+      dat = data.frame(t(c(inf_req, inf_input_crude, inf_input_adjusted)))
+      colnames(dat) <- c(cols_req, cols_input_crude, cols_input_adjusted)
+
+    } else if (measure %in% c("prop")) {
+
+      dat = data.frame(t(c(inf_req, inf_sample, inf_prop_single, inf_input_crude, inf_input_adjusted)))
+      colnames(dat) <- c(cols_req, cols_sample, cols_prop_single, cols_input_crude, cols_input_adjusted)
+
+    } else if (measure == "alpha") {
+
+      dat = data.frame(t(c(inf_req, inf_sample, inf_alpha, inf_input_crude, inf_input_adjusted)))
+      colnames(dat) <- c(cols_req, cols_sample, cols_alpha, cols_input_crude, cols_input_adjusted)
+
+    } else if (measure == "icc") {
+
+      dat = data.frame(t(c(inf_req, inf_sample, inf_icc, inf_input_crude, inf_input_adjusted)))
+      colnames(dat) <- c(cols_req, cols_sample, cols_icc, cols_input_crude, cols_input_adjusted)
+
     } else if (measure %in% c("all")) {
       dat = data.frame(t(c(inf_req, inf_exposed, inf_means_post,
                            inf_md, inf_anova, inf_regression,
+                           inf_linreg, inf_linreg_b,
                            inf_med,
                            inf_pre_means, inf_paired_statistics,
                            inf_ancova_mean, inf_ancova_stat,
                            inf_cases, inf_2x2,
-                           inf_or, inf_rr,
+                           inf_or, inf_rr, inf_rd,
                            inf_sample, inf_r,
                            inf_irr,
+                           inf_prop_single,
+                           inf_alpha, inf_icc,
                            inf_input_crude, inf_input_adjusted)))
       colnames(dat) <- c(cols_req, cols_exposed, cols_means_post,
                          cols_md, cols_anova, cols_regression,
+                         cols_linreg, cols_linreg_b,
                          cols_med,
                          cols_pre_means, cols_paired_statistics,
                          cols_ancova_mean, cols_ancova_stat,
                          cols_cases, cols_2x2,
-                         cols_or, cols_rr,
+                         cols_or, cols_rr, cols_rd,
                          cols_sample, cols_r,
                          cols_irr,
+                         cols_prop_single,
+                         cols_alpha, cols_icc,
                          cols_input_crude, cols_input_adjusted)
 
     }
@@ -746,6 +860,12 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
                 "es_from_or_pval()",
                 "OR", "RR+NNT+D+G+R+Z",
                 "Non-adjusted")
+  dat[dat$hierarch_name == "logreg_t",
+      2:7] <- c("OR or RR + Wald t-statistic from logistic/log-binomial regression",
+                "Section 2. https://metaconvert.org/html/input.html",
+                "es_from_logreg_t()",
+                "OR+RR", "NNT+D+G+R+Z",
+                "Non-adjusted")
 
   dat[dat$hierarch_name == "pearson_r",
       2:7] <- c("Pearson's correlation coefficient",
@@ -757,6 +877,12 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
       2:7] <- c("Fisher's r-to-z correlation coefficient",
                 "Section 4. https://metaconvert.org/html/input.html",
                 "es_from_fisher_z()",
+                "R+Z", "D+G+OR",
+                "Non-adjusted")
+  dat[dat$hierarch_name == "spearman_r",
+      2:7] <- c("Spearman's rank correlation coefficient",
+                "Section 4. https://metaconvert.org/html/input.html",
+                "es_from_spearman_rho()",
                 "R+Z", "D+G+OR",
                 "Non-adjusted")
 

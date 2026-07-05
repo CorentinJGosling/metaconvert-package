@@ -22,12 +22,12 @@
 #'
 #' **To obtain the mean difference**, the following formulas are used (authors calculations):
 #' \deqn{md = ancova\_mean\_exp - ancova\_mean\_nexp}
-#' \deqn{md\_se = \sqrt{\frac{mean\_sd\_exp^2}{n\_exp} + \frac{mean\_sd\_nexp^2}{n\_nexp}}}
+#' \deqn{md\_se = \sqrt{\frac{ancova\_mean\_sd\_exp^2}{n\_exp} + \frac{ancova\_mean\_sd\_nexp^2}{n\_nexp}}}
 #' \deqn{md\_ci\_lo = md - md\_se * qt(.975, n\_exp+n\_nexp-2-n\_cov\_ancova)}
 #' \deqn{md\_ci\_up = md + md\_se * qt(.975, n\_exp+n\_nexp-2-n\_cov\_ancova)}
 #'
 #' **To obtain the Cohen's d**, the following formulas are used (table 12.3 in Cooper):
-#' \deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * ancova\_mean\_exp^2 + (n\_nexp - 1) * ancova\_mean\_nexp^2}{n\_exp+n\_nexp-2}}}
+#' \deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * ancova\_mean\_sd\_exp^2 + (n\_nexp - 1) * ancova\_mean\_sd\_nexp^2}{n\_exp+n\_nexp-2}}}
 #' \deqn{cohen\_d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp}{mean\_sd\_pooled}}
 #' \deqn{cohen\_d\_se = \frac{(n\_exp+n\_nexp)*(1-cov\_outcome\_r^2)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}
 #' \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, n\_exp + n\_nexp - 2 - n\_cov\_ancova)}
@@ -72,19 +72,7 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
-  if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument of incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       ancova_mean_sd_exp, ancova_mean_sd_nexp,
-                       cov_outcome_r, n_cov_ancova,
-                       error_message = paste0("The number of people exposed/non-exposed, ANCOVA SDs ",
-                                              "as well as the correlation and number of covariates in ANCOVA ",
-                                              "should be >0."),
-                       func = "es_from_ancova_means_sd")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument is incorrectly specified.")
 
   df <- n_exp + n_nexp - 2 - n_cov_ancova
   ancova_mean_sd_pooled <- sqrt(((n_exp - 1) * ancova_mean_sd_exp^2 +
@@ -101,9 +89,7 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
   es$md <- ifelse(reverse_ancova_means,
                   ancova_mean_nexp - ancova_mean_exp,
                   ancova_mean_exp - ancova_mean_nexp)
-  mean_sd_exp <- ancova_mean_sd_exp / sqrt(1 - cov_outcome_r^2)
-  mean_sd_nexp <- ancova_mean_sd_nexp / sqrt(1 - cov_outcome_r^2)
-  es$md_se <- sqrt(mean_sd_exp^2/n_exp + mean_sd_nexp^2/n_nexp)
+  es$md_se <- sqrt(ancova_mean_sd_exp^2/n_exp + ancova_mean_sd_nexp^2/n_nexp)
   es$md_ci_lo <- es$md - qt(.975, df) * es$md_se
   es$md_ci_up <- es$md + qt(.975, df) * es$md_se
 
@@ -170,18 +156,6 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
 
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       ancova_mean_se_exp, ancova_mean_se_nexp,
-                       cov_outcome_r, n_cov_ancova,
-                       error_message = paste0("The number of people exposed/non-exposed, ANCOVA SEs ",
-                                              "as well as the correlation and number of covariates in ANCOVA ",
-                                              "should be >0."),
-                       func = "es_from_ancova_means_se")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
 
   ancova_mean_sd_exp <- ancova_mean_se_exp * sqrt(n_exp)
   ancova_mean_sd_nexp <- ancova_mean_se_nexp * sqrt(n_nexp)
@@ -212,7 +186,6 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
-#' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -221,8 +194,8 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
 #' and then relies on the calculations of the \code{\link{es_from_ancova_means_se}()} function.
 #'
 #' **To convert the 95% CIs into standard errors,** the following formula is used (table 12.3 in Cooper):
-#' \deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_ci\_up\_exp - ancova\_mean\_ci\_lo\_exp}{2 * qt(0.975, df = n\_exp - 1)}}
-#' \deqn{ancova\_mean\_se\_nexp = \frac{ancova\_mean\_ci\_up\_nexp - ancova\_mean\_ci\_lo\_nexp}{2 * qt(0.975, df = n\_nexp - 1)}}
+#' \deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_ci\_up\_exp - ancova\_mean\_ci\_lo\_exp}{2 * qt(0.975, df = n\_exp + n\_nexp - 2 - n\_cov\_ancova)}}
+#' \deqn{ancova\_mean\_se\_nexp = \frac{ancova\_mean\_ci\_up\_nexp - ancova\_mean\_ci\_lo\_nexp}{2 * qt(0.975, df = n\_exp + n\_nexp - 2 - n\_cov\_ancova)}}
 #' Calculations of the \code{\link{es_from_ancova_means_se}()} are then applied.
 #'
 #' @return
@@ -255,41 +228,14 @@ es_from_ancova_means_ci <- function(n_exp, n_nexp,
                                     ancova_mean_exp, ancova_mean_ci_lo_exp, ancova_mean_ci_up_exp,
                                     ancova_mean_nexp, ancova_mean_ci_lo_nexp, ancova_mean_ci_up_nexp,
                                     cov_outcome_r, n_cov_ancova,
-                                    max_asymmetry = 10,
                                     smd_to_cor = "viechtbauer", reverse_ancova_means) {
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       cov_outcome_r, n_cov_ancova,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "as well as the correlation and number of covariates in ANCOVA ",
-                                              "should be >0."),
-                       func = "es_from_ancova_means_ci")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-  tryCatch({
-    .validate_ci_symmetry(ancova_mean_exp, ancova_mean_ci_lo_exp, ancova_mean_ci_up_exp,
-                          func = "es_from_ancova_means_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
-  tryCatch({
-    .validate_ci_symmetry(ancova_mean_nexp, ancova_mean_ci_lo_nexp, ancova_mean_ci_up_nexp,
-                          func = "es_from_ancova_means_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
+  df_model <- n_exp + n_nexp - 2 - n_cov_ancova
 
-  df_exp <- n_exp - 1
-  df_nexp <- n_nexp - 1
-
-  ancova_se_exp <- (ancova_mean_ci_up_exp - ancova_mean_ci_lo_exp) / (2 * qt(0.975, df_exp))
-  ancova_se_nexp <- (ancova_mean_ci_up_nexp - ancova_mean_ci_lo_nexp) / (2 * qt(0.975, df_nexp))
+  ancova_se_exp <- (ancova_mean_ci_up_exp - ancova_mean_ci_lo_exp) / (2 * qt(0.975, df_model))
+  ancova_se_nexp <- (ancova_mean_ci_up_nexp - ancova_mean_ci_lo_nexp) / (2 * qt(0.975, df_model))
 
   es <- es_from_ancova_means_se(
     n_exp = n_exp, n_nexp = n_nexp,
@@ -361,18 +307,7 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
-  if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument of incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, ancova_mean_sd_pooled,
-                       cov_outcome_r, n_cov_ancova,
-                       error_message = paste0("The number of people exposed/non-exposed, ANCOVA pooled SD ",
-                                              "as well as the correlation and number of covariates in ANCOVA ",
-                                              "should be >0."),
-                       func = "es_from_ancova_means_sd_pooled_adj")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument is incorrectly specified.")
 
   sd_within <- ancova_mean_sd_pooled / sqrt(1 - cov_outcome_r^2)
 
@@ -456,18 +391,7 @@ es_from_ancova_means_sd_pooled_crude <- function(ancova_mean_exp, ancova_mean_ne
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
-  if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument of incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, mean_sd_pooled,
-                       cov_outcome_r, n_cov_ancova,
-                       error_message = paste0("The number of people exposed/non-exposed, pooled SD ",
-                                              "as well as the correlation and number of covariates in ANCOVA ",
-                                              "should be >0."),
-                       func = "es_from_ancova_means_sd_pooled_crude")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument is incorrectly specified.")
 
   d <- (ancova_mean_exp - ancova_mean_nexp) / mean_sd_pooled
 

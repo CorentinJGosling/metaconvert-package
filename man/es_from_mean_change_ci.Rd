@@ -2,7 +2,7 @@
 % Please edit documentation in R/es_from_PAIRED_MC.R
 \name{es_from_mean_change_ci}
 \alias{es_from_mean_change_ci}
-\title{Convert mean changes and standard deviations of two independent groups into standard effect size measures}
+\title{Convert mean changes and 95\% CI of two independent groups into standard effect size measures}
 \usage{
 es_from_mean_change_ci(
   mean_change_exp,
@@ -17,6 +17,8 @@ es_from_mean_change_ci(
   n_nexp,
   max_asymmetry = 10,
   smd_to_cor = "viechtbauer",
+  pre_post_to_smd = "cooper",
+  pool_sd = FALSE,
   reverse_mean_change
 )
 }
@@ -33,9 +35,9 @@ es_from_mean_change_ci(
 
 \item{mean_change_ci_up_nexp}{upper bound of the 95\% CI around the mean change of the non-experimental/non-exposed group.}
 
-\item{r_pre_post_exp}{pre-post correlation in the experimental/exposed group}
+\item{r_pre_post_exp}{pre-post correlation in the experimental/exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).}
 
-\item{r_pre_post_nexp}{pre-post correlation in the non-experimental/non-exposed group}
+\item{r_pre_post_nexp}{pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).}
 
 \item{n_exp}{number of participants in the experimental/exposed group.}
 
@@ -44,6 +46,10 @@ es_from_mean_change_ci(
 \item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{pre_post_to_smd}{formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).}
+
+\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
 
 \item{reverse_mean_change}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -61,28 +67,28 @@ This function estimates and converts between several effect size measures.
 }
 }
 \description{
-Convert mean changes and standard deviations of two independent groups into standard effect size measures
+Convert mean changes and 95\% CI of two independent groups into standard effect size measures
 }
 \details{
-This function converts the mean change and 95\% CI of two independent groups
-into a Cohen's d. The Cohen's d is then converted to other effect size measures.
+This function converts the mean change and 95\% CI of two independent groups into a Cohen's d.
+The Cohen's d is then converted to other effect size measures.
 
 This function simply internally calls the \code{\link{es_from_means_ci_pre_post}} function but setting:
-\deqn{mean\_pre\_exp = mean\_change\_exp}
-\deqn{mean\_pre\_ci\_lo\_exp = mean\_change\_ci\_lo\_exp}
-\deqn{mean\_pre\_ci\_up\_exp = mean\_change\_ci\_up\_exp}
+\deqn{mean\_pre\_exp = 0}
+\deqn{mean\_pre\_ci\_lo\_exp = 0}
+\deqn{mean\_pre\_ci\_up\_exp = 0}
 
-\deqn{mean\_exp = 0}
-\deqn{mean\_ci\_lo\_exp = 0}
-\deqn{mean\_ci\_up\_exp = 0}
+\deqn{mean\_exp = mean\_change\_exp}
+\deqn{mean\_ci\_lo\_exp = mean\_change\_ci\_lo\_exp}
+\deqn{mean\_ci\_up\_exp = mean\_change\_ci\_up\_exp}
 
-\deqn{mean\_pre\_nexp = mean\_change\_nexp}
-\deqn{mean\_pre\_ci\_lo\_nexp = mean\_change\_ci\_lo\_nexp}
-\deqn{mean\_pre\_ci\_up\_nexp = mean\_change\_ci\_up\_nexp}
+\deqn{mean\_pre\_nexp = 0}
+\deqn{mean\_pre\_ci\_lo\_nexp = 0}
+\deqn{mean\_pre\_ci\_up\_nexp = 0}
 
-\deqn{mean\_nexp = 0}
-\deqn{mean\_ci\_lo\_nexp = 0}
-\deqn{mean\_ci\_up\_nexp = 0}
+\deqn{mean\_nexp = mean\_change\_nexp}
+\deqn{mean\_ci\_lo\_nexp = mean\_change\_ci\_lo\_nexp}
+\deqn{mean\_ci\_up\_nexp = mean\_change\_ci\_up\_nexp}
 
 To know more about the calculations, see \code{\link{es_from_means_sd_pre_post}} function.
 }
@@ -97,7 +103,9 @@ es_from_mean_change_ci(
 )
 }
 \references{
-Bonett, S. B. (2008). Estimating effect sizes from pretest-posttest-control group designs. Organizational Research Methods, 11(2), 364–386. https://doi.org/10.1177/1094428106291059
+Morris, S. B. (2008). Estimating effect sizes from pretest-posttest-control group designs. Organizational Research Methods, 11(2), 364-386. https://doi.org/10.1177/1094428106291059
 
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 }

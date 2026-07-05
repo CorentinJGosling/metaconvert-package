@@ -19,6 +19,7 @@ es_from_means_se_pre_post(
   r_pre_post_nexp,
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "bonett",
+  pool_sd = FALSE,
   reverse_means_pre_post
 )
 }
@@ -50,6 +51,8 @@ es_from_means_se_pre_post(
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
 \item{pre_post_to_smd}{formula used to convert the pre and post means/SD into a SMD (see details).}
+
+\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
 
 \item{reverse_means_pre_post}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }

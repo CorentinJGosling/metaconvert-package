@@ -10,6 +10,7 @@
 #' @details
 #' This function first computes (log) odds ratio (OR), (log) risk ratio (RR) and number needed to treat (NNT)
 #' from the 2x2 table. Note that if a cell is equal to 0, we applied the typical adjustment (add 0.5) to all cells.
+#' This adjustment is used for the OR/RR only; the RD and NNT are obtained from the raw cell counts.
 #' Cohen's d (D), Hedges' g (G) and correlation coefficients (R/Z) are then estimated from the OR.
 #'
 #' **To estimate an OR**, the formulas used (Box 6.4.a in the Cochrane Handbook) are:
@@ -20,11 +21,15 @@
 #' \deqn{logrr = log(\frac{n\_cases\_exp / n\_exp}{n\_cases\_nexp / n\_nexp})}
 #' \deqn{logrr\_se = \sqrt{\frac{1}{n\_cases\_exp} - \frac{1}{n\_exp} + \frac{1}{n\_cases\_nexp} - \frac{1}{n\_nexp}}}
 #'
-#' **To estimate a NNT**, the formulas used are (Sedwick, 2013) :
+#' **To estimate a risk difference (RD) and NNT**, the formulas used are (Wen et al., 2005; Altman, 1998):
 #' \deqn{pt = \frac{n\_cases\_exp}{n\_cases\_exp + n\_controls\_exp}}
 #' \deqn{pc = \frac{n\_cases\_nexp}{n\_cases\_nexp + n\_controls\_nexp}}
-#' \deqn{AAR = pc - pt}
-#' \deqn{nnt = \frac{1}{AAR}}
+#' \deqn{rd = pc - pt}
+#' \deqn{rd\_se = \sqrt{\frac{pt(1-pt)}{n\_exp} + \frac{pc(1-pc)}{n\_nexp}}}
+#' \deqn{nnt = \frac{1}{rd}}
+#' \deqn{nnt\_se = \frac{rd\_se}{rd^2}}
+#' Note that NNT confidence intervals are set to NA when the RD confidence interval crosses zero
+#' (discontinuous CI; Altman, 1998).
 #'
 #' **To convert the 2x2 table into a SMD**,
 #' the function estimates an OR value from the 2x2 table (formula above)
@@ -43,7 +48,7 @@
 #' This function estimates and converts between several effect size measures.
 #'
 #' \tabular{ll}{
-#'  \code{natural effect size measure} \tab OR + RR + NNT\cr
+#'  \code{natural effect size measure} \tab OR + RR + NNT + RD\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab D + G + R + Z \cr
 #'  \tab \cr
@@ -65,6 +70,10 @@
 #'
 #' Sedgwick, P. (2013). What is number needed to treat (NNT)? Bmj, 347.
 #'
+#' Altman, D. G. (1998). Confidence intervals for the number needed to treat. BMJ, 317(7168), 1309-1312.
+#'
+#' Wen, S., Zhang, L., & Yang, B. (2005). Two approaches to incorporate clinical data uncertainty into number needed to treat. Journal of Clinical Pharmacy and Therapeutics, 30(2), 105-109.
+#'
 #' @examples
 #' es_from_2x2(n_cases_exp = 467, n_cases_nexp = 22087, n_controls_exp = 261, n_controls_nexp = 8761)
 es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
@@ -73,7 +82,7 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
   if (missing(reverse_2x2)) reverse_2x2 <- rep(FALSE, length(n_cases_exp))
   reverse_2x2[is.na(reverse_2x2)] <- FALSE
   if (length(reverse_2x2) == 1) reverse_2x2 = c(rep(reverse_2x2, length(n_cases_exp)))
-  if (length(reverse_2x2) != length(n_cases_exp)) stop("The length of the 'reverse_2x2' argument of incorrectly specified.")
+  if (length(reverse_2x2) != length(n_cases_exp)) stop("The length of the 'reverse_2x2' argument is incorrectly specified.")
 
   if (!all(table_2x2_to_cor %in% c("tetrachoric"))) { # , "cooper", "lipsey"
     stop(paste0(
@@ -84,14 +93,15 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
     ))
   }
 
-  tryCatch({
-    .validate_positive(n_cases_exp, n_cases_nexp, n_controls_exp, n_controls_nexp,
-      error_message = "The number of cases/controls in the exposed/non-exposed groups should be >0.",
-      func = "es_from_2x2")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  # rd from raw counts
+  n_exp_raw <- n_cases_exp + n_controls_exp
+  n_nexp_raw <- n_cases_nexp + n_controls_nexp
+  pc_raw <- n_cases_nexp / n_nexp_raw
+  pt_raw <- n_cases_exp / n_exp_raw
+  rd <- pc_raw - pt_raw
+  rd_se <- sqrt(pt_raw * (1 - pt_raw) / n_exp_raw + pc_raw * (1 - pc_raw) / n_nexp_raw)
 
+  # 0.5 correction for or/rr
   zero <- which(n_cases_exp == 0 | n_cases_nexp == 0 | n_controls_exp == 0 | n_controls_nexp == 0)
   n_cases_exp[zero] <- n_cases_exp[zero] + 0.5
   n_cases_nexp[zero] <- n_cases_nexp[zero] + 0.5
@@ -151,7 +161,7 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
     #   es$z[no_cooper] <- es$z_se[no_cooper] <-
     #   es$z_ci_lo[no_cooper] <- es$z_ci_up[no_cooper] <- NA
 
-    res_tet <- suppressWarnings(t(mapply(.contigency_to_cor,
+    res_tet <- suppressWarnings(t(mapply(.contingency_to_cor,
       n_cases_exp = dat2x2$n_cases_exp[nn_miss],
       n_controls_exp = dat2x2$n_controls_exp[nn_miss],
       n_cases_nexp = dat2x2$n_cases_nexp[nn_miss],
@@ -171,10 +181,20 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
     es$z_ci_up[nn_miss] <- res_tet[, 8]
   }
 
-  pc <- n_cases_nexp / (n_cases_nexp+ n_controls_nexp)
-  pt <- n_cases_exp / (n_cases_exp + n_controls_exp )
-  AAR <- pc - pt
-  es$nnt <- ifelse(reverse_2x2, -1/AAR, 1/AAR)
+  es$rd <- ifelse(reverse_2x2, -rd, rd)
+  es$rd_se <- rd_se
+  es$rd_ci_lo <- es$rd - qnorm(.975) * rd_se
+  es$rd_ci_up <- es$rd + qnorm(.975) * rd_se
+
+  es$nnt <- ifelse(rd == 0, NA, ifelse(reverse_2x2, -1 / rd, 1 / rd))
+  es$nnt_se <- ifelse(rd == 0, NA, rd_se / rd^2)
+  rd_ci_lo_raw <- rd - qnorm(.975) * rd_se
+  rd_ci_up_raw <- rd + qnorm(.975) * rd_se
+  crosses_zero <- (rd_ci_lo_raw < 0 & rd_ci_up_raw > 0)
+  es$nnt_ci_lo <- ifelse(crosses_zero | rd == 0, NA,
+                          ifelse(reverse_2x2, -1 / rd_ci_lo_raw, 1 / rd_ci_up_raw))
+  es$nnt_ci_up <- ifelse(crosses_zero | rd == 0, NA,
+                          ifelse(reverse_2x2, -1 / rd_ci_up_raw, 1 / rd_ci_lo_raw))
 
   es$info_used <- "2x2"
   return(es)
@@ -186,7 +206,7 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
 #' @param n_cases_nexp number of cases/events in the non exposed group
 #' @param n_exp total number of participants in the exposed group
 #' @param n_nexp total number of participants in the non exposed group
-#' @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contigency table (see details).
+#' @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contingency table (see details).
 #' @param reverse_2x2 a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -201,7 +221,7 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
 #' This function estimates and converts between several effect size measures.
 #'
 #' \tabular{ll}{
-#'  \code{natural effect size measure} \tab OR + RR + NNT\cr
+#'  \code{natural effect size measure} \tab OR + RR + NNT + RD\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab D + G + R + Z \cr
 #'  \tab \cr
@@ -221,15 +241,6 @@ es_from_2x2_sum <- function(n_cases_exp, n_exp, n_cases_nexp, n_nexp,
                             table_2x2_to_cor = "tetrachoric", reverse_2x2) {
   if (missing(reverse_2x2)) reverse_2x2 <- rep(FALSE, length(n_cases_exp))
   reverse_2x2[is.na(reverse_2x2)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_cases_exp, n_exp, n_cases_nexp, n_nexp,
-                      n_exp - n_cases_exp, n_nexp - n_cases_nexp,
-                      error_message = "The number of cases in the exposed/non exposed groups should be >0 and < to the number of exposed/non-exposed.",
-                      func = "es_from_2x2_sum")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   es <- es_from_2x2(
     n_cases_exp = n_cases_exp,
@@ -251,7 +262,7 @@ es_from_2x2_sum <- function(n_cases_exp, n_exp, n_cases_nexp, n_nexp,
 #' @param prop_cases_nexp proportion of cases/events in the non-exposed group (ranging from 0 to 1)
 #' @param n_exp total number of participants in the exposed group
 #' @param n_nexp total number of participants in the non exposed group
-#' @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contigency table (see details).
+#' @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contingency table (see details).
 #' @param reverse_prop a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #'
@@ -270,7 +281,7 @@ es_from_2x2_sum <- function(n_cases_exp, n_exp, n_cases_nexp, n_nexp,
 #' This function estimates and converts between several effect size measures.
 #'
 #' \tabular{ll}{
-#'  \code{natural effect size measure} \tab OR + RR + NNT\cr
+#'  \code{natural effect size measure} \tab OR + RR + NNT + RD\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab D + G + R + Z \cr
 #'  \tab \cr
@@ -291,16 +302,6 @@ es_from_2x2_prop <- function(prop_cases_exp, prop_cases_nexp, n_exp, n_nexp,
   if (missing(reverse_prop)) reverse_prop <- rep(FALSE, length(prop_cases_exp))
   reverse_prop[is.na(reverse_prop)] <- FALSE
 
-  tryCatch({
-    .validate_positive(prop_cases_exp, prop_cases_nexp, n_exp, n_nexp,
-                      1.000000000001 - prop_cases_exp, 1.000000000001 - prop_cases_nexp,
-                      error_message = paste0("The number of people in the exposed/non exposed groups should be >0",
-                      " and the proportion of cases in the two groups should lie between [0-1]."),
-                      func = "es_from_2x2_prop")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
 
   n_cases_exp <- round(prop_cases_exp * n_exp)
   n_cases_nexp <- round(prop_cases_nexp * n_nexp)
@@ -317,105 +318,5 @@ es_from_2x2_prop <- function(prop_cases_exp, prop_cases_nexp, n_exp, n_nexp,
 
   return(es)
 }
-
-
-# .validate_positive <- function(..., error_message = "All arguments should be greater than 0.") {
-#   args <- list(...)
-#   if (any(sapply(args, function(x) any(x <= 0, na.rm=TRUE)))) {
-#     stop(error_message)
-#   }
-# }
-.validate_positive <- function(...,
-                               error_message = "All arguments should be greater than 0.",
-                               func) {
-  args <- list(...)
-
-  # Function to check if a vector contains non-positive values (ignoring NA)
-  check_positive <- function(x) {
-    if (is.numeric(x)) {
-      return(which(x < 0 & !is.na(x)))
-    } else {
-      return(integer(0))  # Return empty vector for non-numeric inputs
-    }
-  }
-
-  # Check each argument and collect error rows
-  error_rows <- unique(unlist(lapply(args, check_positive)))
-
-  if (length(error_rows) > 0) {
-    rows_errors <- paste(sort(error_rows), collapse = ", ")
-    stop(paste0("In ", func, ": ", error_message, " Errors in rows number: ", rows_errors))
-  }
-}
-
-
-.validate_ci_symmetry <- function(value, ci_lo, ci_up, func, max_asymmetry_percent = 5,
-                                 error_message = "CI bounds are not sufficiently symmetric.") {
-  errors <- character()
-
-  ci_errors <- which(value - ci_lo < 0 | ci_up - value < 0, arr.ind = TRUE)
-  if (length(ci_errors) > 0) {
-    errors <- c(errors, sprintf("In %s we spotted errors in the 95%% CI: %d cases where lower bound > value or upper bound < value. Rows number: %s",
-                                func, length(ci_errors), paste(ci_errors, collapse = ", ")))
-  }
-
-  lower_distance <- value - ci_lo
-  upper_distance <- ci_up - value
-  avg_distance <- (lower_distance + upper_distance) / 2
-  difference <- abs(upper_distance - lower_distance)
-  asymmetry_percent <- (difference / avg_distance) * 100
-
-  asymmetry_errors <- which(asymmetry_percent > max_asymmetry_percent & !is.na(asymmetry_percent))
-  if (length(asymmetry_errors) > 0) {
-    max_asymmetry <- max(asymmetry_percent[asymmetry_errors], na.rm = TRUE)
-    errors <- c(errors, sprintf("In %s, %s Maximum asymmetry: %.2f%% (max allowed: %.2f%%) in rows number %s",
-                                func, error_message, max_asymmetry, max_asymmetry_percent, paste(asymmetry_errors, collapse = ", ")))
-  }
-
-  if (length(errors) > 0) {
-    stop(paste(errors, collapse = "\n"))
-  }
-
-  return(TRUE)
-}
-
-
-# tryCatch({
-#   validate_positive(n_cases_exp, n_cases_nexp, n_controls_exp, n_controls_nexp,
-#                     error_message = "The number of cases/controls in the exposed/non-exposed groups should be >0.")
-# }, error = function(e) {
-#   stop("Validation failed:", conditionMessage(e), "\n")
-# })
-#
-#
-# tryCatch({
-#   validate_ci_symmetry(value, ci_lo, ci_up, func = "example_function",
-#                        max_asymmetry_percent = 5)
-# }, error = function(e) {
-#   stop("Validation failed:", conditionMessage(e), "\n")
-# })
-#
-
-
-# **A.** First, Cooper et al. (2019) - \code{table_2x2_to_cor = "cooper"} -
-# proposes to convert the
-# 2x2 table into a OR (formula above), to convert this OR into a SMD
-# (see formula in \code{\link{es_from_or_se}()}), and to convert this
-# SMD into a correlation coefficient (see formula in \code{\link{es_from_cohen_d}()},
-# with the option \code{"smd_to_cor = 'lipsey_cooper'"}).
-#
-# **B.** Second, a correlation coefficient (more precisely - a phi coefficient)
-# can be obtained from the contingency table using the formula given in
-# Lipsey and Wilson (2001) - \code{table_2x2_to_cor = "lipsey"}.
-# The formulas used to estimate the r and z are:
-# \deqn{r = \frac{(n\_cases\_exp*n\_controls\_nexp - n\_controls\_exp*n\_cases\_nexp)}{\sqrt{(n\_exp) * (n\_nexp) * (n\_cases) * (n\_controls\_exp+n\_cases\_nexp)}}}
-# \deqn{z = atanh(r)}
-# \deqn{z\_se = logor\_se^2 * \frac{z^2}{\log(or)^2}}
-# \deqn{z\_ci\_lo = z - qnorm(.975)*z\_se}
-# \deqn{z\_ci\_up = z + qnorm(.975)*z\_se}
-# \deqn{r\_ci\_lo = tanh(z\_ci\_lo)}
-# \deqn{r\_ci\_up = tanh(z\_ci\_up)}
-# \deqn{effective\_n = \frac{1}{z\_se^2 + 3}}
-# \deqn{r\_se = \frac{(1 - r^2)^2}{effective\_n - 1}}
 
 

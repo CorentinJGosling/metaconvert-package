@@ -6,10 +6,14 @@ inst/doc
 # RStudio files
 *.Rproj
 .Rproj.user
-.Rbuildignore
 .Rhistory
 .RData
 .Ruserdata
+
+# Claude Code / editor local settings (per-developer)
+.claude/
+.vscode/
+CLAUDE.md
 
 # Documentation and Config
 cran-comments.md
@@ -21,7 +25,11 @@ data-raw
 app
 simulations
 web/
+papers/
 
 # Tests and Artifacts
 tests_save
 SUMMARY_TESTS.xlsx
+archive/
+metaConvert.Rcheck/
+metaConvert_*.tar.gz

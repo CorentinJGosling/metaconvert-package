@@ -50,8 +50,8 @@ This function converts the p-value of an ANCOVA (binary predictor) into a t valu
 and then relies on the calculations of the \code{\link{es_from_ancova_t}()} function.
 
 \strong{To convert the p-value into a t-value,} the following formula is used (table 12.3 in Cooper):
-\deqn{df = n\_exp + n\_nexp + n\_exp - 2 - n\_cov\_ancova}
-\deqn{t = | pt(ancova\_f\_pval/2, df = df) |}
+\deqn{df = n\_exp + n\_nexp - 2 - n\_cov\_ancova}
+\deqn{t = | qt(ancova\_f\_pval/2, df = df) |}
 Then, calculations of the \code{\link{es_from_ancova_t}()} are applied.
 }
 \examples{

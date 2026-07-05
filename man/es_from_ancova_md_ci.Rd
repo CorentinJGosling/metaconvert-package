@@ -12,7 +12,6 @@ es_from_ancova_md_ci(
   n_cov_ancova,
   n_exp,
   n_nexp,
-  max_asymmetry = 10,
   smd_to_cor = "viechtbauer",
   reverse_ancova_md
 )
@@ -31,8 +30,6 @@ es_from_ancova_md_ci(
 \item{n_exp}{number of participants in the experimental/exposed group.}
 
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
-
-\item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 

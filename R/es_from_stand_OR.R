@@ -65,7 +65,9 @@
 #' Di Pietrantonj (2006).
 #'
 #' **To estimate the NNT, the formulas used are :**
-#' \deqn{\frac{(1 - br * (1 - or))}{(1 - br) * (br * (1 - or))}}
+#' \deqn{treatment\_risk = \frac{or \times br}{1 - br + or \times br}}
+#' \deqn{rd = br - treatment\_risk}
+#' \deqn{nnt = \frac{1}{rd} = \frac{1 - br \times (1 - or)}{br \times (1 - br)}}
 #'
 #' **To estimate a correlation coefficient, various formulas can be used.**
 #'
@@ -77,7 +79,7 @@
 #'
 #' \deqn{c = \frac{1}{2}}
 #' \deqn{r = \cos{\frac{\pi}{1+or^c}}}
-#' \deqn{r\_se = logor\_se * ((\pi * c * or^c) * \frac{\sin(\pi / (1+or^c))}{1+or^c})^2}
+#' \deqn{r\_se = logor\_se * (\pi * c * or^c) * \frac{\sin(\pi / (1+or^c))}{(1+or^c)^2}}
 #' \deqn{or\_ci\_lo = exp(log(or) - qnorm(.975)*logor\_se)}
 #' \deqn{or\_ci\_up = exp(log(or) + qnorm(.975)*logor\_se)}
 #' \deqn{r\_ci\_lo = cos(\frac{\pi}{1 + or\_ci\_lo^c})}
@@ -95,7 +97,7 @@
 #'
 #' \deqn{c = \frac{3}{4}}
 #' \deqn{r = \frac{or^c - 1}{or^c + 1}}
-#' \deqn{r\_se = \sqrt{\frac{c^2}{4} * (1 - r^2)^2 * logor\_se}}
+#' \deqn{r\_se = \sqrt{\frac{c^2}{4} * (1 - r^2)^2 * logor\_se^2}}
 #' \deqn{z = atanh(r)}
 #' \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
 #' \deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se}}
@@ -110,7 +112,7 @@
 #'
 #' \deqn{c = \frac{\frac{1 - |n\_exp - n\_cases|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
 #' \deqn{r = \cos{\frac{\pi}{1+or^c}}}
-#' \deqn{r\_se = logor\_se * ((\pi * c * or^c) * \frac{\sin(\frac{\pi}{1+or^c})}{1+or^c})^2}
+#' \deqn{r\_se = logor\_se * (\pi * c * or^c) * \frac{\sin(\frac{\pi}{1+or^c})}{(1+or^c)^2}}
 #' \deqn{or\_ci\_lo = exp(log(or) - qnorm(.975)*logor\_se)}
 #' \deqn{or\_ci\_up = exp(log(or) + qnorm(.975)*logor\_se)}
 #' \deqn{r\_ci\_lo = cos(\frac{\pi}{1 + or\_ci\_lo^c})}
@@ -137,7 +139,7 @@
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab OR\cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab RR + NNT\cr
+#'  \code{converted effect size measure} \tab RR + NNT + RD\cr
 #'  \code{} \tab D + G + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 2. Odds Ratio'\cr
@@ -148,11 +150,11 @@
 #' @references
 #' Bonett, Douglas G. and Robert M. Price. (2005). Inferential Methods for the Tetrachoric Correlation Coefficient. Journal of Educational and Behavioral Statistics 30:213-25.
 #'
-#' Bonett, D. G., & Price, R. M. (2007). Statistical inference for generalized Yule coefficients in 2× 2 contingency tables. Sociological methods & research, 35(3), 429-446.
+#' Bonett, D. G., & Price, R. M. (2007). Statistical inference for generalized Yule coefficients in 2* 2 contingency tables. Sociological methods & research, 35(3), 429-446.
 #'
 #' Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 #'
-#' Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299–2322. https://doi.org/10.1002/sim.2287
+#' Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299-2322. https://doi.org/10.1002/sim.2287
 #'
 #' Digby, Peter G. N. (1983). Approximating the Tetrachoric Correlation Coefficient. Biometrics 39:753-7.
 #'
@@ -162,7 +164,7 @@
 #'
 #' Pearson, K. (1900). Mathematical Contributions to the Theory of Evolution. VII: On the Correlation of Characters Not Quantitatively Measurable. Philosophical Transactions of the Royal Statistical Society of London, Series A 19:1-47
 #'
-#' Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78–94. https://doi.org/10.1002/jrsm.1061
+#' Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78-94. https://doi.org/10.1002/jrsm.1061
 #'
 #' @examples
 #' es_from_or_se(or = 2.12, logor_se = 0.242, n_exp = 120, n_nexp = 44)
@@ -227,17 +229,6 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   reverse_or[is.na(reverse_or)] <- FALSE
   if (length(reverse_or) == 1) reverse_or = c(rep(reverse_or, length(or)))
   if (length(reverse_or) != length(or)) stop("The length of the 'reverse_or' argument is incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(logor_se, baseline_risk, small_margin_prop, n_exp, n_nexp,
-                       n_cases, n_controls, n_sample,
-                       error_message = paste0("The number of people exposed/non-exposed, cases/controls, total sample size, ",
-                                              "baseline risk, standard error of the logOR",
-                                              "should be >0."),
-                       func = "es_from_or_se")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   or <- ifelse(is.na(or) & !is.na(logor), exp(logor), or)
 
@@ -365,10 +356,28 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
     es$z_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], res_cor[, 7], res_cor[, 8]) # res_cor[, 8]
   }
 
-  es$nnt <- (1 - baseline_risk * (1 - or)) /
-    ((1 - baseline_risk) * (baseline_risk * (1 - or)))
+  # Risk difference from OR + baseline_risk (Grant 2014)
+  treatment_risk <- (or * baseline_risk) / (1 - baseline_risk + or * baseline_risk)
+  rd <- baseline_risk - treatment_risk
 
+  es$rd <- ifelse(reverse_or, -rd, rd)
+  # delta method
+  drd_dor <- baseline_risk * (1 - baseline_risk) / (1 - baseline_risk + or * baseline_risk)^2
+  rd_se <- abs(drd_dor) * or * logor_se
+  es$rd_se <- rd_se
+  es$rd_ci_lo <- es$rd - qnorm(.975) * rd_se
+  es$rd_ci_up <- es$rd + qnorm(.975) * rd_se
+
+  es$nnt <- ifelse(rd == 0, NA, 1 / rd)
   es$nnt <- ifelse(reverse_or, -es$nnt, es$nnt)
+  es$nnt_se <- ifelse(rd == 0, NA, rd_se / rd^2)
+  rd_ci_lo_raw <- rd - qnorm(.975) * rd_se
+  rd_ci_up_raw <- rd + qnorm(.975) * rd_se
+  crosses_zero <- (rd_ci_lo_raw < 0 & rd_ci_up_raw > 0) | rd == 0
+  es$nnt_ci_lo <- ifelse(crosses_zero, NA,
+                          ifelse(reverse_or, -1 / rd_ci_lo_raw, 1 / rd_ci_up_raw))
+  es$nnt_ci_up <- ifelse(crosses_zero, NA,
+                          ifelse(reverse_or, -1 / rd_ci_up_raw, 1 / rd_ci_lo_raw))
 
   es$info_used <- "or_se"
   return(es)
@@ -383,7 +392,7 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' @param n_exp number of participants in the exposed group
 #' @param n_nexp number of participants in the non-exposed group
 #' @param n_sample total number of participants in the sample
-#' @param baseline_risk proportion of cases in the non-exposed group
+#' @param baseline_risk proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)
 #' @param small_margin_prop smallest margin proportion of the underlying 2x2 table
 #' @param reverse_or a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
@@ -466,17 +475,6 @@ es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
     n_sample <- rep(NA_real_, length(or))
   }
   reverse_or[is.na(reverse_or)] <- FALSE
-
-  tryCatch({
-    .validate_positive(baseline_risk, small_margin_prop, n_exp, n_nexp,
-                       n_cases, n_controls, n_sample,
-                       error_message = paste0("The number of people exposed/non-exposed, cases/controls, total sample size, ",
-                                              "baseline risk,",
-                                              "should be >0."),
-                       func = "es_from_or")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   or <- ifelse(is.na(or) & !is.na(logor), exp(logor), or)
 
@@ -596,37 +594,11 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
     reverse_or <- rep(FALSE, length(or))
   }
   if (missing(n_sample)) {
-    n_sample <- rep(FALSE, length(or))
+    n_sample <- rep(NA_real_, length(or))
   }
   reverse_or[is.na(reverse_or)] <- FALSE
 
   or <- ifelse(is.na(or) & !is.na(logor), exp(logor), or)
-
-  tryCatch({
-    .validate_positive(baseline_risk, small_margin_prop, n_exp, n_nexp,
-                       n_cases, n_controls, n_sample,
-                       error_message = paste0("The number of people exposed/non-exposed, cases/controls, total sample size, ",
-                                              "baseline risk, standard error of the logOR",
-                                              "should be >0."),
-                       func = "es_from_or_se")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
-  tryCatch({
-    .validate_ci_symmetry(logor, logor_ci_lo, logor_ci_up,
-                          func = "es_from_or_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
-  tryCatch({
-    .validate_ci_symmetry(log(or), log(or_ci_lo), log(or_ci_up),
-                          func = "es_from_or_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Validation failed: ", conditionMessage(e), "\n")
-  })
 
 
   logor_ci_lo <- ifelse(is.na(logor_ci_lo) & !is.na(or_ci_lo), log(or_ci_lo), logor_ci_lo)
@@ -729,21 +701,9 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
     reverse_or_pval <- rep(FALSE, length(or))
   }
   if (missing(n_sample)) {
-    n_sample <- rep(FALSE, length(or))
+    n_sample <- rep(NA_real_, length(or))
   }
   reverse_or_pval[is.na(reverse_or_pval)] <- FALSE
-
-  tryCatch({
-    .validate_positive(es_from_or_pval, baseline_risk,
-                       small_margin_prop, n_exp, n_nexp, n_cases,
-                       n_controls, n_sample,
-                       error_message = paste0("The number of people exposed/non-exposed, cases/controls, total sample size, ",
-                                              "baseline risk, p-value of the OR",
-                                              "should be >0."),
-                       func = "es_from_or_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   or <- ifelse(is.na(or) & !is.na(logor), exp(logor), or)
   logOR <- suppressWarnings(log(or))
@@ -761,6 +721,143 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
   )
 
   es$info_used <- "or_pval"
+
+  return(es)
+}
+
+#' Convert an odds ratio or risk ratio and a Wald t-statistic from a regression model into several effect size measures
+#'
+#' @param or odds ratio value (from logistic regression)
+#' @param logor log odds ratio value
+#' @param rr risk ratio value (from log-binomial or modified Poisson regression)
+#' @param logrr log risk ratio value
+#' @param logreg_t a t-statistic (Wald statistic) from a logistic, log-binomial, or modified Poisson regression model
+#' @param n_cases number of cases/events across exposed/non-exposed groups
+#' @param n_controls number of controls/no-event across exposed/non-exposed groups
+#' @param n_exp number of participants in the exposed group
+#' @param n_nexp number of participants in the non-exposed group
+#' @param n_sample total number of participants in the sample
+#' @param baseline_risk proportion of cases in the non-exposed group
+#' @param small_margin_prop smallest margin proportion of cases/events in the underlying 2x2 table
+#' @param reverse_logreg_t a logical value indicating whether the direction of the generated effect sizes should be flipped.
+#' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
+#' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).
+#' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
+#' @param smd_to_cor formula used to convert a SMD into a correlation coefficient (see details).
+#'
+#' @details
+#' This function derives the standard error of the log odds ratio (or log risk ratio) from a
+#' Wald t-statistic reported in a regression model.
+#'
+#' **To estimate the standard error of the log OR (or log RR)**, the formulas used are:
+#' \deqn{t = \frac{\beta}{SE(\beta)}}
+#' \deqn{SE(\beta) = \frac{|\beta|}{|t|}}
+#' where \eqn{\beta} is \eqn{\log(OR)} or \eqn{\log(RR)} depending on the model.
+#'
+#' Then, if an OR (or logOR) is entered, calculations of \code{\link{es_from_or_se}()} are applied.
+#' If a RR (or logRR) is entered, calculations of \code{\link{es_from_rr_se}()} are applied.
+#'
+#' @return
+#' This function estimates and converts between several effect size measures.
+#' \tabular{ll}{
+#'  \code{natural effect size measure} \tab OR + RR \cr
+#'  \tab \cr
+#'  \code{converted effect size measure} \tab D + G + R + Z \cr
+#' }
+#'
+#' @references
+#' Sanchez-Meca, J., Marin-Martinez, F., & Chacon-Moscoso, S. (2003). Effect-size indices for
+#' dichotomized outcomes in meta-analysis. \emph{Psychological Methods}, 8(4), 448--467.
+#'
+#' @md
+#'
+#' @export es_from_logreg_t
+#'
+#' @examples
+#' es_or <- es_from_logreg_t(
+#'   or = 2.12, logreg_t = 3.21,
+#'   n_cases = 50, n_controls = 150
+#' )
+#'
+#' es_rr <- es_from_logreg_t(
+#'   rr = 1.5, logreg_t = 2.8,
+#'   n_exp = 100, n_nexp = 100
+#' )
+es_from_logreg_t <- function(or, logor, rr, logrr, logreg_t,
+                         baseline_risk, small_margin_prop,
+                         n_exp, n_nexp, n_cases, n_controls, n_sample,
+                         or_to_rr = "metaumbrella_cases",
+                         or_to_cor = "bonett",
+                         rr_to_or = "metaumbrella",
+                         smd_to_cor = "viechtbauer",
+                         reverse_logreg_t) {
+
+  len <- if (!missing(or)) length(or) else if (!missing(logor)) length(logor) else if (!missing(rr)) length(rr) else if (!missing(logrr)) length(logrr) else length(logreg_t)
+
+  if (missing(or)) or <- rep(NA_real_, len)
+  if (missing(logor)) logor <- rep(NA_real_, len)
+  if (missing(rr)) rr <- rep(NA_real_, len)
+  if (missing(logrr)) logrr <- rep(NA_real_, len)
+  if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, len)
+  if (missing(small_margin_prop)) small_margin_prop <- rep(NA_real_, len)
+  if (missing(n_exp)) n_exp <- rep(NA_real_, len)
+  if (missing(n_nexp)) n_nexp <- rep(NA_real_, len)
+  if (missing(n_cases)) n_cases <- rep(NA_real_, len)
+  if (missing(n_controls)) n_controls <- rep(NA_real_, len)
+  if (missing(n_sample)) n_sample <- rep(NA_real_, len)
+  if (missing(reverse_logreg_t)) reverse_logreg_t <- rep(FALSE, len)
+  reverse_logreg_t[is.na(reverse_logreg_t)] <- FALSE
+
+  has_or <- !is.na(or) | !is.na(logor)
+  has_rr <- !is.na(rr) | !is.na(logrr)
+
+  # OR -------
+  or <- ifelse(is.na(or) & !is.na(logor), exp(logor), or)
+  logOR <- suppressWarnings(log(or))
+  logor_se <- abs(logOR / logreg_t)
+
+  es_or <- es_from_or_se(
+    or = or, logor_se = logor_se,
+    baseline_risk = baseline_risk, small_margin_prop = small_margin_prop,
+    n_exp = n_exp, n_nexp = n_nexp, n_sample = n_sample,
+    n_cases = n_cases, n_controls = n_controls,
+    or_to_cor = or_to_cor, or_to_rr = or_to_rr,
+    reverse_or = reverse_logreg_t
+  )
+
+  # RR -------
+  rr <- ifelse(is.na(rr) & !is.na(logrr), exp(logrr), rr)
+  logRR <- suppressWarnings(log(rr))
+  logrr_se <- abs(logRR / logreg_t)
+
+  es_rr <- es_from_rr_se(
+    rr = rr, logrr_se = logrr_se,
+    baseline_risk = baseline_risk,
+    n_exp = n_exp, n_nexp = n_nexp,
+    n_cases = n_cases, n_controls = n_controls,
+    rr_to_or = rr_to_or, smd_to_cor = smd_to_cor,
+    reverse_rr = reverse_logreg_t
+  )
+
+  use_rr <- has_rr & !has_or
+
+  if (!any(use_rr)) {
+    es_or$info_used <- "logreg_t"
+    return(es_or)
+  } else if (all(use_rr)) {
+    es_rr$info_used <- "logreg_t"
+    return(es_rr)
+  }
+
+  all_cols <- union(names(es_or), names(es_rr))
+  es <- data.frame(matrix(NA_real_, nrow = len, ncol = 0))
+  for (col in all_cols) {
+    if (col == "info_used") next
+    or_val <- if (col %in% names(es_or)) es_or[[col]] else rep(NA_real_, len)
+    rr_val <- if (col %in% names(es_rr)) es_rr[[col]] else rep(NA_real_, len)
+    es[[col]] <- ifelse(use_rr, rr_val, or_val)
+  }
+  es$info_used <- "logreg_t"
 
   return(es)
 }

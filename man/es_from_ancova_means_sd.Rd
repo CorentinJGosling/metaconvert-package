@@ -65,12 +65,12 @@ This function start by estimating the non-adjusted standard deviation of the two
 
 \strong{To obtain the mean difference}, the following formulas are used (authors calculations):
 \deqn{md = ancova\_mean\_exp - ancova\_mean\_nexp}
-\deqn{md\_se = \sqrt{\frac{mean\_sd\_exp^2}{n\_exp} + \frac{mean\_sd\_nexp^2}{n\_nexp}}}
+\deqn{md\_se = \sqrt{\frac{ancova\_mean\_sd\_exp^2}{n\_exp} + \frac{ancova\_mean\_sd\_nexp^2}{n\_nexp}}}
 \deqn{md\_ci\_lo = md - md\_se * qt(.975, n\_exp+n\_nexp-2-n\_cov\_ancova)}
 \deqn{md\_ci\_up = md + md\_se * qt(.975, n\_exp+n\_nexp-2-n\_cov\_ancova)}
 
 \strong{To obtain the Cohen's d}, the following formulas are used (table 12.3 in Cooper):
-\deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * ancova\_mean\_exp^2 + (n\_nexp - 1) * ancova\_mean\_nexp^2}{n\_exp+n\_nexp-2}}}
+\deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * ancova\_mean\_sd\_exp^2 + (n\_nexp - 1) * ancova\_mean\_sd\_nexp^2}{n\_exp+n\_nexp-2}}}
 \deqn{cohen\_d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp}{mean\_sd\_pooled}}
 \deqn{cohen\_d\_se = \frac{(n\_exp+n\_nexp)*(1-cov\_outcome\_r^2)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}
 \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, n\_exp + n\_nexp - 2 - n\_cov\_ancova)}

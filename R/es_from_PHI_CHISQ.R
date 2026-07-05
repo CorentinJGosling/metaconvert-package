@@ -72,16 +72,7 @@ es_from_phi <- function(phi, n_cases, n_exp,
   if (missing(n_cases)) n_cases <- rep(NA, length(phi))
 
   if (length(reverse_phi) == 1) reverse_phi = c(rep(reverse_phi, length(phi)))
-  if (length(reverse_phi) != length(phi)) stop("The length of the 'reverse_phi' argument of incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(n_cases, n_exp, n_sample,
-                       error_message = paste0("The number of cases, people exposed, total sample ",
-                                              "should be >0."),
-                       func = "es_from_phi")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (length(reverse_phi) != length(phi)) stop("The length of the 'reverse_phi' argument is incorrectly specified.")
 
   cont_table <- suppressWarnings(
     metafor::conv.2x2(
@@ -127,7 +118,10 @@ es_from_phi <- function(phi, n_cases, n_exp,
 #' @param n_sample total number of participants in the sample
 #' @param n_cases total number of cases/events
 #' @param n_exp total number of participants in the exposed group
-#' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yate's correction for continuity.
+#' @param yates_chisq logical value (or vector of length \code{length(chisq)})
+#'   indicating whether the chi-square has been performed using Yates' correction
+#'   for continuity. When a vector is supplied, each row is back-transformed using
+#'   its own setting. Missing values are treated as \code{FALSE}.
 #' @param reverse_chisq a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -135,7 +129,9 @@ es_from_phi <- function(phi, n_cases, n_exp,
 #' into a phi coefficient (Lipsey et al. 2001):
 #' \deqn{phi = \sqrt{\frac{chisq^2}{n\_sample}}}.
 #'
-#' Note that if \code{yates_chisq = "TRUE"}, a small correction is added.
+#' Note that if \code{yates_chisq = TRUE}, the chi-square value is interpreted
+#' as Yates-corrected when back-transforming to a 2x2 contingency table; this is
+#' propagated row by row when a vector is supplied.
 #'
 #' Then, the phi coefficient is converted to other effect size measures (see \code{\link{es_from_phi}}).
 #'
@@ -171,22 +167,17 @@ es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
   reverse_chisq[is.na(reverse_chisq)] <- FALSE
 
   if (length(reverse_chisq) == 1) reverse_chisq = c(rep(reverse_chisq, length(chisq)))
-  if (length(reverse_chisq) != length(chisq)) stop("The length of the 'reverse_chisq' argument of incorrectly specified.")
+  if (length(reverse_chisq) != length(chisq)) stop("The length of the 'reverse_chisq' argument is incorrectly specified.")
 
-  tryCatch({
-    .validate_positive(n_cases, n_exp, n_sample, chisq,
-                       error_message = paste0("The chi-square, number of cases, people exposed, total sample ",
-                                              "should be >0."),
-                       func = "es_from_chisq")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
+  if (length(yates_chisq) == 1) yates_chisq <- rep(yates_chisq, length(chisq))
+  if (length(yates_chisq) != length(chisq)) stop("The length of the 'yates_chisq' argument is incorrectly specified.")
+  yates_chisq[is.na(yates_chisq)] <- FALSE
 
   cont_table <- suppressWarnings(
     metafor::conv.2x2(
       x2i = chisq, ni = n_sample,
       n1i = n_exp, n2i = n_cases,
-      correct=yates_chisq
+      correct = yates_chisq
     )
   )
 
@@ -229,7 +220,10 @@ es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
 #' @param n_sample total number of participants in the sample
 #' @param n_cases total number of cases/events
 #' @param n_exp total number of participants in the exposed group
-#' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yate's correction for continuity.
+#' @param yates_chisq logical value (or vector of length \code{length(chisq_pval)})
+#'   indicating whether the chi-square has been performed using Yates' correction
+#'   for continuity. When a vector is supplied, each row is back-transformed using
+#'   its own setting. Missing values are treated as \code{FALSE}.
 #' @param reverse_chisq_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -237,7 +231,9 @@ es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
 #' into a chi-square coefficient (Section 3.12 in Lipsey et al., 2001):
 #' \deqn{chisq = qchisq(chisq\_pval, df = 1, lower.tail = FALSE)}
 #'
-#' Note that if \code{yates_chisq = "TRUE"}, a small correction is added.
+#' Note that if \code{yates_chisq = TRUE}, the chi-square value is interpreted
+#' as Yates-corrected when back-transforming to a 2x2 contingency table; this is
+#' propagated row by row when a vector is supplied.
 #'
 #' Then, the chisq coefficient is converted to other effect size measures (see \code{\link{es_from_chisq}}).
 #'
@@ -268,15 +264,6 @@ es_from_chisq_pval <- function(chisq_pval, n_sample, n_cases, n_exp,
                                reverse_chisq_pval) {
   if (missing(reverse_chisq_pval)) reverse_chisq_pval <- rep(FALSE, length(chisq_pval))
   reverse_chisq_pval[is.na(reverse_chisq_pval)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_cases, n_exp, n_sample, chisq_pval,
-                       error_message = paste0("The chi-square p-value, number of cases, people exposed, total sample ",
-                                              "should be >0."),
-                       func = "es_from_chisq_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   chisq <- stats::qchisq(p = chisq_pval, df = 1, lower.tail = FALSE)
 

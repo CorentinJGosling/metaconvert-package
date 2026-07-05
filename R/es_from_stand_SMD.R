@@ -70,9 +70,9 @@
 #'
 #' Borenstein, M., Hedges, L. V., Higgins, J. P., & Rothstein, H. R. (2021). Introduction to meta-analysis. John Wiley & Sons.
 #'
-#' Hedges LV (1981): Distribution theory for Glass’s estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107–28
+#' Hedges LV (1981): Distribution theory for Glass's estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107-28
 #'
-#' Jacobs, P., & Viechtbauer, W. (2017). Estimation of the biserial correlation and its sampling variance for use in meta-analysis. Research synthesis methods, 8(2), 161–180.
+#' Jacobs, P., & Viechtbauer, W. (2017). Estimation of the biserial correlation and its sampling variance for use in meta-analysis. Research synthesis methods, 8(2), 161-180.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -97,15 +97,6 @@ es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
   if (missing(reverse_d)) reverse_d <- rep(FALSE, length(n_exp))
   reverse_d[is.na(reverse_d)] <- FALSE
 
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "should be >0."),
-                       func = "es_from_cohen_d")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   es <- .es_from_d(
     d = cohen_d, n_exp = n_exp, n_nexp = n_nexp,
@@ -164,16 +155,7 @@ es_from_cohen_d_adj <- function(cohen_d_adj, n_cov_ancova, cov_outcome_r, n_exp,
   if (missing(reverse_d)) reverse_d <- rep(FALSE, length(n_exp))
   reverse_d[is.na(reverse_d)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "should be >0."),
-                       func = "es_from_cohen_d_adj")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
-  es <- .es_from_d_ancova(
+  es <- .es_from_d(
     d = cohen_d_adj, n_cov_ancova = n_cov_ancova,
     cov_outcome_r = cov_outcome_r,
     n_exp = n_exp, n_nexp = n_nexp,
@@ -211,7 +193,7 @@ es_from_cohen_d_adj <- function(cohen_d_adj, n_cov_ancova, cov_outcome_r, n_exp,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
 #'
 #' @references
-#' Hedges LV (1981): Distribution theory for Glass’s estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107–28
+#' Hedges LV (1981): Distribution theory for Glass's estimator of effect size and related estimators. Journal of Educational and Behavioral Statistics, 6, 107-28
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -237,15 +219,6 @@ es_from_hedges_g <- function(hedges_g, n_exp, n_nexp, smd_to_cor = "viechtbauer"
   reverse_g[is.na(reverse_g)] <- FALSE
   if (length(reverse_g) == 1) reverse_g = c(rep(reverse_g, length(hedges_g)))
   if (length(reverse_g) != length(hedges_g)) stop("The length of the 'reverse_g' argument is incorrectly specified.")
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "should be >0."),
-                       func = "es_from_cohen_d_adj")
-  }, error = function(e) {
-    stop("Data es_from_hedges_g error: ", conditionMessage(e), "\n")
-  })
 
   df <- n_exp + n_nexp - 2
 

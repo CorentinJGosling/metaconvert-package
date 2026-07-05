@@ -5,7 +5,8 @@
 \title{Data extraction sheet generator}
 \usage{
 data_extraction_sheet(
-  measure = c("d", "g", "md", "or", "rr", "nnt", "r", "z", "logvr", "logcvr", "irr"),
+  measure = c("d", "g", "md", "dw", "gw", "mdw", "or", "rr", "nnt", "rd", "r", "z",
+    "logvr", "logcvr", "irr", "prop"),
   type_of_measure = c("natural", "natural+converted"),
   name = "mcv_data_extraction",
   extension = c("data.frame", ".txt", ".csv", ".xlsx"),
@@ -35,7 +36,7 @@ This function generates, on your computer, a data extraction sheet that contains
 that can be used by our tools to estimate various effect size measures.
 
 If you select a specific measure (e.g., \code{measure = "g"}), you will be presented only with most common
-information allowing to estimate this measure (e.g., you will not be provided with columns for contigency
+information allowing to estimate this measure (e.g., you will not be provided with columns for contingency
 tables if you request a data extraction sheet for \code{measure = "g"}).
 \subsection{Measure}{
 

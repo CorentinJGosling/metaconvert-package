@@ -14,27 +14,35 @@ es_from_mean_change_sd(
   n_exp,
   n_nexp,
   smd_to_cor = "viechtbauer",
+  pre_post_to_smd = "cooper",
+  pool_sd = FALSE,
   reverse_mean_change
 )
 }
 \arguments{
 \item{mean_change_exp}{mean change of participants in the experimental/exposed group.}
 
-\item{mean_change_sd_exp}{standard deviation of the mean change for participants in the experimental/exposed group.}
+\item{mean_change_sd_exp}{standard deviation of the mean change (i.e., SD of the difference scores)
+for participants in the experimental/exposed group.}
 
 \item{mean_change_nexp}{mean change of participants in the non-experimental/non-exposed group.}
 
-\item{mean_change_sd_nexp}{standard deviation of the mean change for participants in the non-experimental/non-exposed group.}
+\item{mean_change_sd_nexp}{standard deviation of the mean change for participants in the
+non-experimental/non-exposed group.}
 
-\item{r_pre_post_exp}{pre-post correlation in the experimental/exposed group}
+\item{r_pre_post_exp}{pre-post correlation in the experimental/exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).}
 
-\item{r_pre_post_nexp}{pre-post correlation in the non-experimental/non-exposed group}
+\item{r_pre_post_nexp}{pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).}
 
 \item{n_exp}{number of participants in the experimental/exposed group.}
 
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{pre_post_to_smd}{formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).}
+
+\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
 
 \item{reverse_mean_change}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -55,19 +63,29 @@ This function estimates and converts between several effect size measures.
 Convert mean changes and standard deviations of two independent groups into standard effect size measures
 }
 \details{
-This function first computes a Cohen's d (D), Hedges' g (G)
-from the mean change (MC) and standard deviations of two independent groups.
-Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
+This function computes a Cohen's d (D) and Hedges' g (G) from the mean change and standard deviation
+of change scores of two independent groups. Odds ratio (OR) and correlation coefficients (R/Z) are
+then converted from Cohen's d.
+
+Two formulas can be used to obtain the SMD (Morris & DeShon, 2002):
+\deqn{d_{z} = \frac{mean\_change}{sd\_change}}
+\deqn{d_{rm} = d_{z} \times \sqrt{2 \times (1 - r\_pre\_post)}}
+The 'morris_drm' formula (default, alias 'cooper') requires the pre-post correlation while
+'morris_dz' does not. Note that d_rm and d_z are not expressed on the same scale and should not be
+combined in a same meta-analysis (Morris & DeShon, 2002). Under 'morris_drm', the resulting effect
+size directly depends on the r_pre_post value entered; if r is unknown, the 'morris_dz' formula
+can be used instead. The 'bonett' and 'morris_dav' formulas require separate pre/post SDs and are
+thus not available for mean change data.
 
 This function simply internally calls the \code{\link{es_from_means_sd_pre_post}} function but setting:
-\deqn{mean\_pre\_exp = mean\_change\_exp}
-\deqn{mean\_pre\_sd\_exp = mean\_change\_sd\_exp}
-\deqn{mean\_exp = 0}
-\deqn{mean\_sd\_exp = 0}
-\deqn{mean\_pre\_nexp = mean\_change\_nexp}
-\deqn{mean\_pre\_sd\_nexp = mean\_change\_sd\_nexp}
-\deqn{mean\_nexp = 0}
-\deqn{mean\_sd\_nexp = 0}
+\deqn{mean\_pre\_exp = 0}
+\deqn{mean\_pre\_sd\_exp = 0}
+\deqn{mean\_exp = mean\_change\_exp}
+\deqn{mean\_sd\_exp = mean\_change\_sd\_exp}
+\deqn{mean\_pre\_nexp = 0}
+\deqn{mean\_pre\_sd\_nexp = 0}
+\deqn{mean\_nexp = mean\_change\_nexp}
+\deqn{mean\_sd\_nexp = mean\_change\_sd\_nexp}
 
 To know more about the calculations, see \code{\link{es_from_means_sd_pre_post}} function.
 }
@@ -80,7 +98,9 @@ es_from_mean_change_sd(
 )
 }
 \references{
-Bonett, S. B. (2008). Estimating effect sizes from pretest-posttest-control group designs. Organizational Research Methods, 11(2), 364–386. https://doi.org/10.1177/1094428106291059
+Morris, S. B. (2008). Estimating effect sizes from pretest-posttest-control group designs. Organizational Research Methods, 11(2), 364-386. https://doi.org/10.1177/1094428106291059
 
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Morris, S. B., & DeShon, R. P. (2002). Combining effect size estimates in meta-analysis with repeated measures and independent-groups designs. Psychological Methods, 7(1), 105-125. https://doi.org/10.1037/1082-989X.7.1.105
 }

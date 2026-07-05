@@ -22,7 +22,7 @@ es_from_2x2_sum(
 
 \item{n_nexp}{total number of participants in the non exposed group}
 
-\item{table_2x2_to_cor}{formula used to obtain a correlation coefficient from the contigency table (see details).}
+\item{table_2x2_to_cor}{formula used to obtain a correlation coefficient from the contingency table (see details).}
 
 \item{reverse_2x2}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -30,7 +30,7 @@ es_from_2x2_sum(
 This function estimates and converts between several effect size measures.
 
 \tabular{ll}{
-\code{natural effect size measure} \tab OR + RR + NNT\cr
+\code{natural effect size measure} \tab OR + RR + NNT + RD\cr
 \tab \cr
 \code{converted effect size measure} \tab D + G + R + Z \cr
 \tab \cr

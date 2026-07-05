@@ -24,6 +24,7 @@ es_from_means_ci_pre_post(
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "bonett",
   max_asymmetry = 10,
+  pool_sd = FALSE,
   reverse_means_pre_post
 )
 }
@@ -65,6 +66,8 @@ es_from_means_ci_pre_post(
 \item{pre_post_to_smd}{formula used to convert the pre and post means/SD into a SMD (see details).}
 
 \item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
+
+\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
 
 \item{reverse_means_pre_post}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }

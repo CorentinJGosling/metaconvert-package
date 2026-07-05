@@ -2,6 +2,7 @@
 % Please edit documentation in R/metaConvert.R
 \docType{package}
 \name{metaConvert-package}
+\alias{metaConvert}
 \alias{metaConvert-package}
 \title{metaConvert: An R Package Dedicated to Automated Effect Size Calculations}
 \description{
@@ -166,3 +167,18 @@ depending on the function - some of the following columns:
 }
 }
 
+\author{
+\strong{Maintainer}: Corentin J. Gosling \email{corentin.gosling@parisnanterre.fr}
+
+Authors:
+\itemize{
+  \item Samuele Cortese \email{samuele.cortese@gmail.com}
+  \item Marco Solmi \email{marco.solmi83@gmail.com}
+  \item Belen Haza \email{hazabelen@gmail.com}
+  \item Eduard Vieta \email{EVIETA@clinic.cat}
+  \item Richard Delorme \email{richard.delorme.rdb@gmail.com}
+  \item Paolo Fusar-Poli \email{Paolo.fusar-poli@kcl.ac.uk}
+  \item Joaquim Radua \email{radua@clinic.cat}
+}
+
+}

@@ -43,15 +43,6 @@ es_from_student_t <- function(student_t, n_exp, n_nexp,
   if (missing(reverse_student_t)) reverse_student_t <- rep(FALSE, length(student_t))
   reverse_student_t[is.na(reverse_student_t)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              "should be >0."),
-                       func = "es_from_student_t")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
 
   d <- student_t * sqrt(1 / n_exp + 1 / n_nexp)
 
@@ -107,16 +98,6 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
   if (missing(reverse_student_t_pval)) reverse_student_t_pval <- rep(FALSE, length(student_t_pval))
   reverse_student_t_pval[is.na(reverse_student_t_pval)] <- FALSE
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, student_t_pval,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              " and the p-value ",
-                                              "should be >0."),
-                       func = "es_from_student_t_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
   t <- qt(p = student_t_pval / 2, df = n_exp + n_nexp - 2, lower.tail = FALSE)
 
   es <- es_from_student_t(
@@ -170,16 +151,6 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
 es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_anova_f) {
   if (missing(reverse_anova_f)) reverse_anova_f <- rep(FALSE, length(anova_f))
   reverse_anova_f[is.na(reverse_anova_f)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, anova_f,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              " and the F-ANOVA ",
-                                              "should be >0."),
-                       func = "es_from_anova_f")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   t <- sqrt(anova_f)
 
@@ -235,16 +206,6 @@ es_from_anova_pval <- function(anova_f_pval, n_exp, n_nexp, smd_to_cor = "viecht
                                reverse_anova_f_pval) {
   if (missing(reverse_anova_f_pval)) reverse_anova_f_pval <- rep(FALSE, length(anova_f_pval))
   reverse_anova_f_pval[is.na(reverse_anova_f_pval)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, anova_f_pval,
-                       error_message = paste0("The number of people exposed/non-exposed, ",
-                                              " and the p-value ",
-                                              "should be >0."),
-                       func = "es_from_anova_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
 
   es <- es_from_student_t_pval(

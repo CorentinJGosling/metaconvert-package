@@ -6,15 +6,15 @@
 \usage{
 convert_df(
   x,
-  measure = c("d", "g", "md", "logor", "logrr", "logirr", "nnt", "r", "z", "logvr",
-    "logcvr"),
+  measure = c("d", "g", "md", "logor", "logrr", "logirr", "nnt", "rd", "r", "z", "rp",
+    "zp", "logvr", "logcvr"),
   main_es = TRUE,
   es_selected = c("auto", "hierarchy", "minimum", "maximum"),
   selection_auto = c("crude", "paired", "adjusted"),
   split_adjusted = TRUE,
   format_adjusted = c("wide", "long"),
   verbose = TRUE,
-  max_asymmetry = 10,
+  max_asymmetry = 50,
   hierarchy = "means_sd > means_se > means_ci",
   table_2x2_to_cor = "tetrachoric",
   rr_to_or = "metaumbrella",
@@ -22,10 +22,16 @@ convert_df(
   or_to_cor = "bonett",
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "bonett",
-  r_pre_post = 0.5,
+  r_pre_post = 0.8,
   cor_to_smd = "viechtbauer",
   unit_type = "raw_scale",
-  yates_chisq = FALSE
+  yates_chisq = FALSE,
+  pool_sd = FALSE,
+  prop_to_es = "raw",
+  alpha_to_es = "bonett",
+  icc_to_es = "bonett",
+  correct_inputs = TRUE,
+  flag_options = list()
 )
 }
 \arguments{
@@ -45,7 +51,7 @@ convert_df(
 
 \item{verbose}{a logical variable indicating whether text outputs and messages should be generated. We recommend turning this option to FALSE only after having carefully read all the generated messages.}
 
-\item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
+\item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds. Asymmetric CIs are only flagged, not modified (see \code{\link{summary.metaConvert}}).}
 
 \item{hierarchy}{a character string indicating the hierarchy in the information to be prioritized for the effect size calculations. See details.}
 
@@ -67,7 +73,19 @@ convert_df(
 
 \item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value" (see \code{\link{es_from_pearson_r}}).}
 
-\item{yates_chisq}{a logical value indicating whether the Chi square has been performed using Yate's correction for continuity.}
+\item{yates_chisq}{a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).}
+
+\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
+
+\item{prop_to_es}{method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).}
+
+\item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha. Must be either "bonett" or "raw" (see \code{\link{es_from_cronbach_alpha}}).}
+
+\item{icc_to_es}{method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).}
+
+\item{correct_inputs}{a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'es_flags' column and kept in the data.}
+
+\item{flag_options}{a named list of thresholds used by the quality flags (see \code{\link{summary.metaConvert}} for the list of options and defaults).}
 }
 \value{
 The \code{convert_df()} function returns a list of
@@ -83,9 +101,17 @@ using the summary function (see \code{\link{summary.metaConvert}}).
 Automatically compute effect sizes from a well formatted dataset
 }
 \details{
-This function automatically computes or converts between 11 effect sizes
+This function automatically computes or converts between 14 effect sizes
 measures from any relevant type of input data stored in the
 dataset you pass to this function.
+\subsection{Input validation}{
+
+Before the calculations, the input data are checked (negative sample
+sizes/SD/SE/p-values, inverted CI bounds, values outside their CI,
+asymmetric CI). By default invalid values are set to NA; issues appear
+in the 'es_flags' column of summary().
+}
+
 \subsection{Effect size measures}{
 
 Possible effect size measures are:
@@ -98,9 +124,12 @@ Possible effect size measures are:
 \item (log) incidence rate ratio ("irr" and "logirr")
 \item correlation coefficient ("r")
 \item transformed r-to-z correlation coefficient ("z")
+\item partial correlation coefficient ("rp")
+\item Fisher's z of partial correlation ("zp")
 \item log variability ratio ("logvr")
 \item log coefficient of variation ("logcvr")
 \item number needed to treat ("nnt")
+\item risk difference ("rd")
 }
 }
 
@@ -262,6 +291,23 @@ If you select an automatic hierarchy, here are the types of input data that will
 \item Contingency table
 \item Odds ratio values
 \item Risk ratio values
+\item Incidence rate ratio (person-time NNT, requires baseline_rate)
+\item Phi/chi-square value
+}
+
+NNT values should not be pooled directly (the NNT confidence interval is
+disjoint when the risk difference crosses zero). You should pool RD/OR/RR
+values and convert the pooled estimate to NNT (Deeks, 2002; Cochrane
+Handbook, Chapter 15).
+}
+
+\subsection{Risk difference (\code{measure=c("rd")})}{
+\enumerate{
+\item User's input effect size value
+\item Contingency table
+\item Odds ratio values
+\item Risk ratio values
+\item Incidence rate ratio (requires baseline_rate)
 \item Phi/chi-square value
 }
 }
@@ -280,7 +326,7 @@ For example, if you set:
 the means + SD, then the means + SE, then the Student's t-test to estimate the main effect
 size.
 \item \code{hierarchy = "2x2 > or_se > phi"}, the convert_df function will prioritize
-the contigency table, then the odds ratio value + SE, then the phi coefficient to estimate
+the contingency table, then the odds ratio value + SE, then the phi coefficient to estimate
 the main effect size.
 }
 

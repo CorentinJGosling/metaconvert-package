@@ -32,6 +32,14 @@
     user_input_es_adj <- user_input_se_adj <- rep(NA_real_, nrow(x))
   x$row_id <- 1:nrow(x)
 
+  # Backwards compatibility: map old user_es_measure column names to new names
+  if ("user_es_measure_crude" %in% colnames(x) && !"user_es_original_measure_crude" %in% colnames(x)) {
+    x$user_es_original_measure_crude <- x$user_es_measure_crude
+  }
+  if ("user_es_measure_adj" %in% colnames(x) && !"user_es_original_measure_adj" %in% colnames(x)) {
+    x$user_es_original_measure_adj <- x$user_es_measure_adj
+  }
+
   returned <- paste0("Checkings finished.") # object returned
 
 
@@ -40,7 +48,8 @@
     # sample size
     "n_sample", "n_exp", "n_nexp",
     # CRUDE input
-    "user_es_measure_crude",
+    "user_es_original_measure_crude",
+    "user_es_target_measure_crude",
     "user_es_crude",
     "user_se_crude",
     "user_ci_lo_crude",
@@ -49,6 +58,12 @@
     "reverse_d", "cohen_d", "reverse_g", "hedges_g",
     # regression
     "reverse_beta_std", "beta_std", "reverse_beta_unstd", "beta_unstd", "sd_dv",
+    # regression t-statistic (partial correlation)
+    "reverse_linreg_t", "linreg_t", "n_covariates",
+    # regression coefficient (partial correlation)
+    "reverse_linreg_b", "linreg_b", "linreg_b_se",
+    "linreg_b_ci_lo", "linreg_b_ci_up",
+    "reverse_linreg_b_pval", "linreg_b_pval",
     # md
     "reverse_md", "md", "md_sd", "md_se", "md_ci_lo", "md_ci_up",
     "md_pval",
@@ -93,7 +108,8 @@
     "plot_mean_ci_lo_exp", "plot_mean_ci_lo_nexp",
     "plot_mean_ci_up_exp", "plot_mean_ci_up_nexp",
     # ADJUSTED input
-    "user_es_measure_adj",
+    "user_es_original_measure_adj",
+    "user_es_target_measure_adj",
     "user_es_adj",
     "user_se_adj",
     "user_ci_lo_adj",
@@ -128,19 +144,27 @@
     "reverse_means_variability", "reverse_means_change_variability",
 
     # 2x2 table
-    "reverse_2x2", "baseline_risk", "small_margin_prop",
+    "reverse_2x2", "baseline_risk", "baseline_rate", "small_margin_prop",
     "n_cases_exp", "n_cases_nexp", "n_controls_exp", "n_controls_nexp",
     "reverse_prop", "prop_cases_exp", "prop_cases_nexp",
     "n_cases", "n_controls",
+    # single-group proportion
+    "prop",
     # or
     "reverse_or", "or", "logor", "logor_se", "or_ci_lo", "or_ci_up", "logor_ci_lo", "logor_ci_up",
     "reverse_or_pval", "or_pval",
+    "reverse_logreg_t", "logreg_t",
     # rr
     "reverse_rr", "rr", "logrr", "logrr_se",
     "rr_ci_lo", "rr_ci_up", "logrr_ci_lo", "logrr_ci_up",
     "reverse_rr_pval", "rr_pval",
+    # rd (risk difference)
+    "reverse_rd", "rd", "rd_se",
+    "rd_ci_lo", "rd_ci_up",
+    "reverse_rd_pval", "rd_pval",
     # X2, PHI, COR PB
     "reverse_chisq", "chisq", "reverse_chisq_pval", "chisq_pval",
+    "yates_chisq",
     "reverse_phi", "phi", #"reverse_phi_pval", "phi_pval",
     # r
     "reverse_pearson_r", "pearson_r", "reverse_fisher_z", "fisher_z",
@@ -149,7 +173,14 @@
     "sd_iv",
     # survival
     "time_exp", "time_nexp", "reverse_irr",
-    "discard"
+    # correlation (Spearman)
+    "reverse_spearman_r", "spearman_r",
+    # psychometrics
+    "cronbach_alpha", "n_items",
+    "icc", "n_measurements", "icc_type",
+    "discard",
+    # multi-arm trial pooling
+    "pool_side"
   )
   # res = data.frame(Comment = rep("N/A", 5))
   # res[, c(expected_cols)] <- NA
@@ -167,13 +198,23 @@
     grepl("predictor", expected_cols, fixed = TRUE) |
     grepl("outcome", expected_cols, fixed = TRUE) |
     grepl("measure", expected_cols, fixed = TRUE) |
-    grepl("reverse", expected_cols, fixed = TRUE) |
     grepl("unit_type", expected_cols, fixed = TRUE) |
+    grepl("icc_type", expected_cols, fixed = TRUE) |
     grepl("discard", expected_cols, fixed = TRUE),
   "char", "numeric"
   )
 
+  # Set reverse_* and discard columns to logical type
+  expected_cols_type[grepl("reverse", expected_cols, fixed = TRUE)] <- "logical"
+  expected_cols_type[grepl("discard", expected_cols, fixed = TRUE)] <- "logical"
+
   expected_cols_type[which(expected_cols == "cov_outcome_r")] <- "numeric"
+  # n_measurements/n_items would otherwise match "measure" grepl and be set to "char"
+  expected_cols_type[which(expected_cols == "n_measurements")] <- "numeric"
+  expected_cols_type[which(expected_cols == "n_items")] <- "numeric"
+  expected_cols_type[which(expected_cols == "pool_side")] <- "char"
+  # per-row Yates flag for chi-square back-derivation
+  expected_cols_type[which(expected_cols == "yates_chisq")] <- "logical"
   # View(cbind(expected_cols, expected_cols_type))
   # colnames(x) <- tolower(colnames(x))
 
@@ -200,7 +241,7 @@
       x == "inf" | x == "infinity" | x == "Infinity" | x == "INFINITY" | x == "INF" |
       x == "Inf"] <- NA
 
-  #### Convert numerical columns to numeric
+  #### Convert numerical and logical columns to correct type
   for (j in 1:length(expected_cols)) {
     idx <- which(colnames(x) == expected_cols[j])
     x[, idx] <- as.character(x[, idx])
@@ -226,10 +267,17 @@
       }
       # convert numeric columns to numeric format
       x[, idx] <- as.numeric(as.character(x[, idx]))
+    } else if (expected_cols_type[j] == "logical") {
+      # convert logical columns to logical format
+      x[, idx] <- as.logical(x[, idx])
+      # Set NA values to FALSE for logical columns - except yates_chisq,
+      # where NA means "use the scalar yates_chisq default supplied to convert_df()"
+      # (handled downstream in main_convert_df.R).
+      if (expected_cols[j] != "yates_chisq") {
+        x[is.na(x[, idx]), idx] <- FALSE
+      }
     }
   }
-
-  x[, grepl("reverse", colnames(x), fixed = TRUE)][is.na(x[, grepl("reverse", colnames(x), fixed = TRUE)])] <- FALSE
 
 
 

@@ -18,7 +18,7 @@ es_from_ancova_md_sd(
 \arguments{
 \item{ancova_md}{adjusted mean difference between two independent groups}
 
-\item{ancova_md_sd}{covariate-adjusted standard deviation of the mean difference}
+\item{ancova_md_sd}{covariate-adjusted pooled within-group standard deviation}
 
 \item{cov_outcome_r}{correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).}
 
@@ -53,11 +53,13 @@ This function first computes an "adjusted" Cohen's d (D), Hedges' g (G)
 from the adjusted mean difference (MD).
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
-\strong{To estimate the unadjusted variance of MD} (table 12.3 in Cooper):
-\deqn{md\_sd = \frac{ancova\_md\_sd}{\sqrt{1 - cor\_outcome\_r^2}}}
-\deqn{md\_se = md\_sd * \sqrt{\frac{1}{n\_exp} + \frac{1}{n\_nexp}}}
+\strong{To estimate the SE of the adjusted MD}:
+\deqn{md\_se = ancova\_md\_sd * \sqrt{\frac{1}{n\_exp} + \frac{1}{n\_nexp}}}
 \deqn{md\_lo = md - md\_se * qt(.975, n\_exp + n\_nexp-2-n\_cov\_ancova)}
 \deqn{md\_up = md + md\_se * qt(.975, n\_exp + n\_nexp-2-n\_cov\_ancova)}
+
+\strong{To recover the unadjusted pooled SD} (for Cohen's d, table 12.3 in Cooper):
+\deqn{md\_sd = \frac{ancova\_md\_sd}{\sqrt{1 - cor\_outcome\_r^2}}}
 
 \strong{To estimate the Cohen's d} (table 12.3 in Cooper):
 \deqn{d = \frac{ancova\_md}{md\_sd}}

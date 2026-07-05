@@ -1,7 +1,110 @@
+#' @noRd
+.compact_measure_label <- function(measure, exp) {
+  if (exp && measure == "logor") return("OR")
+  if (exp && measure == "logrr") return("RR")
+  if (exp && measure == "logirr") return("IRR")
+  if (exp && measure == "loghr") return("HR")
+  labels <- c(d = "d", g = "g", md = "MD", r = "r", z = "z",
+              logor = "logOR", logrr = "logRR", logirr = "logIRR",
+              loghr = "logHR",
+              logvr = "logVR", logcvr = "logCVR",
+              nnt = "NNT", rd = "RD", dw = "d_w", gw = "g_w", mdw = "MD_w",
+              rp = "r_p", zp = "z_p",
+              prop = "prop", alpha = "alpha", icc = "ICC")
+  if (measure %in% names(labels)) labels[measure] else measure
+}
+
+.make_es_summary <- function(res, measure, exp, digits, suffix) {
+  es_col <- paste0("es", suffix)
+  ci_lo_col <- paste0("es_ci_lo", suffix)
+  ci_up_col <- paste0("es_ci_up", suffix)
+  out_col <- paste0("es_summary", suffix)
+  label <- .compact_measure_label(measure, exp)
+
+  res[[out_col]] <- ifelse(
+    is.na(res[[es_col]]), NA_character_,
+    paste0(label, " = ",
+           round(as.numeric(as.character(res[[es_col]])), digits),
+           " [",
+           round(as.numeric(as.character(res[[ci_lo_col]])), digits),
+           ", ",
+           round(as.numeric(as.character(res[[ci_up_col]])), digits),
+           "]")
+  )
+  res
+}
+
+.make_es_consistency <- function(res, digits, suffix) {
+  es_col <- paste0("es", suffix)
+  n_est_col <- paste0("n_estimations", suffix)
+  min_info_col <- paste0("min_info", suffix)
+  min_val_col <- paste0("min_es_value", suffix)
+  max_info_col <- paste0("max_info", suffix)
+  max_val_col <- paste0("max_es_value", suffix)
+  overlap_col <- paste0("overlap_min_max", suffix)
+  disp_col <- paste0("dispersion_es", suffix)
+  out_col <- paste0("es_consistency", suffix)
+
+  n_est <- suppressWarnings(as.numeric(as.character(res[[n_est_col]])))
+  overlap_raw <- suppressWarnings(as.numeric(as.character(res[[overlap_col]])))
+  disp_raw <- suppressWarnings(as.numeric(as.character(res[[disp_col]])))
+  min_val <- suppressWarnings(as.numeric(as.character(res[[min_val_col]])))
+  max_val <- suppressWarnings(as.numeric(as.character(res[[max_val_col]])))
+
+  res[[out_col]] <- ifelse(
+    is.na(res[[es_col]]), NA_character_,
+    ifelse(!is.na(n_est) & n_est > 1,
+      paste0("min: ", res[[min_info_col]], " = ", round(min_val, digits),
+             ", max: ", res[[max_info_col]], " = ", round(max_val, digits),
+             ", overlap: ", round(overlap_raw * 100), "%",
+             ", SD: ", round(disp_raw, digits)),
+      "")
+  )
+  res
+}
+
+# round ES/SE/CI columns (flags need full precision)
+.round_numeric_cols <- function(res, digits, suffix) {
+  cols_to_round <- paste0(
+    c("es", "se", "es_ci_lo", "es_ci_up",
+      "overlap_min_max", "diff_min_max", "dispersion_es",
+      "min_es_value", "min_es_se", "min_es_ci_lo", "min_es_ci_up",
+      "max_es_value", "max_es_se", "max_es_ci_lo", "max_es_ci_up"),
+    suffix
+  )
+  for (col in cols_to_round) {
+    if (!col %in% colnames(res)) next
+    vals <- res[[col]]
+    numeric_rows <- which(vals != "< 2 types of input data available")
+    if (length(numeric_rows) > 0) {
+      res[numeric_rows, col] <- round(
+        as.numeric(as.character(vals[numeric_rows])), digits)
+    }
+  }
+  res
+}
+
 #' Synthesize information of an object of class \dQuote{metaConvert} into a dataframe
 #'
 #' @param object an object of class \dQuote{metaConvert}
 #' @param digits an integer value specifying the number of decimal places for the rounding of numeric values. Default is 3.
+#' @param flags a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{es_flags} column includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.
+#' @param flag_options a named list of thresholds overriding the defaults (and any options set in \code{\link{convert_df}}).
+#' Available options:
+#' \itemize{
+#'   \item \code{smd_max} (default 3): |SMD| above this value is flagged
+#'   \item \code{r_max} (default 0.95): same, for |r|
+#'   \item \code{log_or_max} (default 5): same, for |logOR| and |logRR|
+#'   \item \code{n_min} (default 10): flag sample sizes below this value
+#'   \item \code{iqr_mult} (default 3): IQR multiplier for the cross-row outlier detection
+#'   \item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum SD of the ES across estimation methods (SMD, correlation, logOR/logRR)
+#'   \item \code{diff_max_smd} / \code{diff_max_r} / \code{diff_max_logor} (defaults 1.0 / 0.3 / 2.0): maximum min-max ES difference across estimation methods
+#'   \item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
+#'   \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
+#'   \item \code{direction_conflict_min} (default 2): number of significantly-positive and significantly-negative studies needed to raise the direction conflict flag (G1)
+#' }
+#' @param guidance a logical value indicating whether missing data guidance should be generated for rows where the effect size is NA. Default is TRUE. When enabled, a column \code{es_guidance} (or \code{es_guidance_crude}/\code{es_guidance_adjusted}) is appended, listing the closest estimation methods and which specific columns are missing.
+#' @param include_raw a logical value indicating whether the raw input columns should be appended after the effect size columns in the returned dataframe. Default is TRUE.
 #' @param ... other arguments that can be passed to the function
 #'
 #' @details
@@ -137,6 +240,34 @@
 #'  \tab \cr
 #' }
 #'
+#' **5. Quality/plausibility flags**
+#' When \code{flags = TRUE} (the default), a flags* column is added, containing
+#' the semicolon-separated list of issues detected for the row (empty when none).
+#'
+#' \tabular{ll}{
+#'  \code{flags*} \tab quality/plausibility flags for the effect size in this row.\cr
+#'  \tab \cr
+#' }
+#'
+#' Flag categories:
+#' \itemize{
+#'   \item \strong{A (Numeric integrity)}: Inf/NaN values, negative SE, inverted CI, ES outside CI
+#'   \item \strong{B (Bounds violations)}: correlation outside \eqn{[-1,1]}, non-positive OR/RR, NNT in (-1,1), proportion outside \eqn{[0,1]}, RD outside \eqn{[-1,1]}
+#'   \item \strong{C (Plausibility)}: unusually large SMD, zero SE, high correlation, large logOR/logRR, small sample size
+#'   \item \strong{D (Cross-row outliers)}: ES or SE is an outlier relative to other rows (IQR method)
+#'   \item \strong{E (Internal consistency)}: high dispersion across estimation methods, low/zero CI overlap, large min-max difference
+#' }
+#'
+#' **6. Missing data guidance**
+#' When \code{guidance = TRUE} (the default), an es_guidance* column indicates,
+#' for rows without an effect size, the closest estimation methods and which
+#' input columns are missing (empty otherwise).
+#'
+#' \tabular{ll}{
+#'  \code{es_guidance*} \tab guidance on which columns to add to obtain an effect size.\cr
+#'  \tab \cr
+#' }
+#'
 #' @seealso
 #' \code{\link{metaConvert-package}} for the formatting of well-formatted datasets\cr
 #' \code{\link{convert_df}} for estimating effect sizes from a dataset\cr
@@ -150,7 +281,7 @@
 #' summary(
 #'   convert_df(df.haza, measure = "g"),
 #'   digits = 5)
-summary.metaConvert <- function(object, digits = 3, ...) {
+summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options = list(), guidance = TRUE, include_raw = TRUE, ...) {
   # object = convert_df(dat, verbose = FALSE,
   #                     or_to_rr = "dipietrantonj", measure="nnt")
   # digits = 3
@@ -180,7 +311,13 @@ summary.metaConvert <- function(object, digits = 3, ...) {
     "logirr", "logirr_se",
     "logcvr", "logcvr_se",
     "logvr", "logvr_se",
-    "nnt"
+    "rp", "rp_se",
+    "zp", "zp_se",
+    "nnt", "nnt_se", "nnt_ci_lo", "nnt_ci_up",
+    "rd", "rd_se", "rd_ci_lo", "rd_ci_up",
+    "prop", "prop_se", "prop_ci_lo", "prop_ci_up",
+    "alpha", "alpha_se", "alpha_ci_lo", "alpha_ci_up",
+    "icc", "icc_se", "icc_ci_lo", "icc_ci_up"
   ))
 
   # extract the values for the correct effect measure
@@ -214,8 +351,9 @@ summary.metaConvert <- function(object, digits = 3, ...) {
   adj_list <- ordering_tot[which(grepl("adj", ordering_tot, fixed = TRUE) |
     grepl("ancova", ordering_tot, fixed = TRUE))]
 
-  ordering_crude <- as.character(ordering_tot[-c(which(ordering_tot %in% adj_list))])
-  ordering_adj <- as.character(ordering_tot[which(ordering_tot %in% adj_list)])
+  idx_adj <- which(ordering_tot %in% adj_list)
+  ordering_crude <- if (length(idx_adj) > 0) as.character(ordering_tot[-idx_adj]) else as.character(ordering_tot)
+  ordering_adj <- as.character(ordering_tot[idx_adj])
 
   # -----------------------------------------------------------------------
 
@@ -294,6 +432,101 @@ summary.metaConvert <- function(object, digits = 3, ...) {
     stop("The combination of 'main_es', 'format_adjusted' and 'split_adjusted' is incorrect. Check documentation for more info.")
   }
 
+  # compact summary columns
+  if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
+    res <- .make_es_summary(res, measure, exp, digits, "_crude")
+    res <- .make_es_consistency(res, digits, "_crude")
+    res <- .make_es_summary(res, measure, exp, digits, "_adjusted")
+    res <- .make_es_consistency(res, digits, "_adjusted")
+  } else {
+    res <- .make_es_summary(res, measure, exp, digits, "")
+    res <- .make_es_consistency(res, digits, "")
+  }
+
+  # quality flags
+  if (flags) {
+    stored_opts <- attr(object, "flag_options")
+    if (is.null(stored_opts)) stored_opts <- .default_flag_options()
+    opts <- stored_opts
+    opts[names(flag_options)] <- flag_options
+    input_val <- attr(object, "input_validation")
+    r_def <- attr(object, "r_defaulted")
+    alpha_method <- attr(object, "alpha_to_es")
+    if (is.null(alpha_method)) alpha_method <- "bonett"
+    icc_method <- attr(object, "icc_to_es")
+    if (is.null(icc_method)) icc_method <- "bonett"
+    prop_method <- attr(object, "prop_to_es")
+    if (is.null(prop_method)) prop_method <- "raw"
+
+    if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
+      res <- .flag_es_quality(res, measure, exp, "_crude", raw_data, opts, input_val,
+                              alpha_to_es = alpha_method, icc_to_es = icc_method,
+                              prop_to_es = prop_method, r_defaulted = r_def)
+      res <- .flag_es_quality(res, measure, exp, "_adjusted", raw_data, opts, input_val,
+                              alpha_to_es = alpha_method, icc_to_es = icc_method,
+                              prop_to_es = prop_method, r_defaulted = r_def)
+    } else {
+      res <- .flag_es_quality(res, measure, exp, "", raw_data, opts, input_val,
+                              alpha_to_es = alpha_method, icc_to_es = icc_method,
+                              prop_to_es = prop_method, r_defaulted = r_def)
+    }
+  }
+
+  # missing data guidance
+  if (guidance) {
+    if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
+      res <- .add_es_guidance(res, "_crude", raw_data, measure, object)
+      res <- .add_es_guidance(res, "_adjusted", raw_data, measure, object)
+    } else {
+      res <- .add_es_guidance(res, "", raw_data, measure, object)
+    }
+  }
+
+  # rounding (flags above use full precision)
+  if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
+    res <- .round_numeric_cols(res, digits, "_crude")
+    res <- .round_numeric_cols(res, digits, "_adjusted")
+  } else {
+    res <- .round_numeric_cols(res, digits, "")
+  }
+
+  # reorder columns
+  all_cols <- colnames(res)
+
+  identity_names   <- c("row_id", "study_id", "author", "year", "outcome",
+                        "predictor", "info_expected", "adjusted_input")
+  provenance_names <- c("all_info", "info_measure", "es_guidance", "es_selected")
+  quality_names    <- c("flags")
+  summary_names    <- c("es_summary", "es_consistency", "n_estimations",
+                        "dispersion_es")
+  primary_names    <- c("es", "se", "es_ci_lo", "es_ci_up",
+                        "info_used", "measure")
+  minmax_names     <- c("overlap_min_max", "diff_min_max",
+                        "min_info", "max_info",
+                        "min_es_value", "min_es_se", "min_es_ci_lo", "min_es_ci_up",
+                        "max_es_value", "max_es_se", "max_es_ci_lo", "max_es_ci_up")
+
+  if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
+    suffixes <- c("_crude", "_adjusted")
+  } else {
+    suffixes <- ""
+  }
+
+  ordered <- character(0)
+  ordered <- c(ordered, identity_names[identity_names %in% all_cols])
+  for (sfx in suffixes) {
+    for (block in list(provenance_names, quality_names, summary_names,
+                       primary_names, minmax_names)) {
+      cols <- paste0(block, sfx)
+      ordered <- c(ordered, cols[cols %in% all_cols])
+    }
+  }
+  remaining <- all_cols[!all_cols %in% ordered]
+  if (isTRUE(include_raw)) {
+    ordered <- c(ordered, remaining)
+  }
+  res <- res[, ordered, drop = FALSE]
+
   if (all(is.na(res$author))) res = subset(res, select = -c(author))
   if (all(is.na(res$year))) res = subset(res, select = -c(year))
   if (all(is.na(res$predictor))) res = subset(res, select = -c(predictor))
@@ -307,6 +540,111 @@ summary.metaConvert <- function(object, digits = 3, ...) {
   ))
 
   res[, main_cols] <- lapply(res[, main_cols], function(x) as.numeric(as.character(x)))
+
+  # diagnostic overview
+  .measure_label <- function(m) {
+    labels <- c(d = "Cohen's d", g = "Hedges' g", md = "Mean difference",
+                r = "Pearson r", z = "Fisher's z", or = "Odds ratio",
+                rr = "Risk ratio", irr = "Incidence rate ratio",
+                logor = "log(OR)", logrr = "log(RR)", logirr = "log(IRR)",
+                logvr = "log(VR)", logcvr = "log(CVR)",
+                nnt = "NNT", rd = "Risk difference",
+                dw = "Within-group d", gw = "Within-group g",
+                mdw = "Within-group MD",
+                rp = "Partial r", zp = "Fisher's z of partial r",
+                prop = "Proportion", alpha = "Cronbach's alpha",
+                icc = "ICC")
+    if (m %in% names(labels)) labels[m] else m
+  }
+
+  .summary_for_suffix <- function(res, suffix) {
+    es_col <- paste0("es", suffix)
+    info_col <- paste0("info_used", suffix)
+    flags_col <- paste0("flags", suffix)
+    if (!es_col %in% colnames(res)) return(NULL)
+
+    n_total <- nrow(res)
+    es_vals <- res[[es_col]]
+    n_estimated <- sum(!is.na(es_vals))
+    pct <- round(100 * n_estimated / n_total)
+
+    info_vals <- res[[info_col]]
+    info_vals <- info_vals[!is.na(info_vals) & info_vals != ""]
+    method_freq <- sort(table(info_vals), decreasing = TRUE)
+
+    n_flags <- 0
+    if (flags_col %in% colnames(res)) {
+      flag_vals <- res[[flags_col]]
+      n_flags <- sum(!is.na(flag_vals) & nchar(flag_vals) > 0)
+    }
+
+    missing_rows <- which(is.na(es_vals))
+
+    list(n_total = n_total, n_estimated = n_estimated, pct = pct,
+         method_freq = method_freq, n_flags = n_flags,
+         missing_rows = missing_rows)
+  }
+
+  is_wide_split <- split_adjusted == TRUE & format == "wide" & main_es == TRUE
+
+  if (is_wide_split) {
+    info_crude <- .summary_for_suffix(res, "_crude")
+    info_adj   <- .summary_for_suffix(res, "_adjusted")
+
+    message("\n-- metaConvert summary --")
+    message("Measure: ", .measure_label(measure), "  |  ", info_crude$n_total, " studies")
+
+    # Crude
+    message("\nCrude estimates: ", info_crude$n_estimated, "/", info_crude$n_total,
+            " (", info_crude$pct, "%)")
+    if (length(info_crude$method_freq) > 0) {
+      top <- utils::head(info_crude$method_freq, 5)
+      for (i in seq_along(top)) {
+        message("  ", format(names(top)[i], width = 25), " ", top[i])
+      }
+    }
+    if (info_crude$n_flags > 0) message(info_crude$n_flags, " quality flag(s) raised")
+    if (length(info_crude$missing_rows) > 0 && length(info_crude$missing_rows) <= 10) {
+      message("Missing ES in rows: ", paste(info_crude$missing_rows, collapse = ", "))
+    } else if (length(info_crude$missing_rows) > 10) {
+      message(length(info_crude$missing_rows), " rows with missing ES")
+    }
+
+    # Adjusted
+    if (!is.null(info_adj)) {
+      message("\nAdjusted estimates: ", info_adj$n_estimated, "/", info_adj$n_total,
+              " (", info_adj$pct, "%)")
+      if (length(info_adj$method_freq) > 0) {
+        top <- utils::head(info_adj$method_freq, 5)
+        for (i in seq_along(top)) {
+          message("  ", format(names(top)[i], width = 25), " ", top[i])
+        }
+      }
+      if (info_adj$n_flags > 0) message(info_adj$n_flags, " quality flag(s) raised")
+    }
+  } else {
+    info <- .summary_for_suffix(res, "")
+    if (!is.null(info)) {
+      message("\n-- metaConvert summary --")
+      message("Measure: ", .measure_label(measure), "  |  ", info$n_total, " studies")
+      message("ES estimated: ", info$n_estimated, "/", info$n_total,
+              " (", info$pct, "%)")
+      if (length(info$method_freq) > 0) {
+        message("\nMethods selected:")
+        top <- utils::head(info$method_freq, 5)
+        for (i in seq_along(top)) {
+          message("  ", format(names(top)[i], width = 25), " ", top[i])
+        }
+      }
+      if (info$n_flags > 0) message(info$n_flags, " quality flag(s) raised")
+      if (length(info$missing_rows) > 0 && length(info$missing_rows) <= 10) {
+        message("Missing ES in rows: ", paste(info$missing_rows, collapse = ", "))
+      } else if (length(info$missing_rows) > 10) {
+        message(length(info$missing_rows), " rows with missing ES")
+      }
+    }
+  }
+
   return(res)
 }
 
@@ -335,4 +673,30 @@ summary.metaConvert <- function(object, digits = 3, ...) {
 print.metaConvert <- function(x, ...) {
   y <- summary.metaConvert(x, digits = 3, ...)
   print(y)
+  invisible(x)
+}
+
+#' Convert a \dQuote{metaConvert} object to a dataframe
+#'
+#' @param x an object of class \dQuote{metaConvert}
+#' @param ... other arguments passed to \code{\link{summary.metaConvert}}
+#'
+#' @details
+#' Convenience wrapper around \code{summary.metaConvert(x, ...)}.
+#'
+#' @return
+#' A dataframe containing the effect size results, diagnostics, and all input data columns.
+#'
+#' @seealso
+#' \code{\link{summary.metaConvert}}
+#'
+#' @exportS3Method
+#'
+#' @md
+#'
+#' @examples
+#' ### get the full output as a dataframe
+#' as.data.frame(convert_df(df.haza, measure = "g"))
+as.data.frame.metaConvert <- function(x, ...) {
+  summary.metaConvert(x, ...)
 }

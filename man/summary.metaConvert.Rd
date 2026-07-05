@@ -4,12 +4,41 @@
 \alias{summary.metaConvert}
 \title{Synthesize information of an object of class \dQuote{metaConvert} into a dataframe}
 \usage{
-\method{summary}{metaConvert}(object, digits = 3, ...)
+\method{summary}{metaConvert}(
+  object,
+  digits = 3,
+  flags = TRUE,
+  flag_options = list(),
+  guidance = TRUE,
+  include_raw = TRUE,
+  ...
+)
 }
 \arguments{
 \item{object}{an object of class \dQuote{metaConvert}}
 
 \item{digits}{an integer value specifying the number of decimal places for the rounding of numeric values. Default is 3.}
+
+\item{flags}{a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{es_flags} column includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.}
+
+\item{flag_options}{a named list of thresholds overriding the defaults (and any options set in \code{\link{convert_df}}).
+Available options:
+\itemize{
+\item \code{smd_max} (default 3): |SMD| above this value is flagged
+\item \code{r_max} (default 0.95): same, for |r|
+\item \code{log_or_max} (default 5): same, for |logOR| and |logRR|
+\item \code{n_min} (default 10): flag sample sizes below this value
+\item \code{iqr_mult} (default 3): IQR multiplier for the cross-row outlier detection
+\item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum SD of the ES across estimation methods (SMD, correlation, logOR/logRR)
+\item \code{diff_max_smd} / \code{diff_max_r} / \code{diff_max_logor} (defaults 1.0 / 0.3 / 2.0): maximum min-max ES difference across estimation methods
+\item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
+\item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
+\item \code{direction_conflict_min} (default 2): number of significantly-positive and significantly-negative studies needed to raise the direction conflict flag (G1)
+}}
+
+\item{guidance}{a logical value indicating whether missing data guidance should be generated for rows where the effect size is NA. Default is TRUE. When enabled, a column \code{es_guidance} (or \code{es_guidance_crude}/\code{es_guidance_adjusted}) is appended, listing the closest estimation methods and which specific columns are missing.}
+
+\item{include_raw}{a logical value indicating whether the raw input columns should be appended after the effect size columns in the returned dataframe. Default is TRUE.}
 
 \item{...}{other arguments that can be passed to the function}
 }
@@ -133,6 +162,34 @@ estimated from crude and adjusted input data.
 \code{overlap_min_max*} \tab \% of overlap between the 95\% CIs of the largest/smallest effect sizes for the comparison.\cr
 \tab \cr
 \code{dispersion_es*} \tab standard deviation of all effect sizes for the comparison.\cr
+\tab \cr
+}
+
+\strong{5. Quality/plausibility flags}
+When \code{flags = TRUE} (the default), a flags* column is added, containing
+the semicolon-separated list of issues detected for the row (empty when none).
+
+\tabular{ll}{
+\code{flags*} \tab quality/plausibility flags for the effect size in this row.\cr
+\tab \cr
+}
+
+Flag categories:
+\itemize{
+\item \strong{A (Numeric integrity)}: Inf/NaN values, negative SE, inverted CI, ES outside CI
+\item \strong{B (Bounds violations)}: correlation outside \eqn{[-1,1]}, non-positive OR/RR, NNT in (-1,1), proportion outside \eqn{[0,1]}, RD outside \eqn{[-1,1]}
+\item \strong{C (Plausibility)}: unusually large SMD, zero SE, high correlation, large logOR/logRR, small sample size
+\item \strong{D (Cross-row outliers)}: ES or SE is an outlier relative to other rows (IQR method)
+\item \strong{E (Internal consistency)}: high dispersion across estimation methods, low/zero CI overlap, large min-max difference
+}
+
+\strong{6. Missing data guidance}
+When \code{guidance = TRUE} (the default), an es_guidance* column indicates,
+for rows without an effect size, the closest estimation methods and which
+input columns are missing (empty otherwise).
+
+\tabular{ll}{
+\code{es_guidance*} \tab guidance on which columns to add to obtain an effect size.\cr
 \tab \cr
 }
 }

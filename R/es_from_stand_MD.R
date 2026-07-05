@@ -43,15 +43,6 @@ es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
   if (length(reverse_md) == 1) reverse_md = c(rep(reverse_md, length(md)))
   if (length(reverse_md) != length(md)) stop("The length of the 'reverse_md' argument is incorrectly specified.")
 
-  tryCatch({
-    .validate_positive(md_sd, n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed and standard deviation of the MD ",
-                                              "should be >0."),
-                       func = "es_from_md_sd")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
   d <- md / md_sd
 
   d_se <- sqrt((n_exp + n_nexp) / (n_exp * n_nexp) + (d^2) / (2 * (n_exp + n_nexp)))
@@ -115,15 +106,6 @@ es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
 
-  tryCatch({
-    .validate_positive(md_se, n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed and standard error of the MD ",
-                                              "should be >0."),
-                       func = "es_from_md_se")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
   md_sd <- md_se / sqrt(1 / n_exp + 1 / n_nexp)
 
   es <- es_from_md_sd(
@@ -184,22 +166,6 @@ es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
   reverse_md[is.na(reverse_md)] <- FALSE
 
 
-  tryCatch({
-    .validate_positive(n_exp, n_nexp,
-                       error_message = paste0("The number of people exposed/non-exposed ",
-                                              "should be >0."),
-                       func = "es_from_md_ci")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-  tryCatch({
-    .validate_ci_symmetry(md, md_ci_lo, md_ci_up,
-                          func = "es_from_md_ci",
-                          max_asymmetry_percent = max_asymmetry)
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
-
 
   md_se <- (md_ci_up - md_ci_lo) / (2 * qt(0.975, n_exp + n_nexp - 2))
 
@@ -255,15 +221,6 @@ es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
 es_from_md_pval <- function(md, md_pval, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_md) {
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
-
-  tryCatch({
-    .validate_positive(n_exp, n_nexp, md_pval,
-                       error_message = paste0("The number of people exposed/non-exposed and MD p-values ",
-                                              "should be >0."),
-                       func = "es_from_md_pval")
-  }, error = function(e) {
-    stop("Data entry error: ", conditionMessage(e), "\n")
-  })
 
   t <- qt(p = md_pval / 2, df = n_exp + n_nexp - 2, lower.tail = FALSE)
 

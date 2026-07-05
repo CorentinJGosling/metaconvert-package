@@ -25,7 +25,7 @@ es_from_rr_se(
 
 \item{logrr_se}{standard error of the log risk ratio}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group}
+\item{baseline_risk}{proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)}
 
 \item{n_exp}{number of participants in the exposed group}
 
@@ -47,7 +47,7 @@ This function estimates and converts between several effect size measures.
 \tabular{ll}{
 \code{natural effect size measure} \tab RR\cr
 \tab \cr
-\code{converted effect size measure} \tab OR + NNT\cr
+\code{converted effect size measure} \tab OR + NNT + RD\cr
 \tab \cr
 \code{required input data} \tab See 'Section 3. Risk Ratio'\cr
 \tab https://metaconvert.org/input.html\cr
@@ -100,11 +100,11 @@ Di Pietrantonj (2006).
 es_from_rr_se(rr = 2.12, logrr_se = 0.242, n_exp = 120, n_nexp = 44)
 }
 \references{
-Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299–2322. https://doi.org/10.1002/sim.2287
+Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299-2322. https://doi.org/10.1002/sim.2287
 
 Gosling, C. J., Solanes, A., Fusar-Poli, P., & Radua, J. (2023). metaumbrella: the first comprehensive suite to perform data analysis in umbrella reviews with stratification of the evidence. BMJ mental health, 26(1), e300534. https://doi.org/10.1136/bmjment-2022-300534
 
 Grant R. L. (2014). Converting an odds ratio to a range of plausible relative risks for better communication of research findings. BMJ (Clinical research ed.), 348, f7450. https://doi.org/10.1136/bmj.f7450
 
-Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78–94. https://doi.org/10.1002/jrsm.1061
+Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78-94. https://doi.org/10.1002/jrsm.1061
 }
