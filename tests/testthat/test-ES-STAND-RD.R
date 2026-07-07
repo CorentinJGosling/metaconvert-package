@@ -27,7 +27,7 @@ test_that("es_from_rd_se: NNT is 1/RD with correct SE", {
   expect_equal(res$nnt_se, nnt_se_expected, tolerance = 1e-10)
 })
 
-test_that("es_from_rd_se: without baseline_risk, OR/RR/d/g/r/z are NA", {
+test_that("es_from_rd_se: without baseline_risk, OR/RR are NA (SMD/r/z never produced)", {
   res <- es_from_rd_se(
     rd = 0.15, rd_se = 0.05,
     n_exp = 100, n_nexp = 100
@@ -37,13 +37,15 @@ test_that("es_from_rd_se: without baseline_risk, OR/RR/d/g/r/z are NA", {
   expect_false(is.na(res$nnt))
   expect_false(is.na(res$rd))
 
-  # OR, RR, d, g, r, z should be NA (no baseline_risk)
+  # OR, RR should be NA (no baseline_risk)
   expect_true(is.na(res$logor))
   expect_true(is.na(res$logrr))
-  expect_true(is.na(res$d))
-  expect_true(is.na(res$g))
-  expect_true(is.na(res$r))
-  expect_true(is.na(res$z))
+
+  # SMD/correlation are never produced from a risk difference
+  expect_false("d" %in% names(res))
+  expect_false("g" %in% names(res))
+  expect_false("r" %in% names(res))
+  expect_false("z" %in% names(res))
 })
 
 # --- es_from_rd_se: full conversion with baseline_risk ---
@@ -87,32 +89,25 @@ test_that("es_from_rd_se: RR conversion with baseline_risk", {
   expect_equal(res$logrr_se, logrr_se_expected, tolerance = 1e-10)
 })
 
-test_that("es_from_rd_se: d/g/r/z conversion via logOR", {
+test_that("es_from_rd_se: does not produce SMD (d/g) or correlation (r/z)", {
   rd <- 0.15
   rd_se <- 0.05
   br <- 0.30
-  pt <- br - rd
 
   res <- es_from_rd_se(
     rd = rd, rd_se = rd_se,
     baseline_risk = br, n_exp = 100, n_nexp = 100
   )
 
-  or <- (pt * (1 - br)) / (br * (1 - pt))
-  logor <- log(or)
-  logor_se <- rd_se / (pt * (1 - pt))
+  # RD is a ratio-family measure: SMD/correlation columns must be absent, even
+  # when baseline_risk is available (they are reached only via OR / 2x2).
+  expect_false("d" %in% names(res))
+  expect_false("g" %in% names(res))
+  expect_false("r" %in% names(res))
+  expect_false("z" %in% names(res))
 
-  d_expected <- logor * sqrt(3) / pi
-  d_se_expected <- sqrt(logor_se^2 * 3 / pi^2)
-
-  expect_equal(res$d, d_expected, tolerance = 1e-10)
-  expect_equal(res$d_se, d_se_expected, tolerance = 1e-10)
-  expect_false(is.na(res$g))
-  expect_false(is.na(res$g_se))
-  expect_false(is.na(res$r))
-  expect_false(is.na(res$r_se))
-  expect_false(is.na(res$z))
-  expect_false(is.na(res$z_se))
+  # OR (the legitimate ratio conversion) is still produced.
+  expect_false(is.na(res$logor))
 })
 
 # --- Edge cases ---
@@ -138,7 +133,6 @@ test_that("es_from_rd_se: treatment_risk out of (0,1) gives NA for OR/RR", {
   # OR/RR should be NA (invalid treatment risk)
   expect_true(is.na(res$logor))
   expect_true(is.na(res$logrr))
-  expect_true(is.na(res$d))
 
   # NNT should still work
   expect_false(is.na(res$nnt))
@@ -166,7 +160,7 @@ test_that("es_from_rd_se: negative RD gives negative NNT", {
 })
 
 # --- Reversal ---
-test_that("es_from_rd_se: reverse flips RD, NNT, OR, and d signs", {
+test_that("es_from_rd_se: reverse flips RD, NNT, and OR signs", {
   rd <- 0.15
   rd_se <- 0.05
   br <- 0.30
@@ -183,13 +177,11 @@ test_that("es_from_rd_se: reverse flips RD, NNT, OR, and d signs", {
   expect_equal(res_fwd$rd, -res_rev$rd, tolerance = 1e-10)
   expect_equal(res_fwd$nnt, -res_rev$nnt, tolerance = 1e-10)
   expect_equal(res_fwd$logor, -res_rev$logor, tolerance = 1e-10)
-  expect_equal(res_fwd$d, -res_rev$d, tolerance = 1e-10)
 
   # SEs remain the same
   expect_equal(res_fwd$rd_se, res_rev$rd_se, tolerance = 1e-10)
   expect_equal(res_fwd$nnt_se, res_rev$nnt_se, tolerance = 1e-10)
   expect_equal(res_fwd$logor_se, res_rev$logor_se, tolerance = 1e-10)
-  expect_equal(res_fwd$d_se, res_rev$d_se, tolerance = 1e-10)
 })
 
 # --- NNT CI: discontinuous when crossing zero ---
@@ -248,9 +240,7 @@ test_that("es_from_rd_ci: derives SE from CI correctly", {
   expect_equal(res_ci$rd_se, res_se$rd_se, tolerance = 1e-10)
   expect_equal(res_ci$nnt, res_se$nnt, tolerance = 1e-10)
   expect_equal(res_ci$logor, res_se$logor, tolerance = 1e-10)
-  expect_equal(res_ci$d, res_se$d, tolerance = 1e-10)
-  expect_equal(res_ci$g, res_se$g, tolerance = 1e-10)
-  expect_equal(res_ci$r, res_se$r, tolerance = 1e-10)
+  expect_equal(res_ci$logrr, res_se$logrr, tolerance = 1e-10)
 
   expect_equal(res_ci$info_used, "rd_ci")
 })
@@ -276,7 +266,7 @@ test_that("es_from_rd_pval: derives SE from p-value correctly", {
   expect_equal(res_pval$rd_se, res_se$rd_se, tolerance = 1e-10)
   expect_equal(res_pval$nnt, res_se$nnt, tolerance = 1e-10)
   expect_equal(res_pval$logor, res_se$logor, tolerance = 1e-10)
-  expect_equal(res_pval$d, res_se$d, tolerance = 1e-10)
+  expect_equal(res_pval$logrr, res_se$logrr, tolerance = 1e-10)
 
   expect_equal(res_pval$info_used, "rd_pval")
 })
@@ -437,36 +427,8 @@ test_that("convert_df pipeline: RR from rd+SE (with baseline_risk)", {
   expect_equal(res$es_crude, exp(standalone$logrr), tolerance = 1e-10)
 })
 
-# --- Pipeline: d/g from rd ---
-test_that("convert_df pipeline: d from rd+SE (with baseline_risk)", {
-  rd <- 0.15
-  br <- 0.30
-  pt <- br - rd
-
-  dat <- data.frame(
-    rd = rd,
-    rd_se = 0.05,
-    baseline_risk = br,
-    n_exp = 100,
-    n_nexp = 100
-  )
-
-  res <- summary(convert_df(dat, measure = "d",
-                             es_selected = "hierarchy",
-                             hierarchy = "rd_se",
-                             verbose = FALSE), digits = 11)
-
-  expect_equal(nrow(res), 1)
-  expect_false(is.na(res$es_crude))
-  expect_equal(res$info_used_crude, "rd_se")
-
-  # Verify against standalone function
-  standalone <- es_from_rd_se(rd = rd, rd_se = 0.05,
-                              baseline_risk = br, n_exp = 100, n_nexp = 100)
-  expect_equal(res$es_crude, standalone$d, tolerance = 1e-10)
-})
-
-test_that("convert_df pipeline: g from rd+SE (with baseline_risk)", {
+# --- Pipeline: RD is NOT converted to SMD (d/g) or correlation (r/z) ---
+test_that("convert_df pipeline: d/g/r/z are NOT produced from rd (any selection mode)", {
   dat <- data.frame(
     rd = 0.15,
     rd_se = 0.05,
@@ -475,34 +437,17 @@ test_that("convert_df pipeline: g from rd+SE (with baseline_risk)", {
     n_nexp = 100
   )
 
-  res <- summary(convert_df(dat, measure = "g",
-                             es_selected = "hierarchy",
-                             hierarchy = "rd_se",
-                             verbose = FALSE), digits = 11)
-
-  expect_equal(nrow(res), 1)
-  expect_false(is.na(res$es_crude))
-  expect_equal(res$info_used_crude, "rd_se")
-})
-
-# --- Pipeline: r/z from rd ---
-test_that("convert_df pipeline: r from rd+SE (with baseline_risk)", {
-  dat <- data.frame(
-    rd = 0.15,
-    rd_se = 0.05,
-    baseline_risk = 0.30,
-    n_exp = 100,
-    n_nexp = 100
-  )
-
-  res <- summary(convert_df(dat, measure = "r",
-                             es_selected = "hierarchy",
-                             hierarchy = "rd_se",
-                             verbose = FALSE), digits = 11)
-
-  expect_equal(nrow(res), 1)
-  expect_false(is.na(res$es_crude))
-  expect_equal(res$info_used_crude, "rd_se")
+  # RD is the only binary source; the SMD/correlation families are reached only
+  # through OR / 2x2, so no estimate can be produced here. (See the dedicated
+  # sweep in test-RD-not-in-SMD-hierarchy.R.)
+  for (sel in c("auto", "minimum", "maximum")) {
+    for (m in c("d", "g", "r", "z")) {
+      res <- summary(convert_df(dat, measure = m, es_selected = sel,
+                                 verbose = FALSE))
+      expect_true(is.na(res$es_crude),
+                  info = sprintf("measure='%s', es_selected='%s'", m, sel))
+    }
+  }
 })
 
 # --- Round-trip consistency: 2x2 → RD matches direct RD input ---
@@ -602,7 +547,7 @@ test_that("es_from_rd_se: NA input gives NA output", {
 
   expect_true(is.na(res$rd))
   expect_true(is.na(res$nnt))
-  expect_true(is.na(res$d))
+  expect_false("d" %in% names(res))
 })
 
 test_that("es_from_rd_se: NA SE gives NA for everything except RD point estimate", {

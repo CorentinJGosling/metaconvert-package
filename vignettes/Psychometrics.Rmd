@@ -223,15 +223,12 @@ Test-retest reliability is assessed using the **intraclass correlation coefficie
 
 $$T(\text{ICC}) = \ln(1 - \text{ICC})$$
 
-The SE of the **transformed** ICC depends on the ICC model type. By the delta method, the $(1-\rho)^2$ term from the raw ICC variance cancels with the $1/(1-\rho)^2$ from the transformation derivative --- this cancellation is the variance-stabilising property of the Bonett transformation:
+The SE of the **transformed** ICC is obtained by the delta method: the $(1-\rho)^2$ term from the raw ICC variance cancels with the $1/(1-\rho)^2$ from the transformation derivative. For a single-measure ICC, this leading-order variance is the **same** for the two-way absolute-agreement ICC(2,1) and the two-way consistency ICC(3,1):
 
-- **ICC(2,1) -- absolute agreement** (`icc_type = "agreement"`):
+- **ICC(2,1) -- absolute agreement** (`icc_type = "agreement"`) and **ICC(3,1) -- consistency** (`icc_type = "consistency"`):
 $$\text{SE}(T) = \sqrt{\frac{2(1+(k-1)\rho)^2}{k(k-1)(n-1)}}$$
 
-- **ICC(3,1) -- consistency** (`icc_type = "consistency"`):
-$$\text{SE}(T) = \sqrt{\frac{2}{(k-1)(n-1)}}$$
-
-where $k$ is the number of measurement occasions and $\rho$ is the ICC value. Note that for ICC(3,1), the SE is fully independent of $\rho$.
+where $k$ is the number of measurement occasions and $\rho$ is the ICC value. Deriving the ICC(3,1) variance directly from $F_0 = \text{MSR}/\text{MSE}$ (degrees of freedom $n-1$ and $(n-1)(k-1)$) yields $\left[(1+(k-1)\rho)/k\right]^2 \cdot 2k/((k-1)(n-1))$, which reduces to the same expression --- so, contrary to a common simplification, the ICC(3,1) SE is **not** independent of $\rho$ (a Monte Carlo check confirms the $\rho$-dependent form; a $\rho$-free $\sqrt{2/((k-1)(n-1))}$ under-states the SE by up to ~2--3$\times$ in variance for high reliabilities).
 
 **Technical note on the ICC(2,1) formula**: The SE formula labelled "ICC(2,1)" above is technically the analytical variance for the **one-way random ICC(1,1)** model (Shrout & Fleiss, 1979), as derived by Bonett (2002). The exact two-way random ICC(2,1) variance formula involves separate between-rater and residual variance components that are typically unavailable without the raw ANOVA mean squares. Using the one-way formula as a proxy for ICC(2,1) is standard practice in psychometric meta-analysis (see e.g., Bonett, 2002; Donner & Eliasziw, 1987) and provides a reasonable approximation.
 

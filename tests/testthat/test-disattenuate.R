@@ -102,6 +102,20 @@ test_that("es_disattenuate handles corrected r > 1 gracefully", {
   expect_true(is.finite(res$z_corrected))
 })
 
+test_that("es_disattenuate derives r_se from n_sample when r_se is omitted", {
+  r <- 0.50; n <- 100; rel_x <- 0.85; rel_y <- 0.80
+  res <- es_disattenuate(r = r, reliability_x = rel_x, reliability_y = rel_y,
+                         n_sample = n)
+  A <- sqrt(rel_x * rel_y)
+  r_se_derived <- sqrt((1 - r^2)^2 / (n - 1))       # large-sample Pearson SE
+  expect_equal(res$r_corrected_se, r_se_derived / A, tolerance = 1e-10)
+  expect_true(is.finite(res$z_corrected_se))
+  # identical to passing that r_se explicitly
+  res2 <- es_disattenuate(r = r, r_se = r_se_derived,
+                          reliability_x = rel_x, reliability_y = rel_y, n_sample = n)
+  expect_equal(res$r_corrected_se, res2$r_corrected_se, tolerance = 1e-10)
+})
+
 
 # ==============================================================================
 # Cross-validation against psychmeta::correct_r()

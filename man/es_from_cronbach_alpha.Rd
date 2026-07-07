@@ -43,9 +43,14 @@ This function computes an effect size from a Cronbach's alpha.
 is applied:
 \deqn{T(\alpha) = \ln(1 - \alpha)}
 \deqn{T\_se = \sqrt{\frac{2k}{(k - 1)(n - 2)}}}
-\item When \code{alpha_to_es = "raw"}, the raw alpha is used and its standard error
-is obtained by the delta method (Feldt et al., 1987):
+\item When \code{alpha_to_es = "raw"}, the raw alpha is used. Its standard error is
+the delta-method back-transform of the Bonett (2002) transformed variance
+(equivalently the van Zyl, Neudecker & Nel, 2000, asymptotic variance; this is
+the form implemented by \code{metafor}'s \code{measure = "ARAW"}):
 \deqn{\alpha\_se = (1 - \alpha) \sqrt{\frac{2k}{(k - 1)(n - 2)}}}
+Note that Feldt et al.'s (1987) classical asymptotic variance instead uses an
+\eqn{(n - 1)} denominator; the \eqn{(n - 2)} form above follows Bonett (2002)
+for consistency with the Bonett transformation used in method 1.
 }
 
 The Bonett transformation stabilizes the variance and is recommended for meta-analysis.
@@ -61,4 +66,7 @@ Journal of Educational and Behavioral Statistics, 27(4), 335-340.
 
 Feldt, L. S., Woodruff, D. J., & Salih, F. A. (1987). Statistical inference for coefficient alpha.
 Applied Psychological Measurement, 11(1), 93-103.
+
+van Zyl, J. M., Neudecker, H., & Nel, D. G. (2000). On the distribution of the maximum likelihood
+estimator of Cronbach's alpha. Psychometrika, 65(3), 271-280.
 }

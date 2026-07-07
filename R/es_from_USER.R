@@ -117,57 +117,27 @@
                     reverse_or = no_reverse)
     },
     "logrr" = {
-      res <- es_from_rr_se(rr = exp(es_val), logrr_se = se_val,
-                           baseline_risk = baseline_risk,
-                           n_exp = n_exp, n_nexp = n_nexp,
-                           n_cases = n_cases, n_controls = n_controls,
-                           rr_to_or = rr_to_or,
-                           reverse_rr = no_reverse)
-      # d/g/r/z via or
-      has_logor <- !is.na(res$logor) & !is.na(res$logor_se)
-      if (any(has_logor)) {
-        or_res <- es_from_or_se(logor = res$logor, logor_se = res$logor_se,
-                                baseline_risk = baseline_risk,
-                                small_margin_prop = small_margin_prop,
-                                n_exp = n_exp, n_nexp = n_nexp,
-                                n_cases = n_cases, n_controls = n_controls,
-                                n_sample = n_sample,
-                                or_to_rr = or_to_rr, or_to_cor = or_to_cor,
-                                reverse_or = no_reverse)
-        for (col in c("d", "d_se", "d_ci_lo", "d_ci_up",
-                       "g", "g_se", "g_ci_lo", "g_ci_up",
-                       "r", "r_se", "r_ci_lo", "r_ci_up",
-                       "z", "z_se", "z_ci_lo", "z_ci_up")) {
-          res[[col]] <- or_res[[col]]
-        }
-      }
-      res
+      # A risk ratio is a ratio-family measure: convert to OR / NNT / RD only,
+      # NOT to an SMD or correlation. Reaching a standardized family would route
+      # through the OR and an assumed baseline risk (not identified from the RR
+      # alone, anti-conservative SE); this matches the risk-ratio pipeline
+      # measure (es_from_rr_se) and the risk-difference user path. To obtain a
+      # D/G/R/Z from a risk ratio, enter it as an odds ratio instead.
+      es_from_rr_se(rr = exp(es_val), logrr_se = se_val,
+                    baseline_risk = baseline_risk,
+                    n_exp = n_exp, n_nexp = n_nexp,
+                    n_cases = n_cases, n_controls = n_controls,
+                    rr_to_or = rr_to_or,
+                    reverse_rr = no_reverse)
     },
     "rr" = {
-      res <- es_from_rr_se(rr = es_val, logrr_se = se_val,
-                           baseline_risk = baseline_risk,
-                           n_exp = n_exp, n_nexp = n_nexp,
-                           n_cases = n_cases, n_controls = n_controls,
-                           rr_to_or = rr_to_or,
-                           reverse_rr = no_reverse)
-      has_logor <- !is.na(res$logor) & !is.na(res$logor_se)
-      if (any(has_logor)) {
-        or_res <- es_from_or_se(logor = res$logor, logor_se = res$logor_se,
-                                baseline_risk = baseline_risk,
-                                small_margin_prop = small_margin_prop,
-                                n_exp = n_exp, n_nexp = n_nexp,
-                                n_cases = n_cases, n_controls = n_controls,
-                                n_sample = n_sample,
-                                or_to_rr = or_to_rr, or_to_cor = or_to_cor,
-                                reverse_or = no_reverse)
-        for (col in c("d", "d_se", "d_ci_lo", "d_ci_up",
-                       "g", "g_se", "g_ci_lo", "g_ci_up",
-                       "r", "r_se", "r_ci_lo", "r_ci_up",
-                       "z", "z_se", "z_ci_lo", "z_ci_up")) {
-          res[[col]] <- or_res[[col]]
-        }
-      }
-      res
+      # See the logrr case: a risk ratio converts to OR / NNT / RD only.
+      es_from_rr_se(rr = es_val, logrr_se = se_val,
+                    baseline_risk = baseline_risk,
+                    n_exp = n_exp, n_nexp = n_nexp,
+                    n_cases = n_cases, n_controls = n_controls,
+                    rr_to_or = rr_to_or,
+                    reverse_rr = no_reverse)
     },
     "r" = {
       r <- es_val

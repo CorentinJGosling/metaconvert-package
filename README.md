@@ -22,7 +22,7 @@ package on your web browser on its dedicated website
 
 ## Introduction
 
-This package automatically estimates 11 effect size measures from a
+This package automatically estimates 14 effect size measures from a
 well-formatted dataset. Various other functions can help, for example,
 removing dependency between several effect sizes, or identifying
 differences between two datasets.
@@ -47,11 +47,11 @@ Cortese, Marco Solmi, Belen Haza, Eduard Vieta, Richard Delorme, Paolo
 Fusar-Poli and Joaquim Radua. It is licensed under the GNU General
 Public License. <br>You can use metaConvert for free… but please cite
 our work ;-) <br><br> <b>Citation:</b> <em>Gosling CJ, Cortese S, Solmi
-M, Haza B, Vieta E, Delorme R, Fusar-Poli P, & Radua J. (2024).
-metaConvert: An Automatic Suite for Estimation of 11 Different Effect
-Size Measures and Flexible Conversion Across Them. R package version
-1.0.0. <https://metaConvert.org/></em><br><br> To obtain a bibtex
-version of this citation in R, type
+M, et al. metaConvert: an automatic suite for estimation of 11 different
+effect size measures and flexible conversion across them. Research
+Synthesis Methods. Published online 2025:1-12.
+<doi:10.1017/rsm.2025.11></em><br><br> To obtain a bibtex version of
+this citation in R, type
 
 ``` r
 citation(package = "metaConvert")

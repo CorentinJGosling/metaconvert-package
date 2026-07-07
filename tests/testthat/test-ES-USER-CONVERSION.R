@@ -184,7 +184,7 @@ test_that("USER vs direct pipeline: z -> g (ES matches, SE preserved from user)"
   expect_equal(s_user$info_used_crude, "user_input_crude")
 })
 
-test_that("USER vs direct pipeline: rd -> g", {
+test_that("USER vs direct pipeline: rd is not converted to g in either path", {
   rd_val <- 0.15
   rd_se <- 0.05
 
@@ -194,8 +194,7 @@ test_that("USER vs direct pipeline: rd -> g", {
     baseline_risk = 0.3,
     n_exp = 50, n_nexp = 50
   )
-  res_direct <- convert_df(dat_direct, measure = "g", verbose = FALSE)
-  s_direct <- summary(res_direct, digits = 11)
+  s_direct <- summary(convert_df(dat_direct, measure = "g", verbose = FALSE), digits = 11)
 
   # USER path
   dat_user <- data.frame(
@@ -205,13 +204,12 @@ test_that("USER vs direct pipeline: rd -> g", {
     baseline_risk = 0.3,
     n_exp = 50, n_nexp = 50
   )
-  res_user <- convert_df(dat_user, measure = "g", verbose = FALSE)
-  s_user <- summary(res_user, digits = 11)
+  s_user <- summary(convert_df(dat_user, measure = "g", verbose = FALSE), digits = 11)
 
-  expect_equal(s_user$es_crude, s_direct$es_crude, tolerance = 1e-10)
-  expect_equal(s_user$se_crude, s_direct$se_crude, tolerance = 1e-10)
-  expect_equal(s_direct$info_used_crude, "rd_se")
-  expect_equal(s_user$info_used_crude, "user_input_crude")
+  # A risk difference is a ratio-family measure: it is not converted to an SMD
+  # via EITHER entry route (the raw-column and user-input paths stay consistent).
+  expect_true(is.na(s_direct$es_crude))
+  expect_true(is.na(s_user$es_crude))
 })
 
 test_that("USER vs direct pipeline: logrr -> logor", {
@@ -301,6 +299,48 @@ test_that("USER natural-scale RR with CI (no SE): SE derived on log scale", {
   expect_equal(s$se_crude, expected_se, tolerance = 1e-2)
   # SE should match 2x2 result (~1.567), NOT the wrong value (~5.491)
   expect_true(s$se_crude < 2.0)
+})
+
+test_that("USER rr/logrr are ratio-family: not converted to SMD or correlation", {
+  # A user-entered risk ratio must behave like the risk-ratio pipeline measure
+  # (es_from_rr_se): it converts to OR / NNT / RD, never to a d/g/r/z. This
+  # mirrors the risk-difference user path.
+  not_produced <- function(x, col) !(col %in% names(x)) || all(is.na(x[[col]]))
+  for (om in c("rr", "logrr")) {
+    val <- if (om == "rr") 1.5 else log(1.5)
+    res <- es_from_user_crude(
+      user_es_original_measure_crude = om,
+      user_es_crude = val,
+      user_se_crude = 0.2,
+      baseline_risk = 0.2,
+      n_exp = 50, n_nexp = 50,
+      n_cases = 30, n_controls = 70
+    )
+    # The risk-ratio conversion itself is produced ...
+    expect_false(is.na(res$logrr), info = om)
+    # ... but no SMD / correlation value.
+    expect_true(not_produced(res, "d"), info = om)
+    expect_true(not_produced(res, "g"), info = om)
+    expect_true(not_produced(res, "r"), info = om)
+    expect_true(not_produced(res, "z"), info = om)
+  }
+})
+
+test_that("USER rr through convert_df: g is NA but OR is still produced", {
+  dat <- data.frame(
+    user_es_original_measure_crude = "rr",
+    user_es_crude = 1.5,
+    user_se_crude = 0.2,
+    baseline_risk = 0.2,
+    n_exp = 50, n_nexp = 50,
+    n_cases = 30, n_controls = 70
+  )
+  s_g <- summary(convert_df(dat, measure = "g", verbose = FALSE), digits = 11)
+  expect_true(is.na(s_g$es_crude))
+
+  s_or <- summary(convert_df(dat, measure = "or", verbose = FALSE), digits = 11)
+  expect_false(is.na(s_or$es_crude))
+  expect_equal(s_or$info_used_crude, "user_input_crude")
 })
 
 test_that("USER natural-scale OR with CI (no SE): SE derived on log scale", {
@@ -430,7 +470,7 @@ test_that("USER adjusted vs crude: r -> g produces identical values", {
   expect_equal(s_adj$info_used_adjusted, "user_input_adj")
 })
 
-test_that("USER adjusted vs crude: rd -> g produces identical values", {
+test_that("USER adjusted vs crude: rd -> g is NA in both (removal is symmetric)", {
   dat_crude <- data.frame(
     user_es_original_measure_crude = "rd",
     user_es_crude = 0.15,
@@ -438,8 +478,7 @@ test_that("USER adjusted vs crude: rd -> g produces identical values", {
     baseline_risk = 0.3,
     n_exp = 50, n_nexp = 50
   )
-  res_crude <- convert_df(dat_crude, measure = "g", verbose = FALSE)
-  s_crude <- summary(res_crude, digits = 11)
+  s_crude <- summary(convert_df(dat_crude, measure = "g", verbose = FALSE), digits = 11)
 
   dat_adj <- data.frame(
     user_es_original_measure_adj = "rd",
@@ -448,12 +487,11 @@ test_that("USER adjusted vs crude: rd -> g produces identical values", {
     baseline_risk = 0.3,
     n_exp = 50, n_nexp = 50
   )
-  res_adj <- convert_df(dat_adj, measure = "g", verbose = FALSE, split_adjusted = TRUE)
-  s_adj <- summary(res_adj, digits = 11)
+  s_adj <- summary(convert_df(dat_adj, measure = "g", verbose = FALSE, split_adjusted = TRUE), digits = 11)
 
-  expect_equal(s_adj$es_adjusted, s_crude$es_crude, tolerance = 1e-10)
-  expect_equal(s_adj$se_adjusted, s_crude$se_crude, tolerance = 1e-10)
-  expect_equal(s_adj$info_used_adjusted, "user_input_adj")
+  # RD -> SMD is removed for both the crude and adjusted user-input scopes.
+  expect_true(is.na(s_crude$es_crude))
+  expect_true(is.na(s_adj$es_adjusted))
 })
 
 test_that("USER adjusted vs crude: logrr -> logor produces identical values", {
@@ -489,7 +527,7 @@ test_that("USER adjusted vs crude: logrr -> logor produces identical values", {
 # FEATURE TESTS
 # =============================================================================
 
-test_that("USER conversion: logrr also produces d/g (supplementation from logor)", {
+test_that("USER conversion: logrr is ratio-family and is NOT converted to g", {
   dat <- data.frame(
     user_es_original_measure_crude = "logrr",
     user_es_crude = log(1.5),
@@ -498,12 +536,14 @@ test_that("USER conversion: logrr also produces d/g (supplementation from logor)
     n_exp = 50, n_nexp = 50,
     n_cases = 30, n_controls = 70
   )
-  res <- convert_df(dat, measure = "g", verbose = FALSE)
-  s <- summary(res, digits = 11)
+  # RR is a ratio-family measure: no standardized mean difference is produced.
+  s_g <- summary(convert_df(dat, measure = "g", verbose = FALSE), digits = 11)
+  expect_true(is.na(s_g$es_crude))
 
-  expect_false(is.na(s$es_crude))
-  expect_false(is.na(s$se_crude))
-  expect_equal(s$info_used_crude, "user_input_crude")
+  # The ratio conversion RR -> OR still works.
+  s_or <- summary(convert_df(dat, measure = "logor", verbose = FALSE), digits = 11)
+  expect_false(is.na(s_or$es_crude))
+  expect_equal(s_or$info_used_crude, "user_input_crude")
 })
 
 test_that("USER conversion: CI-only input derives ES and SE", {
@@ -678,7 +718,7 @@ test_that("USER z: user-provided SE is preserved, not recomputed from n", {
 # NNT CHAINING TEST (Issue E fix)
 # =============================================================================
 
-test_that("USER nnt: chains to es_from_rd_se for full conversions when baseline_risk available", {
+test_that("USER nnt: chains to es_from_rd_se for ratio conversions (OR/RR/RD), not SMD", {
   nnt_val <- 10       # RD = 0.1
   nnt_se <- 2
   baseline_risk <- 0.3  # treatment_risk = 0.3 - 0.1 = 0.2 (valid: 0 < pt < 1)
@@ -699,10 +739,17 @@ test_that("USER nnt: chains to es_from_rd_se for full conversions when baseline_
   expect_equal(res$rd, 1 / nnt_val, tolerance = 1e-10)
   expect_false(is.na(res$rd_se))
 
-  # With baseline_risk and valid treatment risk, logor/d/g should be produced
+  # With baseline_risk the ratio-family conversion is produced (nnt -> rd -> OR/RR)...
   expect_false(is.na(res$logor))
-  expect_false(is.na(res$d))
-  expect_false(is.na(res$g))
+  expect_false(is.na(res$logrr))
+  # ... but a risk difference is not converted to an SMD or correlation. (The
+  # user wrapper seeds the target-measure column as NA, so check for no VALUE
+  # rather than column absence.)
+  not_produced <- function(x, col) !(col %in% names(x)) || all(is.na(x[[col]]))
+  expect_true(not_produced(res, "d"))
+  expect_true(not_produced(res, "g"))
+  expect_true(not_produced(res, "r"))
+  expect_true(not_produced(res, "z"))
 })
 
 test_that("USER nnt: without baseline_risk, only rd/nnt columns produced", {

@@ -5,11 +5,11 @@ test_that("linreg_b_se - standalone function", {
                               n_sample = 100, n_covariates = 2)
 
   t_val <- 1.5 / 0.6  # = 2.5
-  df <- 100 - 2 - 1   # = 97
+  df <- 100 - 2 - 2   # = 96 (residual df)
   rp_expected <- t_val / sqrt(t_val^2 + df)
   rp_se_expected <- sqrt((1 - rp_expected^2)^2 / df)
   zp_expected <- atanh(rp_expected)
-  zp_se_expected <- sqrt(1 / (df - 2))
+  zp_se_expected <- sqrt(1 / (df - 1))
 
   expect_equal(res$info_used, "linreg_b_se")
   expect_equal(res$rp, rp_expected, tolerance = 1e-10)
@@ -24,7 +24,7 @@ test_that("linreg_b_se - standalone function", {
                                   n_sample = 50, n_covariates = 1)
   expect_true(res_neg$rp < 0)
   t_neg <- -2.0 / 0.8
-  df_neg <- 50 - 1 - 1
+  df_neg <- 50 - 1 - 2
   expect_equal(res_neg$rp, t_neg / sqrt(t_neg^2 + df_neg), tolerance = 1e-10)
 })
 
@@ -49,7 +49,7 @@ test_that("linreg_b_se - matches linreg_t with equivalent input", {
 # linreg_b_ci standalone ----
 test_that("linreg_b_ci - standalone function", {
   b <- 1.5; se <- 0.6; n <- 100; k <- 2
-  df <- n - k - 1
+  df <- n - k - 2
   ci_lo <- b - qt(.975, df) * se
   ci_up <- b + qt(.975, df) * se
 
@@ -69,7 +69,7 @@ test_that("linreg_b_ci - standalone function", {
 # linreg_b_pval standalone ----
 test_that("linreg_b_pval - standalone function", {
   b <- 1.5; se <- 0.6; n <- 100; k <- 2
-  df <- n - k - 1
+  df <- n - k - 2
   t_val <- b / se
   pval <- 2 * pt(-abs(t_val), df)
 
@@ -116,7 +116,7 @@ test_that("linreg_b - multiple studies", {
   # Verify each manually
   for (i in 1:4) {
     t_i <- b_vals[i] / se_vals[i]
-    df_i <- n_vals[i] - k_vals[i] - 1
+    df_i <- n_vals[i] - k_vals[i] - 2
     rp_i <- t_i / sqrt(t_i^2 + df_i)
     expect_equal(res$rp[i], rp_i, tolerance = 1e-10)
   }
@@ -162,7 +162,7 @@ test_that("linreg_b_se - convert_df integration for rp/zp measures", {
 test_that("linreg_b_ci - convert_df integration", {
   b <- c(1.5, -0.8); se <- c(0.6, 0.3)
   n <- c(100, 50); k <- c(2, 1)
-  df <- n - k - 1
+  df <- n - k - 2
   ci_lo <- b - qt(.975, df) * se
   ci_up <- b + qt(.975, df) * se
 
@@ -194,7 +194,7 @@ test_that("linreg_b_ci - convert_df integration", {
 test_that("linreg_b_pval - convert_df integration", {
   b <- c(1.5, -0.8); se <- c(0.6, 0.3)
   n <- c(100, 50); k <- c(2, 1)
-  df <- n - k - 1
+  df <- n - k - 2
   t_vals <- b / se
   pvals <- 2 * pt(-abs(t_vals), df)
 
@@ -244,7 +244,7 @@ test_that("linreg_b - reverse flag", {
 test_that("linreg_b_pval - reverse flag", {
   b <- c(1.5, -0.8); se <- c(0.6, 0.3)
   n <- c(100, 50); k <- c(2, 1)
-  df <- n - k - 1
+  df <- n - k - 2
   pvals <- 2 * pt(-abs(b / se), df)
 
   dat <- data.frame(
@@ -292,7 +292,7 @@ test_that("linreg_b - mixed input types across rows", {
   se <- c(0.6, 0.3, 0.9)
   n <- c(100, 50, 200)
   k <- c(2, 1, 5)
-  df <- n - k - 1
+  df <- n - k - 2
 
   dat <- data.frame(
     # Row 1: b + se

@@ -46,6 +46,14 @@ and then relies on the calculations of the \code{\link{es_from_student_t}()} fun
 \strong{To convert the F-value into a t-value,} the following formula is used (table 12.1 in Cooper):
 \deqn{student\_t = \sqrt{anova\_f}}
 Then, calculations of the \code{\link{es_from_student_t}()} are applied.
+
+\strong{Important - single numerator degree of freedom only.} The identity
+\eqn{\sqrt{F} = |t|} holds only when the F-test has a single numerator degree of freedom,
+i.e. a one-way ANOVA comparing exactly two groups (a binary predictor). Supplying an
+omnibus F from a factor with three or more levels (numerator df > 1) produces a
+meaningless effect size and is not detected by the function. In addition, \eqn{\sqrt{F}}
+discards the sign of the effect, so the generated effect sizes are always non-negative;
+use \code{reverse_anova_f} to encode direction.
 }
 \examples{
 es_from_anova_f(anova_f = 2.01, n_exp = 20, n_nexp = 22)

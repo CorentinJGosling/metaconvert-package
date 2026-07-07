@@ -58,7 +58,7 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 calculations of the \code{\link{es_from_cohen_d}()} are applied.
 }
 \examples{
-es_from_beta_unstd(beta_unstd = 2.1, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
+es_from_beta_unstd(beta_unstd = 0.7, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
 }
 \references{
 Lipsey, M. W., & Wilson, D. B. (2001). Practical meta-analysis. Sage Publications, Inc.

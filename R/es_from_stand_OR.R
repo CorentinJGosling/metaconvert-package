@@ -743,7 +743,6 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
-#' @param smd_to_cor formula used to convert a SMD into a correlation coefficient (see details).
 #'
 #' @details
 #' This function derives the standard error of the log odds ratio (or log risk ratio) from a
@@ -757,12 +756,19 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
 #' Then, if an OR (or logOR) is entered, calculations of \code{\link{es_from_or_se}()} are applied.
 #' If a RR (or logRR) is entered, calculations of \code{\link{es_from_rr_se}()} are applied.
 #'
+#' Note that the standardized-mean-difference and correlation conversions (D, G, R, Z) are
+#' produced for **OR inputs only**. RR inputs are treated as a ratio measure and yield
+#' RR + OR + NNT + RD: RR is not converted to a standardized mean difference or correlation,
+#' because that would require going through the OR and the baseline risk (see
+#' \code{\link{es_from_rr_se}}). To obtain a SMD or correlation from an RR, convert it to an
+#' OR first (supplying the baseline risk) and then use the OR path.
+#'
 #' @return
 #' This function estimates and converts between several effect size measures.
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab OR + RR \cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab D + G + R + Z \cr
+#'  \code{converted effect size measure} \tab OR inputs: D + G + R + Z (+ RR + NNT + RD); RR inputs: OR + NNT + RD \cr
 #' }
 #'
 #' @references
@@ -789,7 +795,6 @@ es_from_logreg_t <- function(or, logor, rr, logrr, logreg_t,
                          or_to_rr = "metaumbrella_cases",
                          or_to_cor = "bonett",
                          rr_to_or = "metaumbrella",
-                         smd_to_cor = "viechtbauer",
                          reverse_logreg_t) {
 
   len <- if (!missing(or)) length(or) else if (!missing(logor)) length(logor) else if (!missing(rr)) length(rr) else if (!missing(logrr)) length(logrr) else length(logreg_t)
@@ -805,6 +810,7 @@ es_from_logreg_t <- function(or, logor, rr, logrr, logreg_t,
   if (missing(n_cases)) n_cases <- rep(NA_real_, len)
   if (missing(n_controls)) n_controls <- rep(NA_real_, len)
   if (missing(n_sample)) n_sample <- rep(NA_real_, len)
+  if (missing(logreg_t)) logreg_t <- rep(NA_real_, len)
   if (missing(reverse_logreg_t)) reverse_logreg_t <- rep(FALSE, len)
   reverse_logreg_t[is.na(reverse_logreg_t)] <- FALSE
 
@@ -835,7 +841,7 @@ es_from_logreg_t <- function(or, logor, rr, logrr, logreg_t,
     baseline_risk = baseline_risk,
     n_exp = n_exp, n_nexp = n_nexp,
     n_cases = n_cases, n_controls = n_controls,
-    rr_to_or = rr_to_or, smd_to_cor = smd_to_cor,
+    rr_to_or = rr_to_or,
     reverse_rr = reverse_logreg_t
   )
 

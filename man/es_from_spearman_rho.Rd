@@ -56,11 +56,18 @@ This function first converts a Spearman's rank correlation coefficient to an app
 correlation coefficient using the formula proposed by Rupinski & Dunlap (1996):
 \deqn{r_p = 2 \sin(\pi / 6 \times r_s)}
 
-The standard error of the resulting Pearson's r is derived via the delta method:
-\deqn{r_p\_se = \sqrt{\left(\frac{\pi}{3} \cos\left(\frac{\pi}{6} r_s\right)\right)^2 \times \frac{(1 - r_s^2)^2}{n - 1}}}
+The standard error of the resulting Pearson's r is derived via the delta method.
+The sampling variance of the Spearman rho under bivariate normality carries an
+extra \eqn{(1 + r_s^2 / 2)} factor relative to the Pearson variance
+(Bonett & Wright, 2000); omitting it would understate the SE, increasingly so
+for strong correlations:
+\deqn{r_p\_se = \sqrt{\left(\frac{\pi}{3} \cos\left(\frac{\pi}{6} r_s\right)\right)^2 \times \left(1 + \frac{r_s^2}{2}\right)\frac{(1 - r_s^2)^2}{n - 1}}}
 
 The converted Pearson's r is then further converted to a Fisher's z, Cohen's d, Hedges' g, and
-odds ratio using the same formulas as \code{\link{es_from_pearson_r}()}.
+odds ratio using the same formulas as \code{\link{es_from_pearson_r}()}. This
+delta-method SE is propagated to the Fisher's z and (for the default
+\code{cor_to_smd = "viechtbauer"} path) to the Cohen's d, Hedges' g and odds
+ratio, so all measures share the corrected r variance.
 }
 \examples{
 es_from_spearman_rho(
@@ -70,4 +77,7 @@ es_from_spearman_rho(
 \references{
 Rupinski, M. T., & Dunlap, W. P. (1996). Approximating Pearson product-moment correlations from
 Kendall's tau and Spearman's rho. Educational and Psychological Measurement, 56(3), 419-429.
+
+Bonett, D. G., & Wright, T. A. (2000). Sample size requirements for estimating Pearson, Kendall
+and Spearman correlations. Psychometrika, 65(1), 23-28.
 }

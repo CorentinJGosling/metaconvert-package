@@ -171,7 +171,7 @@ For now, you can refer to the documentation of the convert_df function in the R 
 
 ## Risk difference and NNT
 
-Since version 1.1.0 the package natively supports **risk difference** (`measure = "rd"`) and **number needed to treat** (`measure = "nnt"`) alongside ratio measures. Both carry a proper standard error and a confidence interval. When the RD CI crosses zero, the NNT CI is set to NA to preserve the Altman (1998) discontinuous-CI convention — the point estimate and SE remain available.
+Since version 1.1.0 the package natively supports **risk difference** (`measure = "rd"`) and **number needed to treat** (`measure = "nnt"`) alongside ratio measures. Both carry a proper standard error and a confidence interval. When the RD CI crosses zero, the NNT CI is set to NA to preserve the Altman (1998) discontinuous-CI convention - the point estimate and SE remain available.
 
 ```{r, message=FALSE}
 res_rd <- convert_df(df.haza, measure = "rd")

@@ -55,7 +55,7 @@ unstandardized linear regression coefficient.
 Calculations of the \code{\link{es_from_beta_unstd}} functions are then used.
 }
 \examples{
-es_from_beta_std(beta_std = 2.1, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
+es_from_beta_std(beta_std = 0.35, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
 }
 \references{
 Lipsey, M. W., & Wilson, D. B. (2001). Practical meta-analysis. Sage Publications, Inc.

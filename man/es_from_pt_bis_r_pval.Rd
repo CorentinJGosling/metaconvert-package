@@ -46,6 +46,10 @@ This function converts the p-value of a point biserial correlation into a Studen
 \deqn{t = pt(\frac{pt\_bis\_r\_pval}{2}, df = n\_exp + n\_nexp - 2)}
 
 Calculations of the \code{\link{es_from_student_t}} function are then applied.
+
+Because a two-sided p-value carries no direction, the recovered t (and hence the
+generated effect sizes) are always non-negative; use \code{reverse_pt_bis_r_pval} to
+encode the correct sign.
 }
 \examples{
 es_from_pt_bis_r_pval(pt_bis_r_pval = 0.2, n_exp = 121, n_nexp = 121)

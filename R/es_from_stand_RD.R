@@ -8,13 +8,22 @@
 #' @param n_controls number of controls/no-event across both groups
 #' @param n_sample total number of participants in the sample
 #' @param baseline_risk proportion of cases in the non-exposed/control group.
-#'   Required for converting RD to OR, RR, and SMD measures.
+#'   Required for converting RD to OR and RR.
 #' @param reverse_rd a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
 #' This function converts a risk difference (RD) and its standard error into an odds ratio (OR),
-#' risk ratio (RR), number needed to treat (NNT), Cohen's d (D), Hedges' g (G),
-#' and correlation coefficients (R/Z).
+#' risk ratio (RR), and number needed to treat (NNT).
+#'
+#' A risk difference is a ratio-family (binary-outcome) effect size and is **not** converted
+#' to a standardized mean difference (D/G) or a correlation (R/Z). Such a conversion would
+#' require reconstructing an odds ratio from an assumed baseline risk, which is not identified
+#' by the risk difference alone; and because the baseline risk would be treated as a fixed
+#' known constant, the resulting standardized SEs would be anti-conservative. In metaConvert
+#' the standardized families are reached only through the odds ratio or a raw 2x2 table (the
+#' Cox transform \eqn{d = \log(or)\sqrt{3}/\pi}), neither of which needs an assumed baseline
+#' risk. To obtain a D/G/R/Z from a risk difference, first convert it to an OR (supplying the
+#' baseline risk) and then use \code{\link{es_from_or_se}}.
 #'
 #' **NNT is always computed from RD:**
 #' \deqn{nnt = \frac{1}{rd}}
@@ -33,17 +42,9 @@
 #' \deqn{logrr\_se = \frac{rd\_se}{|baseline\_risk - rd|}}
 #' where the SE is derived via the delta method from \eqn{\frac{d(\log RR)}{d(RD)} = \frac{-1}{baseline\_risk - rd}}.
 #'
-#' **To estimate the Cohen's d and Hedges' g:**
-#' The OR is first converted to Cohen's d using the formulas of Cooper et al. (2019):
-#' \deqn{d = \log(or) \times \frac{\sqrt{3}}{\pi}}
-#' \deqn{d\_se = \sqrt{\frac{logor\_se^2 \times 3}{\pi^2}}}
-#' Then, the standard conversion to Hedges' g and correlation coefficients is applied.
-#'
 #' Note that the conversions to OR and RR assume the baseline risk is a fixed constant.
 #'
 #' @references
-#' Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
-#'
 #' Deeks, J.J. (2002). Issues in the selection of a summary statistic for meta-analysis of clinical trials with binary outcomes. Statistics in Medicine, 21(11), 1575-1600.
 #'
 #' @return
@@ -53,7 +54,6 @@
 #'  \code{natural effect size measure} \tab RD\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab OR + RR + NNT\cr
-#'  \code{} \tab D + G + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab rd + rd_se\cr
 #'  \tab \cr
@@ -86,14 +86,13 @@ es_from_rd_se <- function(rd, rd_se,
     stop("The length of the 'reverse_rd' argument is incorrectly specified.")
   }
 
-  n_sample <- ifelse(is.na(n_sample),
-    ifelse(!is.na(n_cases) & !is.na(n_controls),
-           n_cases + n_controls,
-           n_exp + n_nexp),
-    n_sample
-  )
-
   # OR -------
+  # A risk difference converts to the ratio family (OR + RR + NNT) only. It is
+  # deliberately NOT converted to a standardized mean difference or correlation:
+  # RD -> SMD/r/z is not identified without an assumed baseline_risk, and treating
+  # baseline_risk as a fixed known constant yields anti-conservative SEs. The
+  # standardized families are reached in metaConvert only through the odds ratio
+  # or a raw 2x2 table (the Cox transform); see es_from_or_se() / es_from_2x2().
   treatment_risk <- baseline_risk - rd
   valid_pt <- !is.na(treatment_risk) & treatment_risk > 0 & treatment_risk < 1 &
               !is.na(baseline_risk) & baseline_risk > 0 & baseline_risk < 1
@@ -106,27 +105,10 @@ es_from_rd_se <- function(rd, rd_se,
   # delta method
   logor_se <- ifelse(valid_pt, rd_se / abs(treatment_risk * (1 - treatment_risk)), NA_real_)
 
-  d <- logOR * sqrt(3) / pi
-  d_se <- sqrt(logor_se^2 * 3 / (pi^2))
-
-  es <- .es_from_d(
-    d = d, d_se = d_se, n_exp = n_exp, n_nexp = n_nexp,
-    n_sample = n_sample, reverse = reverse_rd,
-    smd_to_cor = rep("lipsey_cooper", length(d))
+  es <- data.frame(
+    logor = ifelse(reverse_rd, -logOR, logOR),
+    logor_se = logor_se
   )
-
-  row_miss <- which(is.na(d_se))
-  es$d[row_miss] <- es$d_se[row_miss] <-
-    es$d_ci_lo[row_miss] <- es$d_ci_up[row_miss] <-
-    es$g[row_miss] <- es$g_se[row_miss] <-
-    es$g_ci_lo[row_miss] <- es$g_ci_up[row_miss] <- NA
-  es$r[row_miss] <- es$r_se[row_miss] <-
-    es$r_ci_lo[row_miss] <- es$r_ci_up[row_miss] <-
-    es$z[row_miss] <- es$z_se[row_miss] <-
-    es$z_ci_lo[row_miss] <- es$z_ci_up[row_miss] <- NA
-
-  es$logor <- ifelse(reverse_rd, -logOR, logOR)
-  es$logor_se <- logor_se
   es$logor_ci_lo <- es$logor - qnorm(.975) * logor_se
   es$logor_ci_up <- es$logor + qnorm(.975) * logor_se
 
@@ -202,7 +184,6 @@ es_from_rd_se <- function(rd, rd_se,
 #'  \code{natural effect size measure} \tab RD\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab OR + RR + NNT\cr
-#'  \code{} \tab D + G + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab rd + rd_ci_lo + rd_ci_up\cr
 #'  \tab \cr
@@ -280,7 +261,6 @@ es_from_rd_ci <- function(rd, rd_ci_lo, rd_ci_up,
 #'  \code{natural effect size measure} \tab RD\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab OR + RR + NNT\cr
-#'  \code{} \tab D + G + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab rd + rd_pval\cr
 #'  \tab \cr

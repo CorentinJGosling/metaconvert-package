@@ -16,10 +16,12 @@ test_that("es_from_icc computes Bonett transformation for ICC(2,1) by default", 
 test_that("es_from_icc computes Bonett transformation for ICC(3,1)", {
   res <- es_from_icc(icc = 0.75, n_sample = 100, n_measurements = 3, icc_type = "consistency")
 
-  # ICC(3,1) Bonett-transformed SE: sqrt(2 / ((k-1)*(n-1)))
-  # Fully variance-stabilized — no dependence on rho
+  # ICC(3,1) Bonett-transformed SE is rho-DEPENDENT. Deriving the two-way
+  # consistency variance from F0 = MSR/MSE reduces to the same leading-order
+  # form as the agreement/one-way case (confirmed by Monte Carlo):
+  # sqrt(2*(1+(k-1)*rho)^2 / (k*(k-1)*(n-1)))
   rho <- 0.75; k <- 3; n <- 100
-  expected_se <- sqrt(2 / ((k - 1) * (n - 1)))
+  expected_se <- sqrt(2 * (1 + (k - 1) * rho)^2 / (k * (k - 1) * (n - 1)))
   expect_equal(res$icc_se, expected_se, tolerance = 1e-10)
 })
 

@@ -9,13 +9,15 @@ es_disattenuate(r, r_se, reliability_x, reliability_y, n_sample)
 \arguments{
 \item{r}{observed correlation coefficient}
 
-\item{r_se}{standard error of the observed correlation}
+\item{r_se}{standard error of the observed correlation. Optional: when omitted,
+it is derived from \code{n_sample} (see Details).}
 
 \item{reliability_x}{reliability of measure X (e.g., target PROM)}
 
 \item{reliability_y}{reliability of measure Y (e.g., comparator instrument)}
 
-\item{n_sample}{sample size (not used in the calculations)}
+\item{n_sample}{sample size. Used only to derive \code{r_se} when \code{r_se}
+is not supplied; otherwise unused.}
 }
 \value{
 A data.frame with the corrected correlation and its Fisher's z
@@ -41,6 +43,10 @@ The standard error of the corrected correlation is approximated as:
 This approximation treats the reliabilities as known constants, so the SE
 and CI are a lower bound when the reliabilities are themselves estimated
 (Hunter & Schmidt, 2004, Ch. 3).
+
+When \code{r_se} is not supplied, it is first obtained from the sample size as
+the large-sample Pearson correlation SE \eqn{\sqrt{(1 - r^2)^2 / (n - 1)}}
+(Cooper et al., 2019).
 
 The function also provides Fisher's z transformation of the corrected
 correlation for use in meta-analysis, with
@@ -77,4 +83,7 @@ Error and Bias in Research Findings (2nd ed.). Sage Publications.
 
 Spearman, C. (1904). The proof and measurement of association between two things.
 The American Journal of Psychology, 15(1), 72-101.
+
+Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of
+research synthesis and meta-analysis. Russell Sage Foundation.
 }

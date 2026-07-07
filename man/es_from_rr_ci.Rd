@@ -17,7 +17,6 @@ es_from_rr_ci(
   n_cases,
   n_controls,
   rr_to_or = "metaumbrella",
-  smd_to_cor = "viechtbauer",
   max_asymmetry = 10,
   reverse_rr
 )
@@ -46,8 +45,6 @@ es_from_rr_ci(
 \item{n_controls}{number of controls/no-event}
 
 \item{rr_to_or}{formula used to convert the \code{rr} value into an odds ratio (see details).}
-
-\item{smd_to_cor}{formula used to convert the SMD value (converted from RR) into a coefficient correlation (see \code{\link{es_from_cohen_d}}).}
 
 \item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 

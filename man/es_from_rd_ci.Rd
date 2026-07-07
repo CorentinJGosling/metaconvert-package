@@ -45,7 +45,6 @@ This function estimates and converts between several effect size measures.
 \code{natural effect size measure} \tab RD\cr
 \tab \cr
 \code{converted effect size measure} \tab OR + RR + NNT\cr
-\code{} \tab D + G + R + Z\cr
 \tab \cr
 \code{required input data} \tab rd + rd_ci_lo + rd_ci_up\cr
 \tab \cr

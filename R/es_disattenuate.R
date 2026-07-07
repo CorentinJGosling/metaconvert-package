@@ -1,10 +1,12 @@
 #' Disattenuate (correct for unreliability) a correlation coefficient
 #'
 #' @param r observed correlation coefficient
-#' @param r_se standard error of the observed correlation
+#' @param r_se standard error of the observed correlation. Optional: when omitted,
+#'   it is derived from \code{n_sample} (see Details).
 #' @param reliability_x reliability of measure X (e.g., target PROM)
 #' @param reliability_y reliability of measure Y (e.g., comparator instrument)
-#' @param n_sample sample size (not used in the calculations)
+#' @param n_sample sample size. Used only to derive \code{r_se} when \code{r_se}
+#'   is not supplied; otherwise unused.
 #'
 #' @details
 #' Corrects an observed correlation for attenuation due to measurement error
@@ -22,6 +24,10 @@
 #' This approximation treats the reliabilities as known constants, so the SE
 #' and CI are a lower bound when the reliabilities are themselves estimated
 #' (Hunter & Schmidt, 2004, Ch. 3).
+#'
+#' When \code{r_se} is not supplied, it is first obtained from the sample size as
+#' the large-sample Pearson correlation SE \eqn{\sqrt{(1 - r^2)^2 / (n - 1)}}
+#' (Cooper et al., 2019).
 #'
 #' The function also provides Fisher's z transformation of the corrected
 #' correlation for use in meta-analysis, with
@@ -51,6 +57,9 @@
 #' Spearman, C. (1904). The proof and measurement of association between two things.
 #' The American Journal of Psychology, 15(1), 72-101.
 #'
+#' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of
+#' research synthesis and meta-analysis. Russell Sage Foundation.
+#'
 #' @md
 #'
 #' @return
@@ -69,7 +78,15 @@
 #'                 n_sample = 100)
 es_disattenuate <- function(r, r_se, reliability_x, reliability_y, n_sample) {
 
-  if (missing(n_sample)) n_sample <- rep(NA, length(r))
+  if (missing(n_sample)) n_sample <- rep(NA_real_, length(r))
+  if (missing(r_se)) r_se <- rep(NA_real_, length(r))
+  if (length(r_se) == 1) r_se <- rep(r_se, length(r))
+
+  # When r_se is not supplied, derive it from the sample size using the
+  # large-sample Pearson correlation variance (Cooper et al., 2019):
+  # SE(r) = sqrt((1 - r^2)^2 / (n - 1)).
+  need_se <- is.na(r_se) & !is.na(n_sample) & !is.na(r)
+  r_se[need_se] <- sqrt((1 - r[need_se]^2)^2 / (n_sample[need_se] - 1))
 
   if (any(!is.na(reliability_x) & (reliability_x <= 0 | reliability_x > 1), na.rm = TRUE)) {
     warning("reliability_x outside (0, 1] detected; corrected r may be invalid or Inf")

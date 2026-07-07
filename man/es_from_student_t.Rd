@@ -48,6 +48,17 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d}()} are applied.
+
+\strong{Important - Student's t, not Welch's t.} This formula is the exact inverse of the
+pooled-variance (Student) t-test, so \code{student_t} must be the \emph{equal-variance} t.
+It should NOT be used with a Welch (unequal-variance) t-test, which is the default of
+R's \code{t.test()}. A Welch t uses \eqn{\sqrt{s_1^2/n_1 + s_2^2/n_2}} rather than
+\eqn{s_{pooled}\sqrt{1/n_1 + 1/n_2}}, so when group sizes and variances both differ,
+plugging a Welch t into this formula yields a biased Cohen's d (the bias can exceed
+50\\% and may flip sign depending on which arm carries the larger variance; it vanishes
+only when \eqn{n_1 = n_2}). A Welch t cannot be converted to Cohen's d from
+\code{(t, n_exp, n_nexp)} alone: recovering the pooled SD requires the two arm SDs, in
+which case \code{\link{es_from_means_sd}} should be used directly.
 }
 \examples{
 es_from_student_t(student_t = 2.1, n_exp = 20, n_nexp = 22)

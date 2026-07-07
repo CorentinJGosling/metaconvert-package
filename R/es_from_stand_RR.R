@@ -9,7 +9,6 @@
 #' @param n_nexp number of participants in the non-exposed group
 #' @param baseline_risk proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)
 #' @param reverse_rr a logical value indicating whether the direction of the generated effect sizes should be flipped.
-#' @param smd_to_cor formula used to convert the SMD value (converted from RR) into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
 #'
 #' @details
@@ -81,7 +80,7 @@
 #' es_from_rr_se(rr = 2.12, logrr_se = 0.242, n_exp = 120, n_nexp = 44)
 es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
                           n_exp, n_nexp, n_cases, n_controls,
-                          smd_to_cor = "viechtbauer", rr_to_or = "metaumbrella",
+                          rr_to_or = "metaumbrella",
                           reverse_rr) {
 
   if (missing(rr)) rr <- rep(NA_real_, length(logrr))
@@ -209,7 +208,6 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
 #' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"} and \code{rr_to_or = "grant_2x2"} arguments).
 #' @param reverse_rr a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
-#' @param smd_to_cor formula used to convert the SMD value (converted from RR) into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
 #'
 #' @details
@@ -245,7 +243,7 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
 #' )
 es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_up, baseline_risk,
                           n_exp, n_nexp, n_cases, n_controls, rr_to_or = "metaumbrella",
-                          smd_to_cor = "viechtbauer", max_asymmetry = 10, reverse_rr) {
+                          max_asymmetry = 10, reverse_rr) {
   if (missing(rr)) {
     rr <- rep(NA_real_, length(logrr))
   }
@@ -293,7 +291,7 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
     rr = rr, logrr_se = logrr_se,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     n_cases = n_cases, n_controls = n_controls,
-    rr_to_or = rr_to_or, smd_to_cor = "viechtbauer", reverse_rr = reverse_rr
+    rr_to_or = rr_to_or, reverse_rr = reverse_rr
   )
 
   es$info_used <- "rr_ci"
@@ -312,7 +310,6 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
 #' @param n_nexp number of participants in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"}, \code{rr_to_or = "grant_2x2"} arguments).
 #' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"} and \code{rr_to_or = "grant_2x2"} arguments).
 #' @param reverse_rr_pval a logical value indicating whether the direction of the generated effect sizes should be flipped.
-#' @param smd_to_cor formula used to convert the SMD value (converted from RR) into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
 #'
 #' @details
@@ -349,7 +346,7 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
 #' )
 es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
                             n_exp, n_nexp, n_cases, n_controls,
-                            rr_to_or = "metaumbrella", smd_to_cor = "viechtbauer",
+                            rr_to_or = "metaumbrella",
                             reverse_rr_pval) {
   if (missing(rr)) rr <- rep(NA_real_, length(logrr))
   if (missing(logrr)) logrr <- rep(NA_real_, length(rr))
@@ -379,7 +376,7 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
     rr = rr, logrr_se = logrr_se, n_cases = n_cases,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     n_controls = n_controls,
-    rr_to_or = rr_to_or, smd_to_cor = "viechtbauer", reverse_rr = reverse_rr_pval
+    rr_to_or = rr_to_or, reverse_rr = reverse_rr_pval
   )
 
   es$info_used <- "rr_pval"

@@ -15,17 +15,27 @@
 #' correlation coefficient using the formula proposed by Rupinski & Dunlap (1996):
 #' \deqn{r_p = 2 \sin(\pi / 6 \times r_s)}
 #'
-#' The standard error of the resulting Pearson's r is derived via the delta method:
-#' \deqn{r_p\_se = \sqrt{\left(\frac{\pi}{3} \cos\left(\frac{\pi}{6} r_s\right)\right)^2 \times \frac{(1 - r_s^2)^2}{n - 1}}}
+#' The standard error of the resulting Pearson's r is derived via the delta method.
+#' The sampling variance of the Spearman rho under bivariate normality carries an
+#' extra \eqn{(1 + r_s^2 / 2)} factor relative to the Pearson variance
+#' (Bonett & Wright, 2000); omitting it would understate the SE, increasingly so
+#' for strong correlations:
+#' \deqn{r_p\_se = \sqrt{\left(\frac{\pi}{3} \cos\left(\frac{\pi}{6} r_s\right)\right)^2 \times \left(1 + \frac{r_s^2}{2}\right)\frac{(1 - r_s^2)^2}{n - 1}}}
 #'
 #' The converted Pearson's r is then further converted to a Fisher's z, Cohen's d, Hedges' g, and
-#' odds ratio using the same formulas as \code{\link{es_from_pearson_r}()}.
+#' odds ratio using the same formulas as \code{\link{es_from_pearson_r}()}. This
+#' delta-method SE is propagated to the Fisher's z and (for the default
+#' \code{cor_to_smd = "viechtbauer"} path) to the Cohen's d, Hedges' g and odds
+#' ratio, so all measures share the corrected r variance.
 #'
 #' @export es_from_spearman_rho
 #'
 #' @references
 #' Rupinski, M. T., & Dunlap, W. P. (1996). Approximating Pearson product-moment correlations from
 #' Kendall's tau and Spearman's rho. Educational and Psychological Measurement, 56(3), 419-429.
+#'
+#' Bonett, D. G., & Wright, T. A. (2000). Sample size requirements for estimating Pearson, Kendall
+#' and Spearman correlations. Psychometrika, 65(1), 23-28.
 #'
 #' @md
 #'
@@ -86,18 +96,45 @@ es_from_spearman_rho <- function(spearman_r, n_sample,
     reverse_pearson_r = reverse_spearman_r
   )
 
-  # delta method: d/dr_s 2*sin(pi/6*r_s) = (pi/3)*cos(pi/6*r_s); var(r_s) = (1-r_s^2)^2/(n-1)
+  # SE of the converted Pearson r_p via the delta method on the Spearman -> Pearson
+  # transform r_p = 2*sin(pi/6*r_s):  d r_p / d r_s = (pi/3)*cos(pi/6*r_s).
+  # The sampling variance of the Spearman rho under bivariate normality carries an
+  # extra (1 + r_s^2/2) factor relative to the Pearson variance (Bonett & Wright,
+  # 2000); using the plain Pearson form would understate the SE (increasingly so
+  # for strong correlations).
   r_applied <- ifelse(reverse_spearman_r, -spearman_r, spearman_r)
   deriv <- (pi / 3) * cos(pi / 6 * r_applied)
-  var_spearman <- (1 - r_applied^2)^2 / (n_sample - 1)
+  var_spearman <- (1 + r_applied^2 / 2) * (1 - r_applied^2)^2 / (n_sample - 1)
   r_se_delta <- sqrt(deriv^2 * var_spearman)
 
+  # Reuse the (correct) converted Pearson r and z that es_from_pearson_r computed.
+  r_p_applied <- es$r
+  z_applied <- es$z
+
+  # Propagate the corrected r_p SE into the converted SMD/OR measures. For the
+  # (default) viechtbauer path, d_se is proportional to the input r_se
+  # (d_se = |d(rtod)/dr_p| * r_se), so scaling d_se by r_se_delta / r_se_pearson
+  # yields delta-consistent d/g/OR SEs; g, OR and all CIs are then rebuilt by
+  # .es_from_d exactly as elsewhere in the package. The cooper/mathur SMD SEs use
+  # a different (slope-based) variance that does not route through r_se, so those
+  # rows are left unchanged (scale = 1).
+  r_se_pearson <- es$r_se
+  scale <- ifelse(cor_to_smd == "viechtbauer" & !is.na(r_se_pearson) &
+                    r_se_pearson > 0 & is.finite(r_se_delta),
+                  r_se_delta / r_se_pearson, 1)
+  es <- .es_from_d(d = es$d, d_se = es$d_se * scale,
+                   n_exp = n_exp, n_nexp = n_nexp, n_sample = n_sample)
+
+  # Overwrite the round-trip r/z from .es_from_d with the direct Spearman->Pearson
+  # values and their delta-method SEs.
+  es$r <- r_p_applied
   es$r_se <- r_se_delta
-  es$r_ci_lo <- es$r - qt(.975, n_sample - 2) * r_se_delta
-  es$r_ci_up <- es$r + qt(.975, n_sample - 2) * r_se_delta
+  es$r_ci_lo <- r_p_applied - qt(.975, n_sample - 2) * r_se_delta
+  es$r_ci_up <- r_p_applied + qt(.975, n_sample - 2) * r_se_delta
 
   # dz/dr = 1/(1-r^2)
-  r_bounded <- pmin(pmax(es$r, -0.9999), 0.9999)
+  es$z <- z_applied
+  r_bounded <- pmin(pmax(r_p_applied, -0.9999), 0.9999)
   es$z_se <- r_se_delta / (1 - r_bounded^2)
   es$z_ci_lo <- es$z - qnorm(.975) * es$z_se
   es$z_ci_up <- es$z + qnorm(.975) * es$z_se

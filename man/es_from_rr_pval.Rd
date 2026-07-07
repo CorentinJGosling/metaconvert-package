@@ -14,7 +14,6 @@ es_from_rr_pval(
   n_cases,
   n_controls,
   rr_to_or = "metaumbrella",
-  smd_to_cor = "viechtbauer",
   reverse_rr_pval
 )
 }
@@ -36,8 +35,6 @@ es_from_rr_pval(
 \item{n_controls}{number of controls/no-event}
 
 \item{rr_to_or}{formula used to convert the \code{rr} value into an odds ratio (see details).}
-
-\item{smd_to_cor}{formula used to convert the SMD value (converted from RR) into a coefficient correlation (see \code{\link{es_from_cohen_d}}).}
 
 \item{reverse_rr_pval}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }

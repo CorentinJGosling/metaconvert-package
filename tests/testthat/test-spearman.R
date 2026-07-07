@@ -14,16 +14,41 @@ test_that("es_from_spearman_rho converts correctly to Pearson r", {
   expect_equal(res1$r, 1, tolerance = 1e-10)
 })
 
-test_that("es_from_spearman_rho SE uses delta method", {
-  # SE via delta method: sqrt((pi/3 * cos(pi/6 * r_s))^2 * (1-r_s^2)^2 / (n-1))
+test_that("es_from_spearman_rho SE uses delta method with Bonett-Wright variance", {
+  # SE via delta method, with the Bonett & Wright (2000) Spearman variance factor
+  # (1 + r_s^2/2): sqrt((pi/3 * cos(pi/6 * r_s))^2 * (1 + r_s^2/2) * (1-r_s^2)^2 / (n-1))
   r_s <- 0.55
   n <- 100
   deriv <- (pi / 3) * cos(pi / 6 * r_s)
-  var_spearman <- (1 - r_s^2)^2 / (n - 1)
+  var_spearman <- (1 + r_s^2 / 2) * (1 - r_s^2)^2 / (n - 1)
   expected_se <- sqrt(deriv^2 * var_spearman)
 
   res <- es_from_spearman_rho(spearman_r = r_s, n_sample = n)
   expect_equal(res$r_se, expected_se, tolerance = 1e-10)
+})
+
+test_that("es_from_spearman_rho propagates the corrected SE into d/g/OR (viechtbauer)", {
+  r_s <- 0.55
+  n <- 100
+  res <- es_from_spearman_rho(spearman_r = r_s, n_sample = n)
+
+  # corrected r_p SE (delta method + Bonett-Wright factor)
+  deriv <- (pi / 3) * cos(pi / 6 * r_s)
+  r_se_delta <- sqrt(deriv^2 * (1 + r_s^2 / 2) * (1 - r_s^2)^2 / (n - 1))
+
+  # Pearson reference: what the conversion produces treating r_p as an observed r
+  r_p <- 2 * sin(pi / 6 * r_s)
+  ref <- es_from_pearson_r(pearson_r = r_p, n_sample = n)
+  scale <- r_se_delta / ref$r_se
+
+  # SMD/OR SEs must carry the same delta-method correction as r/z
+  expect_equal(res$d_se, ref$d_se * scale, tolerance = 1e-10)
+  expect_equal(res$g_se, ref$g_se * scale, tolerance = 1e-10)
+  expect_equal(res$logor_se, ref$logor_se * scale, tolerance = 1e-10)
+  # point estimates are unchanged by the SE correction
+  expect_equal(res$d, ref$d, tolerance = 1e-10)
+  expect_equal(res$g, ref$g, tolerance = 1e-10)
+  expect_equal(res$logor, ref$logor, tolerance = 1e-10)
 })
 
 test_that("es_from_spearman_rho produces Fisher's z", {

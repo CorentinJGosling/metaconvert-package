@@ -27,7 +27,7 @@ knitr::opts_chunk$set(
 If you are not familiar with R, you can access the core features of this package on your web browser on its dedicated website [(https://metaConvert.org/)](https://metaConvert.org/).
 
 ## Introduction
-This package automatically estimates 11 effect size measures from a well-formatted dataset. Various other functions can help, for example, removing dependency between several effect sizes, or identifying differences between two datasets.
+This package automatically estimates 14 effect size measures from a well-formatted dataset. Various other functions can help, for example, removing dependency between several effect sizes, or identifying differences between two datasets.
 
 This package is mainly designed to assist in conducting a systematic review with a meta-analysis but can be useful to any researcher interested in estimating an effect size. 
 

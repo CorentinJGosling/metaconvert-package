@@ -16,6 +16,17 @@
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
 #'
+#' **Important - Student's t, not Welch's t.** This formula is the exact inverse of the
+#' pooled-variance (Student) t-test, so \code{student_t} must be the *equal-variance* t.
+#' It should NOT be used with a Welch (unequal-variance) t-test, which is the default of
+#' R's \code{t.test()}. A Welch t uses \eqn{\sqrt{s_1^2/n_1 + s_2^2/n_2}} rather than
+#' \eqn{s_{pooled}\sqrt{1/n_1 + 1/n_2}}, so when group sizes and variances both differ,
+#' plugging a Welch t into this formula yields a biased Cohen's d (the bias can exceed
+#' 50\% and may flip sign depending on which arm carries the larger variance; it vanishes
+#' only when \eqn{n_1 = n_2}). A Welch t cannot be converted to Cohen's d from
+#' \code{(t, n_exp, n_nexp)} alone: recovering the pooled SD requires the two arm SDs, in
+#' which case \code{\link{es_from_means_sd}} should be used directly.
+#'
 #' @return
 #' This function estimates and converts between several effect size measures.
 #'
@@ -70,6 +81,11 @@ es_from_student_t <- function(student_t, n_exp, n_nexp,
 #' **To convert the p-value into a t-value,** the following formula is used (table 12.1 in Cooper):
 #' \deqn{student\_t = qt(\frac{student\_t\_pval}{2}, df = n\_exp + n\_nexp - 2)}
 #' Then, calculations of the \code{\link{es_from_student_t}()} are applied.
+#'
+#' Note that a two-sided p-value carries no direction, so the recovered t (and hence the
+#' generated effect sizes) are always non-negative. Use \code{reverse_student_t_pval} to
+#' encode the correct sign for effects that favour the non-experimental group. The same
+#' equal-variance (Student, not Welch) assumption as \code{\link{es_from_student_t}} applies.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -126,6 +142,14 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
 #' \deqn{student\_t = \sqrt{anova\_f}}
 #' Then, calculations of the \code{\link{es_from_student_t}()} are applied.
 #'
+#' **Important - single numerator degree of freedom only.** The identity
+#' \eqn{\sqrt{F} = |t|} holds only when the F-test has a single numerator degree of freedom,
+#' i.e. a one-way ANOVA comparing exactly two groups (a binary predictor). Supplying an
+#' omnibus F from a factor with three or more levels (numerator df > 1) produces a
+#' meaningless effect size and is not detected by the function. In addition, \eqn{\sqrt{F}}
+#' discards the sign of the effect, so the generated effect sizes are always non-negative;
+#' use \code{reverse_anova_f} to encode direction.
+#'
 #' @return
 #' This function estimates and converts between several effect size measures.
 #'
@@ -179,6 +203,13 @@ es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' **To convert the p-value into a t-value,** the following formula is used (table 12.1 in Cooper):
 #' \deqn{student\_t = qt(\frac{anova\_f\_pval}{2}, df = n\_exp + n\_nexp - 2)}
 #' Then, calculations of the \code{\link{es_from_student_t}()} are applied.
+#'
+#' As for \code{\link{es_from_anova_f}}, this conversion is valid only for an F-test with a
+#' single numerator degree of freedom (a two-group comparison): the p-value of a
+#' multi-level (numerator df > 1) omnibus F is inverted here as if it were a two-sided
+#' two-group t p-value, which is incorrect. The two-sided p-value also carries no
+#' direction, so the generated effect sizes are always non-negative; use
+#' \code{reverse_anova_f_pval} to encode the correct sign.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.

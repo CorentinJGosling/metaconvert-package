@@ -39,7 +39,7 @@
 #' @md
 #'
 #' @examples
-#' es_from_beta_std(beta_std = 2.1, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
+#' es_from_beta_std(beta_std = 0.35, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
 es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
                              smd_to_cor = "viechtbauer", reverse_beta_std) {
   if (missing(reverse_beta_std)) reverse_beta_std <- rep(FALSE, length(beta_std))
@@ -108,17 +108,34 @@ es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
 #' @md
 #'
 #' @examples
-#' es_from_beta_unstd(beta_unstd = 2.1, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
+#' es_from_beta_unstd(beta_unstd = 0.7, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
 es_from_beta_unstd <- function(beta_unstd, sd_dv, n_exp, n_nexp,
                                smd_to_cor = "viechtbauer", reverse_beta_unstd) {
   if (missing(reverse_beta_unstd)) reverse_beta_unstd <- rep(FALSE, length(beta_unstd))
   reverse_beta_unstd[is.na(reverse_beta_unstd)] <- FALSE
 
 
-  sd_pooled <- suppressWarnings(
-    sqrt(abs(((sd_dv^2 * (n_exp + n_nexp - 1)) - (beta_unstd^2 * ((n_exp * n_nexp) / (n_exp + n_nexp)))) /
-      (n_exp + n_nexp - 2)))
-  )
+  # Within-group variance from the ANOVA SS decomposition
+  # SS_total = SS_between + SS_within, with SS_between = beta_unstd^2 * n_exp*n_nexp/N.
+  # This is >= 0 for any genuine binary-predictor OLS; it goes negative only when the
+  # reported sd_dv is too small to be consistent with beta_unstd (a mathematically
+  # impossible input, e.g. |standardized beta| > 1, or the residual SD entered as sd_dv).
+  # Such rows are set to NA rather than masked with abs(), which would fabricate a
+  # plausible-looking effect size.
+  within_var <- ((sd_dv^2 * (n_exp + n_nexp - 1)) -
+                 (beta_unstd^2 * ((n_exp * n_nexp) / (n_exp + n_nexp)))) /
+                (n_exp + n_nexp - 2)
+
+  n_impossible <- sum(within_var < 0, na.rm = TRUE)
+  if (n_impossible > 0) {
+    warning(sprintf(
+      "es_from_beta_unstd: %d row(s) had a reported sd_dv too small to be consistent with beta_unstd (implied within-group variance < 0). These inputs are mathematically impossible (e.g. |standardized beta| > 1); the effect sizes are set to NA for those rows.",
+      n_impossible
+    ), call. = FALSE)
+  }
+
+  within_var <- ifelse(within_var < 0, NA_real_, within_var)
+  sd_pooled <- sqrt(within_var) # NA where the inputs were impossible
 
   d <- beta_unstd / sd_pooled
 
@@ -152,7 +169,9 @@ es_from_beta_unstd <- function(beta_unstd, sd_dv, n_exp, n_nexp,
 #'
 #' The partial correlation is obtained as (Aloe & Thompson, 2013, Eq. 2; Gustafson, 1961):
 #' \deqn{r_p = \frac{t}{\sqrt{t^2 + df}}}
-#' where \eqn{df = n\_sample - n\_covariates - 1}.
+#' where \eqn{df = n\_sample - n\_covariates - 2} is the residual degrees of freedom
+#' of the regression model (i.e. \eqn{n} minus the intercept, the focal predictor,
+#' and the \code{n_covariates} covariates).
 #'
 #' Its sampling variance is estimated as recommended by van Aert & Goos (2023, Eq. 5):
 #' \deqn{var(r_p) = \frac{(1 - r_p^2)^2}{df}}
@@ -224,7 +243,7 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
                 Possible inputs are: 'cooper', 'mathur', 'viechtbauer'"))
   }
 
-  df <- n_sample - n_covariates - 1
+  df <- n_sample - n_covariates - 2
 
   if (any(df <= 0, na.rm = TRUE)) {
     stop("Degrees of freedom must be positive. Check n_sample and n_covariates.")
@@ -238,7 +257,10 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
   rp_ci_up <- rp + qt(.975, df) * rp_se
 
   zp <- atanh(rp)
-  zp_se <- sqrt(1 / (df - 2))
+  # target Fisher-z variance of a partial correlation controlling for
+  # n_covariates variables is 1 / (n - n_covariates - 3); with the residual
+  # df = n - n_covariates - 2 this is 1 / (df - 1).
+  zp_se <- sqrt(1 / (df - 1))
   zp_ci_lo <- zp - qnorm(.975) * zp_se
   zp_ci_up <- zp + qnorm(.975) * zp_se
 
@@ -442,7 +464,7 @@ es_from_linreg_b_ci <- function(linreg_b, linreg_b_ci_lo, linreg_b_ci_up,
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
 
-  df <- n_sample - n_covariates - 1
+  df <- n_sample - n_covariates - 2
   linreg_b_se <- (linreg_b_ci_up - linreg_b_ci_lo) / (2 * qt(.975, df))
 
   es <- es_from_linreg_b_se(
@@ -522,7 +544,7 @@ es_from_linreg_b_pval <- function(linreg_b, linreg_b_pval,
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
 
-  df <- n_sample - n_covariates - 1
+  df <- n_sample - n_covariates - 2
   linreg_t <- qt(1 - linreg_b_pval / 2, df) * sign(linreg_b)
 
   es <- es_from_linreg_t(

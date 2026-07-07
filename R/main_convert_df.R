@@ -481,7 +481,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     n_cases = n_cases, n_controls = n_controls, n_sample = n_sample,
     or_to_rr = or_to_rr, or_to_cor = or_to_cor,
-    rr_to_or = rr_to_or, smd_to_cor = smd_to_cor,
+    rr_to_or = rr_to_or,
     reverse_logreg_t = reverse_logreg_t
   ))
   # R ----------------------------------------------
@@ -996,20 +996,20 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     rr = rr, logrr = logrr, logrr_se = logrr_se,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     n_cases = n_cases, n_controls = n_controls,
-    rr_to_or = rr_to_or, smd_to_cor = smd_to_cor, reverse_rr = reverse_rr
+    rr_to_or = rr_to_or, reverse_rr = reverse_rr
   ))
   es_rr_ci <- with(x, es_from_rr_ci(
     rr = rr, logrr = logrr,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     rr_ci_lo = rr_ci_lo, logrr_ci_lo = logrr_ci_lo, rr_ci_up = rr_ci_up, logrr_ci_up = logrr_ci_up, n_cases = n_cases, n_controls = n_controls,
-    rr_to_or = rr_to_or, smd_to_cor = smd_to_cor, reverse_rr = reverse_rr,
+    rr_to_or = rr_to_or, reverse_rr = reverse_rr,
     max_asymmetry = max_asymmetry
   ))
   es_rr_pval <- with(x, es_from_rr_pval(
     rr = rr, logrr = logrr, rr_pval = rr_pval,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     n_cases = n_cases, n_controls = n_controls,
-    rr_to_or = rr_to_or, smd_to_cor = smd_to_cor, reverse_rr = reverse_rr_pval
+    rr_to_or = rr_to_or, reverse_rr = reverse_rr_pval
   ))
 
   # RD (risk difference) --------------------------------------------------------
@@ -1275,27 +1275,32 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 
   if (es_selected == "auto") {
     if (measure %in% c("d", "g", "md")) {
+      # OR and the raw 2x2 table (CONT) are the sole gateway into the SMD
+      # family via the Cox transform d = log(OR) * sqrt(3)/pi. RD_stand is
+      # NOT used here: RD -> SMD is not identified without an assumed
+      # baseline_risk and its SE is anti-conservative (baseline_risk treated
+      # as a fixed constant). RD keeps its legitimate ratio conversions below.
 
       if (selection_auto == "crude") {
         res = c(USER_crude, SMD_post, SMD_paired, OR,
-                CONT, RD_stand, COR, PHI, SMD_adjusted,
+                CONT, COR, PHI, SMD_adjusted,
                 USER_adjusted,
                 #not used
-                RR, IRR, VAR)
+                RR, RD_stand, IRR, VAR)
 
       } else if (selection_auto == "adjusted") {
         res = c(USER_adjusted, SMD_adjusted,
                 USER_crude, SMD_post,
-                SMD_paired, OR, CONT, RD_stand, COR,
+                SMD_paired, OR, CONT, COR,
                 PHI,
                 #not used
-                RR, IRR, VAR)
+                RR, RD_stand, IRR, VAR)
       } else if (selection_auto == "paired") {
         res = c(USER_crude, SMD_paired, SMD_post, SMD_adjusted,
-                USER_adjusted, OR, CONT, RD_stand, COR,
+                USER_adjusted, OR, CONT, COR,
                 PHI,
                 #not used
-                RR, IRR, VAR)
+                RR, RD_stand, IRR, VAR)
       } else {
         stop("selection_auto should be one of 'crude', 'adjusted' or 'paired'")
       }
@@ -1336,6 +1341,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
               VAR)
 
     } else if (measure %in% c("r", "z")) {
+      # As for the SMD family, OR and the raw 2x2 (CONT) are the sole gateway
+      # into the correlation family (r/z are derived downstream of d_se).
+      # RD_stand stays #not used for the same identification/SE reason.
       res = c(USER_crude, COR, CONT, OR, PHI, SMD_post,
               SMD_paired, USER_adjusted,
               #not used
@@ -1377,12 +1385,58 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       res = c(USER_crude, partial_cor_list_L27)
     } else if (measure %in% c("loghr", "hr")) {
       res = c(USER_crude, USER_adjusted)
+    } else if (measure %in% c("logor", "or")) {
+      # Non-auto modes mirror the auto-mode ordering for every measure, so the
+      # fallback selection (e.g. hierarchy mode with a default hierarchy) agrees
+      # with es_selected = "auto" -- here, preferring the directly reported OR
+      # over a reconstructed 2x2.
+      res = c(USER_crude, OR, CONT, RR, RD_stand, PHI, COR, SMD_post, USER_adjusted,
+              #not used
+              SMD_paired, SMD_adjusted, IRR, VAR)
+    } else if (measure %in% c("logrr", "rr")) {
+      # Prefer the directly reported RR over a reconstructed 2x2/OR (mirrors auto).
+      res = c(USER_crude, RR, CONT, OR, RD_stand, PHI, USER_adjusted,
+              #not used
+              SMD_post, SMD_paired,
+              COR, SMD_adjusted,
+              IRR, VAR)
+    } else if (measure %in% c("logirr", "irr")) {
+      res = c(USER_crude, IRR, USER_adjusted,
+              #not used
+              SMD_post, SMD_paired, OR,
+              CONT, COR, PHI, SMD_adjusted,
+              RR, RD_stand, VAR)
+    } else if (measure %in% c("nnt", "rd")) {
+      # Ratio-family targets: RD_stand is a legitimate source (RD -> OR/RR/NNT).
+      res = c(USER_crude, RD_stand, CONT, OR, RR, IRR, PHI, USER_adjusted,
+              #not used
+              SMD_post, SMD_paired, COR, SMD_adjusted,
+              VAR)
+    } else if (measure %in% c("r", "z")) {
+      # OR and the raw 2x2 are the sole gateway into the correlation family;
+      # RD_stand stays #not used (RD -> r/z not identified without an assumed
+      # baseline_risk; anti-conservative SE). Mirrors auto.
+      res = c(USER_crude, COR, CONT, OR, PHI, SMD_post,
+              SMD_paired, USER_adjusted,
+              #not used
+              SMD_adjusted,
+              RR, RD_stand, IRR, VAR)
+    } else if (measure %in% c("logvr", "logcvr")) {
+      res = c(USER_crude, VAR, SMD_post, SMD_paired, USER_adjusted,
+              #not used
+              OR, CONT, RD_stand, COR, PHI, SMD_adjusted,
+              RR, IRR)
     } else {
+      # d/g/md targets. selection_auto (crude/adjusted/paired) does not apply
+      # outside es_selected = "auto", so the crude ordering is used. OR and the
+      # raw 2x2 are the sole gateway into the SMD family; RD_stand is demoted
+      # (RD -> SMD is not identified without an assumed baseline_risk and yields
+      # anti-conservative SEs).
       res = c(USER_crude, SMD_post, SMD_paired, OR,
-              CONT, RD_stand, COR, PHI, SMD_adjusted,
+              CONT, COR, PHI, SMD_adjusted,
               USER_adjusted,
               #not used
-              RR, IRR, VAR)
+              RR, RD_stand, IRR, VAR)
     }
   }
 

@@ -91,6 +91,36 @@ test_that("compute_sem: larger n gives smaller SE", {
   expect_true(res_large$sem_se < res_small$sem_se)
 })
 
+test_that("compute_sem default (no icc_se) uses the exact same-sample variance", {
+  # SEM = SD*sqrt(1-ICC) = sqrt(MSE); Var(SEM) = SEM^2 / (2 (n-1)(k-1)), default k=2
+  sd_val <- 10; icc_val <- 0.85; n <- 100
+  res <- compute_sem(sd = sd_val, icc = icc_val, n_sample = n)
+  sem <- sd_val * sqrt(1 - icc_val)
+  expected_se <- sqrt(sem^2 / (2 * (n - 1) * (2 - 1)))
+  expect_equal(res$sem_se, expected_se, tolerance = 1e-10)
+})
+
+test_that("compute_sem: n_measurements (k) affects the same-sample SE", {
+  n <- 100; sd_val <- 10; icc_val <- 0.85
+  sem <- sd_val * sqrt(1 - icc_val)
+  res_k2 <- compute_sem(sd = sd_val, icc = icc_val, n_sample = n, n_measurements = 2)
+  res_k3 <- compute_sem(sd = sd_val, icc = icc_val, n_sample = n, n_measurements = 3)
+  expect_equal(res_k3$sem_se, sqrt(sem^2 / (2 * (n - 1) * (3 - 1))), tolerance = 1e-10)
+  # more measurements -> more error df -> smaller SE
+  expect_true(res_k3$sem_se < res_k2$sem_se)
+})
+
+test_that("compute_sem: exact same-sample SE is far below the old independence-delta", {
+  # Regression guard for the Cov(SD,ICC) fix: the same-sample exact variance is
+  # 2-6x smaller than the former independence-delta approximation.
+  sd_val <- 10; icc_val <- 0.85; n <- 100
+  res <- compute_sem(sd = sd_val, icc = icc_val, n_sample = n)   # exact chi-square
+  var_sd <- sd_val^2 / (2 * (n - 1))
+  var_icc_old <- (1 - icc_val^2)^2 / (n - 1)
+  old_se <- sqrt((sd_val^2 / (4 * (1 - icc_val))) * var_icc_old + (1 - icc_val) * var_sd)
+  expect_true(res$sem_se < 0.75 * old_se)
+})
+
 
 test_that("compute_sdc computes correctly", {
   sem_val <- 3.87

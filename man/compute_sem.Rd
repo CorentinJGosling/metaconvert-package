@@ -4,16 +4,22 @@
 \alias{compute_sem}
 \title{Compute Standard Error of Measurement (SEM) from reliability and SD}
 \usage{
-compute_sem(sd, icc, n_sample, icc_se)
+compute_sem(sd, icc, n_sample, icc_se, n_measurements = 2)
 }
 \arguments{
 \item{sd}{standard deviation of the PROM/test scores}
 
 \item{icc}{intraclass correlation coefficient (test-retest reliability)}
 
-\item{n_sample}{sample size (used for delta-method variance estimation)}
+\item{n_sample}{sample size (used for the SEM sampling-variance estimation)}
 
-\item{icc_se}{standard error of the ICC (optional; if not provided, a rough approximation is used)}
+\item{icc_se}{standard error of the ICC (optional). When supplied, the ICC is
+treated as an independent external estimate; when omitted, the ICC and SD are
+assumed to come from the same sample (see Details).}
+
+\item{n_measurements}{number of measurement occasions or raters (k) used to
+estimate the ICC; default 2 (test-retest). Only used when \code{icc_se} is
+not supplied.}
 }
 \value{
 A data.frame with the SEM, its standard error and 95\% CI.
@@ -27,13 +33,25 @@ coefficient and the standard deviation of scores:
 
 \deqn{SEM = SD \times \sqrt{1 - ICC}}
 
-The sampling variance of SEM is derived via the delta method:
+The sampling variance of SEM is computed in one of two ways:
+\enumerate{
+\item \strong{When \code{icc_se} is supplied}, the ICC is treated as an external
+estimate, independent of the within-sample SD, and the bivariate delta method
+(with zero covariance) is used:
 \deqn{Var(SEM) = \frac{SD^2}{4(1 - ICC)} \times Var(ICC) + (1 - ICC) \times Var(SD)}
-
-where \eqn{Var(SD) \approx SD^2 / (2(n-1))}.
-
-If \code{icc_se} is not provided, the variance of ICC is approximated as
-\eqn{Var(ICC) \approx (1 - ICC^2)^2 / (n - 1)}, which is a rough approximation.
+with \eqn{Var(ICC) = icc\_se^2} and \eqn{Var(SD) \approx SD^2 / (2(n-1))}.
+\item \strong{When \code{icc_se} is not supplied}, the ICC and SD are assumed to come
+from the same reliability sample, where they are strongly positively
+correlated. Because \eqn{SEM = SD\sqrt{1 - ICC}} equals the within-subject
+residual root-mean-square \eqn{\sqrt{MSE}}, and \eqn{MSE / \sigma_e^2} follows
+a scaled chi-square with \eqn{(n-1)(k-1)} degrees of freedom, the exact
+sampling variance is
+\deqn{Var(SEM) = \frac{SEM^2}{2(n-1)(k-1)}}
+where \eqn{k} is the number of measurement occasions/raters
+(\code{n_measurements}, default 2 for test-retest). Treating the same-sample SD
+and ICC as independent (the delta method of case 1) would overestimate this
+variance by roughly 2-6x, so the exact form is used instead.
+}
 }
 \examples{
 compute_sem(sd = 10, icc = 0.85, n_sample = 100)

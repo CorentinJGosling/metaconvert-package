@@ -6,14 +6,14 @@
 \alias{metaConvert-package}
 \title{metaConvert: An R Package Dedicated to Automated Effect Size Calculations}
 \description{
-The \pkg{metaConvert} package automatically estimates 11 effect size measures from a well-formatted dataframe.
+The \pkg{metaConvert} package automatically estimates 14 effect size measures from a well-formatted dataframe.
 Various other functions can help, for example, removing dependency between several effect sizes,
 or identifying differences between two dataframes.
 This package is mainly designed to assist in conducting a systematic review with a meta-analysis, but it can be
 useful to any researcher interested in estimating an effect size.
 }
 \section{Overview of the package}{
-To visualize all the types of input data that can be used to estimate the 11 effect size measures available
+To visualize all the types of input data that can be used to estimate the 14 effect size measures available
 in metaConvert, you can use the \code{\link{see_input_data}()} function.
 }
 

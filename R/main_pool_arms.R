@@ -94,18 +94,36 @@ pool_arms <- function(x,
                 ". Allowed values are 'exp', 'nexp', or NA."))
   }
 
-  # Check: within each study_id group, all non-NA pool_side values must be the same
-  groups <- split(ps_vals, x[[study_id]])
+  # Check: within each study_id group, all non-NA pool_side values must be the
+  # same. Split on a character key so a factor study_id does not spawn empty
+  # groups for unused levels.
+  groups <- split(ps_vals, as.character(x[[study_id]]))
   for (grp_name in names(groups)) {
-    vals <- na.omit(groups[[grp_name]])
+    v <- groups[[grp_name]]
+    vals <- na.omit(v)
     if (length(unique(vals)) > 1) {
       stop(paste0("Study '", grp_name,
                   "' has mixed pool_side values ('exp' and 'nexp'). ",
                   "All rows of a multi-arm trial must pool the same side."))
     }
+    # A study with some tagged and some NA rows is ambiguous: the NA rows are
+    # routed to pass-through and end up as a separate output row sharing this
+    # study_id, silently escaping the pooling/splitting.
+    if (verbose && any(is.na(v)) && any(!is.na(v))) {
+      warning(paste0("Study '", grp_name, "' has both tagged (pool_side = '",
+                     paste(unique(vals), collapse = "/"),
+                     "') and untagged (NA) rows. The untagged row(s) are left ",
+                     "unchanged and NOT pooled/split with the rest of the ",
+                     "study, producing a separate output row with the same ",
+                     "study_id. Tag all arms of a multi-arm comparison, or give ",
+                     "a genuinely independent row a distinct study_id."))
+    }
   }
 
-  x$.orig_row <- seq_len(nrow(x))
+  # Collision-safe ordering key (avoid clobbering a user column named .orig_row).
+  order_key <- ".orig_row"
+  while (order_key %in% colnames(x)) order_key <- paste0(order_key, "_")
+  x[[order_key]] <- seq_len(nrow(x))
 
   is_passthrough <- is.na(x[[pool_side]])
   x_pass <- x[is_passthrough, , drop = FALSE]
@@ -114,11 +132,12 @@ pool_arms <- function(x,
   if (nrow(x_multi) == 0) {
     res <- x_pass
     res[[pool_side]] <- NULL
-    res$.orig_row <- NULL
+    res[[order_key]] <- NULL
     return(res)
   }
 
-  x_split <- split(x_multi, x_multi[[study_id]])
+  # Split on a character key so a factor study_id does not create empty groups.
+  x_split <- split(x_multi, as.character(x_multi[[study_id]]))
 
   if (method == "pool") {
     processed <- lapply(x_split, function(grp) {
@@ -132,7 +151,7 @@ pool_arms <- function(x,
         return(grp)
       }
       .pool_one_group(grp, side = side, pool_side_col = pool_side,
-                       verbose = verbose)
+                       study_id_col = study_id, verbose = verbose)
     })
   } else {
     processed <- lapply(x_split, function(grp) {
@@ -146,7 +165,7 @@ pool_arms <- function(x,
         return(grp)
       }
       .split_one_group(grp, side = side, pool_side_col = pool_side,
-                        verbose = verbose)
+                        study_id_col = study_id, verbose = verbose)
     })
   }
 
@@ -163,10 +182,10 @@ pool_arms <- function(x,
   res <- rbind(x_pass[, all_cols, drop = FALSE],
                x_processed[, all_cols, drop = FALSE])
 
-  res <- res[order(res$.orig_row), , drop = FALSE]
+  res <- res[order(res[[order_key]]), , drop = FALSE]
 
   res[[pool_side]] <- NULL
-  res$.orig_row <- NULL
+  res[[order_key]] <- NULL
   rownames(res) <- seq_len(nrow(res))
 
   return(res)
@@ -319,7 +338,7 @@ pool_arms <- function(x,
 }
 
 # Pool one multi-arm group (method = "pool")
-.pool_one_group <- function(grp, side, pool_side_col, verbose = TRUE) {
+.pool_one_group <- function(grp, side, pool_side_col, study_id_col, verbose = TRUE) {
 
   other_side <- ifelse(side == "exp", "nexp", "exp")
   cols_info <- .pool_cols(side)
@@ -448,20 +467,42 @@ pool_arms <- function(x,
     }
   }
 
-  # plot SE bars: recompute from pooled SD
+  # plot SE bars: prefer the pooled SD reconstructed from the plot_sd bars;
+  # otherwise recover per-arm SDs from the SE bars themselves (SD = SE * sqrt(n)),
+  # Cochrane-pool them, and recompute - so a study reporting only SE error bars
+  # (a very common case) keeps a usable pooled interval instead of being dropped.
   for (pse_info in cols_info$plot_ses) {
     lo_col <- pse_info$lo
     up_col <- pse_info$up
     m_col <- pse_info$mean
-    sd_lo_col <- pse_info$sd_lo
     sd_up_col <- pse_info$sd_up
     n_c <- pse_info$n
     if (!lo_col %in% colnames(grp) && !up_col %in% colnames(grp)) next
 
-    # SE = SD / sqrt(n), use pooled SD from plot_sd bars if available
     m_pooled <- if (m_col %in% colnames(result)) result[[m_col]] else NA_real_
+
+    # (a) pooled SD already reconstructed from the plot_sd bars this round
     sd_up_val <- if (sd_up_col %in% colnames(result)) result[[sd_up_col]] else NA_real_
     sd_pooled <- if (!is.na(sd_up_val) && !is.na(m_pooled)) sd_up_val - m_pooled else NA_real_
+
+    # (b) otherwise derive per-arm SDs from the SE bars and Cochrane-pool them
+    if (is.na(sd_pooled)) {
+      m_vals  <- .get_col(grp, m_col)
+      up_vals <- .get_col(grp, up_col)
+      lo_vals <- .get_col(grp, lo_col)
+      n_vals  <- .get_col(grp, n_c)
+      se_bars <- ifelse(!is.na(up_vals) & !is.na(m_vals),
+                        up_vals - m_vals,
+                        ifelse(!is.na(m_vals) & !is.na(lo_vals),
+                               m_vals - lo_vals, NA_real_))
+      derived_sds <- se_bars * sqrt(n_vals)
+      ok <- !is.na(derived_sds) & !is.na(m_vals) & !is.na(n_vals)
+      if (sum(ok) >= 2) {
+        sd_pooled <- .pool_sd_cochrane_multi(n_vals[ok], derived_sds[ok], m_vals[ok])
+      } else if (sum(ok) == 1) {
+        sd_pooled <- derived_sds[ok]
+      }
+    }
 
     if (!is.na(sd_pooled) && !is.na(n_pooled) && n_pooled > 0) {
       se_pooled <- sd_pooled / sqrt(n_pooled)
@@ -495,7 +536,7 @@ pool_arms <- function(x,
     if (length(unique(na.omit(vals))) > 1 && verbose) {
       warning(paste0("Shared-side column '", oc,
                      "' differs across arms of study '",
-                     grp[[colnames(grp)[1]]][1],
+                     grp[[study_id_col]][1],
                      "'. Using first row's value."))
     }
   }
@@ -506,8 +547,14 @@ pool_arms <- function(x,
   } else {
     NA_real_
   }
-  if ("n_sample" %in% colnames(result) && !is.na(n_pooled) && !is.na(n_other)) {
-    result[["n_sample"]] <- n_pooled + n_other
+  if ("n_sample" %in% colnames(result)) {
+    if (!is.na(n_pooled) && !is.na(n_other)) {
+      result[["n_sample"]] <- n_pooled + n_other
+    } else {
+      # Cannot recompute a consistent total; do not keep the stale first-row
+      # value (mirrors the split method, which sets NA in the same situation).
+      result[["n_sample"]] <- NA_real_
+    }
   }
   if ("mean_sd_pooled" %in% colnames(result)) {
     result[["mean_sd_pooled"]] <- NA_real_
@@ -520,10 +567,26 @@ pool_arms <- function(x,
 }
 
 # Split one multi-arm group (method = "split")
-.split_one_group <- function(grp, side, pool_side_col, verbose = TRUE) {
+.split_one_group <- function(grp, side, pool_side_col, study_id_col, verbose = TRUE) {
 
   other_side <- ifelse(side == "exp", "nexp", "exp")
   k <- nrow(grp)
+
+  # The split method consumes only the first row's shared-side n / counts; if the
+  # duplicated shared-arm rows disagree, the extras are silently discarded. Warn,
+  # mirroring the pool method (and the @param verbose contract).
+  if (verbose) {
+    other_cols <- grep(paste0("_", other_side, "$"), colnames(grp), value = TRUE)
+    for (oc in other_cols) {
+      vals <- grp[[oc]]
+      if (length(unique(na.omit(vals))) > 1) {
+        warning(paste0("Shared-side column '", oc,
+                       "' differs across arms of study '",
+                       grp[[study_id_col]][1],
+                       "'. Using first row's value."))
+      }
+    }
+  }
 
   # Divide the shared (other) side's sample size by k
   n_col <- paste0("n_", other_side)

@@ -46,6 +46,11 @@ and then relies on the calculations of the \code{\link{es_from_student_t}()} fun
 \strong{To convert the p-value into a t-value,} the following formula is used (table 12.1 in Cooper):
 \deqn{student\_t = qt(\frac{student\_t\_pval}{2}, df = n\_exp + n\_nexp - 2)}
 Then, calculations of the \code{\link{es_from_student_t}()} are applied.
+
+Note that a two-sided p-value carries no direction, so the recovered t (and hence the
+generated effect sizes) are always non-negative. Use \code{reverse_student_t_pval} to
+encode the correct sign for effects that favour the non-experimental group. The same
+equal-variance (Student, not Welch) assumption as \code{\link{es_from_student_t}} applies.
 }
 \examples{
 es_from_student_t_pval(student_t_pval = 0.24, n_exp = 20, n_nexp = 22)

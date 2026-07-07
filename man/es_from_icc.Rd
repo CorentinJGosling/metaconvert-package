@@ -46,16 +46,20 @@ This function computes an effect size from an ICC.
 \item When \code{icc_to_es = "bonett"} (default), the Bonett (2002) transformation
 is applied:
 \deqn{T(ICC) = \ln(1 - ICC)}
-For ICC(2,1) (\code{icc_type = "agreement"}):
+For a single-measure ICC, the leading-order sampling variance of \eqn{T(ICC)}
+is the same for the two-way absolute-agreement ICC(2,1)
+(\code{icc_type = "agreement"}) and the two-way consistency ICC(3,1)
+(\code{icc_type = "consistency"}):
 \deqn{T\_se = \sqrt{\frac{2 (1 + (k-1) ICC)^2}{k (k - 1)(n - 1)}}}
-For ICC(3,1) (\code{icc_type = "consistency"}):
-\deqn{T\_se = \sqrt{\frac{2}{(k - 1)(n - 1)}}}
 \item When \code{icc_to_es = "raw"}, the raw ICC is used and its standard error
 is obtained by the delta method.
 }
 
-The ICC(2,1) SE is approximated using the one-way random model formula
-(Bonett, 2002; Donner & Eliasziw, 1987).
+Both SEs use the one-way random-model / two-way-consistency leading-order
+variance (Bonett, 2002; Donner & Eliasziw, 1987). For ICC(3,1) this variance
+still depends on the ICC value (it is \emph{not} \eqn{\rho}-free): deriving it
+from \eqn{F_0 = MSR/MSE} (with degrees of freedom \eqn{n-1} and
+\eqn{(n-1)(k-1)}) reduces to the same expression as the agreement case.
 }
 \examples{
 es_from_icc(

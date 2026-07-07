@@ -24,7 +24,10 @@
 #' \deqn{FT\_se = \frac{1}{\sqrt{4n + 2}}}
 #'
 #' When prop is equal to 0 or 1, a 0.5 correction is applied for the raw and logit methods:
-#' \eqn{prop\_corrected = \frac{x + 0.5}{n + 1}}
+#' \eqn{prop\_corrected = \frac{x + 0.5}{n + 1}}. For the raw method this shifts the
+#' reported point estimate itself (a boundary proportion of exactly 0 or 1 is
+#' returned as \eqn{(x + 0.5)/(n + 1)}, i.e. nudged toward the interior), matching
+#' the convention of \code{metafor}'s \code{measure = "PR"}.
 #'
 #' @references
 #' Barendregt, J. J., Doi, S. A., Lee, Y. Y., Norman, R. E., & Vos, T. (2013).
@@ -44,6 +47,12 @@
 #'  \code{required input data} \tab prop + n_sample\cr
 #'  \tab \cr
 #' }
+#'
+#' Note: when \code{prop_to_es = "logit"} or \code{"freeman_tukey"}, the returned
+#' \code{prop}, \code{prop_se}, \code{prop_ci_lo} and \code{prop_ci_up} columns are
+#' on the transformed (log-odds / Freeman-Tukey double-arcsine) scale, \strong{not}
+#' the `[0, 1]` proportion scale, and are not back-transformed. Only
+#' \code{prop_to_es = "raw"} returns values on the proportion scale.
 #'
 #' @export es_from_prop_single_group
 #'

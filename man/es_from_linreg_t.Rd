@@ -55,7 +55,9 @@ partial correlation coefficient (Rp) and its Fisher's z transformation (Zp).
 
 The partial correlation is obtained as (Aloe & Thompson, 2013, Eq. 2; Gustafson, 1961):
 \deqn{r_p = \frac{t}{\sqrt{t^2 + df}}}
-where \eqn{df = n\_sample - n\_covariates - 1}.
+where \eqn{df = n\_sample - n\_covariates - 2} is the residual degrees of freedom
+of the regression model (i.e. \eqn{n} minus the intercept, the focal predictor,
+and the \code{n_covariates} covariates).
 
 Its sampling variance is estimated as recommended by van Aert & Goos (2023, Eq. 5):
 \deqn{var(r_p) = \frac{(1 - r_p^2)^2}{df}}

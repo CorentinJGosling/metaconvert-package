@@ -14,7 +14,7 @@ data_extraction_sheet(
 )
 }
 \arguments{
-\item{measure}{Target effect size measure (one of the 11 available in metaConvert). Default is "all".}
+\item{measure}{Target effect size measure (one of the 14 available in metaConvert). Default is "all".}
 
 \item{type_of_measure}{One of "natural+converted" or "natural" (see details).}
 

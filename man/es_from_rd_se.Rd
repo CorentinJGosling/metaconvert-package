@@ -22,7 +22,7 @@ es_from_rd_se(
 \item{rd_se}{standard error of the risk difference}
 
 \item{baseline_risk}{proportion of cases in the non-exposed/control group.
-Required for converting RD to OR, RR, and SMD measures.}
+Required for converting RD to OR and RR.}
 
 \item{n_exp}{number of participants in the exposed/treatment group}
 
@@ -43,7 +43,6 @@ This function estimates and converts between several effect size measures.
 \code{natural effect size measure} \tab RD\cr
 \tab \cr
 \code{converted effect size measure} \tab OR + RR + NNT\cr
-\code{} \tab D + G + R + Z\cr
 \tab \cr
 \code{required input data} \tab rd + rd_se\cr
 \tab \cr
@@ -54,8 +53,17 @@ Convert a risk difference value and its standard error into several effect size 
 }
 \details{
 This function converts a risk difference (RD) and its standard error into an odds ratio (OR),
-risk ratio (RR), number needed to treat (NNT), Cohen's d (D), Hedges' g (G),
-and correlation coefficients (R/Z).
+risk ratio (RR), and number needed to treat (NNT).
+
+A risk difference is a ratio-family (binary-outcome) effect size and is \strong{not} converted
+to a standardized mean difference (D/G) or a correlation (R/Z). Such a conversion would
+require reconstructing an odds ratio from an assumed baseline risk, which is not identified
+by the risk difference alone; and because the baseline risk would be treated as a fixed
+known constant, the resulting standardized SEs would be anti-conservative. In metaConvert
+the standardized families are reached only through the odds ratio or a raw 2x2 table (the
+Cox transform \eqn{d = \log(or)\sqrt{3}/\pi}), neither of which needs an assumed baseline
+risk. To obtain a D/G/R/Z from a risk difference, first convert it to an OR (supplying the
+baseline risk) and then use \code{\link{es_from_or_se}}.
 
 \strong{NNT is always computed from RD:}
 \deqn{nnt = \frac{1}{rd}}
@@ -74,12 +82,6 @@ where the SE is derived via the delta method from \eqn{\frac{d(\log OR)}{d(RD)} 
 \deqn{logrr\_se = \frac{rd\_se}{|baseline\_risk - rd|}}
 where the SE is derived via the delta method from \eqn{\frac{d(\log RR)}{d(RD)} = \frac{-1}{baseline\_risk - rd}}.
 
-\strong{To estimate the Cohen's d and Hedges' g:}
-The OR is first converted to Cohen's d using the formulas of Cooper et al. (2019):
-\deqn{d = \log(or) \times \frac{\sqrt{3}}{\pi}}
-\deqn{d\_se = \sqrt{\frac{logor\_se^2 \times 3}{\pi^2}}}
-Then, the standard conversion to Hedges' g and correlation coefficients is applied.
-
 Note that the conversions to OR and RR assume the baseline risk is a fixed constant.
 }
 \examples{
@@ -87,7 +89,5 @@ es_from_rd_se(rd = 0.15, rd_se = 0.05,
               baseline_risk = 0.30, n_exp = 100, n_nexp = 100)
 }
 \references{
-Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
-
 Deeks, J.J. (2002). Issues in the selection of a summary statistic for meta-analysis of clinical trials with binary outcomes. Statistics in Medicine, 21(11), 1575-1600.
 }

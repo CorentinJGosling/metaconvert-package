@@ -77,6 +77,10 @@ es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer"
 #'
 #' Calculations of the \code{\link{es_from_student_t}} function are then applied.
 #'
+#' Because a two-sided p-value carries no direction, the recovered t (and hence the
+#' generated effect sizes) are always non-negative; use \code{reverse_pt_bis_r_pval} to
+#' encode the correct sign.
+#'
 #' @return
 #' This function estimates and converts between several effect size measures.
 #'

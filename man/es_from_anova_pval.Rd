@@ -46,6 +46,13 @@ and then relies on the calculations of the \code{\link{es_from_student_t}()} fun
 \strong{To convert the p-value into a t-value,} the following formula is used (table 12.1 in Cooper):
 \deqn{student\_t = qt(\frac{anova\_f\_pval}{2}, df = n\_exp + n\_nexp - 2)}
 Then, calculations of the \code{\link{es_from_student_t}()} are applied.
+
+As for \code{\link{es_from_anova_f}}, this conversion is valid only for an F-test with a
+single numerator degree of freedom (a two-group comparison): the p-value of a
+multi-level (numerator df > 1) omnibus F is inverted here as if it were a two-sided
+two-group t p-value, which is incorrect. The two-sided p-value also carries no
+direction, so the generated effect sizes are always non-negative; use
+\code{reverse_anova_f_pval} to encode the correct sign.
 }
 \examples{
 es_from_anova_pval(anova_f_pval = 0.0012, n_exp = 20, n_nexp = 22)

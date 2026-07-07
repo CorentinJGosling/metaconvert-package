@@ -3,7 +3,10 @@ test_that("STD reg", {
   dat <- df.haza[1:50, ]
   dat$beta_std <- abs(runif(nrow(dat), -0.5, 0.5))
   dat$beta_unstd <- runif(nrow(dat), -0.7, 0.7)
-  dat$sd_dv <- sqrt(1 / dat$n_exp + 1 / dat$n_nexp)
+  # realistic dependent-variable SD (large enough that the synthetic beta_unstd
+  # values remain mathematically consistent, i.e. imply a non-negative within-group
+  # variance; a tiny sd_dv would make high-|beta| rows impossible and return NA)
+  dat$sd_dv <- runif(nrow(dat), 1, 3)
 
   # esc functions require scalar inputs, so we loop row-by-row
   comp_res_d <- do.call(rbind, lapply(seq_len(nrow(dat)), function(i) {
@@ -53,7 +56,10 @@ test_that("UNSTD reg", {
   dat <- df.haza[1:50, ]
   dat$beta_std <- abs(runif(nrow(dat), -0.5, 0.5))
   dat$beta_unstd <- runif(nrow(dat), -0.7, 0.7)
-  dat$sd_dv <- sqrt(1 / dat$n_exp + 1 / dat$n_nexp)
+  # realistic dependent-variable SD (large enough that the synthetic beta_unstd
+  # values remain mathematically consistent, i.e. imply a non-negative within-group
+  # variance; a tiny sd_dv would make high-|beta| rows impossible and return NA)
+  dat$sd_dv <- runif(nrow(dat), 1, 3)
 
   # esc functions require scalar inputs, so we loop row-by-row
   comp_res_d <- do.call(rbind, lapply(seq_len(nrow(dat)), function(i) {
@@ -106,7 +112,10 @@ test_that("beta_std-reverse", {
   dat <- df.haza[1:50, ]
   dat$beta_std <- abs(runif(nrow(dat), -0.5, 0.5))
   dat$beta_unstd <- runif(nrow(dat), -0.7, 0.7)
-  dat$sd_dv <- sqrt(1 / dat$n_exp + 1 / dat$n_nexp)
+  # realistic dependent-variable SD (large enough that the synthetic beta_unstd
+  # values remain mathematically consistent, i.e. imply a non-negative within-group
+  # variance; a tiny sd_dv would make high-|beta| rows impossible and return NA)
+  dat$sd_dv <- runif(nrow(dat), 1, 3)
 
   es.mcv_d <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "beta_std", measure = "d"), digits = 11)
   es.mcv_or <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "beta_std", measure = "logor"), digits = 11)
@@ -162,7 +171,10 @@ test_that("beta_unstd-reverse", {
   dat <- df.haza[1:50, ]
   dat$beta_std <- abs(runif(nrow(dat), -0.5, 0.5))
   dat$beta_unstd <- runif(nrow(dat), -0.7, 0.7)
-  dat$sd_dv <- sqrt(1 / dat$n_exp + 1 / dat$n_nexp)
+  # realistic dependent-variable SD (large enough that the synthetic beta_unstd
+  # values remain mathematically consistent, i.e. imply a non-negative within-group
+  # variance; a tiny sd_dv would make high-|beta| rows impossible and return NA)
+  dat$sd_dv <- runif(nrow(dat), 1, 3)
 
   es.mcv_d <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "beta_unstd", measure = "d"), digits = 11)
   es.mcv_or <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "beta_unstd", measure = "logor"), digits = 11)

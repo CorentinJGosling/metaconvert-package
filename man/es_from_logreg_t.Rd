@@ -20,7 +20,6 @@ es_from_logreg_t(
   or_to_rr = "metaumbrella_cases",
   or_to_cor = "bonett",
   rr_to_or = "metaumbrella",
-  smd_to_cor = "viechtbauer",
   reverse_logreg_t
 )
 }
@@ -55,8 +54,6 @@ es_from_logreg_t(
 
 \item{rr_to_or}{formula used to convert the \code{rr} value into an odds ratio (see details).}
 
-\item{smd_to_cor}{formula used to convert a SMD into a correlation coefficient (see details).}
-
 \item{reverse_logreg_t}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
 \value{
@@ -64,7 +61,7 @@ This function estimates and converts between several effect size measures.
 \tabular{ll}{
 \code{natural effect size measure} \tab OR + RR \cr
 \tab \cr
-\code{converted effect size measure} \tab D + G + R + Z \cr
+\code{converted effect size measure} \tab OR inputs: D + G + R + Z (+ RR + NNT + RD); RR inputs: OR + NNT + RD \cr
 }
 }
 \description{
@@ -81,6 +78,13 @@ where \eqn{\beta} is \eqn{\log(OR)} or \eqn{\log(RR)} depending on the model.
 
 Then, if an OR (or logOR) is entered, calculations of \code{\link{es_from_or_se}()} are applied.
 If a RR (or logRR) is entered, calculations of \code{\link{es_from_rr_se}()} are applied.
+
+Note that the standardized-mean-difference and correlation conversions (D, G, R, Z) are
+produced for \strong{OR inputs only}. RR inputs are treated as a ratio measure and yield
+RR + OR + NNT + RD: RR is not converted to a standardized mean difference or correlation,
+because that would require going through the OR and the baseline risk (see
+\code{\link{es_from_rr_se}}). To obtain a SMD or correlation from an RR, convert it to an
+OR first (supplying the baseline risk) and then use the OR path.
 }
 \examples{
 es_or <- es_from_logreg_t(

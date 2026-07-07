@@ -13,7 +13,6 @@ es_from_rr_se(
   n_nexp,
   n_cases,
   n_controls,
-  smd_to_cor = "viechtbauer",
   rr_to_or = "metaumbrella",
   reverse_rr
 )
@@ -34,8 +33,6 @@ es_from_rr_se(
 \item{n_cases}{number of cases/events}
 
 \item{n_controls}{number of controls/no-event}
-
-\item{smd_to_cor}{formula used to convert the SMD value (converted from RR) into a coefficient correlation (see \code{\link{es_from_cohen_d}}).}
 
 \item{rr_to_or}{formula used to convert the \code{rr} value into an odds ratio (see details).}
 

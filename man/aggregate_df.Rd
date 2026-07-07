@@ -24,9 +24,9 @@ aggregate_df(
 \arguments{
 \item{x}{a dataframe that should be aggregated (must contain effect size values and standard errors).}
 
-\item{dependence}{The type of dependence in your dataframe (can be either "outcomes" or "subgroups"). See details.}
+\item{dependence}{The type of dependence in your dataframe (can be "outcomes", "times", or "subgroups"). See details.}
 
-\item{cor_unit}{The correlation between effect sizes coming from the same clustering unit (only used when \code{dependence = "times"} or \code{dependence = "outcomes"}).}
+\item{cor_unit}{The correlation between effect sizes coming from the same clustering unit. Used directly when \code{dependence = "outcomes"}. When \code{dependence = "times"} the within-cluster correlation is taken from a per-row \code{cor_unit} column if present (which must be constant within each cluster), and this argument is only used as a fallback when that column is absent; \code{dependence = "times"} additionally requires a \code{time_agg} column giving the time-point of each effect size. Ignored when \code{dependence = "subgroups"}.}
 
 \item{agg_fact}{A character string identifying the column name that contains the clustering units (all rows with the same \code{agg_fact} value will be aggregated together).}
 
@@ -55,7 +55,7 @@ The object returned by the \code{aggregate_df} contains, is a dataframe containi
 the aggregating factor, and the aggregated effect size values and standard errors. All columns indicated in the \code{col_*} arguments
 will also be included in this dataframe.
 \tabular{ll}{
-\code{row_id} \tab the row number in the original dataset.\cr
+\code{row_index} \tab the row number in the original dataset.\cr
 \tab \cr
 \code{es} \tab the aggregated effect size value.\cr
 \tab \cr
@@ -71,7 +71,7 @@ Aggregate a dataframe containing dependent effect sizes
 \details{
 \enumerate{
 \item In the \code{dependence} argument, you should indicate "outcomes" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced from the same participants at the same time-point (e.g., multiple outcome measures)
-\item In the \code{dependence} argument, you should indicate "times" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced from the same participants at the different time-points (e.g., an RCT with several follow-up waves).
+\item In the \code{dependence} argument, you should indicate "times" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced from the same participants at the different time-points (e.g., an RCT with several follow-up waves). This option requires a \code{time_agg} column (the time-point of each effect size) and a \code{cor_unit} column giving the within-cluster correlation (constant within each cluster; falls back to the \code{cor_unit} argument if the column is absent).
 \item In the \code{dependence} argument, you should indicate "subgroups" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced by independent subgroups (e.g., one effect size for boys, and one for girls).
 }
 
