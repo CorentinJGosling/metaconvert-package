@@ -24,3 +24,5 @@
 ^\.Rhistory$
 ^\.RData$
 ^\.Rd2pdf.*$
+^revdep$
+^CRAN-SUBMISSION$

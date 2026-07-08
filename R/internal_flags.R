@@ -1653,9 +1653,14 @@
         if (ratio < 1 / se_ratio_extreme || ratio > se_ratio_extreme) {
           msuf <- if (!is.null(info_used)) .method_suffix(info_used[i]) else ""
           if (!is.na(se_raw_med) && se_raw_med > 0 && se[i] < se_raw_med) {
-            cmp <- paste0(round(se_raw_med / se[i], 1),
-                          "x tighter than the cohort median SE (",
-                          round(se_raw_med, 3), ")")
+            fold <- se_raw_med / se[i]
+            cmp <- if (is.finite(fold)) {
+              paste0(round(fold, 1), "x tighter than the cohort median SE (",
+                     round(se_raw_med, 3), ")")
+            } else {
+              paste0("far tighter than the cohort median SE (",
+                     round(se_raw_med, 3), ")")
+            }
           } else if (!is.na(se_raw_med) && se_raw_med > 0) {
             cmp <- paste0(round(se[i] / se_raw_med, 1),
                           "x the cohort median SE (", round(se_raw_med, 3), ")")

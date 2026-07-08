@@ -47,6 +47,7 @@ Suggests:
     effectsize,
     MetaUtility,
     MASS,
+    mvtnorm,
     psych,
     psychmeta,
     knitr,

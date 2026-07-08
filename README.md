@@ -23,9 +23,11 @@ package on your web browser on its dedicated website
 ## Introduction
 
 This package automatically estimates 14 effect size measures from a
-well-formatted dataset. Various other functions can help, for example,
-removing dependency between several effect sizes, or identifying
-differences between two datasets.
+well-formatted dataset. It is also the official implementation of the
+metaDETECT framework, that aims to limit the errors in data extraction
+and effect size computation for meta-analyses. Various other functions
+can help, for example, removing dependency between several effect sizes,
+or identifying differences between two datasets.
 
 This package is mainly designed to assist in conducting a systematic
 review with a meta-analysis but can be useful to any researcher
