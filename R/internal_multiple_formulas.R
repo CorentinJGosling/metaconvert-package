@@ -842,8 +842,13 @@
     d <- mean_diff / sd_pooled
     g <- d * J
 
-    # Harrer eq. 13
-    var_g <- J^2 * (2 * (1 - r_avg) * N / (n_exp * n_nexp) + g^2 / (2 * m))
+    # Two-sample SMD variance on the change-score scale (Hedges 1981), as in
+    # metafor::escalc(measure = "SMD") on change scores. Deliberately departs
+    # from Harrer et al. (2025) eq. 13 for SMD_CS/CS: their 2(1-r) factor
+    # belongs only to raw-score-metric estimators (the morris_drm branch below,
+    # whose point estimate carries the sqrt(2(1-r)) rescaling) — the dz point
+    # estimate does not, so its variance cannot either.
+    var_g <- J^2 * (N / (n_exp * n_nexp) + g^2 / (2 * m))
     var_d <- var_g / J^2
 
   } else if (pre_post_to_smd == "morris_drm") {
