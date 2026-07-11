@@ -6,7 +6,21 @@ library(testthat)
 library(metaConvert)
 
 ### SMD from PRE POST MEANS/SD-----
-test_that("D - Means/SD - bonett", {
+
+# NOTE ON pool_sd IN THIS SECTION
+# --------------------------------
+# convert_df() now defaults to pool_sd = TRUE: the between-group SMD is the
+# difference in mean change divided by a SINGLE SD pooled across arms
+# (Morris 2008). The external comparators used below (metafor SMCRH, TOSTER
+# smd_calc) are built by computing a value for EACH ARM SEPARATELY and then
+# SUBTRACTING the two. That subtraction-of-per-arm-values IS the legacy
+# per-arm construction (each arm standardized by its OWN SD). The comparators
+# therefore pin the pool_sd = FALSE path, and these tests pass pool_sd = FALSE
+# explicitly. They remain valid regression tests OF THAT LEGACY PATH.
+# The pooled (new default) path stays covered by the "pre/post v change" and
+# "REVERSE" blocks further down, which call convert_df() with its defaults.
+
+test_that("D - Means/SD - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
   res <- metaumbrella::df.SMC
 
   res$n_exp <- res$n_cases
@@ -45,6 +59,9 @@ test_that("D - Means/SD - bonett", {
   J_nexp = metaConvert:::.d_j(res$n_nexp - 1)
 
 
+  # Comparator replicates the per-arm rule: each arm gets its OWN SMCRH value
+  # (standardized by that arm's own baseline SD), and the two are subtracted.
+  # This is the legacy construction => pool_sd = FALSE below.
   smcc_vd <- (-as.numeric(as.character(smc_exp$yi)) / J_exp) -
              (-as.numeric(as.character(smc_nexp$yi)) / J_nexp)
   se_vd <- sqrt(smc_exp$vi / (J_exp^2) + smc_nexp$vi / J_nexp^2)
@@ -55,7 +72,8 @@ test_that("D - Means/SD - bonett", {
     hierarchy = "means_sd_pre_post",
     measure = "d",
     smd_to_cor = "viechtbauer",
-    pre_post_to_smd = "bonett"
+    pre_post_to_smd = "bonett",
+    pool_sd = FALSE
   ), digits = 11)
   ## d
   expect_equal(unique(es.mcv_d$info_used_crude), "means_sd_pre_post")
@@ -64,7 +82,7 @@ test_that("D - Means/SD - bonett", {
   )
   expect_equal(es.mcv_d$se_crude, se_vd, tolerance = 1e-10)
 })
-test_that("D - Means/SD - cooper", {
+test_that("D - Means/SD - cooper (legacy per-arm standardizer, pool_sd = FALSE)", {
   p = 0.4
   n = 98
   d = 0.31323
@@ -89,6 +107,10 @@ test_that("D - Means/SD - cooper", {
   dat$r_pre_post_nexp <- cor.test(~scores_grp2_pre+scores_grp2)$estimate
   dat$reverse_means_pre_post <- FALSE
 
+  # Comparator replicates the per-arm rule: TOSTER is run SEPARATELY on each
+  # arm's own pre/post scores (so each arm is standardized by its OWN change
+  # SD) and the two within-group d_rm values are subtracted. That is the
+  # legacy construction => pool_sd = FALSE below.
   res_g1 = TOSTER::smd_calc(
     formula = c(scores_grp1_pre, scores_grp1) ~
       rep(c("A", "B"), each = length(scores_grp1_pre)),
@@ -106,7 +128,8 @@ test_that("D - Means/SD - cooper", {
                                  es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
                                  measure = "d",
                                  smd_to_cor = "viechtbauer",
-                                 pre_post_to_smd = "cooper"
+                                 pre_post_to_smd = "cooper",
+                                 pool_sd = FALSE
   ), digits = 11)
   ## d
 
@@ -119,7 +142,7 @@ test_that("D - Means/SD - cooper", {
 })
 
 
-test_that("G - Means/SD - bonett", {
+test_that("G - Means/SD - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
   res <- metaumbrella::df.SMC
 
   res$n_exp <- res$n_cases
@@ -154,13 +177,16 @@ test_that("G - Means/SD - bonett", {
     measure = "SMCRH"
   )
 
+  # Comparator replicates the per-arm rule (per-arm SMCRH values subtracted)
+  # => legacy construction => pool_sd = FALSE below.
   smcc_vg <- (-as.numeric(as.character(smc_exp$yi))) - (-as.numeric(as.character(smc_nexp$yi)))
   se_vg <- sqrt(smc_exp$vi + smc_nexp$vi)
   ## metaconvert
   es.mcv_g <- summary(convert_df(res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g",
     smd_to_cor = "viechtbauer",
-    pre_post_to_smd = "bonett"
+    pre_post_to_smd = "bonett",
+    pool_sd = FALSE
   ), digits = 11)
   ## d
   expect_equal(unique(es.mcv_g$info_used_crude), "means_sd_pre_post")
@@ -169,7 +195,7 @@ test_that("G - Means/SD - bonett", {
   )
   expect_equal(es.mcv_g$se_crude, se_vg, tolerance = 1e-10)
 })
-test_that("G - Means/SD - cooper", {
+test_that("G - Means/SD - cooper (legacy per-arm standardizer, pool_sd = FALSE)", {
   p = 0.4
   n = 98
   d = 0.5
@@ -194,6 +220,9 @@ test_that("G - Means/SD - cooper", {
   dat$r_pre_post_nexp <- cor.test(~scores_grp2_pre+scores_grp2)$estimate
   dat$reverse_means_pre_post <- FALSE
 
+  # Comparator replicates the per-arm rule: TOSTER run SEPARATELY per arm, the
+  # two within-group g_rm values subtracted => legacy construction =>
+  # pool_sd = FALSE below.
   res_g1 = TOSTER::smd_calc(
     formula = c(scores_grp1_pre, scores_grp1) ~
       rep(c("A", "B"), each = length(scores_grp1_pre)),
@@ -211,7 +240,8 @@ test_that("G - Means/SD - cooper", {
                                  es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
                                  measure = "g",
                                  smd_to_cor = "viechtbauer",
-                                 pre_post_to_smd = "cooper"
+                                 pre_post_to_smd = "cooper",
+                                 pool_sd = FALSE
   ), digits = 11)
   ## d
 
@@ -222,7 +252,7 @@ test_that("G - Means/SD - cooper", {
                tolerance = 5e-1)
 })
 
-test_that("G - SE - bonett", {
+test_that("G - SE - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
   res <- metaumbrella::df.SMC
   res$n_exp <- res$n_cases
   res$n_nexp <- res$n_controls
@@ -267,6 +297,8 @@ test_that("G - SE - bonett", {
     measure = "SMCRH"
   )
 
+  # Comparator replicates the per-arm rule (per-arm SMCRH values subtracted)
+  # => legacy construction => pool_sd = FALSE below.
   smcc_vg <- (-as.numeric(as.character(smc_exp$yi))) - (-as.numeric(as.character(smc_nexp$yi)))
   se_vg <- sqrt(smc_exp$vi + smc_nexp$vi)
 
@@ -274,7 +306,8 @@ test_that("G - SE - bonett", {
   es.mcv_g <- summary(convert_df(res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g",
     smd_to_cor = "viechtbauer",
-    pre_post_to_smd = "bonett"
+    pre_post_to_smd = "bonett",
+    pool_sd = FALSE
   ), digits = 11)
   ## d
   expect_equal(unique(es.mcv_g$info_used_crude), "means_se_pre_post")
@@ -284,7 +317,7 @@ test_that("G - SE - bonett", {
   expect_equal(es.mcv_g$se_crude, se_vg, tolerance = 1e-10)
 })
 
-test_that("G - CI - bonett", {
+test_that("G - CI - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
   res <- metaumbrella::df.SMC
 
   res$n_exp <- res$n_cases
@@ -338,13 +371,16 @@ test_that("G - CI - bonett", {
     measure = "SMCRH"
   )
 
+  # Comparator replicates the per-arm rule (per-arm SMCRH values subtracted)
+  # => legacy construction => pool_sd = FALSE below.
   smcc_vg <- (-as.numeric(as.character(smc_exp$yi))) - (-as.numeric(as.character(smc_nexp$yi)))
   se_vg <- sqrt(smc_exp$vi + smc_nexp$vi)
   ## metaconvert
   es.mcv_g <- summary(convert_df(res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g",
     smd_to_cor = "viechtbauer",
-    pre_post_to_smd = "bonett"
+    pre_post_to_smd = "bonett",
+    pool_sd = FALSE
   ), digits = 11)
   ## d
   expect_equal(unique(es.mcv_g$info_used_crude), "means_ci_pre_post")

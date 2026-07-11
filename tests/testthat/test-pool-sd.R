@@ -1,5 +1,8 @@
-test_that("pool_sd=FALSE (default) matches existing behavior", {
-  res_default <- es_from_means_sd_pre_post(
+test_that("pool_sd=TRUE is the DEFAULT (pooled common standardizer, Morris 2008)", {
+  # The default was flipped FALSE -> TRUE: the between-group SMD is now
+  # (mean change difference) / (SD pooled across arms), Morris (2008)'s
+  # recommended common standardizer. This pins the default to the POOLED path.
+  args <- list(
     n_exp = 50, n_nexp = 50,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 6,
@@ -9,18 +12,65 @@ test_that("pool_sd=FALSE (default) matches existing behavior", {
     pre_post_to_smd = "bonett"
   )
 
-  res_explicit <- es_from_means_sd_pre_post(
-    n_exp = 50, n_nexp = 50,
-    mean_pre_exp = 20, mean_exp = 25,
-    mean_pre_sd_exp = 5, mean_sd_exp = 6,
-    mean_pre_nexp = 20, mean_nexp = 21,
-    mean_pre_sd_nexp = 5, mean_sd_nexp = 6,
-    r_pre_post_exp = 0.5, r_pre_post_nexp = 0.5,
-    pre_post_to_smd = "bonett",
-    pool_sd = FALSE
-  )
+  res_default <- do.call(es_from_means_sd_pre_post, args)
+  res_pooled <- do.call(es_from_means_sd_pre_post, c(args, pool_sd = TRUE))
+  res_unpooled <- do.call(es_from_means_sd_pre_post, c(args, pool_sd = FALSE))
 
-  expect_identical(res_default, res_explicit)
+  # default == pool_sd = TRUE
+  expect_identical(res_default, res_pooled)
+  # ... and the default is genuinely NOT the legacy per-arm path
+  expect_false(identical(res_default$g, res_unpooled$g))
+  expect_false(identical(res_default$g_se, res_unpooled$g_se))
+})
+
+test_that("pool_sd=FALSE still yields the LEGACY per-arm standardizer result", {
+  # Regression test of the legacy path retained for backward compatibility:
+  # each arm is standardized by its OWN SD and the two WITHIN-group values are
+  # then subtracted (variances added). Verified here against the independent
+  # public entry point es_from_means_sd_pre_post_single_group() -- i.e. the
+  # legacy rule is checked through a *different* exported function rather than
+  # by transcribing the internal source, so this is not circular.
+  n1 <- 36; n2 <- 35
+  r1 <- 0.6; r2 <- 0.7
+
+  for (method in c("bonett", "morris_dz", "morris_drm", "morris_dav")) {
+    two_group <- es_from_means_sd_pre_post(
+      n_exp = n1, n_nexp = n2,
+      mean_pre_exp = 20, mean_exp = 28,
+      mean_pre_sd_exp = 5, mean_sd_exp = 6,
+      mean_pre_nexp = 20, mean_nexp = 22,
+      mean_pre_sd_nexp = 4, mean_sd_nexp = 5,
+      r_pre_post_exp = r1, r_pre_post_nexp = r2,
+      pre_post_to_smd = method,
+      pool_sd = FALSE
+    )
+
+    arm_exp <- es_from_means_sd_pre_post_single_group(
+      n_exp = n1,
+      mean_pre_exp = 20, mean_exp = 28,
+      mean_pre_sd_exp = 5, mean_sd_exp = 6,
+      r_pre_post_exp = r1,
+      pre_post_to_smd = method
+    )
+    arm_nexp <- es_from_means_sd_pre_post_single_group(
+      n_exp = n2,
+      mean_pre_exp = 20, mean_exp = 22,
+      mean_pre_sd_exp = 4, mean_sd_exp = 5,
+      r_pre_post_exp = r2,
+      pre_post_to_smd = method
+    )
+
+    # point estimate: difference of the two within-group values
+    expect_equal(two_group$d, arm_exp$d - arm_nexp$d,
+                 tolerance = 1e-10, info = paste("Method:", method))
+    expect_equal(two_group$g, arm_exp$g - arm_nexp$g,
+                 tolerance = 1e-10, info = paste("Method:", method))
+    # variance: sum of the two within-group variances (independent arms)
+    expect_equal(two_group$d_se, sqrt(arm_exp$d_se^2 + arm_nexp$d_se^2),
+                 tolerance = 1e-10, info = paste("Method:", method))
+    expect_equal(two_group$g_se, sqrt(arm_exp$g_se^2 + arm_nexp$g_se^2),
+                 tolerance = 1e-10, info = paste("Method:", method))
+  }
 })
 
 test_that("pool_sd=TRUE produces different results from pool_sd=FALSE", {

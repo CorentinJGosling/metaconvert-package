@@ -108,14 +108,23 @@ cols_to_remove <- c("n_cases", "n_controls", "mean_pre_cases", "mean_cases",
 dat <- dat[, setdiff(names(dat), cols_to_remove)]
 
 # --- Helper: run convert_df for a given hierarchy and extract results ---
+#
+# pool_sd defaults to TRUE, matching convert_df()'s own (current) default:
+#   pool_sd = TRUE  -> between-group SMD = (difference in mean change) / (SD pooled
+#                      across arms). Morris (2008)'s recommended common standardizer.
+#   pool_sd = FALSE -> LEGACY per-arm construction: each arm is standardized by its
+#                      OWN SD and the two within-group values are then subtracted.
+#                      Valid only when the arms' SDs are equal; kept for backward
+#                      compatibility and still exercised below.
 run_pathway <- function(data, hierarchy, measure = "d",
-                        pre_post_to_smd = "cooper") {
+                        pre_post_to_smd = "cooper", pool_sd = TRUE) {
   res <- convert_df(data,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = hierarchy,
     measure = measure,
-    pre_post_to_smd = pre_post_to_smd
+    pre_post_to_smd = pre_post_to_smd,
+    pool_sd = pool_sd
   )
   summ <- summary(res, digits = 11)
   list(
@@ -125,10 +134,25 @@ run_pathway <- function(data, hierarchy, measure = "d",
   )
 }
 
+# IMPORTANT — why some comparisons below must pass pool_sd = FALSE.
+#
+# The paired-t / paired-F routes CANNOT pool. A paired t identifies each arm's
+# mean_change and sd_change, but NOT the two arms' SD ratio, so the pooled
+# standardizer is mathematically unrecoverable from it. Those routes therefore
+# keep the per-arm construction and expose no pool_sd argument.
+#
+# Consequently a "paired_t == means/mean_change" equivalence assertion is only
+# true when the means-side call is run on the same per-arm footing, i.e. with
+# pool_sd = FALSE (or on a fixture whose arm SDs happen to be equal — df.SMC's
+# are not). Every such comparison below passes pool_sd = FALSE on the means side
+# and says so. All other comparisons run under the pooled default.
+
 
 # ==============================================================================
 # SECTION 1: TWO-GROUP — ALL PATHWAYS MUST MATCH (cooper/morris_drm)
 # ==============================================================================
+# These run under the CURRENT DEFAULT standardizer (pool_sd = TRUE): every
+# means/mean-change route must agree once they share the pooled standardizer.
 
 test_that("LIFECYCLE: means_sd vs means_se — cooper, d", {
   ref <- run_pathway(dat, "means_sd_pre_post", "d", "cooper")
@@ -179,9 +203,13 @@ test_that("LIFECYCLE: means_sd vs mean_change_pval — cooper, d", {
   expect_equal(ref$se, alt$se, tolerance = 1e-6)
 })
 
-test_that("LIFECYCLE: means_sd vs paired_t — cooper, d", {
-  ref <- run_pathway(dat, "means_sd_pre_post", "d", "cooper")
-  alt <- run_pathway(dat, "paired_t", "d", "cooper")
+test_that("LIFECYCLE: means_sd vs paired_t — cooper, d (legacy per-arm standardizer, pool_sd = FALSE)", {
+  # paired_t cannot pool (it does not identify the arms' SD ratio), so it always
+  # builds the per-arm standardizer. The means side is therefore run with
+  # pool_sd = FALSE to put both routes on the same footing; this pins the LEGACY
+  # per-arm path, which remains a supported (backward-compatible) construction.
+  ref <- run_pathway(dat, "means_sd_pre_post", "d", "cooper", pool_sd = FALSE)
+  alt <- run_pathway(dat, "paired_t", "d", "cooper", pool_sd = FALSE)
   expect_equal(alt$info, rep("paired_t", nrow(dat)))
   expect_equal(ref$es, alt$es, tolerance = 1e-10)
   expect_equal(ref$se, alt$se, tolerance = 1e-10)
@@ -250,10 +278,12 @@ test_that("LIFECYCLE: means_sd vs all pathways — cooper, g", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # Paired t (exact)
-  alt_t <- run_pathway(dat, "paired_t", "g", "cooper")
-  expect_equal(ref$es, alt_t$es, tolerance = 1e-10)
-  expect_equal(ref$se, alt_t$se, tolerance = 1e-10)
+  # Paired t (exact) — compared against the LEGACY per-arm means reference,
+  # because paired_t cannot pool (see the note above run_pathway).
+  ref_perarm <- run_pathway(dat, "means_sd_pre_post", "g", "cooper", pool_sd = FALSE)
+  alt_t <- run_pathway(dat, "paired_t", "g", "cooper", pool_sd = FALSE)
+  expect_equal(ref_perarm$es, alt_t$es, tolerance = 1e-10)
+  expect_equal(ref_perarm$se, alt_t$se, tolerance = 1e-10)
 })
 
 test_that("LIFECYCLE: unsigned pathways match each other — cooper, g", {
@@ -306,11 +336,18 @@ test_that("LIFECYCLE: signed pathways match — morris_dz, d", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # Paired t: d matches exactly; SE uses a slightly different variance estimate
-  # because paired_t lacks separate sd_pre/sd_post for the exact morris_dz SE formula
-  alt_t <- run_pathway(dat, "paired_t", "d", "morris_dz")
-  expect_equal(ref$es, alt_t$es, tolerance = 1e-10)
-  expect_equal(ref$se, alt_t$se, tolerance = 0.02)
+  # Paired t — compared against the LEGACY per-arm means reference, because
+  # paired_t cannot pool (see the note above run_pathway).
+  # BOTH d and SE now match EXACTLY. The SE tolerance used to be 0.02 to absorb a
+  # variance-convention mismatch: the paired_t morris_dz variance was built as
+  # J^2/n + g^2/(2n), while the means route used the metafor SMCC convention
+  # (variance built from the CORRECTED g: 1/n + g^2/(2n)). The paired_t route now
+  # uses the SMCC convention too, so the two agree to machine precision and the
+  # tolerance is tightened from 0.02 to 1e-10.
+  ref_perarm <- run_pathway(dat, "means_sd_pre_post", "d", "morris_dz", pool_sd = FALSE)
+  alt_t <- run_pathway(dat, "paired_t", "d", "morris_dz", pool_sd = FALSE)
+  expect_equal(ref_perarm$es, alt_t$es, tolerance = 1e-10)
+  expect_equal(ref_perarm$se, alt_t$se, tolerance = 1e-10)
 })
 
 test_that("LIFECYCLE: unsigned pathways match each other — morris_dz, d", {
@@ -351,10 +388,12 @@ test_that("LIFECYCLE: signed pathways match — morris_dz, g", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # Paired t: g matches exactly; SE has slight difference (see morris_dz d note)
-  alt_t <- run_pathway(dat, "paired_t", "g", "morris_dz")
-  expect_equal(ref$es, alt_t$es, tolerance = 1e-10)
-  expect_equal(ref$se, alt_t$se, tolerance = 0.02)
+  # Paired t — LEGACY per-arm reference (paired_t cannot pool). Both g and SE now
+  # match exactly; SE tolerance tightened 0.02 -> 1e-10 (see morris_dz d note).
+  ref_perarm <- run_pathway(dat, "means_sd_pre_post", "g", "morris_dz", pool_sd = FALSE)
+  alt_t <- run_pathway(dat, "paired_t", "g", "morris_dz", pool_sd = FALSE)
+  expect_equal(ref_perarm$es, alt_t$es, tolerance = 1e-10)
+  expect_equal(ref_perarm$se, alt_t$se, tolerance = 1e-10)
 })
 
 test_that("LIFECYCLE: unsigned pathways match each other — morris_dz, g", {
@@ -525,13 +564,22 @@ test_that("LIFECYCLE: single-group — all pathways match, cooper", {
 # ==============================================================================
 # SECTION 5: CROSS-VALIDATION — TWO-GROUP d ~ SINGLE-GROUP exp - nexp
 # ==============================================================================
+# "two-group d == d_exp - d_nexp" IS the definition of the LEGACY per-arm
+# standardizer, so this cross-validation is run with pool_sd = FALSE. It remains
+# a valid regression test OF THAT PATH.
+#
+# Under the pooled default (pool_sd = TRUE) the identity does NOT hold, and must
+# not: a common standardizer is a structurally different estimand. On this fixture
+# the pooled d departs from (d_exp - d_nexp) by up to 0.46, which is exactly the
+# per-arm bias the pooled default was introduced to remove. That contrast is
+# pinned by the "pool_sd default" test in Section 6.
 
-test_that("LIFECYCLE: two-group d ~ single_group_exp - single_group_nexp (bonett)", {
+test_that("LIFECYCLE: two-group d == single_group_exp - single_group_nexp (bonett; legacy per-arm standardizer, pool_sd = FALSE)", {
   for (i in 1:nrow(dat)) {
     row <- dat[i, ]
 
-    # Two-group
-    two_grp <- run_pathway(dat[i, ], "means_sd_pre_post", "d", "bonett")
+    # Two-group, legacy per-arm standardizer
+    two_grp <- run_pathway(dat[i, ], "means_sd_pre_post", "d", "bonett", pool_sd = FALSE)
 
     # Single-group exp
     sg_exp <- es_from_means_sd_pre_post_single_group(
@@ -549,9 +597,11 @@ test_that("LIFECYCLE: two-group d ~ single_group_exp - single_group_nexp (bonett
       pre_post_to_smd = "bonett"
     )
 
-    # Two-group d should approximately equal d_exp - d_nexp
+    # Under the per-arm standardizer this is an exact identity, not an
+    # approximation: max |diff| across the 33 rows is ~5e-12. Tolerance tightened
+    # from the previous 0.1 (which was far looser than the identity warrants).
     expected_diff <- sg_exp$d - sg_nexp$d
-    expect_equal(two_grp$es, expected_diff, tolerance = 0.1,
+    expect_equal(two_grp$es, expected_diff, tolerance = 1e-8,
                  info = paste("Two-group vs diff of single-group, row", i))
   }
 })
@@ -614,6 +664,28 @@ test_that("LIFECYCLE: different methods produce different values (not all identi
                info = "cooper and morris_dz should differ")
   expect_false(all(abs(bonett_d$es - dav_d$es) < 1e-10),
                info = "bonett and morris_dav should differ")
+})
+
+test_that("LIFECYCLE: convert_df defaults to the POOLED standardizer (pool_sd = TRUE)", {
+  # Guards the default. If pool_sd ever silently reverts to the legacy per-arm
+  # standardizer, the two-group SMDs change materially and this fails.
+  for (method in c("cooper", "bonett", "morris_dav", "morris_dz")) {
+    implicit <- run_pathway(dat, "means_sd_pre_post", "d", method)
+    pooled   <- run_pathway(dat, "means_sd_pre_post", "d", method, pool_sd = TRUE)
+    per_arm  <- run_pathway(dat, "means_sd_pre_post", "d", method, pool_sd = FALSE)
+
+    # The default IS the pooled standardizer.
+    expect_equal(implicit$es, pooled$es, tolerance = 1e-12,
+                 info = paste(method, "default should equal pool_sd = TRUE"))
+    expect_equal(implicit$se, pooled$se, tolerance = 1e-12,
+                 info = paste(method, "default SE should equal pool_sd = TRUE"))
+
+    # ...and it is genuinely a different estimand from the legacy per-arm path.
+    # df.SMC's arms have unequal SDs, so the two must not coincide. (They would
+    # coincide only on a fixture with equal arm SDs.)
+    expect_false(all(abs(pooled$es - per_arm$es) < 1e-8),
+                 info = paste(method, "pooled and per-arm standardizers should differ"))
+  }
 })
 
 
@@ -772,10 +844,13 @@ test_that("LIFECYCLE-RAW: all signed pathways match — cooper, d", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # paired_t (exact)
-  alt_t <- run_pathway(dat_raw, "paired_t", "d", "cooper")
-  expect_equal(ref$es, alt_t$es, tolerance = 1e-10)
-  expect_equal(ref$se, alt_t$se, tolerance = 1e-10)
+  # paired_t (exact) — against the LEGACY per-arm means reference, because
+  # paired_t cannot pool (see the note above run_pathway). The simulated arms
+  # here have unequal SDs, so the pooled and per-arm standardizers differ.
+  ref_perarm <- run_pathway(dat_raw, "means_sd_pre_post", "d", "cooper", pool_sd = FALSE)
+  alt_t <- run_pathway(dat_raw, "paired_t", "d", "cooper", pool_sd = FALSE)
+  expect_equal(ref_perarm$es, alt_t$es, tolerance = 1e-10)
+  expect_equal(ref_perarm$se, alt_t$se, tolerance = 1e-10)
 })
 
 # --- Test 7c: Unsigned pathways match each other ---
@@ -817,9 +892,11 @@ test_that("LIFECYCLE-RAW: all signed pathways match — cooper, g", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  alt_t <- run_pathway(dat_raw, "paired_t", "g", "cooper")
-  expect_equal(ref$es, alt_t$es, tolerance = 1e-10)
-  expect_equal(ref$se, alt_t$se, tolerance = 1e-10)
+  # paired_t — LEGACY per-arm reference (paired_t cannot pool).
+  ref_perarm <- run_pathway(dat_raw, "means_sd_pre_post", "g", "cooper", pool_sd = FALSE)
+  alt_t <- run_pathway(dat_raw, "paired_t", "g", "cooper", pool_sd = FALSE)
+  expect_equal(ref_perarm$es, alt_t$es, tolerance = 1e-10)
+  expect_equal(ref_perarm$se, alt_t$se, tolerance = 1e-10)
 })
 
 # --- Test 7e: means_ci pathway matches (from raw-derived pre/post CIs) ---

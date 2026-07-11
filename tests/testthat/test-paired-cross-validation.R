@@ -121,7 +121,13 @@ test_that("Mean change equals direct d_z when r = 0.5", {
 })
 
 # Test 3: Two-group paired matches difference of single-group ====
-test_that("Two-group paired equals difference of two single-group - bonett", {
+# These two tests pin the LEGACY per-arm standardizer (pool_sd = FALSE): each arm
+# is standardized by its OWN SD and the two within-group values are then
+# subtracted. The comparator below (single-group exp minus single-group nexp) IS
+# that construction by definition, so the identity is EXACT under pool_sd = FALSE.
+# It does NOT hold under the current default (pool_sd = TRUE, Morris 2008: one
+# standardizer pooled across arms), which is covered by its own test further down.
+test_that("Two-group paired equals difference of two single-group - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
   # Setup two groups
   mean_pre_t <- 40
   mean_post_t <- 52
@@ -137,7 +143,7 @@ test_that("Two-group paired equals difference of two single-group - bonett", {
 
   r <- 0.68
 
-  # Method 1: Two-group function
+  # Method 1: Two-group function, forced onto the legacy per-arm path
   result_two_group <- es_from_means_sd_pre_post(
     mean_pre_exp = mean_pre_t,
     mean_exp = mean_post_t,
@@ -151,7 +157,8 @@ test_that("Two-group paired equals difference of two single-group - bonett", {
     n_nexp = n_c,
     r_pre_post_exp = r,
     r_pre_post_nexp = r,
-    pre_post_to_smd = "bonett"
+    pre_post_to_smd = "bonett",
+    pool_sd = FALSE
   )
 
   # Method 2: Difference of two single-group calls
@@ -175,16 +182,14 @@ test_that("Two-group paired equals difference of two single-group - bonett", {
     pre_post_to_smd = "bonett"
   )
 
-  # The two-group d should approximate d_treatment - d_control
-  # (This is a conceptual check, exact match depends on pooling)
+  # On the per-arm path the two-group d IS d_treatment - d_control by
+  # construction, so this is an exact identity (not an approximation).
   expected_d_diff <- result_t$d - result_c$d
 
-  # Should be similar (within reasonable tolerance)
-  # Note: May not be exact due to pooling of SDs
-  expect_equal(result_two_group$d, expected_d_diff, tolerance = 0.1)
+  expect_equal(result_two_group$d, expected_d_diff, tolerance = 1e-10)
 })
 
-test_that("Two-group paired equals difference of single-group - morris_dav", {
+test_that("Two-group paired equals difference of single-group - morris_dav (legacy per-arm standardizer, pool_sd = FALSE)", {
   mean_pre_t <- 35
   mean_post_t <- 48
   sd_pre_t <- 9
@@ -199,7 +204,7 @@ test_that("Two-group paired equals difference of single-group - morris_dav", {
 
   r <- 0.72
 
-  # Two-group function
+  # Two-group function, forced onto the legacy per-arm path (see note above)
   result_two_group <- es_from_means_sd_pre_post(
     mean_pre_exp = mean_pre_t,
     mean_exp = mean_post_t,
@@ -213,7 +218,8 @@ test_that("Two-group paired equals difference of single-group - morris_dav", {
     n_nexp = n_c,
     r_pre_post_exp = r,
     r_pre_post_nexp = r,
-    pre_post_to_smd = "morris_dav"
+    pre_post_to_smd = "morris_dav",
+    pool_sd = FALSE
   )
 
   # Single-group calls
@@ -231,10 +237,85 @@ test_that("Two-group paired equals difference of single-group - morris_dav", {
     pre_post_to_smd = "morris_dav"
   )
 
+  # Exact identity on the per-arm path (see note above)
   expected_d_diff <- result_t$d - result_c$d
 
-  # Should be similar
-  expect_equal(result_two_group$d, expected_d_diff, tolerance = 0.1)
+  expect_equal(result_two_group$d, expected_d_diff, tolerance = 1e-10)
+})
+
+# Test 3b: The pooled standardizer is the DEFAULT (Morris 2008) ====
+# Counterpart to the two legacy tests above: pool_sd = TRUE standardizes the
+# between-group mean change by a SINGLE SD pooled across arms, so it is NOT the
+# difference of the two within-group values. Assertions here are exact identities
+# (estimand definition + an external metafor check), not formula transcriptions.
+test_that("pool_sd = TRUE is the default and pools the standardizer across arms", {
+  mean_pre_t <- 40
+  mean_post_t <- 52
+  sd_pre_t <- 11
+  sd_post_t <- 13
+  n_t <- 25
+
+  mean_pre_c <- 42
+  mean_post_c <- 44
+  sd_pre_c <- 10
+  sd_post_c <- 11
+  n_c <- 25
+
+  r <- 0.68
+
+  call_pp <- function(...) {
+    es_from_means_sd_pre_post(
+      mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
+      mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t, n_exp = n_t,
+      mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
+      mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c, n_nexp = n_c,
+      r_pre_post_exp = r, r_pre_post_nexp = r, ...
+    )
+  }
+
+  # (1) Omitting pool_sd must give the POOLED result: the default is TRUE.
+  res_default <- call_pp(pre_post_to_smd = "bonett")
+  res_pooled <- call_pp(pre_post_to_smd = "bonett", pool_sd = TRUE)
+  res_perarm <- call_pp(pre_post_to_smd = "bonett", pool_sd = FALSE)
+
+  expect_equal(res_default$d, res_pooled$d, tolerance = 1e-10)
+  expect_equal(res_default$d_se, res_pooled$d_se, tolerance = 1e-10)
+
+  # (2) The two constructions are genuinely different (guards against the
+  #     default silently falling back to the legacy per-arm path).
+  expect_false(isTRUE(all.equal(res_pooled$d, res_perarm$d, tolerance = 1e-6)))
+
+  # (3) bonett + pool_sd = TRUE is, by definition of the estimand, the
+  #     between-group mean change over the pooled BASELINE SD.
+  sd_pooled_baseline <- sqrt(
+    ((n_t - 1) * sd_pre_t^2 + (n_c - 1) * sd_pre_c^2) / (n_t + n_c - 2)
+  )
+  d_estimand <- ((mean_post_t - mean_pre_t) - (mean_post_c - mean_pre_c)) /
+    sd_pooled_baseline
+
+  expect_equal(res_pooled$d, d_estimand, tolerance = 1e-10)
+
+  # (4) External check: morris_dz + pool_sd = TRUE is a two-sample SMD computed
+  #     on the change scores, so its point estimate must equal metafor's
+  #     escalc(measure = "SMD") fed the change means/SDs. (Only the point
+  #     estimate is pinned: metaConvert's variance follows the Hedges (1981)
+  #     J^2 form, which differs from every escalc vtype by a small-sample
+  #     df/J^2 convention.)
+  skip_if_not_installed("metafor")
+
+  res_dz <- call_pp(pre_post_to_smd = "morris_dz", pool_sd = TRUE)
+
+  sd_change_t <- sqrt(sd_pre_t^2 + sd_post_t^2 - 2 * r * sd_pre_t * sd_post_t)
+  sd_change_c <- sqrt(sd_pre_c^2 + sd_post_c^2 - 2 * r * sd_pre_c * sd_post_c)
+
+  ref <- metafor::escalc(
+    measure = "SMD",
+    m1i = mean_post_t - mean_pre_t, m2i = mean_post_c - mean_pre_c,
+    sd1i = sd_change_t, sd2i = sd_change_c,
+    n1i = n_t, n2i = n_c
+  )
+
+  expect_equal(res_dz$g, as.numeric(ref$yi), tolerance = 1e-10)
 })
 
 # Test 4: Different input formats for same data ====

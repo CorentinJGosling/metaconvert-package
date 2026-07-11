@@ -14,7 +14,14 @@ has_esc <- requireNamespace("esc", quietly = TRUE)
 # =============================================================================
 
 # Test 1: Bonett standardizer vs metafor SMCRH (two-group) ====
-test_that("bonett two-group matches metafor SMCRH for effect size and SE", {
+# NOTE: the metafor comparator below is built by computing each arm's SMCRH
+# separately (each arm standardized by its OWN baseline SD) and SUBTRACTING the
+# two, and by SUMMING the two per-arm variances. That construction IS the legacy
+# per-arm standardizer, i.e. pool_sd = FALSE. The current default (pool_sd = TRUE)
+# standardizes the mean-change difference by a SD pooled ACROSS arms (Morris 2008),
+# which no per-arm-subtraction comparator can reproduce when the arms' SDs differ.
+# So this test pins the legacy per-arm path and must pass pool_sd = FALSE.
+test_that("bonett two-group matches metafor SMCRH for effect size and SE (legacy per-arm standardizer, pool_sd = FALSE)", {
   skip_if_not(has_metafor, "metafor package not available")
 
   # Two-group pre-post design
@@ -33,11 +40,14 @@ test_that("bonett two-group matches metafor SMCRH for effect size and SE", {
   r_nexp <- 0.65
 
   # metaConvert calculation
+  # pool_sd = FALSE: match the per-arm rule the metafor comparator replicates
+  # (arm-specific baseline SD as standardizer, then subtract the two arms).
   result_mc <- es_from_means_sd_pre_post(
     mean_pre_exp, mean_post_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
-    pre_post_to_smd = "bonett"
+    pre_post_to_smd = "bonett",
+    pool_sd = FALSE
   )
 
   # metafor SMCRH computes (m1 - m2) / sd1, so to get (post - pre) / sd_pre:

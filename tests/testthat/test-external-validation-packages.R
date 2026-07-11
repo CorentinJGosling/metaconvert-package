@@ -149,10 +149,85 @@ test_that("metafor::MC matches mean change two-group (ES + SE)", {
                                 n1i = n1i, n2i = n2i,
                                 data = mf_data)
 
+  # NOTE on pool_sd: es_from_mean_change_sd() now defaults to pool_sd = TRUE, but
+  # this test asserts only the RAW mean difference (md / md_se), which is
+  # pool_sd-invariant -- pool_sd selects the *standardizer* for the SMD, and does
+  # not touch the unstandardized difference or its SE. Verified: md and md_se are
+  # bit-identical under pool_sd = TRUE and pool_sd = FALSE. The metafor MD
+  # comparator is therefore unaffected by the default flip, and no pool_sd
+  # argument is needed here. (The SMD from this same call *does* depend on
+  # pool_sd -- that is covered by the dedicated test below.)
   expect_equal(result_mc$md, as.numeric(result_mf$yi), tolerance = 1e-6,
                label = "Two-group mean change MD matches metafor MD")
   expect_equal(result_mc$md_se, sqrt(as.numeric(result_mf$vi)), tolerance = 1e-6,
                label = "Two-group mean change SE matches metafor MD")
+})
+
+# Test 4b: Pooled two-group SMD vs metafor SMD on change scores ====
+# External anchor for the NEW pool_sd = TRUE default (and for the corrected
+# pooled morris_dz variance). This is the only two-group *standardized* route in
+# this file, so without it the pool_sd default flip would have no external
+# validation here at all.
+test_that("metafor::SMD on change scores matches pooled two-group morris_dz (new pool_sd = TRUE default)", {
+  skip_if_not(has_metafor, "metafor not available")
+
+  mean_change_exp <- 10.5; sd_change_exp <- 5.2; n_exp <- 30
+  mean_change_nexp <- 2.8; sd_change_nexp <- 4.5; n_nexp <- 28
+
+  # pool_sd = TRUE (the default): the between-group SMD is the difference in mean
+  # change divided by the SD POOLED ACROSS ARMS. That is exactly the estimand
+  # metafor's "SMD" targets when it is handed the change scores as if they were
+  # two independent groups -- so metafor is a genuine external comparator here,
+  # not a restatement of metaConvert's own formula.
+  result_default <- es_from_mean_change_sd(
+    mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
+    mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
+    pre_post_to_smd = "morris_dz"
+  )
+
+  result_mf <- metafor::escalc(
+    measure = "SMD",
+    m1i = mean_change_exp, m2i = mean_change_nexp,
+    sd1i = sd_change_exp, sd2i = sd_change_nexp,
+    n1i = n_exp, n2i = n_nexp
+  )
+  g_mf <- as.numeric(result_mf$yi)
+  se_mf <- sqrt(as.numeric(result_mf$vi))
+
+  # Point estimate matches metafor EXACTLY.
+  expect_equal(result_default$g, g_mf, tolerance = 1e-9,
+               label = "pooled morris_dz g matches metafor SMD on change scores")
+
+  # SE: the two packages use different-but-both-standard variance conventions for
+  # the SAME estimand, so they agree to ~1% rather than exactly --
+  #   metaConvert: J^2 * (1/n1 + 1/n2 + g^2 / (2 * (N - 2)))   [Hedges & Olkin: var(g) = J^2 var(d)]
+  #   metafor:            1/n1 + 1/n2 + g^2 / (2 * N)          [large-sample vi on the corrected g]
+  # The 1.5% band below is the size of that convention gap, NOT a tolerance
+  # loosened to force a pass (the point estimate above is pinned at 1e-9). This
+  # mirrors how the TOSTER tests in this file already document their SE gaps.
+  expect_equal(result_default$g_se, se_mf, tolerance = 0.015,
+               label = "pooled morris_dz SE approximately matches metafor SMD (differing variance conventions)")
+
+  # Guard the DEFAULT ITSELF: calling with no pool_sd must equal pool_sd = TRUE.
+  result_pooled <- es_from_mean_change_sd(
+    mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
+    mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
+    pool_sd = TRUE, pre_post_to_smd = "morris_dz"
+  )
+  expect_equal(result_default$g, result_pooled$g, tolerance = 1e-12,
+               label = "default pool_sd is TRUE")
+  expect_equal(result_default$g_se, result_pooled$g_se, tolerance = 1e-12,
+               label = "default pool_sd is TRUE (SE)")
+
+  # And the LEGACY per-arm path must still be reachable, and must genuinely differ
+  # (each arm standardized by its OWN SD, then subtracted -- biased when the arms'
+  # SDs are unequal, as they are here: 5.2 vs 4.5).
+  result_legacy <- es_from_mean_change_sd(
+    mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
+    mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
+    pool_sd = FALSE, pre_post_to_smd = "morris_dz"
+  )
+  expect_false(isTRUE(all.equal(result_legacy$g, g_mf, tolerance = 1e-3)))
 })
 
 # Test 5: metafor SMCRH vs metaConvert bonett - Single Group ====
@@ -440,7 +515,9 @@ test_that("bonett matches Bonett (2008) manual formula (ES + SE)", {
 })
 
 # Test 9: Morris_dav vs metafor SMCRP Formula - Effect Size & SE ====
-test_that("morris_dav matches metafor SMCRP formula (ES + SE)", {
+test_that("morris_dav matches metafor SMCRP (live escalc + manual formula, ES + SE)", {
+  skip_if_not_installed("metafor")
+
   mean_pre <- 35; mean_post <- 42
   sd_pre <- 6; sd_post <- 7
   n <- 28; r <- 0.68
@@ -451,7 +528,27 @@ test_that("morris_dav matches metafor SMCRP formula (ES + SE)", {
     pre_post_to_smd = "morris_dav"
   )
 
-  # metaConvert uses metafor SMCRP approach:
+  # --- PRIMARY: live external anchor -------------------------------------------
+  # The manual block below transcribes metaConvert's own source formula, which
+  # makes it circular as a "verification". A live escalc() call is the real
+  # external check, and it is cheap and EXACT here (agreement to 0 on both g and
+  # SE), so it is asserted at the same 1e-10 tolerance.
+  # metafor computes m1i - m2i, so pass m1i = post, m2i = pre to get post - pre.
+  result_mf <- metafor::escalc(measure = "SMCRP",
+                               m1i = mean_post, m2i = mean_pre,
+                               sd1i = sd_post, sd2i = sd_pre,
+                               ni = n, ri = r)
+  g_mf <- as.numeric(result_mf$yi)
+  se_mf <- sqrt(as.numeric(result_mf$vi))
+
+  expect_equal(result_mc$g, g_mf, tolerance = 1e-10,
+               label = "morris_dav g matches live metafor SMCRP")
+  expect_equal(result_mc$g_se, se_mf, tolerance = 1e-10,
+               label = "morris_dav SE matches live metafor SMCRP")
+
+  # --- SECONDARY: retained manual transcription ---------------------------------
+  # Kept (not deleted) because it additionally pins the d / d_se de-correction by
+  # J, which escalc does not expose. metaConvert uses the metafor SMCRP approach:
   # - Modified df: mi = 2*(n-1)/(1+r²)
   # - var(g) = 2*(1-r)/n + g²*(1+r²)/(4*n), then var(d) = var(g)/J²
   calc_J <- function(df) exp(lgamma(df/2) - 0.5*log(df/2) - lgamma((df-1)/2))
@@ -469,10 +566,16 @@ test_that("morris_dav matches metafor SMCRP formula (ES + SE)", {
                label = "morris_dav d matches metafor SMCRP")
   expect_equal(result_mc$d_se, se_d_av_manual, tolerance = 1e-10,
                label = "morris_dav SE matches metafor SMCRP")
+
+  # The manual transcription and the live external anchor must agree -- if they
+  # ever diverge, the transcription has drifted from metafor and is untrustworthy.
+  expect_equal(g_av_manual, g_mf, tolerance = 1e-10)
 })
 
 # Test 10: Morris_dz vs metafor SMCC Formula - Effect Size & SE ====
-test_that("morris_dz matches metafor SMCC formula (ES + SE)", {
+test_that("morris_dz matches metafor SMCC (live escalc + manual formula, ES + SE)", {
+  skip_if_not_installed("metafor")
+
   mean_pre <- 55; mean_post <- 62
   sd_pre <- 10; sd_post <- 11
   n <- 35; r <- 0.62
@@ -483,7 +586,32 @@ test_that("morris_dz matches metafor SMCC formula (ES + SE)", {
     pre_post_to_smd = "morris_dz"
   )
 
-  # metaConvert uses metafor SMCC approach:
+  # --- PRIMARY: live external anchor -------------------------------------------
+  # Replaces reliance on the (circular) transcription below with a real external
+  # check. Agreement is EXACT (0 difference on both g and SE), so 1e-10 holds.
+  #
+  # This is also the convention that matters for S3: metafor's SMCC builds the
+  # variance from the CORRECTED g -- var(g) = 1/n + g^2/(2n) -- and
+  # es_from_paired_t() / es_from_paired_t_single_group() were aligned to exactly
+  # this kernel. Pinning it live here means a future drift in metafor's SMCC (or
+  # in metaConvert's) surfaces as a failure rather than passing silently against
+  # a hand-copied formula.
+  # metafor computes m1i - m2i, so pass m1i = post, m2i = pre to get post - pre.
+  result_mf <- metafor::escalc(measure = "SMCC",
+                               m1i = mean_post, m2i = mean_pre,
+                               sd1i = sd_post, sd2i = sd_pre,
+                               ni = n, ri = r)
+  g_mf <- as.numeric(result_mf$yi)
+  se_mf <- sqrt(as.numeric(result_mf$vi))
+
+  expect_equal(result_mc$g, g_mf, tolerance = 1e-10,
+               label = "morris_dz g matches live metafor SMCC")
+  expect_equal(result_mc$g_se, se_mf, tolerance = 1e-10,
+               label = "morris_dz SE matches live metafor SMCC")
+
+  # --- SECONDARY: retained manual transcription ---------------------------------
+  # Kept because it additionally pins the d / d_se de-correction by J, which
+  # escalc does not expose. metaConvert uses the metafor SMCC approach:
   # var(g) = 1/n + g²/(2n), then var(d) = var(g)/J²
   calc_J <- function(df) exp(lgamma(df/2) - 0.5*log(df/2) - lgamma((df-1)/2))
   J <- calc_J(n - 1)
@@ -499,4 +627,8 @@ test_that("morris_dz matches metafor SMCC formula (ES + SE)", {
                label = "morris_dz d matches metafor SMCC")
   expect_equal(result_mc$d_se, se_d_z_manual, tolerance = 1e-10,
                label = "morris_dz SE matches metafor SMCC")
+
+  # The manual transcription and the live external anchor must agree -- if they
+  # ever diverge, the transcription has drifted from metafor and is untrustworthy.
+  expect_equal(g_z_manual, g_mf, tolerance = 1e-10)
 })

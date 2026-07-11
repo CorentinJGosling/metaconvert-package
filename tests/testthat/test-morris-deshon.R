@@ -265,9 +265,19 @@ test_that("When sd_pre = sd_post, d_av equals average of d_z and d_bonett concep
 })
 
 # Test 5: Validation against Morris 2007 Table 1 examples ====
-test_that("dppc2 from Morris 2007 Table 1 matches our morris_dav", {
+test_that("Morris 2007 Table 1 dppc2 ~ morris_dav (legacy per-arm standardizer, pool_sd = FALSE)", {
   # Study: Ivancevich and Smith (1981)
-  # Morris dppc2 = 0.80 (uses average SD standardizer)
+  # Morris 2007 reports dppc2 = 0.80.
+  #
+  # This test covers the LEGACY per-arm path: each arm is standardized by its
+  # OWN average SD and the two within-group d_av values are then subtracted.
+  # That construction is what reproduces 0.80 here, so the call must pass
+  # pool_sd = FALSE explicitly (the default is now pool_sd = TRUE, the pooled
+  # common standardizer recommended by Morris 2008).
+  #
+  # NOTE: the agreement with dppc2 is arithmetically incidental. Morris's actual
+  # dppc2 estimator uses the POOLED PRETEST SD, which is metaConvert's
+  # `bonett` + `pool_sd = TRUE` route -- pinned exactly in the next test.
 
   # Treatment group
   mean_pre_t <- 23.5
@@ -298,11 +308,50 @@ test_that("dppc2 from Morris 2007 Table 1 matches our morris_dav", {
     n_nexp = n_c,
     r_pre_post_exp = r,
     r_pre_post_nexp = r,
-    pre_post_to_smd = "morris_dav"
+    pre_post_to_smd = "morris_dav",
+    pool_sd = FALSE
   )
 
   # Morris 2007 reports dppc2 = 0.80
   expect_equal(result$d, 0.80, tolerance = 0.01)
+})
+
+test_that("Morris 2007 dppc2 is reproduced exactly by bonett + pool_sd = TRUE", {
+  # Morris (2008) dppc2 = c_p * [(post_T - pre_T) - (post_C - pre_C)] / SD_pre_pooled
+  # i.e. the between-group change difference standardized by the POOLED PRETEST SD,
+  # then bias-corrected. That is exactly metaConvert's `bonett` standardizer with the
+  # (now default) pooled common standardizer, pool_sd = TRUE.
+  # Study: Ivancevich and Smith (1981); Morris 2007 Table 1 reports dppc2 = 0.80.
+
+  mean_pre_t <- 23.5; sd_pre_t <- 3.1; mean_post_t <- 26.8; sd_post_t <- 4.1; n_t <- 50
+  mean_pre_c <- 24.9; sd_pre_c <- 4.1; mean_post_c <- 25.3; sd_post_c <- 3.3; n_c <- 42
+  r <- 0.64
+
+  result <- es_from_means_sd_pre_post(
+    mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
+    mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t, n_exp = n_t,
+    mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
+    mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c, n_nexp = n_c,
+    r_pre_post_exp = r, r_pre_post_nexp = r,
+    pre_post_to_smd = "bonett",
+    pool_sd = TRUE
+  )
+
+  # Closed-form dppc2 (exact bias correction J rather than the c_p approximation)
+  m <- n_t + n_c - 2
+  J <- exp(lgamma(m / 2) - 0.5 * log(m / 2) - lgamma((m - 1) / 2))
+  sd_pre_pooled <- sqrt(((n_t - 1) * sd_pre_t^2 + (n_c - 1) * sd_pre_c^2) / m)
+  mean_diff <- (mean_post_t - mean_pre_t) - (mean_post_c - mean_pre_c)
+  dppc2_expected <- J * mean_diff / sd_pre_pooled
+
+  # The bias-corrected estimate (g) IS dppc2
+  expect_equal(result$g, dppc2_expected, tolerance = 1e-10)
+
+  # ... and it recovers Morris's published value
+  expect_equal(result$g, 0.80, tolerance = 0.01)
+
+  # The uncorrected d is the same quantity without the J correction
+  expect_equal(result$d, mean_diff / sd_pre_pooled, tolerance = 1e-10)
 })
 
 # Test 6: Hedges g correction ====
@@ -378,7 +427,8 @@ test_that("Confidence intervals properly computed for all Morris methods", {
 })
 
 # Test 8: Two-group designs ====
-test_that("Morris methods work for two-group paired designs", {
+test_that("Morris methods work for two-group paired designs (pooled standardizer, default)", {
+  # No pool_sd argument -> exercises the DEFAULT pooled common standardizer.
   # Treatment group
   mean_pre_t <- 30
   mean_post_t <- 45
@@ -422,7 +472,12 @@ test_that("Morris methods work for two-group paired designs", {
 })
 
 # Test 9: Two-Group morris_dz validation ====
-test_that("morris_dz formula correct for two-group design", {
+test_that("morris_dz correct for two-group design (legacy per-arm standardizer, pool_sd = FALSE)", {
+  # Covers the LEGACY per-arm path: a d_z is formed inside each arm against that
+  # arm's OWN change-score SD, and the two are subtracted (variances summed).
+  # The manual comparator below transcribes exactly that per-arm rule, so the
+  # call must pass pool_sd = FALSE (the default is now the pooled standardizer).
+  #
   # Two-group pre-post design with morris_dz standardizer
   # Treatment group
   mean_pre_t <- 30
@@ -476,7 +531,8 @@ test_that("morris_dz formula correct for two-group design", {
     n_nexp = n_c,
     r_pre_post_exp = r_t,
     r_pre_post_nexp = r_c,
-    pre_post_to_smd = "morris_dz"
+    pre_post_to_smd = "morris_dz",
+    pool_sd = FALSE
   )
 
   # Verify point estimate
@@ -486,7 +542,70 @@ test_that("morris_dz formula correct for two-group design", {
   expect_equal(result$d_se, se_d_z_expected, tolerance = 1e-10)
 })
 
-test_that("morris_dz two-group with different correlations", {
+test_that("morris_dz two-group pooled standardizer (default) matches metafor SMD on change scores", {
+  # DEFAULT path (pool_sd = TRUE): the between-group SMD is the difference in mean
+  # change divided by the change-score SD POOLED ACROSS ARMS -- a single common
+  # standardizer (Morris 2008). This is the two-sample SMD computed on change scores.
+  skip_if_not_installed("metafor")
+
+  mean_pre_t <- 30; mean_post_t <- 45; sd_pre_t <- 10; sd_post_t <- 11; n_t <- 25
+  mean_pre_c <- 32; mean_post_c <- 34; sd_pre_c <- 9;  sd_post_c <- 10; n_c <- 25
+  r <- 0.7
+
+  result <- es_from_means_sd_pre_post(
+    mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
+    mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t, n_exp = n_t,
+    mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
+    mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c, n_nexp = n_c,
+    r_pre_post_exp = r, r_pre_post_nexp = r,
+    pre_post_to_smd = "morris_dz"  # pool_sd defaults to TRUE
+  )
+
+  # Change-score SD in each arm
+  sd_change_t <- sqrt(sd_pre_t^2 + sd_post_t^2 - 2 * r * sd_pre_t * sd_post_t)
+  sd_change_c <- sqrt(sd_pre_c^2 + sd_post_c^2 - 2 * r * sd_pre_c * sd_post_c)
+
+  # Live external reference: the bias-corrected point estimate is EXACTLY
+  # metafor's two-sample SMD applied to the change scores.
+  mf <- metafor::escalc(
+    measure = "SMD",
+    m1i = mean_post_t - mean_pre_t, m2i = mean_post_c - mean_pre_c,
+    sd1i = sd_change_t, sd2i = sd_change_c,
+    n1i = n_t, n2i = n_c
+  )
+  expect_equal(result$g, as.numeric(mf$yi), tolerance = 1e-10)
+
+  # Variance: metaConvert defines var(g) = J^2 * var(d) throughout, with
+  #   var(d) = N/(n_exp*n_nexp) + g^2/(2*m),  m = N - 2
+  # (Hedges 1981 two-sample SMD on the change-score scale). This carries NO
+  # 2*(1 - r) factor: that factor belongs to the raw-score-metric d_rm estimator,
+  # whose point estimate is rescaled by sqrt(2*(1 - r)); d_z is not.
+  # It differs by ~2% from metafor's large-sample vi, which omits the J^2 factor
+  # and uses N rather than N - 2 in the g^2 term -- a convention difference, not
+  # a disagreement about the estimator, so the variance is pinned to the formula.
+  N <- n_t + n_c
+  m <- N - 2
+  J <- exp(lgamma(m / 2) - 0.5 * log(m / 2) - lgamma((m - 1) / 2))
+  sd_pooled <- sqrt(((n_t - 1) * sd_change_t^2 + (n_c - 1) * sd_change_c^2) / m)
+  d_expected <- ((mean_post_t - mean_pre_t) - (mean_post_c - mean_pre_c)) / sd_pooled
+  g_expected <- d_expected * J
+  var_g_expected <- J^2 * (N / (n_t * n_c) + g_expected^2 / (2 * m))
+  var_d_expected <- var_g_expected / J^2
+
+  expect_equal(result$d, d_expected, tolerance = 1e-10)
+  expect_equal(result$d_se^2, var_d_expected, tolerance = 1e-10)
+  expect_equal(result$g_se^2, var_g_expected, tolerance = 1e-10)
+
+  # CI is built on the pooled df m = N - 2
+  expect_equal(result$d_ci_lo, d_expected - sqrt(var_d_expected) * qt(.975, m),
+               tolerance = 1e-10)
+  expect_equal(result$d_ci_up, d_expected + sqrt(var_d_expected) * qt(.975, m),
+               tolerance = 1e-10)
+})
+
+test_that("morris_dz two-group with different correlations (legacy per-arm standardizer, pool_sd = FALSE)", {
+  # The comparator subtracts two per-arm d_z values, each standardized by its own
+  # arm's change SD -> legacy construction, so pool_sd = FALSE.
   # Test with different r values between groups
   mean_pre_t <- 50
   mean_post_t <- 60
@@ -519,7 +638,8 @@ test_that("morris_dz two-group with different correlations", {
     mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
     mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c,
     n_nexp = n_c, r_pre_post_nexp = r_c,
-    pre_post_to_smd = "morris_dz"
+    pre_post_to_smd = "morris_dz",
+    pool_sd = FALSE
   )
 
   expect_equal(result$d, d_z_expected, tolerance = 1e-10)
@@ -530,7 +650,13 @@ test_that("morris_dz two-group with different correlations", {
 })
 
 # Test 10: Two-Group morris_dav validation ====
-test_that("morris_dav formula correct for two-group design", {
+test_that("morris_dav correct for two-group design (legacy per-arm standardizer, pool_sd = FALSE)", {
+  # Covers the LEGACY per-arm path. The comparator builds a metafor-SMCRP d_av
+  # INSIDE each arm (own average SD, modified df mi = 2*(n-1)/(1+r^2)) and then
+  # SUBTRACTS the two, summing their variances -- i.e. it encodes the per-arm rule.
+  # The call therefore passes pool_sd = FALSE; the default now pools the
+  # standardizing SD across arms.
+  #
   # Two-group design with morris_dav (average SD standardizer)
   mean_pre_t <- 23.5
   mean_post_t <- 26.8
@@ -580,14 +706,17 @@ test_that("morris_dav formula correct for two-group design", {
     mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
     mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c,
     n_nexp = n_c, r_pre_post_nexp = r_c,
-    pre_post_to_smd = "morris_dav"
+    pre_post_to_smd = "morris_dav",
+    pool_sd = FALSE
   )
 
   expect_equal(result$d, d_av_expected, tolerance = 1e-10)
   expect_equal(result$d_se, se_d_av_expected, tolerance = 1e-10)
 })
 
-test_that("morris_dav two-group robust to variance heterogeneity", {
+test_that("morris_dav two-group robust to variance heterogeneity (legacy per-arm standardizer, pool_sd = FALSE)", {
+  # The comparator subtracts two per-arm d_av values -> legacy construction,
+  # so the call passes pool_sd = FALSE.
   # Morris_dav should handle different variances well
   mean_pre_t <- 40
   mean_post_t <- 50
@@ -622,7 +751,8 @@ test_that("morris_dav two-group robust to variance heterogeneity", {
     mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
     mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c,
     n_nexp = n_c, r_pre_post_nexp = r_c,
-    pre_post_to_smd = "morris_dav"
+    pre_post_to_smd = "morris_dav",
+    pool_sd = FALSE
   )
 
   expect_equal(result$d, d_av_expected, tolerance = 1e-10)
@@ -631,6 +761,29 @@ test_that("morris_dav two-group robust to variance heterogeneity", {
   expect_true(is.finite(result$d))
   expect_true(is.finite(result$d_se))
   expect_true(result$d_se > 0)
+})
+
+test_that("pooled and legacy per-arm standardizers agree when the arms' SDs are equal", {
+  # The legacy per-arm construction (pool_sd = FALSE) subtracts two within-group
+  # values, each divided by its OWN arm's SD. That equals the pooled common
+  # standardizer (pool_sd = TRUE, the default) if and only if the two arms share
+  # the same standardizing SD. This test pins the exact condition under which the
+  # legacy path is unbiased -- and, by contrast, why it is biased otherwise.
+  args_equal_sd <- list(
+    mean_pre_exp = 20, mean_exp = 30, mean_pre_sd_exp = 10, mean_sd_exp = 12, n_exp = 30,
+    mean_pre_nexp = 21, mean_nexp = 24, mean_pre_sd_nexp = 10, mean_sd_nexp = 12, n_nexp = 30,
+    r_pre_post_exp = 0.6, r_pre_post_nexp = 0.6
+  )
+
+  for (method in c("morris_dz", "morris_dav", "morris_drm")) {
+    pooled <- do.call(es_from_means_sd_pre_post,
+                      c(args_equal_sd, pre_post_to_smd = method, pool_sd = TRUE))
+    legacy <- do.call(es_from_means_sd_pre_post,
+                      c(args_equal_sd, pre_post_to_smd = method, pool_sd = FALSE))
+
+    expect_equal(pooled$d, legacy$d, tolerance = 1e-10,
+                 label = paste("equal-SD arms, point estimate for", method))
+  }
 })
 
 # Test 11: Variance formula verification across r values ====

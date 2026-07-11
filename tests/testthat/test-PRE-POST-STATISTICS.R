@@ -6,7 +6,7 @@ library(testthat)
 library(metaConvert)
 
 # T-test to SMD/OR/COR
-test_that("1. paired t-test => D", {
+test_that("1. paired t-test => D (matches means_sd_pre_post on the legacy per-arm standardizer, pool_sd = FALSE)", {
   res <- data.frame(1)
 
   mean_pre_nexp <- rnorm(40, 80, 15)
@@ -35,9 +35,19 @@ test_that("1. paired t-test => D", {
   res$paired_t_nexp <- t.test(mean_nexp, mean_pre_nexp, paired = TRUE, alternative = "two.sided")$statistic
 
   res1 <- summary(convert_df(res, verbose = FALSE, es_selected = "hierarchy", hierarchy = "paired_t", measure = "d"), digits = 11)
+  # pool_sd = FALSE on the means side is REQUIRED for this equivalence, not a
+  # convenience: es_from_paired_t() cannot pool. A paired t identifies each arm's
+  # mean_change/sd_change ratio but NOT the ratio of the two arms' SDs, so the
+  # pooled standardizer is mathematically unrecoverable from the reported
+  # statistic and the paired-t route has no pool_sd argument at all -- it always
+  # standardizes each arm by its OWN SD and subtracts. The means side must be put
+  # on that same legacy per-arm construction for the two routes to coincide.
+  # (The arm SDs here are drawn independently, so they are NOT equal and the
+  # pooled default genuinely gives a different -- and, for the means route,
+  # preferable -- estimate.)
   res2 <- summary(convert_df(res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
-    pre_post_to_smd = "cooper", measure = "d"
+    pre_post_to_smd = "cooper", pool_sd = FALSE, measure = "d"
   ), digits = 11)
   expect_equal(unique(res1$info_used_crude), "paired_t")
   expect_equal(unique(res2$info_used_crude), "means_sd_pre_post")
@@ -84,7 +94,7 @@ test_that("REVERSE - paired t-test ", {
   expect_equal(es.mcv_t_or$se_crude, es.mcv_t_or_rv$se_crude, tolerance = 1e-10)
 })
 
-test_that("2. paired t-test p-value", {
+test_that("2. paired t-test p-value (matches means_sd_pre_post on the legacy per-arm standardizer, pool_sd = FALSE)", {
   res <- data.frame(1)
 
   mean_pre_nexp <- rnorm(40, 80, 5)
@@ -118,9 +128,14 @@ test_that("2. paired t-test p-value", {
   )$p.value
 
   res1 <- summary(convert_df(res, verbose = FALSE, es_selected = "hierarchy", hierarchy = "paired_t_pval", measure = "d"), digits = 11)
+  # pool_sd = FALSE for the same reason as test 1: paired_t_pval recovers a paired
+  # t per arm and routes through es_from_paired_t(), which cannot pool the
+  # standardizer across arms (the SD ratio is not identified by a paired t). The
+  # equivalence with the means route is therefore an equivalence with its LEGACY
+  # per-arm construction. Arm SDs here are unequal, so the pooled default differs.
   res2 <- summary(convert_df(res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
-    pre_post_to_smd = "cooper", measure = "d"
+    pre_post_to_smd = "cooper", pool_sd = FALSE, measure = "d"
   ), digits = 11)
   expect_equal(unique(res1$info_used_crude), "paired_t_pval")
   expect_equal(unique(res2$info_used_crude), "means_sd_pre_post")

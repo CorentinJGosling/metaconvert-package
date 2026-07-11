@@ -123,7 +123,16 @@ test_that("bonett formula with variance heterogeneity", {
 })
 
 # Test 2: Bonett (2008) Formula Verification - Two Groups ====
-test_that("bonett formula matches Bonett (2008) for two-group design", {
+test_that("bonett two-group matches Bonett (2008) (legacy per-arm standardizer, pool_sd = FALSE)", {
+  # LEGACY PER-ARM PATH (pool_sd = FALSE).
+  # The manual calculation below standardizes EACH ARM by ITS OWN baseline SD and
+  # then subtracts the two within-group values. That construction is exactly what
+  # pool_sd = FALSE does, so this test remains a valid regression test of that path.
+  # It is NOT the default any more: pool_sd now defaults to TRUE (a single
+  # standardizing SD pooled across arms, per Morris 2008), which is covered by the
+  # "pooled standardizer" tests further down. The per-arm rule is unbiased only when
+  # the two arms' SDs are equal, and is retained for backward compatibility.
+  #
   # Two-group pre-post design
   mean_pre_exp <- 50
   mean_exp <- 60
@@ -157,16 +166,18 @@ test_that("bonett formula matches Bonett (2008) for two-group design", {
                 g_nexp_manual^2 / (2 * (n_nexp - 1))
   var_nexp_manual <- var_g_nexp / (J_nexp^2)
 
-  # Combined effect (difference between groups)
+  # Combined effect (difference of the two SEPARATELY standardized within-group d's)
   d_combined_manual <- d_exp_manual - d_nexp_manual
   se_combined_manual <- sqrt(var_exp_manual + var_nexp_manual)
 
-  # metaConvert calculation
+  # metaConvert calculation -- pool_sd = FALSE selects the legacy per-arm rule that
+  # the manual calculation above replicates.
   result <- es_from_means_sd_pre_post(
     mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
-    pre_post_to_smd = "bonett"
+    pre_post_to_smd = "bonett",
+    pool_sd = FALSE
   )
 
   expect_equal(result$d, d_combined_manual, tolerance = 1e-10,
@@ -279,7 +290,12 @@ test_that("cooper r-dependency verification", {
 })
 
 # Test 4: Cooper Formula - Two Groups ====
-test_that("cooper formula matches Morris & DeShon (2002) for two-group design", {
+test_that("cooper two-group matches Morris & DeShon (2002) (legacy per-arm standardizer, pool_sd = FALSE)", {
+  # LEGACY PER-ARM PATH (pool_sd = FALSE). As in Test 2, the manual calculation
+  # computes a d_rm PER ARM (each divided by its OWN change SD) and subtracts them.
+  # That is the pool_sd = FALSE construction; the default is now pool_sd = TRUE,
+  # which divides the between-arm change difference by a SINGLE change SD pooled
+  # across arms (covered by the "pooled standardizer" tests below).
   mean_pre_exp <- 30
   mean_exp <- 45
   sd_pre_exp <- 10
@@ -303,20 +319,149 @@ test_that("cooper formula matches Morris & DeShon (2002) for two-group design", 
   d_rm_nexp <- (mean_post_nexp - mean_pre_nexp) / sd_change_nexp * sqrt(2 * (1 - r_nexp))
   var_rm_nexp <- 2 * (1 - r_nexp) / n_nexp + d_rm_nexp^2 / (2 * n_nexp)
 
-  # Combined
+  # Combined (difference of the two SEPARATELY standardized within-group d_rm's)
   d_combined <- d_rm_exp - d_rm_nexp
   se_combined <- sqrt(var_rm_exp + var_rm_nexp)
 
-  # metaConvert
+  # metaConvert -- pool_sd = FALSE selects the legacy per-arm rule replicated above.
   result <- es_from_means_sd_pre_post(
     mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
-    pre_post_to_smd = "cooper"
+    pre_post_to_smd = "cooper",
+    pool_sd = FALSE
   )
 
   expect_equal(result$d, d_combined, tolerance = 1e-10)
   expect_equal(result$d_se, se_combined, tolerance = 1e-10)
+})
+
+# Test 4b: POOLED standardizer (the DEFAULT, pool_sd = TRUE) ====
+# Morris (2008): the between-group SMD should divide the between-arm difference in
+# mean change by a SINGLE standardizing SD pooled across arms, rather than
+# standardizing each arm by its own SD and subtracting. pool_sd = TRUE is the default.
+
+test_that("pool_sd defaults to TRUE (pooled standardizer, not the legacy per-arm rule)", {
+  mean_pre_exp <- 30; mean_exp <- 45; sd_pre_exp <- 10; sd_post_exp <- 11
+  mean_pre_nexp <- 32; mean_post_nexp <- 34; sd_pre_nexp <- 9; sd_post_nexp <- 10
+  n_exp <- 25; n_nexp <- 25; r_exp <- 0.7; r_nexp <- 0.7
+
+  call_pp <- function(...) {
+    es_from_means_sd_pre_post(
+      mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
+      mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
+      n_exp, n_nexp, r_exp, r_nexp, ...
+    )
+  }
+
+  for (method in c("bonett", "cooper", "morris_drm", "morris_dz", "morris_dav")) {
+    res_default <- call_pp(pre_post_to_smd = method)
+    res_pooled <- call_pp(pre_post_to_smd = method, pool_sd = TRUE)
+    res_perarm <- call_pp(pre_post_to_smd = method, pool_sd = FALSE)
+
+    # The default must BE the pooled path...
+    expect_equal(res_default$d, res_pooled$d, tolerance = 1e-12,
+                 label = paste("default == pool_sd=TRUE for", method))
+    expect_equal(res_default$d_se, res_pooled$d_se, tolerance = 1e-12,
+                 label = paste("default SE == pool_sd=TRUE SE for", method))
+
+    # ...and must NOT be the legacy per-arm path. The arms' SDs differ here
+    # (10/11 vs 9/10), so the two constructions are genuinely distinct.
+    expect_false(isTRUE(all.equal(res_default$d, res_perarm$d, tolerance = 1e-6)),
+                 label = paste("default differs from pool_sd=FALSE for", method))
+  }
+})
+
+test_that("pooled standardizer divides the between-arm change difference by ONE pooled SD", {
+  # Definitional check of the pooled estimator (plain arithmetic, not a source
+  # transcription): d = (change_exp - change_nexp) / sd_pooled, where sd_pooled is
+  # the df-weighted pool of the per-arm standardizing SDs.
+  mean_pre_exp <- 30; mean_exp <- 45; sd_pre_exp <- 10; sd_post_exp <- 11
+  mean_pre_nexp <- 32; mean_post_nexp <- 34; sd_pre_nexp <- 9; sd_post_nexp <- 10
+  n_exp <- 25; n_nexp <- 25; r_exp <- 0.7; r_nexp <- 0.7
+
+  N <- n_exp + n_nexp
+  m <- N - 2                     # pooled degrees of freedom
+  r_avg <- (n_exp * r_exp + n_nexp * r_nexp) / N
+  mean_diff <- (mean_exp - mean_pre_exp) - (mean_post_nexp - mean_pre_nexp)
+
+  pool2 <- function(sd_e, sd_n) {
+    sqrt(((n_exp - 1) * sd_e^2 + (n_nexp - 1) * sd_n^2) / m)
+  }
+  sd_change_exp <- sqrt(sd_pre_exp^2 + sd_post_exp^2 - 2 * r_exp * sd_pre_exp * sd_post_exp)
+  sd_change_nexp <- sqrt(sd_pre_nexp^2 + sd_post_nexp^2 - 2 * r_nexp * sd_pre_nexp * sd_post_nexp)
+
+  call_pp <- function(method) {
+    es_from_means_sd_pre_post(
+      mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
+      mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
+      n_exp, n_nexp, r_exp, r_nexp, pre_post_to_smd = method
+    )
+  }
+
+  # bonett: standardizer = pooled BASELINE SD
+  expect_equal(call_pp("bonett")$d,
+               mean_diff / pool2(sd_pre_exp, sd_pre_nexp),
+               tolerance = 1e-10,
+               label = "pooled bonett divides by the pooled baseline SD")
+
+  # morris_dz: standardizer = pooled CHANGE-SCORE SD
+  expect_equal(call_pp("morris_dz")$d,
+               mean_diff / pool2(sd_change_exp, sd_change_nexp),
+               tolerance = 1e-10,
+               label = "pooled morris_dz divides by the pooled change SD")
+
+  # morris_drm / cooper: pooled change SD, rescaled to the raw-score metric
+  expect_equal(call_pp("cooper")$d,
+               mean_diff / pool2(sd_change_exp, sd_change_nexp) * sqrt(2 * (1 - r_avg)),
+               tolerance = 1e-10,
+               label = "pooled cooper rescales by sqrt(2(1-r))")
+
+  # morris_dav: standardizer = pooled AVERAGE of pre/post SDs
+  sd_av_exp <- sqrt((sd_pre_exp^2 + sd_post_exp^2) / 2)
+  sd_av_nexp <- sqrt((sd_pre_nexp^2 + sd_post_nexp^2) / 2)
+  expect_equal(call_pp("morris_dav")$d,
+               mean_diff / pool2(sd_av_exp, sd_av_nexp),
+               tolerance = 1e-10,
+               label = "pooled morris_dav divides by the pooled average SD")
+})
+
+test_that("pooled morris_dz reproduces metafor::escalc(measure='SMD') on change scores", {
+  # EXTERNAL reference (not a source transcription): with the change scores treated
+  # as the outcome, the pooled morris_dz estimator IS the ordinary two-sample
+  # Hedges' g, so metafor must reproduce its point estimate exactly.
+  skip_if_not_installed("metafor")
+
+  mean_pre_exp <- 30; mean_exp <- 45; sd_pre_exp <- 10; sd_post_exp <- 11
+  mean_pre_nexp <- 32; mean_post_nexp <- 34; sd_pre_nexp <- 9; sd_post_nexp <- 10
+  n_exp <- 25; n_nexp <- 25; r_exp <- 0.7; r_nexp <- 0.7
+
+  sd_change_exp <- sqrt(sd_pre_exp^2 + sd_post_exp^2 - 2 * r_exp * sd_pre_exp * sd_post_exp)
+  sd_change_nexp <- sqrt(sd_pre_nexp^2 + sd_post_nexp^2 - 2 * r_nexp * sd_pre_nexp * sd_post_nexp)
+
+  ref <- metafor::escalc(
+    measure = "SMD",
+    m1i = mean_exp - mean_pre_exp, m2i = mean_post_nexp - mean_pre_nexp,
+    sd1i = sd_change_exp, sd2i = sd_change_nexp,
+    n1i = n_exp, n2i = n_nexp
+  )
+
+  result <- es_from_means_sd_pre_post(
+    mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
+    mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
+    n_exp, n_nexp, r_exp, r_nexp,
+    pre_post_to_smd = "morris_dz"   # pool_sd = TRUE by default
+  )
+
+  expect_equal(result$g, as.numeric(ref$yi), tolerance = 1e-8,
+               label = "pooled morris_dz g == metafor Hedges' g on change scores")
+
+  # The dz variance must NOT carry a 2*(1-r) factor. Here 2*(1-0.7) = 0.6, so the
+  # old (defective) variance was ~40% too small; requiring agreement with metafor's
+  # variance to within 5% pins the fix without re-transcribing the source formula.
+  # (The residual few-% gap is the known J^2 / (2m vs 2N) convention difference.)
+  expect_equal(result$g_se^2 / as.numeric(ref$vi), 1, tolerance = 0.05,
+               label = "pooled morris_dz variance agrees with metafor (no spurious 2(1-r))")
 })
 
 # Test 5: Morris_drm alias verification ====

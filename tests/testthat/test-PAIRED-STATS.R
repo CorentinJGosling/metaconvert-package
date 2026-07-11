@@ -8,6 +8,24 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 # Tests that paired_t, paired_t_pval, paired_f, paired_f_pval pathways
 # produce consistent results and that reverse flags correctly flip signs.
 #
+# SCOPE NOTE on the paired_t vs means_sd_pre_post equivalence test below: it is
+# an equivalence test of the LEGACY per-arm standardizer (pool_sd = FALSE), not
+# of the current pooled default (pool_sd = TRUE).
+#
+# Why it must be: a paired t identifies each arm's mean_change / sd_change, but
+# it does NOT identify the ratio of the two arms' SDs, so the pooled
+# standardizer sqrt(((n1-1)*sd_c1^2 + (n2-1)*sd_c2^2)/(N-2)) is mathematically
+# unrecoverable from a paired t. es_from_paired_t() therefore has no pool_sd
+# argument and always uses the per-arm construction (standardize each arm by its
+# OWN change SD, then subtract the two within-group values). The only pool_sd
+# setting under which "means_sd_pre_post == paired_t" can hold is FALSE, so the
+# means side of that comparison is pinned to pool_sd = FALSE. The pooled default
+# is a different, non-equivalent estimand and is covered elsewhere
+# (test-pool-sd.R, test-PAIRED-MC.R).
+#
+# The paired_* routes themselves take no pool_sd argument, so every other test in
+# this file (unsigned-pathway consistency, reverse flags) is pool_sd-invariant.
+#
 # Uses metaumbrella::df.SMC (33 rows of real data).
 # ==============================================================================
 
@@ -73,14 +91,22 @@ cols_to_remove <- c("n_cases", "n_controls", "mean_pre_cases", "mean_cases",
 dat <- dat[, setdiff(names(dat), cols_to_remove)]
 
 # Helper function
+#
+# pool_sd is threaded through so the means_sd_pre_post side of the paired_t
+# equivalence test can select the legacy per-arm standardizer, which is the
+# construction es_from_paired_t() is hard-wired to (see the header note). It is a
+# no-op for the paired_* hierarchies, which take no pool_sd argument. Default
+# FALSE keeps both sides of every comparison on one explicit, named construction.
 run_pathway <- function(data, hierarchy, measure = "d",
-                        pre_post_to_smd = "cooper") {
+                        pre_post_to_smd = "cooper",
+                        pool_sd = FALSE) {
   res <- convert_df(data,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = hierarchy,
     measure = measure,
-    pre_post_to_smd = pre_post_to_smd
+    pre_post_to_smd = pre_post_to_smd,
+    pool_sd = pool_sd
   )
   summary(res, digits = 11)
 }
@@ -90,18 +116,35 @@ run_pathway <- function(data, hierarchy, measure = "d",
 # FORWARD TESTS: paired statistics vs means_sd (signed pathways)
 # ==============================================================================
 
-test_that("D/G — paired_t vs means_sd_pre_post — cooper", {
-  ref <- run_pathway(dat, "means_sd_pre_post", "d", "cooper")
+# The means_sd_pre_post side is pinned to pool_sd = FALSE: es_from_paired_t()
+# cannot pool (the paired t does not identify the arms' SD ratio), so the per-arm
+# standardizer is the only construction the two routes can agree on. Under the
+# shipped default (pool_sd = TRUE) the means route targets a different estimand
+# and this equivalence is not expected to hold. See the header note.
+test_that("D/G — paired_t vs means_sd_pre_post — cooper (legacy per-arm standardizer, pool_sd = FALSE)", {
+  ref <- run_pathway(dat, "means_sd_pre_post", "d", "cooper", pool_sd = FALSE)
   alt <- run_pathway(dat, "paired_t", "d", "cooper")
   expect_equal(unique(ref$info_used_crude), "means_sd_pre_post")
   expect_equal(unique(alt$info_used_crude), "paired_t")
   expect_equal(ref$es_crude, alt$es_crude, tolerance = 1e-10)
   expect_equal(ref$se_crude, alt$se_crude, tolerance = 1e-10)
 
-  ref_g <- run_pathway(dat, "means_sd_pre_post", "g", "cooper")
+  ref_g <- run_pathway(dat, "means_sd_pre_post", "g", "cooper", pool_sd = FALSE)
   alt_g <- run_pathway(dat, "paired_t", "g", "cooper")
   expect_equal(ref_g$es_crude, alt_g$es_crude, tolerance = 1e-10)
   expect_equal(ref_g$se_crude, alt_g$se_crude, tolerance = 1e-10)
+})
+
+# Guard the reason the test above must pass pool_sd = FALSE: on df.SMC (whose two
+# arms have unequal change SDs) the pooled and per-arm standardizers are
+# genuinely different estimands, so the shipped default must NOT silently
+# reproduce the legacy per-arm numbers. If this starts failing, the pool_sd flip
+# has been reverted or neutralised.
+test_that("pooled default is a different estimand from the per-arm construction on df.SMC", {
+  pooled <- run_pathway(dat, "means_sd_pre_post", "g", "cooper", pool_sd = TRUE)
+  perarm <- run_pathway(dat, "means_sd_pre_post", "g", "cooper", pool_sd = FALSE)
+  expect_equal(unique(pooled$info_used_crude), "means_sd_pre_post")
+  expect_false(isTRUE(all.equal(pooled$es_crude, perarm$es_crude, tolerance = 1e-6)))
 })
 
 # NOTE: paired_t_pval, paired_f, paired_f_pval lose per-group sign information.
