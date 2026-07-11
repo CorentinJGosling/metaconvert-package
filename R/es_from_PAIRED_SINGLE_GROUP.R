@@ -386,10 +386,10 @@ es_from_means_ci_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 #' a sensitivity analysis using several plausible values (e.g., 0.3, 0.5, 0.7) is advisable.
 #'
 #' This function simply internally calls the \code{\link{es_from_means_sd_pre_post_single_group}} function but setting:
-#' \deqn{mean\_pre\_exp = mean\_change\_exp}
-#' \deqn{mean\_pre\_sd\_exp = mean\_change\_sd\_exp}
-#' \deqn{mean\_post\_exp = 0}
-#' \deqn{mean\_post\_sd\_exp = 0}
+#' \deqn{mean\_pre\_exp = 0}
+#' \deqn{mean\_pre\_sd\_exp = 0}
+#' \deqn{mean\_exp = mean\_change\_exp}
+#' \deqn{mean\_sd\_exp = mean\_change\_sd\_exp}
 #'
 #' To know more about the calculations, see \code{\link{es_from_means_sd_pre_post_single_group}} function.
 #'
@@ -475,10 +475,10 @@ es_from_mean_change_sd_single_group <- function(mean_change_exp, mean_change_sd_
 #' \code{r_pre_post_exp} is missing); see \code{\link{es_from_mean_change_sd_single_group}}.
 #'
 #' This function simply internally calls the \code{\link{es_from_means_se_pre_post_single_group}} function but setting:
-#' \deqn{mean\_pre\_exp = mean\_change\_exp}
-#' \deqn{mean\_pre\_se\_exp = mean\_change\_se\_exp}
-#' \deqn{mean\_post\_exp = 0}
-#' \deqn{mean\_post\_se\_exp = 0}
+#' \deqn{mean\_pre\_exp = 0}
+#' \deqn{mean\_pre\_se\_exp = 0}
+#' \deqn{mean\_exp = mean\_change\_exp}
+#' \deqn{mean\_se\_exp = mean\_change\_se\_exp}
 #'
 #' To know more about the calculations, see \code{\link{es_from_means_se_pre_post_single_group}} function.
 #'
@@ -566,12 +566,12 @@ es_from_mean_change_se_single_group <- function(mean_change_exp, mean_change_se_
 #' \code{r_pre_post_exp} is missing); see \code{\link{es_from_mean_change_sd_single_group}}.
 #'
 #' This function simply internally calls the \code{\link{es_from_means_ci_pre_post_single_group}} function but setting:
-#' \deqn{mean\_pre\_exp = mean\_change\_exp}
-#' \deqn{mean\_pre\_ci\_lo\_exp = mean\_change\_ci\_lo\_exp}
-#' \deqn{mean\_pre\_ci\_up\_exp = mean\_change\_ci\_up\_exp}
-#' \deqn{mean\_post\_exp = 0}
-#' \deqn{mean\_post\_ci\_lo\_exp = 0}
-#' \deqn{mean\_post\_ci\_up\_exp = 0}
+#' \deqn{mean\_pre\_exp = 0}
+#' \deqn{mean\_pre\_ci\_lo\_exp = 0}
+#' \deqn{mean\_pre\_ci\_up\_exp = 0}
+#' \deqn{mean\_exp = mean\_change\_exp}
+#' \deqn{mean\_ci\_lo\_exp = mean\_change\_ci\_lo\_exp}
+#' \deqn{mean\_ci\_up\_exp = mean\_change\_ci\_up\_exp}
 #'
 #' To know more about the calculations, see \code{\link{es_from_means_sd_pre_post_single_group}} function.
 #'
@@ -667,10 +667,10 @@ es_from_mean_change_ci_single_group <- function(mean_change_exp,
 #' \deqn{mean\_change\_se\_exp <- |\frac{mean\_change\_exp}{t}|}
 #'
 #' Then, this function simply internally calls the \code{\link{es_from_means_se_pre_post_single_group}} function but setting:
-#' \deqn{mean\_pre\_exp = mean\_change\_exp}
-#' \deqn{mean\_pre\_se\_exp = mean\_change\_se\_exp}
-#' \deqn{mean\_post\_exp = 0}
-#' \deqn{mean\_post\_se\_exp = 0}
+#' \deqn{mean\_pre\_exp = 0}
+#' \deqn{mean\_pre\_se\_exp = 0}
+#' \deqn{mean\_exp = mean\_change\_exp}
+#' \deqn{mean\_se\_exp = mean\_change\_se\_exp}
 #'
 #' To know more about other calculations, see \code{\link{es_from_means_sd_pre_post_single_group}} function.
 #'
@@ -818,20 +818,26 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
     func_name = "es_from_paired_t_single_group"
   )
 
+  r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
+
   J <- .d_j(n_exp - 1)
 
-  if (all(pre_post_to_smd == "morris_dz")) {
-    # d_z
-    d <- paired_t_exp / sqrt(n_exp)
-    # metafor SMCC convention (variance built from the corrected g), matching
-    # .single_group_pre_post_to_smd so the paired-t and mean-change routes
-    # return identical SEs on equivalent inputs
-    d_var <- (1 / n_exp + (J * d)^2 / (2 * n_exp)) / J^2
-  } else {
-    # d_rm
-    d <- paired_t_exp * sqrt(2 * (1 - r_pre_post_exp) / n_exp)
-    d_var <- 2 * (1 - r_pre_post_exp) / n_exp + d^2 / (2 * n_exp)
-  }
+  # per-row method selection (a mixed vector previously fell wholesale into drm).
+  # Recycled to the input length so a scalar method still yields one value per row.
+  dz <- rep(pre_post_to_smd == "morris_dz", length.out = length(paired_t_exp))
+
+  # d_z. metafor SMCC convention (variance built from the corrected g), matching
+  # .single_group_pre_post_to_smd so the paired-t and mean-change routes return
+  # identical SEs on equivalent inputs
+  d_dz <- paired_t_exp / sqrt(n_exp)
+  d_var_dz <- (1 / n_exp + (J * d_dz)^2 / (2 * n_exp)) / J^2
+
+  # d_rm
+  d_drm <- paired_t_exp * sqrt(2 * (1 - r_pre_post_exp) / n_exp)
+  d_var_drm <- 2 * (1 - r_pre_post_exp) / n_exp + d_drm^2 / (2 * n_exp)
+
+  d <- ifelse(dz, d_dz, d_drm)
+  d_var <- ifelse(dz, d_var_dz, d_var_drm)
 
   d_se <- sqrt(d_var)
 

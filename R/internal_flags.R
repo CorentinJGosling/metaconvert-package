@@ -2158,6 +2158,8 @@
                              alpha_to_es = "bonett",
                              icc_to_es = "bonett",
                              prop_to_es = "raw",
+                             pre_post_to_smd = "bonett",
+                             pool_sd = TRUE,
                              r_defaulted = NULL) {
   n <- nrow(res)
   flag_col <- paste0("flags", suffix)
@@ -2300,6 +2302,91 @@
     }
   }
 
+  # E6: Cross-row SMD standardizer mixing (change-SD vs raw-score-SD metric)
+  #
+  # An SMD standardized by the CHANGE SD (morris_dz on pre/post or mean-change
+  # data) is not on the same scale as an SMD standardized by a raw-score SD:
+  # under equal pre/post SDs, sd_change = sd_raw * sqrt(2(1-r)), so the two
+  # differ by a factor 1/sqrt(2(1-r)) (they coincide only at r = 0.5). The
+  # Cochrane Handbook (v6, section 10.5.2) is explicit that change-score SMDs
+  # and post-intervention SMDs must not be combined in one SMD meta-analysis,
+  # "because the SDs used in the standardization reflect different things".
+  # The package's own docs say the same of d_rm vs d_z.
+  #
+  # Rows are classified by the standardizer their info_used + pre_post_to_smd
+  # imply. Endpoint (means_sd etc.), baseline-SD (bonett) and raw-metric d_rm
+  # rows all live on a raw-score SD, so they are pooled into one "raw-score-SD"
+  # class; only morris_dz rows sit on the change-SD metric.
+  f_std_mix <- vector("list", n)
+  for (i in seq_len(n)) f_std_mix[[i]] <- character(0)
+  smd_measures <- c("d", "g", "dw", "gw")
+  if (measure %in% smd_measures && !is.null(info_used) &&
+      identical(pre_post_to_smd, "morris_dz")) {
+    # methods whose standardizer is the change SD when pre_post_to_smd is dz
+    change_metric_methods <- c(
+      "means_sd_pre_post", "means_se_pre_post", "means_ci_pre_post",
+      "mean_change_sd", "mean_change_se", "mean_change_ci", "mean_change_pval",
+      "paired_t", "paired_t_pval", "paired_f", "paired_f_pval",
+      "means_sd_pre_post_single_group", "means_se_pre_post_single_group",
+      "means_ci_pre_post_single_group",
+      "mean_change_sd_single_group", "mean_change_se_single_group",
+      "mean_change_ci_single_group", "mean_change_pval_single_group",
+      "paired_t_single_group"
+    )
+    valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
+    is_change <- info_used[valid_idx] %in% change_metric_methods
+    if (any(is_change) && any(!is_change)) {
+      for (i in valid_idx) {
+        row_is_change <- info_used[i] %in% change_metric_methods
+        this_metric <- if (row_is_change) "the change-SD metric (d_z)" else "a raw-score-SD metric"
+        other_metric <- if (row_is_change) "a raw-score-SD metric" else "the change-SD metric (d_z)"
+        msuf <- .method_suffix(info_used[i])
+        f_std_mix[[i]] <- paste0(
+          "[DISCORDANT] Mixed SMD standardizers: this row is on ", this_metric, msuf,
+          ", but other rows are on ", other_metric,
+          " - these differ by a factor 1/sqrt(2(1-r)) and should not be pooled ",
+          "(Cochrane Handbook 10.5.2). Use pre_post_to_smd = 'morris_drm' (or ",
+          "'bonett') to put pre/post rows on the raw-score-SD metric of the ",
+          "endpoint rows")
+      }
+    }
+  }
+
+  # E7: paired t/F rows coexisting with pooled-standardizer rows
+  #
+  # A paired t (or F) statistic identifies each arm's mean_change / sd_change
+  # ratio but NOT the two arms' SD ratio, so the pooled standardizing SD is not
+  # recoverable: these routes necessarily standardize each arm by its own SD and
+  # subtract. When other rows in the same pool DO use a pooled standardizer
+  # (pool_sd = TRUE, the default), the two constructions differ whenever a
+  # study's arm SDs differ. Informational: the paired-t rows are not wrong, they
+  # are simply the best obtainable from the reported statistic.
+  f_paired_t_mix <- vector("list", n)
+  for (i in seq_len(n)) f_paired_t_mix[[i]] <- character(0)
+  if (isTRUE(opts$enable_informational) && measure %in% smd_measures &&
+      !is.null(info_used) && isTRUE(pool_sd)) {
+    per_arm_only_methods <- c("paired_t", "paired_t_pval", "paired_f", "paired_f_pval")
+    pooled_capable_methods <- c(
+      "means_sd_pre_post", "means_se_pre_post", "means_ci_pre_post",
+      "mean_change_sd", "mean_change_se", "mean_change_ci", "mean_change_pval"
+    )
+    valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
+    has_per_arm <- any(info_used[valid_idx] %in% per_arm_only_methods)
+    has_pooled <- any(info_used[valid_idx] %in% pooled_capable_methods)
+    if (has_per_arm && has_pooled) {
+      for (i in valid_idx) {
+        if (!info_used[i] %in% per_arm_only_methods) next
+        msuf <- .method_suffix(info_used[i])
+        f_paired_t_mix[[i]] <- paste0(
+          "[INFO] Per-arm standardizer: a paired t/F statistic does not identify ",
+          "the two arms' SD ratio", msuf, ", so this row standardizes each arm by ",
+          "its own SD, while other rows in this pool use an SD pooled across arms ",
+          "(pool_sd = TRUE). The two constructions coincide only when a study's arm ",
+          "SDs are equal")
+      }
+    }
+  }
+
   # E5: min and max ES on opposite sides of the null (0, or 1 when exp = TRUE)
   # suppressed with E1-E3 when all rows show min ~ -max
   f_direction <- vector("list", n)
@@ -2364,7 +2451,7 @@
         }
       }
     }
-    combined <- c(v_flags, f_a[[i]], f_b[[i]], f_c[[i]], f_d[[i]], f_e[[i]], f_f[[i]], f_g[[i]], f_dup[[i]], f_nnt_mix[[i]], f_direction[[i]])
+    combined <- c(v_flags, f_a[[i]], f_b[[i]], f_c[[i]], f_d[[i]], f_e[[i]], f_f[[i]], f_g[[i]], f_dup[[i]], f_nnt_mix[[i]], f_std_mix[[i]], f_paired_t_mix[[i]], f_direction[[i]])
     if (length(combined) == 0) return("")
     paste(combined, collapse = "; ")
   }, character(1))

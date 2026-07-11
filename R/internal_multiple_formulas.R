@@ -734,6 +734,33 @@
 }
 
 
+################# PRE POST helpers ##############
+#' Guard a standardizing SD before it is used as a denominator
+#'
+#' Returns NA for any standardizer that is zero, negative or non-finite, so the
+#' resulting SMD is NA rather than a silent Inf/NaN. Scoped deliberately to the
+#' DENOMINATOR: the mean-change wrappers legitimately pass mean_pre_sd = 0 (the
+#' pre slot is zeroed by construction), so guarding raw inputs would break them,
+#' whereas a zero *standardizer* is always degenerate. Reachable when a study
+#' reports SD = 0, or when r_pre_post = 1 with equal pre/post SDs makes the
+#' change SD collapse to 0.
+#'
+#' @noRd
+.guard_standardizer <- function(sd_value) {
+  ifelse(is.finite(sd_value) & sd_value > 0, sd_value, NA_real_)
+}
+
+#' Guard a pre-post correlation
+#'
+#' |r| >= 1 is not a valid correlation and drives sd_change to 0 (or a negative
+#' radicand) in every pre-post formula. Strictly at the bounds so that r = 0.99
+#' still computes.
+#'
+#' @noRd
+.guard_r_pre_post <- function(r) {
+  ifelse(is.finite(r) & abs(r) < 1, r, NA_real_)
+}
+
 ################# PRE POST to SMD ##############
 .pre_post_to_smd <- function(mean_pre_exp, mean_pre_sd_exp,
                              mean_exp, mean_sd_exp,
@@ -803,8 +830,13 @@
     pre_post_to_smd <- "morris_drm"
   }
 
+  r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
+  r_pre_post_nexp <- .guard_r_pre_post(r_pre_post_nexp)
+
   N <- n_exp + n_nexp
   m <- N - 2 # pooled degrees of freedom
+  # m <= 2 leaves no residual df for the variance; m <= 0 breaks J itself
+  m <- ifelse(is.finite(m) & m > 0, m, NA_real_)
   J <- .d_j(m)
 
   change_exp <- mean_exp - mean_pre_exp
@@ -818,6 +850,7 @@
     sd_pooled <- sqrt(((n_exp - 1) * mean_pre_sd_exp^2 +
                        (n_nexp - 1) * mean_pre_sd_nexp^2) / m)
 
+    sd_pooled <- .guard_standardizer(sd_pooled)
     d <- mean_diff / sd_pooled
     g <- d * J
 
@@ -836,8 +869,8 @@
                           2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
     sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
                            2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
-    sd_pooled <- sqrt(((n_exp - 1) * sd_change_exp^2 +
-                       (n_nexp - 1) * sd_change_nexp^2) / m)
+    sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_change_exp^2 +
+                       (n_nexp - 1) * sd_change_nexp^2) / m))
 
     d <- mean_diff / sd_pooled
     g <- d * J
@@ -857,8 +890,8 @@
                           2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
     sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
                            2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
-    sd_pooled <- sqrt(((n_exp - 1) * sd_change_exp^2 +
-                       (n_nexp - 1) * sd_change_nexp^2) / m)
+    sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_change_exp^2 +
+                       (n_nexp - 1) * sd_change_nexp^2) / m))
 
     d <- (mean_diff / sd_pooled) * sqrt(2 * (1 - r_avg))
     g <- d * J
@@ -871,8 +904,8 @@
     # average SDs pooled across groups
     sd_av_exp <- sqrt((mean_pre_sd_exp^2 + mean_sd_exp^2) / 2)
     sd_av_nexp <- sqrt((mean_pre_sd_nexp^2 + mean_sd_nexp^2) / 2)
-    sd_pooled <- sqrt(((n_exp - 1) * sd_av_exp^2 +
-                       (n_nexp - 1) * sd_av_nexp^2) / m)
+    sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_av_exp^2 +
+                       (n_nexp - 1) * sd_av_nexp^2) / m))
 
     d <- mean_diff / sd_pooled
     g <- d * J
@@ -919,6 +952,8 @@
     pre_post_to_smd <- "morris_drm"
   }
 
+  r_pre_post <- .guard_r_pre_post(r_pre_post)
+
   if (pre_post_to_smd == "bonett") {
     # Bonett method: standardize by baseline SD
     # Matches metafor SMCRH (heteroscedastic-robust variance formula)
@@ -926,12 +961,13 @@
 
     var_change <- mean_pre_sd^2 + mean_post_sd^2 - 2 * r_pre_post * mean_pre_sd * mean_post_sd
 
-    d <- (mean_post - mean_pre) / mean_pre_sd
+    sd_std <- .guard_standardizer(mean_pre_sd)
+    d <- (mean_post - mean_pre) / sd_std
     g <- d * J
 
     # metafor SMCRH heteroscedastic variance formula (Bonett 2008)
     # var = sd_change^2 / (sd1i^2 * (n-1)) + g^2 / (2 * (n-1))
-    var_g <- var_change / (mean_pre_sd^2 * (n - 1)) + g^2 / (2 * (n - 1))
+    var_g <- var_change / (sd_std^2 * (n - 1)) + g^2 / (2 * (n - 1))
     var_d <- var_g / (J^2)
 
     d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
@@ -947,12 +983,12 @@
     return(res)
   } else if (pre_post_to_smd == "morris_drm") {
     # Morris d_rm (alias "cooper"): standardize by change SD, raw-score correction
-    # nb: the mean_change wrappers pass sd_change through mean_pre_sd
-    # (mean_post = 0, so sd_diff reduces to sd_change)
+    # nb: the mean_change wrappers pass sd_change through mean_post_sd
+    # (mean_pre = 0 and mean_pre_sd = 0, so sd_diff reduces to sd_change)
     J <- .d_j(n - 1)
 
-    sd_diff <- sqrt(mean_pre_sd^2 + mean_post_sd^2 -
-                    (2 * r_pre_post * mean_pre_sd * mean_post_sd))
+    sd_diff <- .guard_standardizer(sqrt(mean_pre_sd^2 + mean_post_sd^2 -
+                    (2 * r_pre_post * mean_pre_sd * mean_post_sd)))
 
     d <- (mean_post - mean_pre) / sd_diff * sqrt(2 * (1 - r_pre_post))
     g <- d * J
@@ -978,8 +1014,8 @@
     # Most conservative when r is high
     J <- .d_j(n - 1)
 
-    sd_diff <- sqrt(mean_pre_sd^2 + mean_post_sd^2 -
-                    2 * r_pre_post * mean_pre_sd * mean_post_sd)
+    sd_diff <- .guard_standardizer(sqrt(mean_pre_sd^2 + mean_post_sd^2 -
+                    2 * r_pre_post * mean_pre_sd * mean_post_sd))
 
     d <- (mean_post - mean_pre) / sd_diff
     g <- d * J
@@ -1008,7 +1044,7 @@
     mi <- 2 * (n - 1) / (1 + r_pre_post^2)
     J <- .d_j(mi)
 
-    sd_av <- sqrt((mean_pre_sd^2 + mean_post_sd^2) / 2)
+    sd_av <- .guard_standardizer(sqrt((mean_pre_sd^2 + mean_post_sd^2) / 2))
 
     d <- (mean_post - mean_pre) / sd_av
     g <- d * J
@@ -1163,5 +1199,4 @@
 # \deqn{r\_ci\_up = tanh(z\_ci\_up)}
 # \deqn{effective\_n = \frac{1}{z\_se^2 + 3}}
 # \deqn{r\_se = \frac{(1 - r^2)^2}{effective\_n - 1}}
-
 

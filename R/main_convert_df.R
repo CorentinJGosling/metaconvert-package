@@ -13,7 +13,13 @@
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio.
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient.
 #' @param pre_post_to_smd formula used to obtain a SMD from pre/post means and SD of two independent groups.
-#' @param pool_sd a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.
+#' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
+#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+#'   metaConvert <= 2.0.0.
 #' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown)
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
@@ -268,7 +274,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
                        cor_to_smd = "viechtbauer",
                        unit_type = "raw_scale",
                        yates_chisq = FALSE,
-                       pool_sd = FALSE,
+                       pool_sd = TRUE,
                        prop_to_es = "raw",
                        alpha_to_es = "bonett",
                        icc_to_es = "bonett",
@@ -309,6 +315,40 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   .r_defaulted_nexp <- is.na(x[, "r_pre_post_nexp"])
   x[.r_defaulted_exp, "r_pre_post_exp"] <- r_pre_post
   x[.r_defaulted_nexp, "r_pre_post_nexp"] <- r_pre_post
+
+  # Under the d_rm (cooper/morris_drm) standardizer the assumed correlation
+  # scales the POINT estimate, not only its precision, so an unreported r that
+  # is silently imputed is a substantive assumption. Warn once, and only for
+  # rows that actually feed an r-consuming (pre/post, mean-change, paired)
+  # route -- datasets with no such data never reach the formulas.
+  if (verbose) {
+    .r_consuming_cols <- c(
+      "mean_pre_exp", "mean_pre_nexp", "mean_pre_sd_exp", "mean_pre_sd_nexp",
+      "mean_change_exp", "mean_change_nexp",
+      "mean_change_sd_exp", "mean_change_sd_nexp",
+      "mean_change_se_exp", "mean_change_se_nexp",
+      "mean_change_pval_exp", "mean_change_pval_nexp",
+      "paired_t_exp", "paired_t_nexp", "paired_f_exp", "paired_f_nexp",
+      "paired_t_pval_exp", "paired_t_pval_nexp",
+      "paired_f_pval_exp", "paired_f_pval_nexp"
+    )
+    .r_consuming_cols <- intersect(.r_consuming_cols, colnames(x))
+    if (length(.r_consuming_cols) > 0) {
+      .rows_with_pp <- rowSums(!is.na(x[, .r_consuming_cols, drop = FALSE])) > 0
+      .n_imputed <- sum((.r_defaulted_exp | .r_defaulted_nexp) & .rows_with_pp)
+      if (.n_imputed > 0) {
+        message(
+          "Note: r_pre_post was not reported for ", .n_imputed, " row(s) with pre/post, ",
+          "mean-change or paired data;\n  the default r_pre_post = ", r_pre_post,
+          " was assumed. Under the default 'cooper'/'morris_drm' standardizer\n",
+          "  the assumed correlation scales the POINT estimate, not only the SE. ",
+          "Supply r_pre_post_exp/\n  r_pre_post_nexp when available, or run a ",
+          "sensitivity analysis over plausible values."
+        )
+      }
+    }
+  }
+
   r_pre_post = rep(r_pre_post, nrow(x))
   for (i in c("rr_to_or",
               "or_to_rr",
@@ -609,6 +649,35 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     "cooper"
   } else {
     pre_post_to_smd
+  }
+
+  # The coercion above silently changes the ESTIMAND for the affected rows: they
+  # are standardized by the change SD (cooper/d_rm) while means_sd_pre_post rows
+  # keep the requested baseline-SD (bonett) or average-SD (morris_dav)
+  # standardizer. Tell the user whenever data that actually routes through a
+  # coerced method is present.
+  if (verbose && !identical(pre_post_to_smd_restricted, pre_post_to_smd)) {
+    .coerced_cols <- c(
+      "mean_change_exp", "mean_change_nexp", "mean_change_sd_exp",
+      "mean_change_sd_nexp", "mean_change_se_exp", "mean_change_se_nexp",
+      "mean_change_pval_exp", "mean_change_pval_nexp",
+      "paired_t_exp", "paired_t_nexp", "paired_f_exp", "paired_f_nexp",
+      "paired_t_pval_exp", "paired_t_pval_nexp",
+      "paired_f_pval_exp", "paired_f_pval_nexp"
+    )
+    .coerced_cols <- intersect(.coerced_cols, colnames(x))
+    .has_coerced_data <- length(.coerced_cols) > 0 &&
+      any(!is.na(x[, .coerced_cols, drop = FALSE]))
+    if (.has_coerced_data) {
+      message(
+        "Note: pre_post_to_smd = '", pre_post_to_smd, "' requires separate pre/post SDs, ",
+        "which mean-change and paired t/F data do not carry.\n",
+        "  Those rows use 'cooper' (morris_drm, change-SD standardizer) instead. ",
+        "Effect sizes from these\n  rows are therefore on a different standardizer than '",
+        pre_post_to_smd, "' rows. See the 'es_flags'\n  column of summary(..., flags = TRUE) ",
+        "for the rows affected."
+      )
+    }
   }
 
   es_means_change_sd <- with(x, es_from_mean_change_sd(
@@ -1496,6 +1565,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   attr(res, "alpha_to_es") <- alpha_to_es
   attr(res, "icc_to_es") <- icc_to_es
   attr(res, "prop_to_es") <- prop_to_es
+  # standardizer used by the pre/post routes (drives the E6/E7 mixing flags)
+  attr(res, "pre_post_to_smd") <- pre_post_to_smd
+  attr(res, "pool_sd") <- pool_sd
   return(res)
 }
 # x_save2 = x; list_df = df_es; ordering = ordering_crude; digits = digits;
@@ -1533,4 +1605,3 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 # start_time <- Sys.time()
 # end_time <- Sys.time()
 # end_time - start_time
-

@@ -24,7 +24,7 @@ es_from_means_ci_pre_post(
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "bonett",
   max_asymmetry = 10,
-  pool_sd = FALSE,
+  pool_sd = TRUE,
   reverse_means_pre_post
 )
 }
@@ -67,7 +67,13 @@ es_from_means_ci_pre_post(
 
 \item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 
-\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
+\item{pool_sd}{a logical value indicating whether the standardizing SD should be pooled across the two
+groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+(2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+metaConvert <= 2.0.0.}
 
 \item{reverse_means_pre_post}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }

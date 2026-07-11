@@ -57,10 +57,10 @@ biases the point estimate, not only its precision; when the correlation is not r
 a sensitivity analysis using several plausible values (e.g., 0.3, 0.5, 0.7) is advisable.
 
 This function simply internally calls the \code{\link{es_from_means_sd_pre_post_single_group}} function but setting:
-\deqn{mean\_pre\_exp = mean\_change\_exp}
-\deqn{mean\_pre\_sd\_exp = mean\_change\_sd\_exp}
-\deqn{mean\_post\_exp = 0}
-\deqn{mean\_post\_sd\_exp = 0}
+\deqn{mean\_pre\_exp = 0}
+\deqn{mean\_pre\_sd\_exp = 0}
+\deqn{mean\_exp = mean\_change\_exp}
+\deqn{mean\_sd\_exp = mean\_change\_sd\_exp}
 
 To know more about the calculations, see \code{\link{es_from_means_sd_pre_post_single_group}} function.
 }

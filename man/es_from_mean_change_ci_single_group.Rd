@@ -59,12 +59,12 @@ The effect size (d_rm) depends linearly on the pre-post correlation (0.8 assumed
 \code{r_pre_post_exp} is missing); see \code{\link{es_from_mean_change_sd_single_group}}.
 
 This function simply internally calls the \code{\link{es_from_means_ci_pre_post_single_group}} function but setting:
-\deqn{mean\_pre\_exp = mean\_change\_exp}
-\deqn{mean\_pre\_ci\_lo\_exp = mean\_change\_ci\_lo\_exp}
-\deqn{mean\_pre\_ci\_up\_exp = mean\_change\_ci\_up\_exp}
-\deqn{mean\_post\_exp = 0}
-\deqn{mean\_post\_ci\_lo\_exp = 0}
-\deqn{mean\_post\_ci\_up\_exp = 0}
+\deqn{mean\_pre\_exp = 0}
+\deqn{mean\_pre\_ci\_lo\_exp = 0}
+\deqn{mean\_pre\_ci\_up\_exp = 0}
+\deqn{mean\_exp = mean\_change\_exp}
+\deqn{mean\_ci\_lo\_exp = mean\_change\_ci\_lo\_exp}
+\deqn{mean\_ci\_up\_exp = mean\_change\_ci\_up\_exp}
 
 To know more about the calculations, see \code{\link{es_from_means_sd_pre_post_single_group}} function.
 }

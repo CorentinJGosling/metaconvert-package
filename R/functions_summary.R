@@ -457,18 +457,25 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     if (is.null(icc_method)) icc_method <- "bonett"
     prop_method <- attr(object, "prop_to_es")
     if (is.null(prop_method)) prop_method <- "raw"
+    pp_method <- attr(object, "pre_post_to_smd")
+    if (is.null(pp_method)) pp_method <- "bonett"
+    pool_sd_used <- attr(object, "pool_sd")
+    if (is.null(pool_sd_used)) pool_sd_used <- TRUE
 
     if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
       res <- .flag_es_quality(res, measure, exp, "_crude", raw_data, opts, input_val,
                               alpha_to_es = alpha_method, icc_to_es = icc_method,
-                              prop_to_es = prop_method, r_defaulted = r_def)
+                              prop_to_es = prop_method, pre_post_to_smd = pp_method,
+                              pool_sd = pool_sd_used, r_defaulted = r_def)
       res <- .flag_es_quality(res, measure, exp, "_adjusted", raw_data, opts, input_val,
                               alpha_to_es = alpha_method, icc_to_es = icc_method,
-                              prop_to_es = prop_method, r_defaulted = r_def)
+                              prop_to_es = prop_method, pre_post_to_smd = pp_method,
+                              pool_sd = pool_sd_used, r_defaulted = r_def)
     } else {
       res <- .flag_es_quality(res, measure, exp, "", raw_data, opts, input_val,
                               alpha_to_es = alpha_method, icc_to_es = icc_method,
-                              prop_to_es = prop_method, r_defaulted = r_def)
+                              prop_to_es = prop_method, pre_post_to_smd = pp_method,
+                              pool_sd = pool_sd_used, r_defaulted = r_def)
     }
   }
 

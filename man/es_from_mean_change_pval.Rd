@@ -15,7 +15,7 @@ es_from_mean_change_pval(
   n_nexp,
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "cooper",
-  pool_sd = FALSE,
+  pool_sd = TRUE,
   reverse_mean_change
 )
 }
@@ -40,7 +40,13 @@ es_from_mean_change_pval(
 
 \item{pre_post_to_smd}{formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).}
 
-\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
+\item{pool_sd}{a logical value indicating whether the standardizing SD should be pooled across the two
+groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+(2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+metaConvert <= 2.0.0.}
 
 \item{reverse_mean_change}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }

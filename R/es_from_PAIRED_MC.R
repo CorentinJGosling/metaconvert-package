@@ -12,7 +12,13 @@
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).
-#' @param pool_sd a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.
+#' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
+#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+#'   metaConvert <= 2.0.0.
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -79,7 +85,7 @@ es_from_mean_change_sd <- function(mean_change_exp, mean_change_sd_exp,
                                    n_exp, n_nexp,
                                    smd_to_cor = "viechtbauer",
                                    pre_post_to_smd = "cooper",
-                                   pool_sd = FALSE,
+                                   pool_sd = TRUE,
                                    reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
   reverse_mean_change[is.na(reverse_mean_change)] <- FALSE
@@ -130,7 +136,13 @@ es_from_mean_change_sd <- function(mean_change_exp, mean_change_sd_exp,
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).
-#' @param pool_sd a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.
+#' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
+#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+#'   metaConvert <= 2.0.0.
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -186,7 +198,7 @@ es_from_mean_change_se <- function(mean_change_exp, mean_change_se_exp,
                                    n_exp, n_nexp,
                                    smd_to_cor = "viechtbauer",
                                    pre_post_to_smd = "cooper",
-                                   pool_sd = FALSE,
+                                   pool_sd = TRUE,
                                    reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
   reverse_mean_change[is.na(reverse_mean_change)] <- FALSE
@@ -239,7 +251,13 @@ es_from_mean_change_se <- function(mean_change_exp, mean_change_se_exp,
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
-#' @param pool_sd a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.
+#' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
+#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+#'   metaConvert <= 2.0.0.
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).
 #'
@@ -306,7 +324,7 @@ es_from_mean_change_ci <- function(mean_change_exp,
                                    r_pre_post_exp, r_pre_post_nexp,
                                    n_exp, n_nexp, max_asymmetry = 10,
                                    smd_to_cor = "viechtbauer", pre_post_to_smd = "cooper",
-                                   pool_sd = FALSE, reverse_mean_change) {
+                                   pool_sd = TRUE, reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
   reverse_mean_change[is.na(reverse_mean_change)] <- FALSE
   if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.8, length(mean_change_exp))
@@ -360,7 +378,13 @@ es_from_mean_change_ci <- function(mean_change_exp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param pool_sd a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.
+#' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
+#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+#'   metaConvert <= 2.0.0.
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).
 #'
@@ -422,7 +446,7 @@ es_from_mean_change_pval <- function(mean_change_exp, mean_change_pval_exp,
                                    r_pre_post_exp, r_pre_post_nexp,
                                    n_exp, n_nexp,
                                    smd_to_cor = "viechtbauer", pre_post_to_smd = "cooper",
-                                   pool_sd = FALSE, reverse_mean_change) {
+                                   pool_sd = TRUE, reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
   reverse_mean_change[is.na(reverse_mean_change)] <- FALSE
   if (missing(r_pre_post_nexp)) r_pre_post_nexp <- rep(0.8, length(mean_change_exp))

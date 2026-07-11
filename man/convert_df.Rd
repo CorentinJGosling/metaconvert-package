@@ -26,7 +26,7 @@ convert_df(
   cor_to_smd = "viechtbauer",
   unit_type = "raw_scale",
   yates_chisq = FALSE,
-  pool_sd = FALSE,
+  pool_sd = TRUE,
   prop_to_es = "raw",
   alpha_to_es = "bonett",
   icc_to_es = "bonett",
@@ -75,7 +75,13 @@ convert_df(
 
 \item{yates_chisq}{a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).}
 
-\item{pool_sd}{a logical value indicating whether the SD used to standardize the effect size should be pooled across the two groups.}
+\item{pool_sd}{a logical value indicating whether the standardizing SD should be pooled across the two
+groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
+divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
+standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
+is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
+(2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
+metaConvert <= 2.0.0.}
 
 \item{prop_to_es}{method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).}
 

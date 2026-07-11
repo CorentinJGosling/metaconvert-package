@@ -31,6 +31,16 @@
 #' When \code{r_pre_post_exp} / \code{r_pre_post_nexp} are not indicated, a value of 0.8 is assumed and
 #' users should conduct sensitivity analyses with other plausible values.
 #'
+#' **No \code{pool_sd} argument.** Unlike the means and mean-change converters, this function cannot
+#' pool the standardizing SD across arms: a paired t-statistic identifies each arm's
+#' \eqn{mean\_change / sd\_change} ratio but NOT the ratio of the two arms' SDs, so the pooled
+#' standardizer is not recoverable from the reported statistic. Each arm is therefore standardized by
+#' its own SD and the two within-group values are subtracted -- a construction that coincides with the
+#' pooled one only when the arms' SDs are equal. When rows from this route are combined in one pool
+#' with rows that DO use a pooled standardizer, \code{summary(..., flags = TRUE)} raises an
+#' informational flag. If the arm SDs are reported, prefer \code{\link{es_from_means_sd_pre_post}} or
+#' \code{\link{es_from_mean_change_sd}}.
+#'
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
 #'
@@ -80,29 +90,35 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
   if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(paired_t_exp))
   r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
+  r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
+  r_pre_post_nexp <- .guard_r_pre_post(r_pre_post_nexp)
+
   J_exp <- .d_j(n_exp - 1)
   J_nexp <- .d_j(n_nexp - 1)
 
-  if (all(pre_post_to_smd == "morris_dz")) {
-    # morris dz
-    d_exp <- paired_t_exp / sqrt(n_exp)
-    d_nexp <- paired_t_nexp / sqrt(n_nexp)
+  # per-row method selection: a vector mixing "morris_dz" and "morris_drm" rows
+  # previously fell wholesale into the drm branch (all(...) is a single logical).
+  # Recycled to the input length so a scalar method still yields one value per row.
+  dz <- rep(pre_post_to_smd == "morris_dz", length.out = length(paired_t_exp))
 
-    # metafor SMCC convention (variance built from the corrected g), matching
-    # .single_group_pre_post_to_smd so the paired-t and mean-change routes
-    # return identical SEs on equivalent inputs
-    d_var_exp <- (1 / n_exp + (J_exp * d_exp)^2 / (2 * n_exp)) / J_exp^2
-    d_var_nexp <- (1 / n_nexp + (J_nexp * d_nexp)^2 / (2 * n_nexp)) / J_nexp^2
-  } else {
-    # morris drm
-    d_exp <- paired_t_exp * sqrt((2 * (1 - r_pre_post_exp)) / n_exp)
-    d_nexp <- paired_t_nexp * sqrt((2 * (1 - r_pre_post_nexp)) / n_nexp)
+  # morris dz. metafor SMCC convention (variance built from the corrected g),
+  # matching .single_group_pre_post_to_smd so the paired-t and mean-change
+  # routes return identical SEs on equivalent inputs
+  d_exp_dz <- paired_t_exp / sqrt(n_exp)
+  d_nexp_dz <- paired_t_nexp / sqrt(n_nexp)
+  d_var_exp_dz <- (1 / n_exp + (J_exp * d_exp_dz)^2 / (2 * n_exp)) / J_exp^2
+  d_var_nexp_dz <- (1 / n_nexp + (J_nexp * d_nexp_dz)^2 / (2 * n_nexp)) / J_nexp^2
 
-    # d_var_exp <- (1/(n_exp) + d_exp^2/(2*n_exp)) * (2 * (1 - r_pre_post_exp))
-    # d_var_nexp <- (1/(n_nexp) + d_nexp^2/(2*n_nexp)) * (2 * (1 - r_pre_post_nexp))
-    d_var_exp <- 2 * (1 - r_pre_post_exp) / n_exp + d_exp^2 / (2 * n_exp)
-    d_var_nexp <- 2 * (1 - r_pre_post_nexp) / n_nexp + d_nexp^2 / (2 * n_nexp)
-  }
+  # morris drm
+  d_exp_drm <- paired_t_exp * sqrt((2 * (1 - r_pre_post_exp)) / n_exp)
+  d_nexp_drm <- paired_t_nexp * sqrt((2 * (1 - r_pre_post_nexp)) / n_nexp)
+  d_var_exp_drm <- 2 * (1 - r_pre_post_exp) / n_exp + d_exp_drm^2 / (2 * n_exp)
+  d_var_nexp_drm <- 2 * (1 - r_pre_post_nexp) / n_nexp + d_nexp_drm^2 / (2 * n_nexp)
+
+  d_exp <- ifelse(dz, d_exp_dz, d_exp_drm)
+  d_nexp <- ifelse(dz, d_nexp_dz, d_nexp_drm)
+  d_var_exp <- ifelse(dz, d_var_exp_dz, d_var_exp_drm)
+  d_var_nexp <- ifelse(dz, d_var_nexp_dz, d_var_nexp_drm)
 
   g_exp <- J_exp * d_exp
   g_nexp <- J_nexp * d_nexp

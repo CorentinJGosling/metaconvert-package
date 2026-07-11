@@ -72,6 +72,16 @@ Note that the Cohen's d obtained from a paired t-test strongly depends on the pr
 When \code{r_pre_post_exp} / \code{r_pre_post_nexp} are not indicated, a value of 0.8 is assumed and
 users should conduct sensitivity analyses with other plausible values.
 
+\strong{No \code{pool_sd} argument.} Unlike the means and mean-change converters, this function cannot
+pool the standardizing SD across arms: a paired t-statistic identifies each arm's
+\eqn{mean\_change / sd\_change} ratio but NOT the ratio of the two arms' SDs, so the pooled
+standardizer is not recoverable from the reported statistic. Each arm is therefore standardized by
+its own SD and the two within-group values are subtracted -- a construction that coincides with the
+pooled one only when the arms' SDs are equal. When rows from this route are combined in one pool
+with rows that DO use a pooled standardizer, \code{summary(..., flags = TRUE)} raises an
+informational flag. If the arm SDs are reported, prefer \code{\link{es_from_means_sd_pre_post}} or
+\code{\link{es_from_mean_change_sd}}.
+
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d}()} are applied.
 }
