@@ -818,10 +818,15 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
     func_name = "es_from_paired_t_single_group"
   )
 
+  J <- .d_j(n_exp - 1)
+
   if (all(pre_post_to_smd == "morris_dz")) {
     # d_z
     d <- paired_t_exp / sqrt(n_exp)
-    d_var <- 1 / n_exp + d^2 / (2 * n_exp)
+    # metafor SMCC convention (variance built from the corrected g), matching
+    # .single_group_pre_post_to_smd so the paired-t and mean-change routes
+    # return identical SEs on equivalent inputs
+    d_var <- (1 / n_exp + (J * d)^2 / (2 * n_exp)) / J^2
   } else {
     # d_rm
     d <- paired_t_exp * sqrt(2 * (1 - r_pre_post_exp) / n_exp)
@@ -833,7 +838,6 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
   d_ci_lo <- d - qt(0.975, n_exp - 1) * d_se
   d_ci_up <- d + qt(0.975, n_exp - 1) * d_se
 
-  J <- .d_j(n_exp - 1)
   g <- d * J
   g_se <- d_se * J
   g_ci_lo <- d_ci_lo * J

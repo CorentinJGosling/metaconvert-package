@@ -88,8 +88,11 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
     d_exp <- paired_t_exp / sqrt(n_exp)
     d_nexp <- paired_t_nexp / sqrt(n_nexp)
 
-    d_var_exp <- 1 / n_exp + d_exp^2 / (2 * n_exp)
-    d_var_nexp <- 1 / n_nexp + d_nexp^2 / (2 * n_nexp)
+    # metafor SMCC convention (variance built from the corrected g), matching
+    # .single_group_pre_post_to_smd so the paired-t and mean-change routes
+    # return identical SEs on equivalent inputs
+    d_var_exp <- (1 / n_exp + (J_exp * d_exp)^2 / (2 * n_exp)) / J_exp^2
+    d_var_nexp <- (1 / n_nexp + (J_nexp * d_nexp)^2 / (2 * n_nexp)) / J_nexp^2
   } else {
     # morris drm
     d_exp <- paired_t_exp * sqrt((2 * (1 - r_pre_post_exp)) / n_exp)
