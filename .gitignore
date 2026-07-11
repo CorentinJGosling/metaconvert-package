@@ -33,3 +33,5 @@ SUMMARY_TESTS.xlsx
 archive/
 metaConvert.Rcheck/
 metaConvert_*.tar.gz
+# Windows crash artifacts
+*.stackdump
