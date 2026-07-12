@@ -109,15 +109,29 @@ dat <- dat[, setdiff(names(dat), cols_to_remove)]
 
 # --- Helper: run convert_df for a given hierarchy and extract results ---
 #
-# pool_sd defaults to TRUE, matching convert_df()'s own (current) default:
-#   pool_sd = TRUE  -> between-group SMD = (difference in mean change) / (SD pooled
-#                      across arms). Morris (2008)'s recommended common standardizer.
-#   pool_sd = FALSE -> LEGACY per-arm construction: each arm is standardized by its
-#                      OWN SD and the two within-group values are then subtracted.
-#                      Valid only when the arms' SDs are equal; kept for backward
-#                      compatibility and still exercised below.
+# pool_sd defaults to FALSE, mirroring convert_df()'s own default. The two settings
+# are a genuine analytic CHOICE between two estimands, not right-vs-wrong:
+#
+#   pool_sd = FALSE (DEFAULT) -> per-arm construction: standardize the mean change
+#                      WITHIN each arm by that arm's own SD, subtract the two, and
+#                      ADD their sampling variances (the arms are independent).
+#                      This is Morris (2008) d_ppc1, from Becker (1988) — the same
+#                      thing metafor users build by hand with
+#                      escalc(measure = "SMCR") per arm then `yi = yT - yC;
+#                      vi = vT + vC` (metafor-project.org/doku.php/analyses:morris2008).
+#                      It does NOT assume the two arms' true standardizing SDs are
+#                      equal, which is why Viechtbauer calls it "more broadly
+#                      applicable".
+#   pool_sd = TRUE  -> OPT-IN: divide the difference in mean change by ONE SD pooled
+#                      across arms = Morris (2008) d_ppc2 (eq. 8-9). More efficient,
+#                      and Morris recommends it, but it ASSUMES equal true arm SDs.
+#
+# The two coincide when the arms' true SDs are equal and target different estimands
+# otherwise, so the package no longer picks one silently. Tests below run under the
+# default (per-arm) unless they say `pool_sd = TRUE`; the pooled path keeps its own
+# dedicated coverage (see the pooled-standardizer tests in Sections 1 and 6).
 run_pathway <- function(data, hierarchy, measure = "d",
-                        pre_post_to_smd = "cooper", pool_sd = TRUE) {
+                        pre_post_to_smd = "cooper", pool_sd = FALSE) {
   res <- convert_df(data,
     verbose = FALSE,
     es_selected = "hierarchy",
@@ -134,25 +148,29 @@ run_pathway <- function(data, hierarchy, measure = "d",
   )
 }
 
-# IMPORTANT — why some comparisons below must pass pool_sd = FALSE.
+# IMPORTANT — why the paired-t / paired-F comparisons pin pool_sd = FALSE.
 #
 # The paired-t / paired-F routes CANNOT pool. A paired t identifies each arm's
 # mean_change and sd_change, but NOT the two arms' SD ratio, so the pooled
 # standardizer is mathematically unrecoverable from it. Those routes therefore
-# keep the per-arm construction and expose no pool_sd argument.
+# always use the per-arm construction and expose no pool_sd argument.
 #
 # Consequently a "paired_t == means/mean_change" equivalence assertion is only
-# true when the means-side call is run on the same per-arm footing, i.e. with
-# pool_sd = FALSE (or on a fixture whose arm SDs happen to be equal — df.SMC's
-# are not). Every such comparison below passes pool_sd = FALSE on the means side
-# and says so. All other comparisons run under the pooled default.
+# true when the means-side call is run on the same per-arm footing — which is the
+# DEFAULT (pool_sd = FALSE). Those comparisons still pass pool_sd = FALSE
+# explicitly: it is the default, but stating it documents that the equivalence is
+# a property of the per-arm standardizer and pins the test against a future
+# default change (on a fixture with unequal arm SDs — df.SMC's are unequal — the
+# assertion is simply false under pooling).
 
 
 # ==============================================================================
 # SECTION 1: TWO-GROUP — ALL PATHWAYS MUST MATCH (cooper/morris_drm)
 # ==============================================================================
-# These run under the CURRENT DEFAULT standardizer (pool_sd = TRUE): every
-# means/mean-change route must agree once they share the pooled standardizer.
+# These run under the DEFAULT standardizer (pool_sd = FALSE, per-arm d_ppc1):
+# every means/mean-change route must agree once they share that standardizer.
+# The opt-in pooled standardizer gets its own cross-route agreement test at the
+# end of this section.
 
 test_that("LIFECYCLE: means_sd vs means_se — cooper, d", {
   ref <- run_pathway(dat, "means_sd_pre_post", "d", "cooper")
@@ -203,11 +221,12 @@ test_that("LIFECYCLE: means_sd vs mean_change_pval — cooper, d", {
   expect_equal(ref$se, alt$se, tolerance = 1e-6)
 })
 
-test_that("LIFECYCLE: means_sd vs paired_t — cooper, d (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("LIFECYCLE: means_sd vs paired_t — cooper, d (default per-arm standardizer, pool_sd = FALSE)", {
   # paired_t cannot pool (it does not identify the arms' SD ratio), so it always
-  # builds the per-arm standardizer. The means side is therefore run with
-  # pool_sd = FALSE to put both routes on the same footing; this pins the LEGACY
-  # per-arm path, which remains a supported (backward-compatible) construction.
+  # builds the per-arm standardizer. The means side is run with pool_sd = FALSE to
+  # put both routes on the same footing — that is the DEFAULT (per-arm d_ppc1);
+  # stating it explicitly documents that the equivalence is a property of the
+  # per-arm standardizer.
   ref <- run_pathway(dat, "means_sd_pre_post", "d", "cooper", pool_sd = FALSE)
   alt <- run_pathway(dat, "paired_t", "d", "cooper", pool_sd = FALSE)
   expect_equal(alt$info, rep("paired_t", nrow(dat)))
@@ -278,7 +297,7 @@ test_that("LIFECYCLE: means_sd vs all pathways — cooper, g", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # Paired t (exact) — compared against the LEGACY per-arm means reference,
+  # Paired t (exact) — compared against the per-arm means reference (the default),
   # because paired_t cannot pool (see the note above run_pathway).
   ref_perarm <- run_pathway(dat, "means_sd_pre_post", "g", "cooper", pool_sd = FALSE)
   alt_t <- run_pathway(dat, "paired_t", "g", "cooper", pool_sd = FALSE)
@@ -296,6 +315,64 @@ test_that("LIFECYCLE: unsigned pathways match each other — cooper, g", {
   expect_equal(alt_f$se, alt_tpval$se, tolerance = 1e-10)
   expect_equal(abs(alt_fpval$es), abs(alt_tpval$es), tolerance = 1e-6)
   expect_equal(alt_fpval$se, alt_tpval$se, tolerance = 1e-6)
+})
+
+# --- OPT-IN POOLED STANDARDIZER (pool_sd = TRUE, Morris 2008 d_ppc2) ---
+#
+# The tests above run under the DEFAULT per-arm standardizer. The pooled path is
+# not the default any more, but it is fully supported and separately validated, so
+# it keeps its own cross-route agreement test: every poolable route must still land
+# on the same answer once they share the pooled standardizer. pool_sd = TRUE is
+# passed EXPLICITLY throughout — this test covers the opt-in path, not the default.
+#
+# paired_t / paired_f are absent by construction: they cannot pool (a paired t does
+# not identify the arms' SD ratio), so they have no pooled counterpart to compare.
+
+test_that("LIFECYCLE: all poolable routes agree under the OPT-IN pooled standardizer (pool_sd = TRUE)", {
+  for (measure in c("d", "g")) {
+    for (method in c("cooper", "morris_dz")) {
+      ref <- run_pathway(dat, "means_sd_pre_post", measure, method, pool_sd = TRUE)
+
+      # Exact routes: SE/CI-derived means, and mean-change SD/SE/CI.
+      for (h in c("means_se_pre_post", "means_ci_pre_post",
+                  "mean_change_sd", "mean_change_se", "mean_change_ci")) {
+        alt <- run_pathway(dat, h, measure, method, pool_sd = TRUE)
+        expect_equal(alt$info, rep(h, nrow(dat)))
+        expect_equal(ref$es, alt$es, tolerance = 1e-10,
+                     info = paste("pooled es:", measure, method, h))
+        expect_equal(ref$se, alt$se, tolerance = 1e-10,
+                     info = paste("pooled se:", measure, method, h))
+      }
+
+      # p-value roundtrip is near-exact rather than exact.
+      alt_pval <- run_pathway(dat, "mean_change_pval", measure, method, pool_sd = TRUE)
+      expect_equal(ref$es, alt_pval$es, tolerance = 1e-6,
+                   info = paste("pooled es: mean_change_pval", measure, method))
+      expect_equal(ref$se, alt_pval$se, tolerance = 1e-6,
+                   info = paste("pooled se: mean_change_pval", measure, method))
+    }
+  }
+})
+
+test_that("LIFECYCLE: SD/SE/CI agree under the OPT-IN pooled standardizer — bonett & morris_dav", {
+  # bonett / morris_dav are pre-post-means-only methods (change scores cannot
+  # recover the separate pre/post SDs they need), so only the means routes apply.
+  for (measure in c("d", "g")) {
+    for (method in c("bonett", "morris_dav")) {
+      ref    <- run_pathway(dat, "means_sd_pre_post", measure, method, pool_sd = TRUE)
+      alt_se <- run_pathway(dat, "means_se_pre_post", measure, method, pool_sd = TRUE)
+      alt_ci <- run_pathway(dat, "means_ci_pre_post", measure, method, pool_sd = TRUE)
+
+      expect_equal(ref$es, alt_se$es, tolerance = 1e-10,
+                   info = paste("pooled es:", measure, method, "means_se"))
+      expect_equal(ref$se, alt_se$se, tolerance = 1e-10,
+                   info = paste("pooled se:", measure, method, "means_se"))
+      expect_equal(ref$es, alt_ci$es, tolerance = 1e-10,
+                   info = paste("pooled es:", measure, method, "means_ci"))
+      expect_equal(ref$se, alt_ci$se, tolerance = 1e-10,
+                   info = paste("pooled se:", measure, method, "means_ci"))
+    }
+  }
 })
 
 
@@ -336,7 +413,7 @@ test_that("LIFECYCLE: signed pathways match — morris_dz, d", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # Paired t — compared against the LEGACY per-arm means reference, because
+  # Paired t — compared against the per-arm means reference (the default), because
   # paired_t cannot pool (see the note above run_pathway).
   # BOTH d and SE now match EXACTLY. The SE tolerance used to be 0.02 to absorb a
   # variance-convention mismatch: the paired_t morris_dz variance was built as
@@ -388,8 +465,8 @@ test_that("LIFECYCLE: signed pathways match — morris_dz, g", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # Paired t — LEGACY per-arm reference (paired_t cannot pool). Both g and SE now
-  # match exactly; SE tolerance tightened 0.02 -> 1e-10 (see morris_dz d note).
+  # Paired t — per-arm reference, the default (paired_t cannot pool). Both g and SE
+  # now match exactly; SE tolerance tightened 0.02 -> 1e-10 (see morris_dz d note).
   ref_perarm <- run_pathway(dat, "means_sd_pre_post", "g", "morris_dz", pool_sd = FALSE)
   alt_t <- run_pathway(dat, "paired_t", "g", "morris_dz", pool_sd = FALSE)
   expect_equal(ref_perarm$es, alt_t$es, tolerance = 1e-10)
@@ -564,21 +641,22 @@ test_that("LIFECYCLE: single-group — all pathways match, cooper", {
 # ==============================================================================
 # SECTION 5: CROSS-VALIDATION — TWO-GROUP d ~ SINGLE-GROUP exp - nexp
 # ==============================================================================
-# "two-group d == d_exp - d_nexp" IS the definition of the LEGACY per-arm
-# standardizer, so this cross-validation is run with pool_sd = FALSE. It remains
-# a valid regression test OF THAT PATH.
+# "two-group d == d_exp - d_nexp" IS the definition of the per-arm standardizer,
+# i.e. of the DEFAULT (pool_sd = FALSE) path — Morris (2008) d_ppc1 / Becker
+# (1988). So this cross-validation runs with pool_sd = FALSE and is a regression
+# test of the default construction.
 #
-# Under the pooled default (pool_sd = TRUE) the identity does NOT hold, and must
-# not: a common standardizer is a structurally different estimand. On this fixture
-# the pooled d departs from (d_exp - d_nexp) by up to 0.46, which is exactly the
-# per-arm bias the pooled default was introduced to remove. That contrast is
-# pinned by the "pool_sd default" test in Section 6.
+# Under the opt-in pooled standardizer (pool_sd = TRUE) the identity does NOT hold,
+# and must not: a common standardizer (Morris d_ppc2) is a structurally different
+# estimand. On this fixture the pooled d departs from (d_exp - d_nexp) by up to
+# 0.46 — the two estimands genuinely differ here because df.SMC's arms have
+# unequal SDs. That contrast is pinned by the "pool_sd default" test in Section 6.
 
-test_that("LIFECYCLE: two-group d == single_group_exp - single_group_nexp (bonett; legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("LIFECYCLE: two-group d == single_group_exp - single_group_nexp (bonett; default per-arm standardizer, pool_sd = FALSE)", {
   for (i in 1:nrow(dat)) {
     row <- dat[i, ]
 
-    # Two-group, legacy per-arm standardizer
+    # Two-group, default per-arm standardizer (d_ppc1)
     two_grp <- run_pathway(dat[i, ], "means_sd_pre_post", "d", "bonett", pool_sd = FALSE)
 
     # Single-group exp
@@ -666,25 +744,49 @@ test_that("LIFECYCLE: different methods produce different values (not all identi
                info = "bonett and morris_dav should differ")
 })
 
-test_that("LIFECYCLE: convert_df defaults to the POOLED standardizer (pool_sd = TRUE)", {
-  # Guards the default. If pool_sd ever silently reverts to the legacy per-arm
-  # standardizer, the two-group SMDs change materially and this fails.
+test_that("LIFECYCLE: pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1)", {
+  # Guards the default. pool_sd = FALSE standardizes the mean change WITHIN each
+  # arm, subtracts the two, and adds their (independent) sampling variances —
+  # Morris (2008) d_ppc1, from Becker (1988); the construction metafor users build
+  # by hand as escalc(measure = "SMCR") per arm + `yi = yT - yC; vi = vT + vC`. It
+  # does not assume equal true arm SDs. If pool_sd ever silently flips to the
+  # pooled d_ppc2 standardizer, the two-group SMDs change materially (up to 0.46 on
+  # this fixture) and this fails.
+  #
+  # NB: this calls convert_df() DIRECTLY rather than via run_pathway(), because
+  # run_pathway() supplies its own pool_sd default — routing through it would read
+  # the helper's default instead of the package's and the guard would be vacuous.
+  implicit_run <- function(method) {
+    res <- convert_df(dat,
+      verbose = FALSE, es_selected = "hierarchy",
+      hierarchy = "means_sd_pre_post", measure = "d",
+      pre_post_to_smd = method
+      # pool_sd deliberately NOT passed — we are reading convert_df()'s own default
+    )
+    summ <- summary(res, digits = 11)
+    list(es = summ$es_crude, se = summ$se_crude)
+  }
+
   for (method in c("cooper", "bonett", "morris_dav", "morris_dz")) {
-    implicit <- run_pathway(dat, "means_sd_pre_post", "d", method)
-    pooled   <- run_pathway(dat, "means_sd_pre_post", "d", method, pool_sd = TRUE)
+    implicit <- implicit_run(method)
     per_arm  <- run_pathway(dat, "means_sd_pre_post", "d", method, pool_sd = FALSE)
+    pooled   <- run_pathway(dat, "means_sd_pre_post", "d", method, pool_sd = TRUE)
 
-    # The default IS the pooled standardizer.
-    expect_equal(implicit$es, pooled$es, tolerance = 1e-12,
-                 info = paste(method, "default should equal pool_sd = TRUE"))
-    expect_equal(implicit$se, pooled$se, tolerance = 1e-12,
-                 info = paste(method, "default SE should equal pool_sd = TRUE"))
+    # The default IS the per-arm standardizer.
+    expect_equal(implicit$es, per_arm$es, tolerance = 1e-12,
+                 info = paste(method, "default should equal pool_sd = FALSE"))
+    expect_equal(implicit$se, per_arm$se, tolerance = 1e-12,
+                 info = paste(method, "default SE should equal pool_sd = FALSE"))
 
-    # ...and it is genuinely a different estimand from the legacy per-arm path.
+    # ...and it is genuinely a different estimand from the opt-in pooled path.
     # df.SMC's arms have unequal SDs, so the two must not coincide. (They would
     # coincide only on a fixture with equal arm SDs.)
     expect_false(all(abs(pooled$es - per_arm$es) < 1e-8),
                  info = paste(method, "pooled and per-arm standardizers should differ"))
+
+    # The default must NOT be the pooled standardizer.
+    expect_false(all(abs(implicit$es - pooled$es) < 1e-8),
+                 info = paste(method, "default should NOT equal pool_sd = TRUE"))
   }
 })
 
@@ -844,7 +946,7 @@ test_that("LIFECYCLE-RAW: all signed pathways match — cooper, d", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # paired_t (exact) — against the LEGACY per-arm means reference, because
+  # paired_t (exact) — against the per-arm means reference (the default), because
   # paired_t cannot pool (see the note above run_pathway). The simulated arms
   # here have unequal SDs, so the pooled and per-arm standardizers differ.
   ref_perarm <- run_pathway(dat_raw, "means_sd_pre_post", "d", "cooper", pool_sd = FALSE)
@@ -892,7 +994,7 @@ test_that("LIFECYCLE-RAW: all signed pathways match — cooper, g", {
   expect_equal(ref$es, alt_mc_pval$es, tolerance = 1e-6)
   expect_equal(ref$se, alt_mc_pval$se, tolerance = 1e-6)
 
-  # paired_t — LEGACY per-arm reference (paired_t cannot pool).
+  # paired_t — per-arm reference, the default (paired_t cannot pool).
   ref_perarm <- run_pathway(dat_raw, "means_sd_pre_post", "g", "cooper", pool_sd = FALSE)
   alt_t <- run_pathway(dat_raw, "paired_t", "g", "cooper", pool_sd = FALSE)
   expect_equal(ref_perarm$es, alt_t$es, tolerance = 1e-10)

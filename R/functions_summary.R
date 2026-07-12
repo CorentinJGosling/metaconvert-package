@@ -460,7 +460,7 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     pp_method <- attr(object, "pre_post_to_smd")
     if (is.null(pp_method)) pp_method <- "bonett"
     pool_sd_used <- attr(object, "pool_sd")
-    if (is.null(pool_sd_used)) pool_sd_used <- TRUE
+    if (is.null(pool_sd_used)) pool_sd_used <- FALSE
 
     if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
       res <- .flag_es_quality(res, measure, exp, "_crude", raw_data, opts, input_val,

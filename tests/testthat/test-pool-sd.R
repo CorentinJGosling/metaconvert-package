@@ -1,7 +1,16 @@
-test_that("pool_sd=TRUE is the DEFAULT (pooled common standardizer, Morris 2008)", {
-  # The default was flipped FALSE -> TRUE: the between-group SMD is now
-  # (mean change difference) / (SD pooled across arms), Morris (2008)'s
-  # recommended common standardizer. This pins the default to the POOLED path.
+test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1)", {
+  # The default is pool_sd = FALSE: each arm's mean change is standardized by
+  # its OWN SD, the two within-arm values are subtracted, and their sampling
+  # variances are ADDED (the arms are independent). This is Morris (2008)
+  # d_ppc1 (from Becker 1988) -- the estimator metafor users build by hand as
+  # escalc(measure = "SMCR") per arm followed by yi = yT - yC; vi = vT + vC
+  # (https://www.metafor-project.org/doku.php/analyses:morris2008). It does NOT
+  # assume the two arms share a common true standardizing SD.
+  #
+  # pool_sd = TRUE is the OPT-IN alternative (Morris 2008 d_ppc2): one SD
+  # pooled across arms. It is more efficient but assumes equal true arm SDs,
+  # so it targets a different estimand and the package does not pick it
+  # silently. This pins the default to the PER-ARM path.
   args <- list(
     n_exp = 50, n_nexp = 50,
     mean_pre_exp = 20, mean_exp = 25,
@@ -16,20 +25,21 @@ test_that("pool_sd=TRUE is the DEFAULT (pooled common standardizer, Morris 2008)
   res_pooled <- do.call(es_from_means_sd_pre_post, c(args, pool_sd = TRUE))
   res_unpooled <- do.call(es_from_means_sd_pre_post, c(args, pool_sd = FALSE))
 
-  # default == pool_sd = TRUE
-  expect_identical(res_default, res_pooled)
-  # ... and the default is genuinely NOT the legacy per-arm path
-  expect_false(identical(res_default$g, res_unpooled$g))
-  expect_false(identical(res_default$g_se, res_unpooled$g_se))
+  # default == pool_sd = FALSE (the per-arm d_ppc1 path)
+  expect_identical(res_default, res_unpooled)
+  # ... and the default is genuinely NOT the opt-in pooled path
+  expect_false(identical(res_default$g, res_pooled$g))
+  expect_false(identical(res_default$g_se, res_pooled$g_se))
 })
 
-test_that("pool_sd=FALSE still yields the LEGACY per-arm standardizer result", {
-  # Regression test of the legacy path retained for backward compatibility:
-  # each arm is standardized by its OWN SD and the two WITHIN-group values are
-  # then subtracted (variances added). Verified here against the independent
-  # public entry point es_from_means_sd_pre_post_single_group() -- i.e. the
-  # legacy rule is checked through a *different* exported function rather than
-  # by transcribing the internal source, so this is not circular.
+test_that("pool_sd=FALSE (the default) yields the per-arm d_ppc1 standardizer result", {
+  # Regression test of the DEFAULT path: each arm is standardized by its OWN SD
+  # and the two WITHIN-group values are then subtracted (variances added, the
+  # arms being independent) -- Morris (2008) d_ppc1 / Becker (1988). Verified
+  # here against the independent public entry point
+  # es_from_means_sd_pre_post_single_group() -- i.e. the rule is checked through
+  # a *different* exported function rather than by transcribing the internal
+  # source, so this is not circular.
   n1 <- 36; n2 <- 35
   r1 <- 0.6; r2 <- 0.7
 

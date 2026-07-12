@@ -33,14 +33,18 @@ data("df.SMC", package = "metaumbrella")
 # SECTION 1: es_from_mean_change_sd() - TWO-GROUP
 # ==============================================================================
 
-## 1.1 COOPER vs Morris & DeShon (2002) Manual Formula (LEGACY per-arm path) ====
-# NOTE: this test pins the LEGACY per-arm standardizer (pool_sd = FALSE): each arm is
-# standardized by its OWN change SD and the two within-group d_rm values are subtracted.
-# The Morris & DeShon (2002) comparator below is built exactly that way (d_rm_exp - d_rm_nexp,
-# var = var_rm_exp + var_rm_nexp), so it encodes the per-arm construction and must be run
-# against pool_sd = FALSE. The package DEFAULT is now pool_sd = TRUE (a single SD pooled
-# across arms, Morris 2008), which is a different — and generally preferable — estimand.
-test_that("MC-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) (legacy per-arm standardizer, pool_sd = FALSE)", {
+## 1.1 COOPER vs Morris & DeShon (2002) Manual Formula (DEFAULT per-arm path) ====
+# NOTE: this test pins the per-arm standardizer (pool_sd = FALSE), which is the package
+# DEFAULT: each arm is standardized by its OWN change SD, the two within-group d_rm values
+# are subtracted, and their sampling variances are ADDED (the arms are independent). This is
+# Morris (2008) d_ppc1 / Becker (1988) — the same construction metafor users implement as
+# escalc(measure = "SMCR") per arm followed by `yi = yT - yC; vi = vT + vC`. The Morris &
+# DeShon (2002) comparator below is built exactly that way (d_rm_exp - d_rm_nexp,
+# var = var_rm_exp + var_rm_nexp), so it encodes the per-arm construction. pool_sd = FALSE is
+# passed explicitly here for self-documentation (it is also the default; test 1.2 asserts that).
+# The OPT-IN pool_sd = TRUE path (a single SD pooled across arms, Morris 2008 d_ppc2) is a
+# different estimand and is covered separately in test 1.2b.
+test_that("MC-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) (per-arm standardizer, pool_sd = FALSE)", {
   dat <- df.SMC[1:5, ]
   dat$n_exp <- dat$n_cases
   dat$n_nexp <- dat$n_controls
@@ -69,7 +73,7 @@ test_that("MC-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) (le
       r_pre_post_exp = dat$r_pre_post_exp[i],
       r_pre_post_nexp = dat$r_pre_post_nexp[i],
       pre_post_to_smd = "cooper",
-      # legacy per-arm standardizer: required for the comparator below, which
+      # per-arm standardizer (the default): required for the comparator below, which
       # subtracts two separately-standardized within-group d_rm values
       pool_sd = FALSE
     )
@@ -98,16 +102,18 @@ test_that("MC-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) (le
   }
 })
 
-## 1.2 MORRIS_DZ vs metafor SMCC Manual Formula (LEGACY per-arm path) ====
-# NOTE: this test pins the LEGACY per-arm standardizer (pool_sd = FALSE). The comparator is
-# metafor's SMCC (change-score) formula applied SEPARATELY TO EACH ARM, with the two
-# within-group d_z values then SUBTRACTED (var = var_exp + var_nexp) — i.e. it encodes the
-# per-arm construction, so it must be run against pool_sd = FALSE. The per-arm SMCC variance
-# (built from the corrected g: var_g = 1/n + g^2/(2n), var_d = var_g / J^2) is unchanged by
-# the recent fixes; only the DEFAULT (now pool_sd = TRUE, a single arm-pooled standardizer)
-# changed. The pooled default is anchored against a live metafor::escalc(measure = "SMD")
-# call in test 1.2b below.
-test_that("MC-SD: morris_dz two-group matches per-arm metafor SMCC formula (d + d_se) (legacy per-arm standardizer, pool_sd = FALSE)", {
+## 1.2 MORRIS_DZ vs metafor SMCC Manual Formula (DEFAULT per-arm path) ====
+# NOTE: this test pins the per-arm standardizer (pool_sd = FALSE), which is the package
+# DEFAULT. The comparator is metafor's SMCC (change-score) formula applied SEPARATELY TO EACH
+# ARM, with the two within-group d_z values then SUBTRACTED (var = var_exp + var_nexp) — i.e.
+# it encodes the per-arm construction. The per-arm SMCC variance (built from the corrected g:
+# var_g = 1/n + g^2/(2n), var_d = var_g / J^2) is unchanged.
+#
+# This test ALSO regression-guards the DEFAULT itself: the wrapper is called a second time
+# with pool_sd left unspecified, and the result must be identical to the explicit
+# pool_sd = FALSE call. (pool_sd = TRUE, the arm-pooled Morris 2008 d_ppc2 estimand, is
+# opt-in and is covered separately in test 1.2b.)
+test_that("MC-SD: morris_dz two-group matches per-arm metafor SMCC formula (d + d_se); pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1)", {
   dat <- df.SMC[1:5, ]
   dat$n_exp <- dat$n_cases
   dat$n_nexp <- dat$n_controls
@@ -138,10 +144,28 @@ test_that("MC-SD: morris_dz two-group matches per-arm metafor SMCC formula (d + 
       r_pre_post_exp = dat$r_pre_post_exp[i],
       r_pre_post_nexp = dat$r_pre_post_nexp[i],
       pre_post_to_smd = "morris_dz",
-      # legacy per-arm standardizer: required for the comparator below, which applies
+      # per-arm standardizer (the default): required for the comparator below, which applies
       # SMCC to each arm separately and subtracts the two within-group d_z values
       pool_sd = FALSE
     )
+
+    # DEFAULT GUARD: calling the wrapper WITHOUT pool_sd must reproduce the per-arm
+    # (pool_sd = FALSE) result exactly — i.e. the default is the per-arm d_ppc1 path.
+    mc_default <- es_from_mean_change_sd(
+      mean_change_exp = dat$mean_change_exp[i],
+      mean_change_sd_exp = dat$mean_change_sd_exp[i],
+      n_exp = dat$n_exp[i],
+      mean_change_nexp = dat$mean_change_nexp[i],
+      mean_change_sd_nexp = dat$mean_change_sd_nexp[i],
+      n_nexp = dat$n_nexp[i],
+      r_pre_post_exp = dat$r_pre_post_exp[i],
+      r_pre_post_nexp = dat$r_pre_post_nexp[i],
+      pre_post_to_smd = "morris_dz"
+    )
+    expect_equal(mc_default$d, mc$d, tolerance = 1e-15,
+                 label = paste0("Study ", i, ": default pool_sd is the per-arm path (d)"))
+    expect_equal(mc_default$d_se, mc$d_se, tolerance = 1e-15,
+                 label = paste0("Study ", i, ": default pool_sd is the per-arm path (d_se)"))
 
     # Manual per-arm metafor SMCC formula
     # Experimental group
@@ -169,19 +193,21 @@ test_that("MC-SD: morris_dz two-group matches per-arm metafor SMCC formula (d + 
   }
 })
 
-## 1.2b MORRIS_DZ pooled (DEFAULT pool_sd = TRUE) vs live metafor::escalc(SMD) ====
-# Covers the CURRENT DEFAULT: a single standardizing SD pooled across the two arms, so the
-# between-group estimate is (mean change difference) / (pooled change SD). That is exactly a
-# two-sample SMD computed on change scores, so it can be anchored against a LIVE
+## 1.2b MORRIS_DZ pooled (OPT-IN pool_sd = TRUE) vs live metafor::escalc(SMD) ====
+# Covers the OPT-IN pooled path (pool_sd = TRUE, passed EXPLICITLY — it is NOT the default):
+# a single standardizing SD pooled across the two arms, so the between-group estimate is
+# (mean change difference) / (pooled change SD). This is Morris (2008) d_ppc2, and it is
+# exactly a two-sample SMD computed on change scores — so it can be anchored against a LIVE
 # metafor::escalc(measure = "SMD") call rather than a (circular) transcription of the source.
 #
+# The pooled variance formulas are correct and validated; they are simply no longer applied
+# silently, because d_ppc2 assumes the two arms' true standardizing SDs are equal, whereas the
+# default per-arm d_ppc1 (tests 1.1 / 1.2) does not. Choosing between them is a genuine
+# analytic decision, so it is now the caller's.
+#
 #   - POINT ESTIMATE: exact. metaConvert's g equals metafor's yi to machine precision.
-#   - SE: metaConvert's variance is J^2 * (N/(n_exp*n_nexp) + g^2/(2*m)); metafor's vtype="LS2"
-#     puts the UNCORRECTED d^2 (not g^2) in the second term. The two therefore differ only by a
-#     factor J^2 on that one term -- < 0.1% here -- so the SE is checked at a relative tolerance
-#     of 1e-2. That is still far tighter than the defect this pins against: the removed spurious
-#     2*(1-r_avg) factor (fixed) shifts the SE by several percent and is caught (asserted below).
-test_that("MC-SD: morris_dz pooled (default pool_sd = TRUE) matches metafor::escalc(SMD) on change scores", {
+#   - SE: exact against metafor's default vtype = "LS" variance.
+test_that("MC-SD: morris_dz pooled (opt-in pool_sd = TRUE) matches metafor::escalc(SMD) on change scores", {
   skip_if_not_installed("metafor")
 
   dat <- df.SMC[1:5, ]
@@ -202,8 +228,8 @@ test_that("MC-SD: morris_dz pooled (default pool_sd = TRUE) matches metafor::esc
   .d_j <- function(df) exp(lgamma(df / 2) - 0.5 * log(df / 2) - lgamma((df - 1) / 2))
 
   for (i in 1:nrow(dat)) {
-    # metaConvert, DEFAULT pool_sd (TRUE) -- deliberately not passed, so this test also
-    # regression-guards the default itself.
+    # metaConvert, OPT-IN pooled standardizer -- pool_sd = TRUE passed EXPLICITLY
+    # (the default is pool_sd = FALSE, the per-arm path guarded in test 1.2).
     mc <- es_from_mean_change_sd(
       mean_change_exp = dat$mean_change_exp[i],
       mean_change_sd_exp = dat$mean_change_sd_exp[i],
@@ -213,7 +239,8 @@ test_that("MC-SD: morris_dz pooled (default pool_sd = TRUE) matches metafor::esc
       n_nexp = dat$n_nexp[i],
       r_pre_post_exp = dat$r_pre_post_exp[i],
       r_pre_post_nexp = dat$r_pre_post_nexp[i],
-      pre_post_to_smd = "morris_dz"
+      pre_post_to_smd = "morris_dz",
+      pool_sd = TRUE
     )
 
     # Live external reference: two-sample SMD on the change scores, metafor's

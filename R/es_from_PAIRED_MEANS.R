@@ -15,12 +15,19 @@
 #' @param pre_post_to_smd formula used to convert the pre and post means/SD into a SMD (see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
-#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
-#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
-#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
-#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
-#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
-#'   metaConvert <= 2.0.0.
+#'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
+#'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
+#'   which to prefer, so this is a deliberate choice and not a technical detail.
+#'   \itemize{
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'       within-group values are subtracted, their variances adding because the arms are independent. This
+#'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
+#'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
+#'       broadly applicable of the two.
+#'     \item \code{TRUE}: the difference in mean change is divided by a single SD pooled across arms. This
+#'       is Morris's (2008) \eqn{d_{ppc2}} (his eq. 8-9), which he recommends: it is more efficient, but it
+#'       assumes the two arms' true standardizing SDs are equal.
+#'   }
 #' @param reverse_means_pre_post a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -102,7 +109,7 @@ es_from_means_sd_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_sd_exp, m
                                       n_exp, n_nexp, r_pre_post_exp, r_pre_post_nexp,
                                       smd_to_cor = "viechtbauer",
                                       pre_post_to_smd = "bonett",
-                                      pool_sd = TRUE,
+                                      pool_sd = FALSE,
                                       reverse_means_pre_post) {
   pre_post_to_smd <- .validate_pre_post_to_smd(
     pre_post_to_smd,
@@ -220,12 +227,19 @@ es_from_means_sd_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_sd_exp, m
 #' @param pre_post_to_smd formula used to convert the pre and post means/SD into a SMD (see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
-#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
-#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
-#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
-#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
-#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
-#'   metaConvert <= 2.0.0.
+#'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
+#'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
+#'   which to prefer, so this is a deliberate choice and not a technical detail.
+#'   \itemize{
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'       within-group values are subtracted, their variances adding because the arms are independent. This
+#'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
+#'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
+#'       broadly applicable of the two.
+#'     \item \code{TRUE}: the difference in mean change is divided by a single SD pooled across arms. This
+#'       is Morris's (2008) \eqn{d_{ppc2}} (his eq. 8-9), which he recommends: it is more efficient, but it
+#'       assumes the two arms' true standardizing SDs are equal.
+#'   }
 #' @param reverse_means_pre_post a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -271,7 +285,7 @@ es_from_means_se_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_se_exp, m
                                       n_exp, n_nexp, r_pre_post_exp, r_pre_post_nexp,
                                       smd_to_cor = "viechtbauer",
                                       pre_post_to_smd = "bonett",
-                                      pool_sd = TRUE,
+                                      pool_sd = FALSE,
                                       reverse_means_pre_post) {
   pre_post_to_smd <- .validate_pre_post_to_smd(
     pre_post_to_smd,
@@ -335,12 +349,19 @@ es_from_means_se_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_se_exp, m
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
-#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
-#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
-#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
-#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
-#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
-#'   metaConvert <= 2.0.0.
+#'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
+#'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
+#'   which to prefer, so this is a deliberate choice and not a technical detail.
+#'   \itemize{
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'       within-group values are subtracted, their variances adding because the arms are independent. This
+#'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
+#'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
+#'       broadly applicable of the two.
+#'     \item \code{TRUE}: the difference in mean change is divided by a single SD pooled across arms. This
+#'       is Morris's (2008) \eqn{d_{ppc2}} (his eq. 8-9), which he recommends: it is more efficient, but it
+#'       assumes the two arms' true standardizing SDs are equal.
+#'   }
 #' @param reverse_means_pre_post a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -398,7 +419,7 @@ es_from_means_ci_pre_post <- function(mean_pre_exp, mean_exp,
                                       n_exp, n_nexp, r_pre_post_exp, r_pre_post_nexp,
                                       smd_to_cor = "viechtbauer",
                                       pre_post_to_smd = "bonett", max_asymmetry = 10,
-                                      pool_sd = TRUE,
+                                      pool_sd = FALSE,
                                       reverse_means_pre_post) {
 
   if (missing(reverse_means_pre_post)) reverse_means_pre_post <- rep(FALSE, length(mean_pre_exp))

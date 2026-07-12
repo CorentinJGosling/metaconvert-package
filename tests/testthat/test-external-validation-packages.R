@@ -149,12 +149,11 @@ test_that("metafor::MC matches mean change two-group (ES + SE)", {
                                 n1i = n1i, n2i = n2i,
                                 data = mf_data)
 
-  # NOTE on pool_sd: es_from_mean_change_sd() now defaults to pool_sd = TRUE, but
-  # this test asserts only the RAW mean difference (md / md_se), which is
-  # pool_sd-invariant -- pool_sd selects the *standardizer* for the SMD, and does
-  # not touch the unstandardized difference or its SE. Verified: md and md_se are
-  # bit-identical under pool_sd = TRUE and pool_sd = FALSE. The metafor MD
-  # comparator is therefore unaffected by the default flip, and no pool_sd
+  # NOTE on pool_sd: this test asserts only the RAW mean difference (md / md_se),
+  # which is pool_sd-invariant -- pool_sd selects the *standardizer* for the SMD,
+  # and does not touch the unstandardized difference or its SE. Verified: md and
+  # md_se are bit-identical under pool_sd = TRUE and pool_sd = FALSE. The metafor
+  # MD comparator is therefore independent of the pool_sd setting, and no pool_sd
   # argument is needed here. (The SMD from this same call *does* depend on
   # pool_sd -- that is covered by the dedicated test below.)
   expect_equal(result_mc$md, as.numeric(result_mf$yi), tolerance = 1e-6,
@@ -163,26 +162,30 @@ test_that("metafor::MC matches mean change two-group (ES + SE)", {
                label = "Two-group mean change SE matches metafor MD")
 })
 
-# Test 4b: Pooled two-group SMD vs metafor SMD on change scores ====
-# External anchor for the NEW pool_sd = TRUE default (and for the corrected
-# pooled morris_dz variance). This is the only two-group *standardized* route in
-# this file, so without it the pool_sd default flip would have no external
-# validation here at all.
-test_that("metafor::SMD on change scores matches pooled two-group morris_dz (new pool_sd = TRUE default)", {
+# Test 4b: Opt-in POOLED two-group SMD vs metafor SMD on change scores ====
+# External anchor for the OPT-IN pooled path (pool_sd = TRUE, Morris 2008 d_ppc2)
+# and for the pooled morris_dz variance. This is the only two-group *standardized*
+# route in this file, so without it the pooled path would have no external
+# validation here at all. It also pins the DEFAULT, which is the per-arm path
+# (pool_sd = FALSE, Morris 2008 d_ppc1 / Becker 1988) -- the two target different
+# estimands whenever the arms' SDs differ, so the default must be asserted, not
+# assumed.
+test_that("metafor::SMD on change scores matches pooled two-group morris_dz (opt-in pool_sd = TRUE)", {
   skip_if_not(has_metafor, "metafor not available")
 
   mean_change_exp <- 10.5; sd_change_exp <- 5.2; n_exp <- 30
   mean_change_nexp <- 2.8; sd_change_nexp <- 4.5; n_nexp <- 28
 
-  # pool_sd = TRUE (the default): the between-group SMD is the difference in mean
-  # change divided by the SD POOLED ACROSS ARMS. That is exactly the estimand
-  # metafor's "SMD" targets when it is handed the change scores as if they were
-  # two independent groups -- so metafor is a genuine external comparator here,
-  # not a restatement of metaConvert's own formula.
-  result_default <- es_from_mean_change_sd(
+  # pool_sd = TRUE (opt-in, NOT the default): the between-group SMD is the
+  # difference in mean change divided by the SD POOLED ACROSS ARMS (Morris 2008
+  # d_ppc2). That is exactly the estimand metafor's "SMD" targets when it is
+  # handed the change scores as if they were two independent groups -- so metafor
+  # is a genuine external comparator here, not a restatement of metaConvert's own
+  # formula. pool_sd is passed EXPLICITLY: the package default is pool_sd = FALSE.
+  result_pooled <- es_from_mean_change_sd(
     mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
     mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
-    pre_post_to_smd = "morris_dz"
+    pool_sd = TRUE, pre_post_to_smd = "morris_dz"
   )
 
   result_mf <- metafor::escalc(
@@ -195,7 +198,7 @@ test_that("metafor::SMD on change scores matches pooled two-group morris_dz (new
   se_mf <- sqrt(as.numeric(result_mf$vi))
 
   # Point estimate matches metafor EXACTLY.
-  expect_equal(result_default$g, g_mf, tolerance = 1e-9,
+  expect_equal(result_pooled$g, g_mf, tolerance = 1e-9,
                label = "pooled morris_dz g matches metafor SMD on change scores")
 
   # SE: the two packages use different-but-both-standard variance conventions for
@@ -205,29 +208,88 @@ test_that("metafor::SMD on change scores matches pooled two-group morris_dz (new
   # The 1.5% band below is the size of that convention gap, NOT a tolerance
   # loosened to force a pass (the point estimate above is pinned at 1e-9). This
   # mirrors how the TOSTER tests in this file already document their SE gaps.
-  expect_equal(result_default$g_se, se_mf, tolerance = 0.015,
+  expect_equal(result_pooled$g_se, se_mf, tolerance = 0.015,
                label = "pooled morris_dz SE approximately matches metafor SMD (differing variance conventions)")
+})
 
-  # Guard the DEFAULT ITSELF: calling with no pool_sd must equal pool_sd = TRUE.
+# Test 4c: pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1) ====
+# Guards the DEFAULT itself. pool_sd = FALSE standardizes the mean change WITHIN
+# each arm by that arm's OWN SD, subtracts the two, and ADDS their sampling
+# variances (the arms are independent). This is Morris (2008) d_ppc1 / Becker
+# (1988) -- the same construction metafor users perform by hand
+# (https://www.metafor-project.org/doku.php/analyses:morris2008): escalc(measure =
+# "SMCR") per arm, then yi = yT - yC, vi = vT + vC. It does NOT assume the arms'
+# true standardizing SDs are equal, and is a legitimate estimand -- not a bug.
+# The pooled path (d_ppc2, Test 4b) is a genuine analytic *choice*, so it is
+# opt-in and the package no longer makes it silently.
+test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1)", {
+  skip_if_not(has_metafor, "metafor not available")
+
+  mean_change_exp <- 10.5; sd_change_exp <- 5.2; n_exp <- 30
+  mean_change_nexp <- 2.8; sd_change_nexp <- 4.5; n_nexp <- 28
+
+  # No pool_sd argument -> whatever the package default is.
+  result_default <- es_from_mean_change_sd(
+    mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
+    mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
+    pre_post_to_smd = "morris_dz"
+  )
+
+  # ... must be bit-identical to the EXPLICIT per-arm path.
+  result_perarm <- es_from_mean_change_sd(
+    mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
+    mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
+    pool_sd = FALSE, pre_post_to_smd = "morris_dz"
+  )
+  expect_equal(result_default$g, result_perarm$g, tolerance = 1e-12,
+               label = "default pool_sd is FALSE (per-arm)")
+  expect_equal(result_default$g_se, result_perarm$g_se, tolerance = 1e-12,
+               label = "default pool_sd is FALSE (per-arm, SE)")
+
+  # ... and must NOT be the pooled path: the arms' SDs are unequal here (5.2 vs
+  # 4.5), so d_ppc1 and d_ppc2 target different estimands and the two must
+  # genuinely diverge. (They coincide only when the true arm SDs are equal.) This
+  # is the assertion that would catch a silent re-flip of the default back to TRUE.
   result_pooled <- es_from_mean_change_sd(
     mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
     mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
     pool_sd = TRUE, pre_post_to_smd = "morris_dz"
   )
-  expect_equal(result_default$g, result_pooled$g, tolerance = 1e-12,
-               label = "default pool_sd is TRUE")
-  expect_equal(result_default$g_se, result_pooled$g_se, tolerance = 1e-12,
-               label = "default pool_sd is TRUE (SE)")
+  expect_false(isTRUE(all.equal(result_default$g, result_pooled$g, tolerance = 1e-3)))
 
-  # And the LEGACY per-arm path must still be reachable, and must genuinely differ
-  # (each arm standardized by its OWN SD, then subtracted -- biased when the arms'
-  # SDs are unequal, as they are here: 5.2 vs 4.5).
-  result_legacy <- es_from_mean_change_sd(
-    mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
-    mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
-    pool_sd = FALSE, pre_post_to_smd = "morris_dz"
+  # The pooled path is the one that reproduces metafor's SMD on change scores
+  # (Test 4b); the default per-arm path therefore must NOT match it.
+  result_mf <- metafor::escalc(
+    measure = "SMD",
+    m1i = mean_change_exp, m2i = mean_change_nexp,
+    sd1i = sd_change_exp, sd2i = sd_change_nexp,
+    n1i = n_exp, n2i = n_nexp
   )
-  expect_false(isTRUE(all.equal(result_legacy$g, g_mf, tolerance = 1e-3)))
+  g_mf <- as.numeric(result_mf$yi)
+  expect_false(isTRUE(all.equal(result_default$g, g_mf, tolerance = 1e-3)))
+
+  # POSITIVE external anchor for the default: reproduce d_ppc1 the way metafor
+  # users build it by hand -- escalc(measure = "SMCR") on each arm's change score
+  # (change standardized by that arm's own SD), then yi = yT - yC, vi = vT + vC.
+  # SMCR with sd1i = the arm's change SD and ri = 0 reduces to the one-sample
+  # standardized mean change m/sd with var = 1/n + g^2/(2n) -- exactly the per-arm
+  # kernel. This makes the default path externally validated, not merely
+  # self-consistent.
+  arm <- function(mc, sdc, ni) {
+    e <- metafor::escalc(measure = "SMCC", m1i = mc, m2i = 0,
+                         sd1i = sdc, sd2i = 0, ni = ni, ri = 0)
+    list(yi = as.numeric(e$yi), vi = as.numeric(e$vi))
+  }
+  a_exp  <- arm(mean_change_exp,  sd_change_exp,  n_exp)
+  a_nexp <- arm(mean_change_nexp, sd_change_nexp, n_nexp)
+
+  g_becker  <- a_exp$yi - a_nexp$yi
+  se_becker <- sqrt(a_exp$vi + a_nexp$vi)
+
+  expect_equal(result_default$g, g_becker, tolerance = 1e-9,
+               label = "default (per-arm) g matches hand-built metafor d_ppc1 (yT - yC)")
+  expect_equal(result_default$g_se, se_becker, tolerance = 1e-9,
+               label = "default (per-arm) SE matches hand-built metafor d_ppc1 (sqrt(vT + vC))")
 })
 
 # Test 5: metafor SMCRH vs metaConvert bonett - Single Group ====

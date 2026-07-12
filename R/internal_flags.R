@@ -2159,7 +2159,7 @@
                              icc_to_es = "bonett",
                              prop_to_es = "raw",
                              pre_post_to_smd = "bonett",
-                             pool_sd = TRUE,
+                             pool_sd = FALSE,
                              r_defaulted = NULL) {
   n <- nrow(res)
   flag_col <- paste0("flags", suffix)
@@ -2362,10 +2362,11 @@
   # A paired t (or F) statistic identifies each arm's mean_change / sd_change
   # ratio but NOT the two arms' SD ratio, so the pooled standardizing SD is not
   # recoverable: these routes necessarily standardize each arm by its own SD and
-  # subtract. When other rows in the same pool DO use a pooled standardizer
-  # (pool_sd = TRUE, the default), the two constructions differ whenever a
+  # subtract. When the user has opted into a pooled standardizer (pool_sd = TRUE)
+  # for the rows that CAN be pooled, the two constructions differ whenever a
   # study's arm SDs differ. Informational: the paired-t rows are not wrong, they
-  # are simply the best obtainable from the reported statistic.
+  # are simply the best obtainable from the reported statistic. Silent under the
+  # default (pool_sd = FALSE), where every row uses the per-arm construction.
   f_paired_t_mix <- vector("list", n)
   for (i in seq_len(n)) f_paired_t_mix[[i]] <- character(0)
   if (isTRUE(opts$enable_cross_row) && measure %in% smd_measures &&
@@ -2386,8 +2387,8 @@
           "[INFO] Per-arm standardizer: a paired t/F statistic does not identify ",
           "the two arms' SD ratio", msuf, ", so this row standardizes each arm by ",
           "its own SD, while other rows in this pool use an SD pooled across arms ",
-          "(pool_sd = TRUE). The two constructions coincide only when a study's arm ",
-          "SDs are equal")
+          "(you set pool_sd = TRUE). The two constructions coincide only when a ",
+          "study's arm SDs are equal")
       }
     }
   }

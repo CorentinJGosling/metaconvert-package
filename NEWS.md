@@ -1,21 +1,30 @@
 # metaConvert 2.1.0
 
-## Breaking changes (pre/post and change-score effect sizes)
+## Behaviour of the two-group pre/post SMD (no default change)
 
-- **`pool_sd` now defaults to `TRUE`.** For the two-group pre/post and mean-change
-  converters (`es_from_means_sd/se/ci_pre_post()`, `es_from_mean_change_sd/se/ci/pval()`)
-  and for `convert_df()`, the between-group SMD is now the difference in mean change
-  divided by a **single standardizing SD pooled across arms** (Morris, 2008).
-  Previously each arm's change was standardized by that arm's **own** SD and the two
-  within-group values were subtracted. That difference is a valid between-group SMD
-  only when the two arms' SDs are equal; when they differ it is biased (in a simulated
-  case with arm change-SDs 6.5 vs 10.7 it overstated the effect by ~60%). Set
-  `pool_sd = FALSE` to restore the previous behaviour.
-- **`es_from_paired_t()` / `es_from_paired_f()` cannot pool** and are unchanged: a paired
-  t identifies each arm's `mean_change / sd_change` ratio but not the ratio of the two
-  arms' SDs, so the pooled standardizer is not recoverable from the reported statistic.
-  These routes keep the per-arm construction; `summary(..., flags = TRUE)` now raises an
-  informational flag when such rows share a pool with pooled-standardizer rows.
+- **`pool_sd` still defaults to `FALSE`.** The default two-group construction is
+  unchanged: each arm's change is standardized by that arm's **own** SD and the two
+  within-group values are subtracted, their sampling variances adding because the arms
+  are independent. This is Morris's (2008) **d_ppc1** (from Becker, 1988), and it is what
+  `metafor` users do for this design (see the metafor-project Morris 2008 page: compute
+  `escalc(measure = "SMCR")` per arm, then subtract the estimates and add the variances).
+  Viechtbauer describes it as the more broadly applicable of the two options because it
+  does not assume the arms' true standardizing SDs are equal.
+- **`pool_sd = TRUE` is now correct and fully supported** as an opt-in. It divides the
+  difference in mean change by a **single SD pooled across arms** — Morris's (2008)
+  **d_ppc2** (his eq. 8-9), which he recommends as more efficient, at the cost of
+  assuming the arms' true SDs are equal. The two options target the same estimand when
+  that assumption holds (as randomization implies at baseline) and different estimands
+  when it does not. **This is a deliberate analytic choice, not a technical detail**, so
+  the package does not make it for you.
+- Both options are now pinned to the published values: `pool_sd = FALSE` reproduces
+  Morris (2008) Table 5 column *d_ppc1*, and `pool_sd = TRUE` reproduces column *d_ppc2*
+  (`tests/testthat/test-EXTERNAL-MORRIS-TABLE5.R`).
+- `es_from_paired_t()` / `es_from_paired_f()` **cannot** pool: a paired t identifies each
+  arm's `mean_change / sd_change` ratio but not the ratio of the two arms' SDs, so the
+  pooled standardizer is not recoverable from the reported statistic. These routes always
+  use the per-arm construction. If you set `pool_sd = TRUE` and such rows share a pool
+  with poolable rows, `summary(..., flags = TRUE)` raises an informational flag.
 
 ## Bug fixes
 

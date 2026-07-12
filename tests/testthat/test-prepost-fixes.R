@@ -1,9 +1,13 @@
 # =============================================================================
 # Coverage for the pre/post & change-score fixes and for the surface the audit
-# found untested: pooled-vs-legacy standardizers, the corrected pooled morris_dz
+# found untested: the per-arm (default, pool_sd = FALSE / d_ppc1) vs pooled
+# (opt-in, pool_sd = TRUE / d_ppc2) standardizers, the corrected pooled morris_dz
 # variance, degenerate inputs (SD = 0, |r| >= 1, tiny m), the per-row method
 # vector, the convert_df pool_sd threading and coercion/r-imputation messages,
 # and the E6/E7 estimand-mixing flags.
+#
+# NOTE: pool_sd = FALSE is the DEFAULT. Every assertion below that compares
+# against a POOLED reference passes pool_sd = TRUE explicitly.
 #
 # Design rule for this file: assertions are anchored to an INDEPENDENT reference
 # (metafor::escalc, or an algebraic identity), never to a re-typed copy of the
@@ -83,9 +87,16 @@ test_that("pooled morris_drm = pooled morris_dz * sqrt(2(1-r)) in BOTH g and SE"
 })
 
 # -----------------------------------------------------------------------------
-# 2. pool_sd default, and the legacy per-arm path
+# 2. pool_sd default (per-arm d_ppc1), and the opt-in pooled path
 # -----------------------------------------------------------------------------
-test_that("pool_sd defaults to TRUE in the two-group wrappers", {
+test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1)", {
+  # The DEFAULT is the per-arm path: a standardized mean change is formed within
+  # each arm on that arm's OWN SD, the two are subtracted, and their (independent)
+  # sampling variances are ADDED. This is Morris (2008) d_ppc1 / Becker (1988), the
+  # construction metafor users build by hand (escalc(measure = "SMCR") per arm, then
+  # yi = yT - yC; vi = vT + vC). It does NOT assume the two arms' true standardizing
+  # SDs are equal, so it is not interchangeable with the pooled d_ppc2 path, and the
+  # package no longer picks between the two estimands silently.
   args <- list(
     n_exp = 29, n_nexp = 34,
     mean_change_exp = -12.4, mean_change_sd_exp = 6.52,
@@ -94,16 +105,16 @@ test_that("pool_sd defaults to TRUE in the two-group wrappers", {
   )
   default <- do.call(es_from_mean_change_sd, args)
   pooled <- do.call(es_from_mean_change_sd, c(args, pool_sd = TRUE))
-  legacy <- do.call(es_from_mean_change_sd, c(args, pool_sd = FALSE))
+  per_arm <- do.call(es_from_mean_change_sd, c(args, pool_sd = FALSE))
 
-  expect_equal(default$g, pooled$g, tolerance = 1e-12)
-  expect_equal(default$g_se, pooled$g_se, tolerance = 1e-12)
-  # and the legacy path really is different on unequal arm SDs
-  expect_false(isTRUE(all.equal(legacy$g, pooled$g, tolerance = 1e-3)))
+  expect_equal(default$g, per_arm$g, tolerance = 1e-12)
+  expect_equal(default$g_se, per_arm$g_se, tolerance = 1e-12)
+  # and the opt-in pooled path really is a different construction on unequal arm SDs
+  expect_false(isTRUE(all.equal(per_arm$g, pooled$g, tolerance = 1e-3)))
 })
 
-test_that("legacy pool_sd = FALSE reproduces the per-arm difference of within-group g's", {
-  # Regression test OF THE LEGACY PATH (retained for backward compatibility):
+test_that("default pool_sd = FALSE reproduces the per-arm difference of within-group g's", {
+  # Regression test OF THE DEFAULT PATH (d_ppc1):
   # g = J(n1-1) * d_rm_exp - J(n2-1) * d_rm_nexp, each arm on its OWN change SD.
   n1 <- 29; n2 <- 34; r <- 0.6
   res <- es_from_mean_change_sd(
@@ -121,8 +132,9 @@ test_that("legacy pool_sd = FALSE reproduces the per-arm difference of within-gr
   expect_equal(res$g, g_legacy, tolerance = 1e-3)
 })
 
-test_that("pooled and legacy coincide when the two arms' SDs and n are equal", {
-  # The one regime in which the per-arm difference IS a valid between-group SMD.
+test_that("the pooled (opt-in) and per-arm (default) paths coincide when arm SDs and n are equal", {
+  # d_ppc1 and d_ppc2 target the same estimand exactly when the arms' true
+  # standardizing SDs are equal -- the assumption the pooled path adds.
   args <- list(
     n_exp = 40, n_nexp = 40,
     mean_change_exp = 6, mean_change_sd_exp = 8,
@@ -131,10 +143,10 @@ test_that("pooled and legacy coincide when the two arms' SDs and n are equal", {
     pre_post_to_smd = "morris_drm"
   )
   pooled <- do.call(es_from_mean_change_sd, c(args, pool_sd = TRUE))
-  legacy <- do.call(es_from_mean_change_sd, c(args, pool_sd = FALSE))
+  per_arm <- do.call(es_from_mean_change_sd, c(args, pool_sd = FALSE))
   # d is identical; g differs only through the J degrees of freedom (N-2 vs n-1)
-  expect_equal(pooled$d, legacy$d, tolerance = 1e-10)
-  expect_equal(pooled$g, legacy$g, tolerance = 1e-2)
+  expect_equal(pooled$d, per_arm$d, tolerance = 1e-10)
+  expect_equal(pooled$g, per_arm$g, tolerance = 1e-2)
 })
 
 # -----------------------------------------------------------------------------

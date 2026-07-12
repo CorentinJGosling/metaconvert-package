@@ -265,15 +265,14 @@ test_that("When sd_pre = sd_post, d_av equals average of d_z and d_bonett concep
 })
 
 # Test 5: Validation against Morris 2007 Table 1 examples ====
-test_that("Morris 2007 Table 1 dppc2 ~ morris_dav (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("Morris 2007 Table 1 dppc2 ~ morris_dav (per-arm standardizer, pool_sd = FALSE, the default)", {
   # Study: Ivancevich and Smith (1981)
   # Morris 2007 reports dppc2 = 0.80.
   #
-  # This test covers the LEGACY per-arm path: each arm is standardized by its
-  # OWN average SD and the two within-group d_av values are then subtracted.
-  # That construction is what reproduces 0.80 here, so the call must pass
-  # pool_sd = FALSE explicitly (the default is now pool_sd = TRUE, the pooled
-  # common standardizer recommended by Morris 2008).
+  # This test covers the PER-ARM path (pool_sd = FALSE, the default): each arm is
+  # standardized by its OWN average SD and the two within-group d_av values are then
+  # subtracted (Becker 1988 / Morris d_ppc1). pool_sd = FALSE is passed explicitly
+  # for readability, but it is what the wrapper would do anyway.
   #
   # NOTE: the agreement with dppc2 is arithmetically incidental. Morris's actual
   # dppc2 estimator uses the POOLED PRETEST SD, which is metaConvert's
@@ -320,7 +319,8 @@ test_that("Morris 2007 dppc2 is reproduced exactly by bonett + pool_sd = TRUE", 
   # Morris (2008) dppc2 = c_p * [(post_T - pre_T) - (post_C - pre_C)] / SD_pre_pooled
   # i.e. the between-group change difference standardized by the POOLED PRETEST SD,
   # then bias-corrected. That is exactly metaConvert's `bonett` standardizer with the
-  # (now default) pooled common standardizer, pool_sd = TRUE.
+  # OPT-IN pooled common standardizer, pool_sd = TRUE (the default is FALSE, the
+  # per-arm d_ppc1 construction), so pool_sd = TRUE must be passed explicitly.
   # Study: Ivancevich and Smith (1981); Morris 2007 Table 1 reports dppc2 = 0.80.
 
   mean_pre_t <- 23.5; sd_pre_t <- 3.1; mean_post_t <- 26.8; sd_post_t <- 4.1; n_t <- 50
@@ -427,8 +427,10 @@ test_that("Confidence intervals properly computed for all Morris methods", {
 })
 
 # Test 8: Two-group designs ====
-test_that("Morris methods work for two-group paired designs (pooled standardizer, default)", {
-  # No pool_sd argument -> exercises the DEFAULT pooled common standardizer.
+test_that("Morris methods work for two-group paired designs (per-arm standardizer, default)", {
+  # No pool_sd argument -> exercises the DEFAULT per-arm standardizer
+  # (pool_sd = FALSE: standardize the mean change WITHIN each arm, subtract the two,
+  # add their sampling variances -- Becker 1988 / Morris d_ppc1).
   # Treatment group
   mean_pre_t <- 30
   mean_post_t <- 45
@@ -472,11 +474,11 @@ test_that("Morris methods work for two-group paired designs (pooled standardizer
 })
 
 # Test 9: Two-Group morris_dz validation ====
-test_that("morris_dz correct for two-group design (legacy per-arm standardizer, pool_sd = FALSE)", {
-  # Covers the LEGACY per-arm path: a d_z is formed inside each arm against that
-  # arm's OWN change-score SD, and the two are subtracted (variances summed).
-  # The manual comparator below transcribes exactly that per-arm rule, so the
-  # call must pass pool_sd = FALSE (the default is now the pooled standardizer).
+test_that("morris_dz correct for two-group design (per-arm standardizer, pool_sd = FALSE, the default)", {
+  # Covers the PER-ARM path (the default): a d_z is formed inside each arm against
+  # that arm's OWN change-score SD, and the two are subtracted (variances summed,
+  # since the arms are independent -- Becker 1988 / Morris d_ppc1).
+  # The manual comparator below transcribes exactly that per-arm rule.
   #
   # Two-group pre-post design with morris_dz standardizer
   # Treatment group
@@ -542,10 +544,12 @@ test_that("morris_dz correct for two-group design (legacy per-arm standardizer, 
   expect_equal(result$d_se, se_d_z_expected, tolerance = 1e-10)
 })
 
-test_that("morris_dz two-group pooled standardizer (default) matches metafor SMD on change scores", {
-  # DEFAULT path (pool_sd = TRUE): the between-group SMD is the difference in mean
-  # change divided by the change-score SD POOLED ACROSS ARMS -- a single common
-  # standardizer (Morris 2008). This is the two-sample SMD computed on change scores.
+test_that("morris_dz two-group OPT-IN pooled standardizer (pool_sd = TRUE) matches metafor SMD on change scores", {
+  # OPT-IN path (pool_sd = TRUE, NOT the default): the between-group SMD is the
+  # difference in mean change divided by the change-score SD POOLED ACROSS ARMS --
+  # a single common standardizer (Morris 2008 d_ppc2). This is the two-sample SMD
+  # computed on change scores. pool_sd must be passed EXPLICITLY: the default is
+  # pool_sd = FALSE (the per-arm d_ppc1 construction).
   skip_if_not_installed("metafor")
 
   mean_pre_t <- 30; mean_post_t <- 45; sd_pre_t <- 10; sd_post_t <- 11; n_t <- 25
@@ -558,7 +562,8 @@ test_that("morris_dz two-group pooled standardizer (default) matches metafor SMD
     mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
     mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c, n_nexp = n_c,
     r_pre_post_exp = r, r_pre_post_nexp = r,
-    pre_post_to_smd = "morris_dz"  # pool_sd defaults to TRUE
+    pre_post_to_smd = "morris_dz",
+    pool_sd = TRUE  # opt in explicitly; the default is FALSE (per-arm d_ppc1)
   )
 
   # Change-score SD in each arm
@@ -602,9 +607,9 @@ test_that("morris_dz two-group pooled standardizer (default) matches metafor SMD
                tolerance = 1e-10)
 })
 
-test_that("morris_dz two-group with different correlations (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("morris_dz two-group with different correlations (per-arm standardizer, pool_sd = FALSE, the default)", {
   # The comparator subtracts two per-arm d_z values, each standardized by its own
-  # arm's change SD -> legacy construction, so pool_sd = FALSE.
+  # arm's change SD -> the per-arm (default) construction, so pool_sd = FALSE.
   # Test with different r values between groups
   mean_pre_t <- 50
   mean_post_t <- 60
@@ -649,12 +654,12 @@ test_that("morris_dz two-group with different correlations (legacy per-arm stand
 })
 
 # Test 10: Two-Group morris_dav validation ====
-test_that("morris_dav correct for two-group design (legacy per-arm standardizer, pool_sd = FALSE)", {
-  # Covers the LEGACY per-arm path. The comparator builds a metafor-SMCRP d_av
+test_that("morris_dav correct for two-group design (per-arm standardizer, pool_sd = FALSE, the default)", {
+  # Covers the PER-ARM path (the default). The comparator builds a metafor-SMCRP d_av
   # INSIDE each arm (own average SD, modified df mi = 2*(n-1)/(1+r^2)) and then
-  # SUBTRACTS the two, summing their variances -- i.e. it encodes the per-arm rule.
-  # The call therefore passes pool_sd = FALSE; the default now pools the
-  # standardizing SD across arms.
+  # SUBTRACTS the two, summing their variances -- i.e. it encodes the per-arm rule
+  # (Becker 1988 / Morris d_ppc1). pool_sd = FALSE is passed explicitly for
+  # readability; it is also what the wrapper defaults to.
   #
   # Two-group design with morris_dav (average SD standardizer)
   mean_pre_t <- 23.5
@@ -713,9 +718,9 @@ test_that("morris_dav correct for two-group design (legacy per-arm standardizer,
   expect_equal(result$d_se, se_d_av_expected, tolerance = 1e-10)
 })
 
-test_that("morris_dav two-group robust to variance heterogeneity (legacy per-arm standardizer, pool_sd = FALSE)", {
-  # The comparator subtracts two per-arm d_av values -> legacy construction,
-  # so the call passes pool_sd = FALSE.
+test_that("morris_dav two-group robust to variance heterogeneity (per-arm standardizer, pool_sd = FALSE, the default)", {
+  # The comparator subtracts two per-arm d_av values -> the per-arm (default)
+  # construction, so the call passes pool_sd = FALSE.
   # Morris_dav should handle different variances well
   mean_pre_t <- 40
   mean_post_t <- 50
@@ -762,12 +767,18 @@ test_that("morris_dav two-group robust to variance heterogeneity (legacy per-arm
   expect_true(result$d_se > 0)
 })
 
-test_that("pooled and legacy per-arm standardizers agree when the arms' SDs are equal", {
-  # The legacy per-arm construction (pool_sd = FALSE) subtracts two within-group
-  # values, each divided by its OWN arm's SD. That equals the pooled common
-  # standardizer (pool_sd = TRUE, the default) if and only if the two arms share
-  # the same standardizing SD. This test pins the exact condition under which the
-  # legacy path is unbiased -- and, by contrast, why it is biased otherwise.
+test_that("per-arm (default) and opt-in pooled standardizers agree when the arms' SDs are equal", {
+  # The per-arm construction (pool_sd = FALSE, the DEFAULT) subtracts two within-group
+  # values, each divided by its OWN arm's SD (Becker 1988 / Morris d_ppc1). The pooled
+  # construction (pool_sd = TRUE, OPT-IN) divides the difference in mean change by ONE
+  # SD pooled across arms (Morris 2008 d_ppc2).
+  #
+  # The two COINCIDE if and only if the arms share the same standardizing SD, which is
+  # what this test pins. Otherwise they target DIFFERENT ESTIMANDS -- neither is "the
+  # buggy one": d_ppc1 does not assume the arms' true SDs are equal (Viechtbauer calls
+  # it "more broadly applicable"), while d_ppc2 assumes equality to buy efficiency.
+  # Because it is a genuine analytic choice, the package no longer makes it silently:
+  # the default is the assumption-free per-arm path, and pooling is opt-in.
   args_equal_sd <- list(
     mean_pre_exp = 20, mean_exp = 30, mean_pre_sd_exp = 10, mean_sd_exp = 12, n_exp = 30,
     mean_pre_nexp = 21, mean_nexp = 24, mean_pre_sd_nexp = 10, mean_sd_nexp = 12, n_nexp = 30,

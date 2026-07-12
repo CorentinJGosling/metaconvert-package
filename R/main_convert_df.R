@@ -14,12 +14,19 @@
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient.
 #' @param pre_post_to_smd formula used to obtain a SMD from pre/post means and SD of two independent groups.
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
-#'   groups (default \code{TRUE}). When \code{TRUE}, the between-group SMD is the difference in mean change
-#'   divided by a single SD pooled across arms (Morris, 2008). When \code{FALSE}, each arm's change is
-#'   standardized by that arm's OWN SD and the two within-group values are then subtracted; that difference
-#'   is a valid between-group SMD only when the two arms' SDs are equal, and is biased otherwise -- Morris
-#'   (2008) argues for the common standardizer. \code{FALSE} is retained for backward compatibility with
-#'   metaConvert <= 2.0.0.
+#'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
+#'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
+#'   which to prefer, so this is a deliberate choice and not a technical detail.
+#'   \itemize{
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'       within-group values are subtracted, their variances adding because the arms are independent. This
+#'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
+#'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
+#'       broadly applicable of the two.
+#'     \item \code{TRUE}: the difference in mean change is divided by a single SD pooled across arms. This
+#'       is Morris's (2008) \eqn{d_{ppc2}} (his eq. 8-9), which he recommends: it is more efficient, but it
+#'       assumes the two arms' true standardizing SDs are equal.
+#'   }
 #' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown)
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
@@ -274,7 +281,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
                        cor_to_smd = "viechtbauer",
                        unit_type = "raw_scale",
                        yates_chisq = FALSE,
-                       pool_sd = TRUE,
+                       pool_sd = FALSE,
                        prop_to_es = "raw",
                        alpha_to_es = "bonett",
                        icc_to_es = "bonett",

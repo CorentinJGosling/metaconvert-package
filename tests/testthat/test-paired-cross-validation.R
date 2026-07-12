@@ -121,13 +121,17 @@ test_that("Mean change equals direct d_z when r = 0.5", {
 })
 
 # Test 3: Two-group paired matches difference of single-group ====
-# These two tests pin the LEGACY per-arm standardizer (pool_sd = FALSE): each arm
-# is standardized by its OWN SD and the two within-group values are then
-# subtracted. The comparator below (single-group exp minus single-group nexp) IS
-# that construction by definition, so the identity is EXACT under pool_sd = FALSE.
-# It does NOT hold under the current default (pool_sd = TRUE, Morris 2008: one
-# standardizer pooled across arms), which is covered by its own test further down.
-test_that("Two-group paired equals difference of two single-group - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
+# These two tests pin the per-arm standardizer (pool_sd = FALSE, the DEFAULT):
+# each arm is standardized by its OWN SD and the two within-group values are then
+# subtracted, their independent sampling variances added. This is Morris (2008)
+# d_ppc1 (from Becker 1988) -- the construction metafor users get from
+# escalc(measure = "SMCR") per arm followed by `yi = yT - yC; vi = vT + vC`.
+# The comparator below (single-group exp minus single-group nexp) IS that
+# construction by definition, so the identity is EXACT under pool_sd = FALSE.
+# It does NOT hold under the opt-in pooled standardizer (pool_sd = TRUE, Morris
+# 2008 d_ppc2: one SD pooled across arms), which is covered by its own test below.
+# pool_sd is passed explicitly here to document the path under test.
+test_that("Two-group paired equals difference of two single-group - bonett (per-arm standardizer, pool_sd = FALSE)", {
   # Setup two groups
   mean_pre_t <- 40
   mean_post_t <- 52
@@ -143,7 +147,8 @@ test_that("Two-group paired equals difference of two single-group - bonett (lega
 
   r <- 0.68
 
-  # Method 1: Two-group function, forced onto the legacy per-arm path
+  # Method 1: Two-group function on the per-arm path (the default; passed
+  # explicitly so the test documents which standardizer it pins)
   result_two_group <- es_from_means_sd_pre_post(
     mean_pre_exp = mean_pre_t,
     mean_exp = mean_post_t,
@@ -189,7 +194,7 @@ test_that("Two-group paired equals difference of two single-group - bonett (lega
   expect_equal(result_two_group$d, expected_d_diff, tolerance = 1e-10)
 })
 
-test_that("Two-group paired equals difference of single-group - morris_dav (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("Two-group paired equals difference of single-group - morris_dav (per-arm standardizer, pool_sd = FALSE)", {
   mean_pre_t <- 35
   mean_post_t <- 48
   sd_pre_t <- 9
@@ -204,7 +209,7 @@ test_that("Two-group paired equals difference of single-group - morris_dav (lega
 
   r <- 0.72
 
-  # Two-group function, forced onto the legacy per-arm path (see note above)
+  # Two-group function on the per-arm path -- the default (see note above)
   result_two_group <- es_from_means_sd_pre_post(
     mean_pre_exp = mean_pre_t,
     mean_exp = mean_post_t,
@@ -243,12 +248,23 @@ test_that("Two-group paired equals difference of single-group - morris_dav (lega
   expect_equal(result_two_group$d, expected_d_diff, tolerance = 1e-10)
 })
 
-# Test 3b: The pooled standardizer is the DEFAULT (Morris 2008) ====
-# Counterpart to the two legacy tests above: pool_sd = TRUE standardizes the
-# between-group mean change by a SINGLE SD pooled across arms, so it is NOT the
-# difference of the two within-group values. Assertions here are exact identities
-# (estimand definition + an external metafor check), not formula transcriptions.
-test_that("pool_sd = TRUE is the default and pools the standardizer across arms", {
+# Test 3b: pool_sd is FALSE by default; TRUE is an opt-in ====
+# The two-group pre/post standardizer is a genuine analytic CHOICE, so the
+# package does not make it silently:
+#   pool_sd = FALSE (DEFAULT) -- standardize the change WITHIN each arm by that
+#     arm's own SD, subtract, and ADD the two independent sampling variances.
+#     Morris (2008) d_ppc1, from Becker (1988). This is what metafor users build
+#     with escalc(measure = "SMCR") per arm + `yi = yT - yC; vi = vT + vC`
+#     (metafor-project.org/doku.php/analyses:morris2008). It does NOT assume the
+#     arms' true standardizing SDs are equal, which is why Viechtbauer calls it
+#     "more broadly applicable".
+#   pool_sd = TRUE (opt-in) -- divide the between-group mean change by a SINGLE
+#     SD pooled across arms. Morris (2008) d_ppc2 (eq. 8-9): more efficient, but
+#     it assumes equal true arm SDs.
+# The two coincide under homoscedasticity and target different estimands
+# otherwise. The first test pins the default; the second validates the pooled
+# path (which is exercised only with pool_sd = TRUE passed EXPLICITLY).
+test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1)", {
   mean_pre_t <- 40
   mean_post_t <- 52
   sd_pre_t <- 11
@@ -273,20 +289,65 @@ test_that("pool_sd = TRUE is the default and pools the standardizer across arms"
     )
   }
 
-  # (1) Omitting pool_sd must give the POOLED result: the default is TRUE.
   res_default <- call_pp(pre_post_to_smd = "bonett")
-  res_pooled <- call_pp(pre_post_to_smd = "bonett", pool_sd = TRUE)
   res_perarm <- call_pp(pre_post_to_smd = "bonett", pool_sd = FALSE)
+  res_pooled <- call_pp(pre_post_to_smd = "bonett", pool_sd = TRUE)
 
-  expect_equal(res_default$d, res_pooled$d, tolerance = 1e-10)
-  expect_equal(res_default$d_se, res_pooled$d_se, tolerance = 1e-10)
+  # (1) Omitting pool_sd must give the PER-ARM result: the default is FALSE.
+  expect_equal(res_default$d, res_perarm$d, tolerance = 1e-10)
+  expect_equal(res_default$d_se, res_perarm$d_se, tolerance = 1e-10)
 
-  # (2) The two constructions are genuinely different (guards against the
-  #     default silently falling back to the legacy per-arm path).
+  # (2) The default is the difference of the two within-arm standardized mean
+  #     changes, with their independent sampling variances ADDED (d_ppc1).
+  res_t <- es_from_means_sd_pre_post_single_group(
+    mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
+    mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t,
+    n_exp = n_t, r_pre_post_exp = r, pre_post_to_smd = "bonett"
+  )
+  res_c <- es_from_means_sd_pre_post_single_group(
+    mean_pre_exp = mean_pre_c, mean_exp = mean_post_c,
+    mean_pre_sd_exp = sd_pre_c, mean_sd_exp = sd_post_c,
+    n_exp = n_c, r_pre_post_exp = r, pre_post_to_smd = "bonett"
+  )
+
+  expect_equal(res_default$d, res_t$d - res_c$d, tolerance = 1e-10)
+  expect_equal(res_default$d_se^2, res_t$d_se^2 + res_c$d_se^2, tolerance = 1e-10)
+
+  # (3) The two constructions are genuinely different, so (1) really does
+  #     discriminate between them (guards against the default silently
+  #     switching to the pooled path).
   expect_false(isTRUE(all.equal(res_pooled$d, res_perarm$d, tolerance = 1e-6)))
+})
 
-  # (3) bonett + pool_sd = TRUE is, by definition of the estimand, the
+test_that("pool_sd = TRUE (opt-in) pools the standardizer across arms - Morris d_ppc2", {
+  mean_pre_t <- 40
+  mean_post_t <- 52
+  sd_pre_t <- 11
+  sd_post_t <- 13
+  n_t <- 25
+
+  mean_pre_c <- 42
+  mean_post_c <- 44
+  sd_pre_c <- 10
+  sd_post_c <- 11
+  n_c <- 25
+
+  r <- 0.68
+
+  call_pp <- function(...) {
+    es_from_means_sd_pre_post(
+      mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
+      mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t, n_exp = n_t,
+      mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
+      mean_pre_sd_nexp = sd_pre_c, mean_sd_nexp = sd_post_c, n_nexp = n_c,
+      r_pre_post_exp = r, r_pre_post_nexp = r, ...
+    )
+  }
+
+  # (1) bonett + pool_sd = TRUE is, by definition of the estimand, the
   #     between-group mean change over the pooled BASELINE SD.
+  res_pooled <- call_pp(pre_post_to_smd = "bonett", pool_sd = TRUE)
+
   sd_pooled_baseline <- sqrt(
     ((n_t - 1) * sd_pre_t^2 + (n_c - 1) * sd_pre_c^2) / (n_t + n_c - 2)
   )
@@ -295,7 +356,7 @@ test_that("pool_sd = TRUE is the default and pools the standardizer across arms"
 
   expect_equal(res_pooled$d, d_estimand, tolerance = 1e-10)
 
-  # (4) External check: morris_dz + pool_sd = TRUE is a two-sample SMD computed
+  # (2) External check: morris_dz + pool_sd = TRUE is a two-sample SMD computed
   #     on the change scores, so its point estimate must equal metafor's
   #     escalc(measure = "SMD") fed the change means/SDs. (Only the point
   #     estimate is pinned: metaConvert's variance follows the Hedges (1981)

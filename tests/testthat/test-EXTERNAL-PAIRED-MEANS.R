@@ -17,26 +17,35 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 # Dataset: metaumbrella::df.SMC (real meta-analysis data with pre/post means)
 #
 # ------------------------------------------------------------------------------
-# NOTE ON pool_sd (Section 1)
+# NOTE ON pool_sd (Sections 1 and 1b)
 # ------------------------------------------------------------------------------
 # Every STANDARDIZED comparator in Section 1 (tests 1.1-1.4) is built the same
 # way: a within-group effect size is computed for EACH arm separately (each arm
-# standardized by its OWN SD) and the two are then SUBTRACTED. metafor's SMCRH /
-# SMCRP / SMCC are single-group (pre-post) estimators, so an arm-wise call plus a
-# subtraction is the only way to build a between-group value out of them. That
-# construction IS the legacy per-arm standardizer, i.e. `pool_sd = FALSE`.
+# standardized by its OWN SD) and the two are then SUBTRACTED, adding the two
+# arms' sampling variances (the arms are independent). metafor's SMCRH / SMCRP /
+# SMCC are single-group (pre-post) estimators, so an arm-wise call plus a
+# subtraction is the only way to build a between-group value out of them.
+#
+# That construction IS the `pool_sd = FALSE` path -- which is the DEFAULT, and
+# the long-standing behaviour of the package. It is Morris (2008) d_ppc1 (from
+# Becker 1988), and it is exactly what metafor users do for this design; see
+# https://www.metafor-project.org/doku.php/analyses:morris2008 where Viechtbauer
+# computes escalc(measure = "SMCR") per arm and then `yi = yT - yC; vi = vT + vC`.
+# It is "more broadly applicable" (Viechtbauer) precisely because it does NOT
+# assume the two arms' true standardizing SDs are equal.
+#
+# `pool_sd = TRUE` is the OPT-IN alternative: the difference in mean change is
+# divided by ONE SD pooled across arms = Morris (2008) d_ppc2 (eq. 8-9). Morris
+# recommends it (it is more efficient) but it does assume equal true arm SDs. The
+# two coincide when that assumption holds and target different estimands
+# otherwise, so the package does not make the choice silently.
+#
+# Section 1 therefore passes `pool_sd = FALSE` explicitly (redundant with the
+# default, but it documents which estimand the external comparator encodes).
+# Section 1b passes `pool_sd = TRUE` explicitly to give the opt-in pooled path
+# its own external coverage.
 # (Test 1.5, raw MD vs metafor MC, is UNSTANDARDIZED and hence pool_sd-invariant;
 # it deliberately keeps running on the default.)
-#
-# Since metaConvert 2.1.0 the DEFAULT is `pool_sd = TRUE` (a single SD pooled
-# across arms -- Morris 2008's recommended common standardizer), which is a
-# different estimand and deliberately does NOT equal arm1 - arm2 unless the two
-# arms' SDs happen to be equal.
-#
-# The Section 1 tests therefore pass `pool_sd = FALSE` explicitly: they remain
-# exact, un-loosened regression tests OF THE LEGACY PER-ARM PATH against the
-# external packages that encode that same per-arm rule. Section 1b below adds
-# external coverage of the new pooled default.
 # ==============================================================================
 
 library(testthat)
@@ -60,7 +69,7 @@ data("df.SMC", package = "metaumbrella")
 # ==============================================================================
 
 ## 1.1 BONETT vs metafor SMCRH ====
-test_that("MEANS-SD: bonett two-group matches metafor SMCRH (g + g_se) (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("MEANS-SD: bonett two-group matches metafor SMCRH (g + g_se) (per-arm d_ppc1 standardizer, pool_sd = FALSE, the default)", {
   skip_if_not(has_metafor, "metafor not available")
 
   # Prepare data from metaumbrella
@@ -102,7 +111,8 @@ test_that("MEANS-SD: bonett two-group matches metafor SMCRH (g + g_se) (legacy p
 
   # Calculate difference (negate metafor to match post-pre convention).
   # SMCRH standardizes each arm by ITS OWN baseline SD, so subtracting the two
-  # arm-wise values replicates the legacy per-arm rule -> pool_sd = FALSE below.
+  # arm-wise values (and adding their variances) replicates the per-arm d_ppc1
+  # rule -> pool_sd = FALSE below (the default, passed explicitly for clarity).
   g_expected <- (-as.numeric(smc_exp$yi)) - (-as.numeric(smc_nexp$yi))
   se_expected <- sqrt(as.numeric(smc_exp$vi) + as.numeric(smc_nexp$vi))
 
@@ -114,7 +124,7 @@ test_that("MEANS-SD: bonett two-group matches metafor SMCRH (g + g_se) (legacy p
     measure = "g",
     smd_to_cor = "viechtbauer",
     pre_post_to_smd = "bonett",
-    pool_sd = FALSE # legacy per-arm standardizer -- what the comparator encodes
+    pool_sd = FALSE # the DEFAULT (per-arm d_ppc1) -- what the comparator encodes
   ), digits = 11)
 
   # Verify correct hierarchy was used
@@ -128,7 +138,7 @@ test_that("MEANS-SD: bonett two-group matches metafor SMCRH (g + g_se) (legacy p
 })
 
 ## 1.2 COOPER vs Morris & DeShon (2002) Manual Formula ====
-test_that("MEANS-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("MEANS-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) (per-arm d_ppc1 standardizer, pool_sd = FALSE, the default)", {
   res <- df.SMC[1:5, ]
   res$n_exp <- res$n_cases
   res$n_nexp <- res$n_controls
@@ -145,8 +155,8 @@ test_that("MEANS-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) 
 
   # Manual Morris & DeShon (2002) calculation.
   # This is the PUBLISHED d_rm formula applied ARM-WISE (each arm standardized by
-  # its own change SD) and then subtracted -- i.e. the legacy per-arm rule, which
-  # is why the metaConvert call below passes pool_sd = FALSE.
+  # its own change SD) and then subtracted -- i.e. the per-arm d_ppc1 rule, which
+  # is why the metaConvert call below passes pool_sd = FALSE (the default).
   # Experimental group
   sd_change_exp <- sqrt(res$mean_pre_sd_exp^2 + res$mean_sd_exp^2 -
                         2 * res$r_pre_post_exp * res$mean_pre_sd_exp * res$mean_sd_exp)
@@ -173,7 +183,7 @@ test_that("MEANS-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) 
     measure = "d",
     smd_to_cor = "viechtbauer",
     pre_post_to_smd = "cooper",
-    pool_sd = FALSE # legacy per-arm standardizer -- what the comparator encodes
+    pool_sd = FALSE # the DEFAULT (per-arm d_ppc1) -- what the comparator encodes
   ), digits = 11)
 
   # Verify correct hierarchy was used
@@ -187,7 +197,7 @@ test_that("MEANS-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) 
 })
 
 ## 1.3 MORRIS_DAV vs metafor SMCRP ====
-test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (per-arm d_ppc1 standardizer, pool_sd = FALSE, the default)", {
   skip_if_not(has_metafor, "metafor not available")
 
   res <- df.SMC[1:5, ]
@@ -228,7 +238,8 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (lega
 
   # Calculate difference (negate metafor to match post-pre convention).
   # SMCRP standardizes each arm by ITS OWN average pre/post SD, so subtracting the
-  # two arm-wise values replicates the legacy per-arm rule -> pool_sd = FALSE below.
+  # two arm-wise values (and adding their variances) replicates the per-arm d_ppc1
+  # rule -> pool_sd = FALSE below (the default, passed explicitly for clarity).
   g_expected <- (-as.numeric(mf_exp$yi)) - (-as.numeric(mf_nexp$yi))
   se_expected <- sqrt(as.numeric(mf_exp$vi) + as.numeric(mf_nexp$vi))
 
@@ -240,7 +251,7 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (lega
     measure = "g",
     smd_to_cor = "viechtbauer",
     pre_post_to_smd = "morris_dav",
-    pool_sd = FALSE # legacy per-arm standardizer -- what the comparator encodes
+    pool_sd = FALSE # the DEFAULT (per-arm d_ppc1) -- what the comparator encodes
   ), digits = 11)
 
   # Verify correct hierarchy was used
@@ -254,7 +265,7 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (lega
 })
 
 ## 1.4 MORRIS_DZ vs metafor SMCC ====
-test_that("MEANS-SD: morris_dz two-group matches metafor SMCC (d + d_se) (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("MEANS-SD: morris_dz two-group matches metafor SMCC (d + d_se) (per-arm d_ppc1 standardizer, pool_sd = FALSE, the default)", {
   skip_if_not(has_metafor, "metafor not available")
 
   res <- df.SMC[1:5, ]
@@ -279,7 +290,8 @@ test_that("MEANS-SD: morris_dz two-group matches metafor SMCC (d + d_se) (legacy
   # The Hedges factor J is recovered purely from metafor (the ratio of the two
   # yi's), so var(d) = var(g)/J^2 needs no formula transcribed from the package.
   # SMCC standardizes each arm by ITS OWN change SD, so the arm-wise subtraction
-  # below is the legacy per-arm rule -> pool_sd = FALSE in the convert_df call.
+  # below is the per-arm d_ppc1 rule -> pool_sd = FALSE in the convert_df call
+  # (the default, passed explicitly for clarity).
   smcc <- function(arm, correct) {
     metafor::escalc(
       measure = "SMCC",
@@ -315,7 +327,7 @@ test_that("MEANS-SD: morris_dz two-group matches metafor SMCC (d + d_se) (legacy
     measure = "d",
     smd_to_cor = "viechtbauer",
     pre_post_to_smd = "morris_dz",
-    pool_sd = FALSE # legacy per-arm standardizer -- what the comparator encodes
+    pool_sd = FALSE # the DEFAULT (per-arm d_ppc1) -- what the comparator encodes
   ), digits = 11)
 
   # Verify correct hierarchy was used
@@ -374,8 +386,8 @@ test_that("MEANS-SD: raw MD two-group matches metafor MC (md + md_se)", {
 
   # metaConvert using convert_df
   # NB: no pool_sd here -- the raw MD is unstandardized, so it is invariant to
-  # pool_sd. This test therefore runs on the DEFAULT (pool_sd = TRUE) and pins
-  # that the pooling change did not leak into the MD path.
+  # pool_sd. This test therefore runs on the DEFAULT (pool_sd = FALSE) and pins
+  # that the pooling option never leaks into the MD path.
   es_mc <- summary(convert_df(res,
     verbose = FALSE,
     es_selected = "hierarchy",
@@ -396,19 +408,21 @@ test_that("MEANS-SD: raw MD two-group matches metafor MC (md + md_se)", {
 })
 
 # ==============================================================================
-# SECTION 1b: POOLED STANDARDIZER (the pool_sd = TRUE default)
+# SECTION 1b: POOLED STANDARDIZER (the OPT-IN pool_sd = TRUE path)
 # ==============================================================================
-# Section 1 validates the legacy per-arm path. This section validates the DEFAULT.
+# Section 1 validates the DEFAULT per-arm path (d_ppc1). This section validates
+# the OPT-IN pooled path (Morris 2008 d_ppc2), which callers must now request
+# explicitly with pool_sd = TRUE.
 #
 # With pool_sd = TRUE + pre_post_to_smd = "morris_dz", the between-group SMD is
 # the difference in mean CHANGE divided by a single change-SD pooled across arms.
 # That is exactly a two-sample Hedges' g computed ON THE CHANGE SCORES, i.e.
 # metafor::escalc(measure = "SMD") fed the per-arm change means and change SDs --
-# giving a real external comparator for the pooled default (no formula from the
+# giving a real external comparator for the pooled path (no formula from the
 # package is transcribed here).
 # ==============================================================================
 
-test_that("MEANS-SD: pooled morris_dz (pool_sd = TRUE default) matches metafor SMD on change scores", {
+test_that("MEANS-SD: pooled morris_dz (opt-in pool_sd = TRUE) matches metafor SMD on change scores", {
   skip_if_not_installed("metafor")
 
   res <- df.SMC[1:5, ]
@@ -443,14 +457,16 @@ test_that("MEANS-SD: pooled morris_dz (pool_sd = TRUE default) matches metafor S
     vtype = "LS2"
   )
 
-  # metaConvert on the DEFAULT (pool_sd not passed => TRUE)
+  # metaConvert on the OPT-IN pooled path (pool_sd = TRUE passed explicitly --
+  # it is no longer the default, so this must be requested)
   es_mc <- summary(convert_df(res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
     measure = "g",
     smd_to_cor = "viechtbauer",
-    pre_post_to_smd = "morris_dz"
+    pre_post_to_smd = "morris_dz",
+    pool_sd = TRUE
   ), digits = 11)
 
   expect_equal(unique(es_mc$info_used_crude), "means_sd_pre_post")
@@ -470,7 +486,7 @@ test_that("MEANS-SD: pooled morris_dz (pool_sd = TRUE default) matches metafor S
                label = "pooled morris_dz g_se agrees with metafor SMD (LS2) within 2%")
 })
 
-test_that("MEANS-SD: pool_sd defaults to TRUE and is not equivalent to the legacy per-arm path", {
+test_that("MEANS-SD: pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1) and is not equivalent to the pooled path", {
   res <- df.SMC[1:5, ]
   res$n_exp <- res$n_cases
   res$n_nexp <- res$n_controls
@@ -499,16 +515,19 @@ test_that("MEANS-SD: pool_sd defaults to TRUE and is not equivalent to the legac
 
   es_default <- run()
   es_pooled <- run(pool_sd = TRUE)
-  es_legacy <- run(pool_sd = FALSE)
+  es_per_arm <- run(pool_sd = FALSE)
 
-  # The default IS the pooled standardizer
-  expect_equal(es_default$es_crude, es_pooled$es_crude, tolerance = 1e-12)
-  expect_equal(es_default$se_crude, es_pooled$se_crude, tolerance = 1e-12)
+  # The default IS the per-arm standardizer (d_ppc1): each arm is standardized by
+  # its OWN SD, the two within-arm SMDs are subtracted, and their sampling
+  # variances are ADDED (the arms are independent). This is the long-standing
+  # behaviour and the construction metafor users build by hand from SMCR/SMCRH.
+  expect_equal(es_default$es_crude, es_per_arm$es_crude, tolerance = 1e-12)
+  expect_equal(es_default$se_crude, es_per_arm$se_crude, tolerance = 1e-12)
 
-  # ... and the two constructions are genuinely different estimands on this
-  # fixture (the arms' baseline SDs are unequal), so the pool_sd = FALSE added to
-  # Section 1 is load-bearing, not cosmetic.
-  expect_false(isTRUE(all.equal(es_default$es_crude, es_legacy$es_crude,
+  # ... and the pooled standardizer (d_ppc2) is a genuinely DIFFERENT estimand on
+  # this fixture (the arms' SDs are unequal), so it must be opted into explicitly
+  # and the pool_sd = TRUE in Section 1b is load-bearing, not cosmetic.
+  expect_false(isTRUE(all.equal(es_default$es_crude, es_pooled$es_crude,
                                 tolerance = 1e-6)))
 })
 
