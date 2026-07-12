@@ -216,9 +216,14 @@ test_that("MC-SD: morris_dz pooled (default pool_sd = TRUE) matches metafor::esc
       pre_post_to_smd = "morris_dz"
     )
 
-    # Live external reference: two-sample SMD on the change scores.
+    # Live external reference: two-sample SMD on the change scores, metafor's
+    # DEFAULT vtype = "LS". Once the change SD is pooled across arms the pooled
+    # morris_dz estimator IS an independent-groups Hedges g on the change scores,
+    # so agreement is now EXACT in both the point estimate and the variance --
+    # not merely close. (It was previously pinned to vtype = "LS2", the convention
+    # that carried a spurious leading J^2 and understated vi by up to 9%.)
     mf <- metafor::escalc(
-      measure = "SMD", vtype = "LS2",
+      measure = "SMD", vtype = "LS",
       m1i = dat$mean_change_exp[i], m2i = dat$mean_change_nexp[i],
       sd1i = dat$mean_change_sd_exp[i], sd2i = dat$mean_change_sd_nexp[i],
       n1i = dat$n_exp[i], n2i = dat$n_nexp[i]
@@ -235,9 +240,9 @@ test_that("MC-SD: morris_dz pooled (default pool_sd = TRUE) matches metafor::esc
     expect_equal(mc$d, g_ref / J, tolerance = 1e-10,
                  label = paste0("Study ", i, ": pooled morris_dz d matches metafor SMD yi / J"))
 
-    # SE: agrees with metafor up to the J^2-on-the-g^2-term convention difference.
-    expect_equal(mc$g_se, se_ref, tolerance = 1e-2,
-                 label = paste0("Study ", i, ": pooled morris_dz g_se matches metafor SMD (LS2)"))
+    # SE: BIT-EXACT agreement with metafor's default LS variance.
+    expect_equal(mc$g_se, se_ref, tolerance = 1e-12,
+                 label = paste0("Study ", i, ": pooled morris_dz g_se matches metafor SMD (LS)"))
 
     # Anti-regression: the OLD variance carried a spurious 2*(1-r_avg) factor on the
     # N/(n_exp*n_nexp) term. Assert we are NOT back on that formula (it is several percent off).

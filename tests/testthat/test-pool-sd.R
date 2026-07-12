@@ -160,8 +160,16 @@ test_that("pool_sd bonett method: manual formula verification", {
   g_manual <- d_manual * J
   r_avg <- (n1 * r1 + n2 * r2) / N
 
-  var_g_manual <- 2 * J^2 * (1 - r_avg) * (N / (n1 * n2)) * (m / (m - 2)) *
-                  (1 + (n1 * n2 / N) * g_manual^2 / (2 * (1 - r_avg))) - g_manual^2
+  # Bonett (2008) / metafor SMCRH form, lifted to two arms: the numerator's
+  # EMPIRICAL variance (from the pooled change SD) expressed in standardizer
+  # units, plus g^2/(2*nu) with nu = m. No leading J^2. The old form used the
+  # 2(1-r)*sigma^2 identity, which assumes SD_pre = SD_post and understates the
+  # variance by ~43% when SD_pre/SD_post = 0.64.
+  sd_chg1 <- sqrt(sd_pre1^2 + sd_post1^2 - 2 * r1 * sd_pre1 * sd_post1)
+  sd_chg2 <- sqrt(sd_pre2^2 + sd_post2^2 - 2 * r2 * sd_pre2 * sd_post2)
+  sd_chg_pooled <- sqrt(((n1 - 1) * sd_chg1^2 + (n2 - 1) * sd_chg2^2) / m)
+  T1 <- (sd_chg_pooled^2 / sd_pooled^2) * (N / (n1 * n2))
+  var_g_manual <- T1 + g_manual^2 / (2 * N)
 
   expect_equal(res$d, d_manual, tolerance = 1e-8)
   expect_equal(res$g, g_manual, tolerance = 1e-8)
@@ -204,7 +212,9 @@ test_that("pool_sd morris_dz method: manual formula verification", {
   # escalc measure = "SMD" on change scores). No 2(1-r) factor: the dz point
   # estimate carries no sqrt(2(1-r)) rescaling, so its variance cannot either
   # (the factor belongs to the raw-score-metric morris_drm branch only).
-  var_g_manual <- J^2 * (N / (n1 * n2) + g_manual^2 / (2 * m))
+  # metafor::escalc(measure = 'SMD', vtype = 'LS') on the change scores.
+  # No leading J^2; g^2 term divided by 2N (nu = m for a both-arms pooled SD).
+  var_g_manual <- N / (n1 * n2) + g_manual^2 / (2 * N)
 
   expect_equal(res$d, d_manual, tolerance = 1e-8)
   expect_equal(res$g, g_manual, tolerance = 1e-8)
@@ -295,7 +305,8 @@ test_that("pool_sd morris_drm method: manual formula verification", {
   d_manual <- (mean_diff / sd_pooled) * sqrt(2 * (1 - r_avg))
   g_manual <- d_manual * J
 
-  var_g_manual <- J^2 * (2 * (1 - r_avg) * N / (n1 * n2) + g_manual^2 / (2 * m))
+  # d_rm = d_z * sqrt(2(1-r)) with r a known constant, so Var(d_rm) = 2(1-r)*Var(d_z).
+  var_g_manual <- 2 * (1 - r_avg) * (N / (n1 * n2)) + g_manual^2 / (2 * N)
 
   expect_equal(res$d, d_manual, tolerance = 1e-8)
   expect_equal(res$g, g_manual, tolerance = 1e-8)
@@ -324,9 +335,16 @@ test_that("pool_sd morris_dav method: manual formula verification", {
   # Manual calculation
   N <- n1 + n2
   m <- N - 2
-  J <- metaConvert:::.d_j(m)
   mean_diff <- (mean_post1 - mean_pre1) - (mean_post2 - mean_pre2)
   r_avg <- (n1 * r1 + n2 * r2) / N
+
+  # d_av's standardizer is the quadratic mean of two CORRELATED SDs, so its
+  # effective df is nu = 2m/(1 + r^2), not m (Cousineau 2020 eq. 2; metafor SMCRP
+  # uses the same modified df per arm, and df add across independent arms).
+  # J must be evaluated at nu -- as metaConvert's own single-group dav branch
+  # already does. Using J(m) here over-shrinks g by ~1.6% at n = 10/arm.
+  nu <- 2 * m / (1 + r_avg^2)
+  J <- metaConvert:::.d_j(nu)
 
   sd_av1 <- sqrt((sd_pre1^2 + sd_post1^2) / 2)
   sd_av2 <- sqrt((sd_pre2^2 + sd_post2^2) / 2)
@@ -335,8 +353,15 @@ test_that("pool_sd morris_dav method: manual formula verification", {
   d_manual <- mean_diff / sd_pooled
   g_manual <- d_manual * J
 
-  var_g_manual <- J^2 * (2 * (1 - r_avg) * N / (n1 * n2) +
-                         g_manual^2 * (1 + r_avg^2) / (4 * m))
+  # metafor SMCRP / Cousineau (2020) eq. 2 lifted to two arms: the standardizer is
+  # the quadratic mean of two correlated SDs, so its effective df is nu = 2m/(1+r^2)
+  # and the g^2 term is divided by 2*nu == (1 + r^2)/(4N) * ... ; the numerator term
+  # is the empirical one (robust to SD_pre != SD_post).
+  sd_chg1 <- sqrt(sd_pre1^2 + sd_post1^2 - 2 * r1 * sd_pre1 * sd_post1)
+  sd_chg2 <- sqrt(sd_pre2^2 + sd_post2^2 - 2 * r2 * sd_pre2 * sd_post2)
+  sd_chg_pooled <- sqrt(((n1 - 1) * sd_chg1^2 + (n2 - 1) * sd_chg2^2) / m)
+  T1 <- (sd_chg_pooled^2 / sd_pooled^2) * (N / (n1 * n2))
+  var_g_manual <- T1 + g_manual^2 * (1 + r_avg^2) / (4 * N)
 
   expect_equal(res$d, d_manual, tolerance = 1e-8)
   expect_equal(res$g, g_manual, tolerance = 1e-8)
@@ -452,8 +477,11 @@ test_that("pool_sd with very unequal correlations", {
   expect_true(res$g_ci_up > res$g)
 })
 
-test_that("pool_sd bonett with small N (edge case m <= 2)", {
-  # N = 4 gives m = 2, bonett variance has m/(m-2) which is undefined
+test_that("pool_sd bonett at the smallest usable N (m = 2) now yields a finite variance", {
+  # N = 4 gives m = 2. The OLD bonett variance was the Morris (2008) eq. 25
+  # plug-in form, which contains m/(m - 2) and is therefore undefined at m = 2 --
+  # so the package returned NA. The LS form has no such singularity, so a finite
+  # (if very wide) variance is now returned. J itself still requires df > 1.
   res <- es_from_means_sd_pre_post(
     n_exp = 2, n_nexp = 2,
     mean_pre_exp = 20, mean_exp = 25,
@@ -465,9 +493,9 @@ test_that("pool_sd bonett with small N (edge case m <= 2)", {
     pool_sd = TRUE
   )
 
-  # d should still be computed, but variance should be NA
   expect_false(is.na(res$d))
-  expect_true(is.na(res$g_se))
+  expect_false(is.na(res$g_se))
+  expect_true(res$g_se > 0)
 })
 
 test_that("pool_sd works through convert_df pipeline", {

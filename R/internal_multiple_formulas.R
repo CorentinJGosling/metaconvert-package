@@ -770,7 +770,7 @@
                              r_pre_post_exp, r_pre_post_nexp,
                              pre_post_to_smd,
                              pool_sd = FALSE) {
-  # pool_sd = TRUE: standardizing SD pooled across groups (Harrer et al. 2025)
+  # pool_sd = TRUE: standardizing SD pooled across groups (Morris 2008, eq. 9/13)
   if (pool_sd) {
     return(.pooled_pre_post_to_smd(
       mean_pre_exp = mean_pre_exp, mean_pre_sd_exp = mean_pre_sd_exp,
@@ -816,7 +816,40 @@
 }
 
 ################# POOLED TWO-GROUP PRE POST to SMD ##############
-#' Between-group SMD with the standardizing SD pooled across groups (Morris 2007; Harrer et al. 2025)
+#' Between-group pre/post SMD, standardizing SD pooled across arms
+#'
+#' All four branches follow the single rule that metafor's own escalc() encodes for
+#' every pre/post measure (SMD, SMCC, SMCR, SMCRH, SMCRP):
+#'
+#'     Var(g) = Var(numerator) / SD_standardizer^2  +  g^2 / (2 * nu_std)
+#'     J      = J(nu_std)
+#'
+#' with NO leading J^2 factor, and Var(d) obtained by substituting d for g (NOT by
+#' dividing Var(g) by J^2 -- that is only an identity under the LS2 convention).
+#' nu_std is the degrees of freedom of the STANDARDIZER, which is what the g^2 term
+#' is divided by: N-2 for an SD pooled over both arms, and 2(N-2)/(1+r^2) for the
+#' quadratic-mean-of-two-correlated-SDs standardizer used by d_av (Cousineau, 2020).
+#'
+#' Var(numerator) is taken from the EMPIRICAL pooled change SD, not from the identity
+#' Var(change) = 2*sigma^2*(1-r), which is valid only when SD_pre = SD_post. This is
+#' the heteroscedasticity-robust choice (metafor SMCRH/SMCRPH, attributed to Bonett
+#' 2008) and it is already what this package's SINGLE-GROUP bonett branch does. It
+#' matters: with SD_pre/SD_post = 0.64 (the median in the authors' own PETRA data) the
+#' homoscedastic form understates Var(g_bonett) by ~43% and its CI coverage falls to
+#' 0.86; the robust form holds coverage at 0.95 in every regime tested.
+#'
+#' References:
+#'   Hedges (1981); Viechtbauer (2007) JEBS 32(1):39-60, eq. 31 -- two-sample SMD "LS"
+#'   Bonett (2008) Psych Methods 13(2):99-109 -- heteroscedasticity-robust variance
+#'   Cousineau (2020) TQMP 16(4):418-421, eq. 2 -- the (1 + r^2) effective df for d_av
+#'   Morris (2008) ORM 11(2):364-386 -- d_ppc2 / d_ppc3 point estimates (eq. 8-14)
+#'   Viechtbauer (2007, p.57) recommends the large-sample ("LS") forms over both the
+#'   plug-in-exact and the unbiased forms; metafor defaults to LS.
+#'
+#' NOTE: no published sampling variance exists for the POOLED TWO-GROUP form of d_z,
+#' d_rm or d_av. These are delta-method generalizations of the single-group results,
+#' obtained by carrying the standardizer's degrees of freedom across the two arms.
+#' They are Monte-Carlo calibrated in tests/testthat/test-pooled-variance-calibration.R.
 #'
 #' @noRd
 .pooled_pre_post_to_smd <- function(mean_pre_exp, mean_pre_sd_exp,
@@ -835,9 +868,8 @@
 
   N <- n_exp + n_nexp
   m <- N - 2 # pooled degrees of freedom
-  # m <= 2 leaves no residual df for the variance; m <= 0 breaks J itself
+  # m <= 0 breaks J; the variance additionally needs m > 0
   m <- ifelse(is.finite(m) & m > 0, m, NA_real_)
-  J <- .d_j(m)
 
   change_exp <- mean_exp - mean_pre_exp
   change_nexp <- mean_nexp - mean_pre_nexp
@@ -845,81 +877,85 @@
 
   r_avg <- (n_exp * r_pre_post_exp + n_nexp * r_pre_post_nexp) / N
 
-  if (pre_post_to_smd == "bonett") {
-    # baseline SDs pooled across groups (Harrer SMD_CS/BL)
-    sd_pooled <- sqrt(((n_exp - 1) * mean_pre_sd_exp^2 +
-                       (n_nexp - 1) * mean_pre_sd_nexp^2) / m)
+  # Pooled change SD: the empirical scale of the numerator. Used by every branch,
+  # so that no branch assumes SD_pre = SD_post.
+  sd_change_exp <- sqrt(mean_pre_sd_exp^2 + mean_sd_exp^2 -
+                        2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
+  sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
+                         2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
+  sd_change_pooled <- sqrt(((n_exp - 1) * sd_change_exp^2 +
+                            (n_nexp - 1) * sd_change_nexp^2) / m)
 
-    sd_pooled <- .guard_standardizer(sd_pooled)
+  # Var(mean_diff) on the change scale, in units of sd_change_pooled^2
+  T_change <- N / (n_exp * n_nexp)
+
+  if (pre_post_to_smd == "bonett") {
+    # Morris (2008) d_ppc2: numerator = difference in mean change, standardizer =
+    # BASELINE SD pooled across arms (eq. 8-9). Variance is the SMCRH form: the
+    # numerator's empirical variance expressed in standardizer units.
+    sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * mean_pre_sd_exp^2 +
+                                           (n_nexp - 1) * mean_pre_sd_nexp^2) / m))
+    nu <- m
+    J <- .d_j(nu)
     d <- mean_diff / sd_pooled
     g <- d * J
 
-    # Morris (2007) variance, Harrer eq. 14
-    if (m > 2) {
-      var_g <- 2 * J^2 * (1 - r_avg) * (N / (n_exp * n_nexp)) * (m / (m - 2)) *
-               (1 + (n_exp * n_nexp / N) * g^2 / (2 * (1 - r_avg))) - g^2
-    } else {
-      var_g <- NA_real_
-    }
-    var_d <- var_g / J^2
+    T1 <- (sd_change_pooled^2 / sd_pooled^2) * T_change
+    var_g <- T1 + g^2 / (2 * N)
+    var_d <- T1 + d^2 / (2 * N)
 
   } else if (pre_post_to_smd == "morris_dz") {
-    # change SDs pooled across groups (Harrer SMD_CS/CS)
-    sd_change_exp <- sqrt(mean_pre_sd_exp^2 + mean_sd_exp^2 -
-                          2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
-    sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
-                           2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
-    sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_change_exp^2 +
-                       (n_nexp - 1) * sd_change_nexp^2) / m))
-
+    # Change-score metric. Once the change SD is pooled across arms this is exactly
+    # an independent-groups Hedges g computed on the change scores, so its variance
+    # is metafor::escalc(measure = "SMD", vtype = "LS") -- no r, no 2(1-r) term.
+    sd_pooled <- .guard_standardizer(sd_change_pooled)
+    nu <- m
+    J <- .d_j(nu)
     d <- mean_diff / sd_pooled
     g <- d * J
 
-    # Two-sample SMD variance on the change-score scale (Hedges 1981), as in
-    # metafor::escalc(measure = "SMD") on change scores. Deliberately departs
-    # from Harrer et al. (2025) eq. 13 for SMD_CS/CS: their 2(1-r) factor
-    # belongs only to raw-score-metric estimators (the morris_drm branch below,
-    # whose point estimate carries the sqrt(2(1-r)) rescaling) — the dz point
-    # estimate does not, so its variance cannot either.
-    var_g <- J^2 * (N / (n_exp * n_nexp) + g^2 / (2 * m))
-    var_d <- var_g / J^2
+    var_g <- T_change + g^2 / (2 * N)
+    var_d <- T_change + d^2 / (2 * N)
 
   } else if (pre_post_to_smd == "morris_drm") {
-    # change SDs pooled, raw-score correction
-    sd_change_exp <- sqrt(mean_pre_sd_exp^2 + mean_sd_exp^2 -
-                          2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
-    sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
-                           2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
-    sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_change_exp^2 +
-                       (n_nexp - 1) * sd_change_nexp^2) / m))
-
-    d <- (mean_diff / sd_pooled) * sqrt(2 * (1 - r_avg))
+    # Raw-score metric: d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13).
+    # r is a known constant, so Var(d_rm) = 2(1-r) * Var(d_z): the 2(1-r) here is a
+    # deterministic rescaling, NOT a homoscedasticity assumption.
+    sd_pooled <- .guard_standardizer(sd_change_pooled)
+    nu <- m
+    J <- .d_j(nu)
+    k <- sqrt(2 * (1 - r_avg))
+    d <- (mean_diff / sd_pooled) * k
     g <- d * J
 
-    # Harrer eq. 13
-    var_g <- J^2 * (2 * (1 - r_avg) * N / (n_exp * n_nexp) + g^2 / (2 * m))
-    var_d <- var_g / J^2
+    T1 <- 2 * (1 - r_avg) * T_change
+    var_g <- T1 + g^2 / (2 * N)
+    var_d <- T1 + d^2 / (2 * N)
 
   } else if (pre_post_to_smd == "morris_dav") {
-    # average SDs pooled across groups
+    # Morris (2008) d_ppc3: standardizer = quadratic mean of the pre and post SDs,
+    # pooled across arms (eq. 12-13). Its effective df is nu = 2m/(1+r^2)
+    # (Cousineau 2020 eq. 2; metafor SMCRP uses 2(n-1)/(1+r^2) per arm, and df add
+    # across independent arms), so J is evaluated at nu and the g^2 term is divided
+    # by 2*nu -- which is exactly the (1 + r^2)/(4N) coefficient below.
     sd_av_exp <- sqrt((mean_pre_sd_exp^2 + mean_sd_exp^2) / 2)
     sd_av_nexp <- sqrt((mean_pre_sd_nexp^2 + mean_sd_nexp^2) / 2)
     sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_av_exp^2 +
-                       (n_nexp - 1) * sd_av_nexp^2) / m))
-
+                                           (n_nexp - 1) * sd_av_nexp^2) / m))
+    nu <- 2 * m / (1 + r_avg^2)
+    J <- .d_j(nu)
     d <- mean_diff / sd_pooled
     g <- d * J
 
-    # Variance analogous to Harrer eq. 13 with (1+r^2)/4 correction
-    var_g <- J^2 * (2 * (1 - r_avg) * N / (n_exp * n_nexp) +
-                    g^2 * (1 + r_avg^2) / (4 * m))
-    var_d <- var_g / J^2
+    T1 <- (sd_change_pooled^2 / sd_pooled^2) * T_change
+    var_g <- T1 + g^2 * (1 + r_avg^2) / (4 * N)
+    var_d <- T1 + d^2 * (1 + r_avg^2) / (4 * N)
   }
 
-  d_ci_lo <- d - sqrt(var_d) * qt(.975, m)
-  d_ci_up <- d + sqrt(var_d) * qt(.975, m)
-  g_ci_lo <- g - sqrt(var_g) * qt(.975, m)
-  g_ci_up <- g + sqrt(var_g) * qt(.975, m)
+  d_ci_lo <- d - sqrt(var_d) * qt(.975, nu)
+  d_ci_up <- d + sqrt(var_d) * qt(.975, nu)
+  g_ci_lo <- g - sqrt(var_g) * qt(.975, nu)
+  g_ci_up <- g + sqrt(var_g) * qt(.975, nu)
 
   res <- cbind(
     d, var_d, d_ci_lo, d_ci_up,
@@ -1149,12 +1185,18 @@
   } else if (context == "pre_post_means") {
     paste0(
       "For pre-post means data, four standardization methods are available:\n\n",
-      "  - 'bonett': Baseline SD standardizer (conservative)\n",
-      "  - 'morris_drm' (alias: 'cooper'): Raw score standardizer [COMMON]\n",
-      "  - 'morris_dz': Change score standardizer (r-independent)\n",
-      "  - 'morris_dav': Average SD standardizer [RECOMMENDED]\n\n",
-      "See Morris & DeShon (2002) and Bonett (2008) for detailed comparisons.\n",
-      "Default is 'bonett' but 'morris_dav' is often recommended for robustness."
+      "  - 'bonett': baseline-SD standardizer (Morris 2008 d_ppc2). Sensitive to a\n",
+      "      baseline SD that is restricted relative to the endpoint SD (e.g. by\n",
+      "      eligibility cut-offs), which inflates the effect size.\n",
+      "  - 'morris_drm' (alias: 'cooper'): change SD rescaled by sqrt(2(1-r)) onto\n",
+      "      the raw-score metric. Depends on r_pre_post; assumes SD_pre = SD_post.\n",
+      "  - 'morris_dz': change-SD standardizer. Independent of r, but NOT on the\n",
+      "      same metric as an endpoint SMD -- do not pool the two (Cochrane 10.5.2).\n",
+      "  - 'morris_dav': average-SD standardizer (Morris 2008 d_ppc3). Morris\n",
+      "      recommends AGAINST it (2008, p.384): its sampling variance was unknown\n",
+      "      and it is downward-biased when the post-treatment SD inflates.\n\n",
+      "No single method is best in all cases; the choice changes the estimand.\n",
+      "See Morris (2008) and Morris & DeShon (2002) for detailed comparisons."
     )
   } else {
     ""

@@ -19,6 +19,37 @@
 
 ## Bug fixes
 
+- **All four pooled variances rebuilt on one rule.** The pooled two-group variances now
+  follow the rule metafor's own `escalc()` encodes for every pre/post measure
+  (`SMD`, `SMCC`, `SMCR`, `SMCRH`, `SMCRP`):
+
+      Var(g) = Var(numerator)/SD_standardizer^2 + g^2/(2*nu_std),   J = J(nu_std)
+
+  with **no leading `J^2`** and `Var(d)` obtained by substituting `d` for `g` (not by
+  dividing `Var(g)` by `J^2`). Three defects are fixed by this:
+  - *Spurious leading `J^2`* on `morris_dz`/`morris_drm`/`morris_dav` (the `LS2`
+    convention). It understated the sampling variance by `1 - J^2` — 9% at n = 10/arm,
+    3% at n = 30/arm — which over-weighted small studies in an inverse-variance
+    meta-analysis. Pooled `morris_dz` is now **bit-exact** with
+    `metafor::escalc(measure = "SMD")` on change scores.
+  - *Homoscedasticity-fragile numerator* on `bonett` and `morris_dav`. Both used the
+    identity `Var(change) = 2*sigma^2*(1 - r)`, valid only when `SD_pre = SD_post`. The
+    numerator variance is now taken from the **empirical pooled change SD** (metafor's
+    heteroscedasticity-robust `SMCRH`/`SMCRPH` treatment, and already what this
+    package's single-group `bonett` did). This is the largest of the three: at
+    `SD_pre/SD_post = 0.64`, `bonett`'s variance was **43% too small** and its 95% CI
+    covered only **86%** of the time; it now covers at nominal rate in every regime
+    tested (Monte Carlo, `tests/testthat/test-pooled-variance-calibration.R`).
+  - *Wrong degrees of freedom for `morris_dav`.* Its standardizer is the quadratic mean
+    of two correlated SDs, so its effective df is `nu = 2m/(1 + r^2)` (Cousineau, 2020,
+    eq. 2), not `m`. `J` and the CI are now evaluated at `nu` — as metafor's `SMCRP` and
+    this package's own single-group `dav` branch already did. The `(1 + r^2)/4`
+    coefficient in the variance is *correct and sourced*; it is exactly `1/(2*nu)`.
+
+  No published sampling variance exists for the pooled two-group form of `d_z`, `d_rm`
+  or `d_av`; these are delta-method generalizations of the single-group results, and are
+  Monte-Carlo calibrated in the test suite.
+
 - **Pooled `morris_dz` variance.** The pooled change-SD-standardized SMD
   (`pre_post_to_smd = "morris_dz"`, `pool_sd = TRUE`) reused the `morris_drm` variance,
   whose `2(1 - r)` factor belongs only to estimators whose point estimate carries the

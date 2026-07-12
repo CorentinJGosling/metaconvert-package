@@ -575,22 +575,21 @@ test_that("morris_dz two-group pooled standardizer (default) matches metafor SMD
   )
   expect_equal(result$g, as.numeric(mf$yi), tolerance = 1e-10)
 
-  # Variance: metaConvert defines var(g) = J^2 * var(d) throughout, with
-  #   var(d) = N/(n_exp*n_nexp) + g^2/(2*m),  m = N - 2
-  # (Hedges 1981 two-sample SMD on the change-score scale). This carries NO
-  # 2*(1 - r) factor: that factor belongs to the raw-score-metric d_rm estimator,
-  # whose point estimate is rescaled by sqrt(2*(1 - r)); d_z is not.
-  # It differs by ~2% from metafor's large-sample vi, which omits the J^2 factor
-  # and uses N rather than N - 2 in the g^2 term -- a convention difference, not
-  # a disagreement about the estimator, so the variance is pinned to the formula.
+  # Variance: the pooled morris_dz estimator is an independent-groups Hedges g on
+  # the change scores, so its variance is Hedges (1981) / metafor's default "LS":
+  #   var(g) = N/(n_t*n_c) + g^2/(2*N)      and    var(d) = N/(n_t*n_c) + d^2/(2*N)
+  # There is NO leading J^2 (that was the LS2 convention, which understated vi by
+  # up to 9% at small n), and NO 2*(1 - r) factor (that belongs to the raw-score
+  # metric d_rm, whose point estimate is rescaled by sqrt(2*(1 - r)); d_z is not).
+  # var(d) is the d-scale twin of var(g), NOT var(g)/J^2.
   N <- n_t + n_c
   m <- N - 2
   J <- exp(lgamma(m / 2) - 0.5 * log(m / 2) - lgamma((m - 1) / 2))
   sd_pooled <- sqrt(((n_t - 1) * sd_change_t^2 + (n_c - 1) * sd_change_c^2) / m)
   d_expected <- ((mean_post_t - mean_pre_t) - (mean_post_c - mean_pre_c)) / sd_pooled
   g_expected <- d_expected * J
-  var_g_expected <- J^2 * (N / (n_t * n_c) + g_expected^2 / (2 * m))
-  var_d_expected <- var_g_expected / J^2
+  var_g_expected <- N / (n_t * n_c) + g_expected^2 / (2 * N)
+  var_d_expected <- N / (n_t * n_c) + d_expected^2 / (2 * N)
 
   expect_equal(result$d, d_expected, tolerance = 1e-10)
   expect_equal(result$d_se^2, var_d_expected, tolerance = 1e-10)
