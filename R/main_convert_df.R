@@ -672,10 +672,11 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       message(
         "Note: pre_post_to_smd = '", pre_post_to_smd, "' requires separate pre/post SDs, ",
         "which mean-change and paired t/F data do not carry.\n",
-        "  Those rows use 'cooper' (morris_drm, change-SD standardizer) instead. ",
-        "Effect sizes from these\n  rows are therefore on a different standardizer than '",
-        pre_post_to_smd, "' rows. See the 'es_flags'\n  column of summary(..., flags = TRUE) ",
-        "for the rows affected."
+        "  Those rows use 'cooper' (morris_drm: the change SD, rescaled by sqrt(2(1 - r)) ",
+        "onto the\n  raw-score metric) instead. Both standardizers are on the raw-score ",
+        "scale, so the rows\n  remain combinable, but 'morris_drm' additionally assumes ",
+        "equal pre/post SDs and depends\n  on r_pre_post. Supply pre/post SDs to use '",
+        pre_post_to_smd, "' throughout."
       )
     }
   }

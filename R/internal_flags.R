@@ -2304,24 +2304,29 @@
 
   # E6: Cross-row SMD standardizer mixing (change-SD vs raw-score-SD metric)
   #
+  # [INFO], not [DISCORDANT]: DISCORDANT is reserved for a single row whose
+  # several input sources disagree with one another. This is a cross-row
+  # property of the pool -- every row may be individually correct.
+  #
   # An SMD standardized by the CHANGE SD (morris_dz on pre/post or mean-change
   # data) is not on the same scale as an SMD standardized by a raw-score SD:
   # under equal pre/post SDs, sd_change = sd_raw * sqrt(2(1-r)), so the two
   # differ by a factor 1/sqrt(2(1-r)) (they coincide only at r = 0.5). The
-  # Cochrane Handbook (v6, section 10.5.2) is explicit that change-score SMDs
-  # and post-intervention SMDs must not be combined in one SMD meta-analysis,
-  # "because the SDs used in the standardization reflect different things".
-  # The package's own docs say the same of d_rm vs d_z.
+  # Cochrane Handbook (v6, section 10.5.2) advises against combining
+  # change-score SMDs with post-intervention SMDs, "because the SDs used in the
+  # standardization reflect different things". The package's own docs say the
+  # same of d_rm vs d_z.
   #
   # Rows are classified by the standardizer their info_used + pre_post_to_smd
   # imply. Endpoint (means_sd etc.), baseline-SD (bonett) and raw-metric d_rm
   # rows all live on a raw-score SD, so they are pooled into one "raw-score-SD"
-  # class; only morris_dz rows sit on the change-SD metric.
+  # class and mixing them raises NOTHING -- d_rm is precisely the transformation
+  # onto that metric. Only morris_dz rows sit on the change-SD metric.
   f_std_mix <- vector("list", n)
   for (i in seq_len(n)) f_std_mix[[i]] <- character(0)
   smd_measures <- c("d", "g", "dw", "gw")
-  if (measure %in% smd_measures && !is.null(info_used) &&
-      identical(pre_post_to_smd, "morris_dz")) {
+  if (isTRUE(opts$enable_cross_row) && measure %in% smd_measures &&
+      !is.null(info_used) && identical(pre_post_to_smd, "morris_dz")) {
     # methods whose standardizer is the change SD when pre_post_to_smd is dz
     change_metric_methods <- c(
       "means_sd_pre_post", "means_se_pre_post", "means_ci_pre_post",
@@ -2342,7 +2347,7 @@
         other_metric <- if (row_is_change) "a raw-score-SD metric" else "the change-SD metric (d_z)"
         msuf <- .method_suffix(info_used[i])
         f_std_mix[[i]] <- paste0(
-          "[DISCORDANT] Mixed SMD standardizers: this row is on ", this_metric, msuf,
+          "[INFO] Mixed SMD standardizers: this row is on ", this_metric, msuf,
           ", but other rows are on ", other_metric,
           " - these differ by a factor 1/sqrt(2(1-r)) and should not be pooled ",
           "(Cochrane Handbook 10.5.2). Use pre_post_to_smd = 'morris_drm' (or ",
@@ -2363,7 +2368,7 @@
   # are simply the best obtainable from the reported statistic.
   f_paired_t_mix <- vector("list", n)
   for (i in seq_len(n)) f_paired_t_mix[[i]] <- character(0)
-  if (isTRUE(opts$enable_informational) && measure %in% smd_measures &&
+  if (isTRUE(opts$enable_cross_row) && measure %in% smd_measures &&
       !is.null(info_used) && isTRUE(pool_sd)) {
     per_arm_only_methods <- c("paired_t", "paired_t_pval", "paired_f", "paired_f_pval")
     pooled_capable_methods <- c(

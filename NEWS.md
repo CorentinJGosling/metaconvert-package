@@ -39,10 +39,14 @@
 
 ## New
 
-- **Estimand-mixing flags** in `summary(..., flags = TRUE)` for `measure = "d"/"g"/"dw"/"gw"`:
-  a `[DISCORDANT]` flag when change-SD-standardized rows (`morris_dz`) share a pool with
-  raw-score-SD rows, which the Cochrane Handbook (v6, §10.5.2) says must not be combined;
-  and an `[INFO]` flag for the per-arm-standardized paired-t rows described above.
+- **Estimand-mixing flags** in `summary(..., flags = TRUE)` for `measure = "d"/"g"/"dw"/"gw"`,
+  both `[INFO]` and both gated by `enable_cross_row` (they are properties of the pool, not
+  of any one row -- every row may be individually correct, so they are not `[DISCORDANT]`):
+  one when change-SD-standardized rows (`morris_dz`) share a pool with raw-score-SD rows,
+  which the Cochrane Handbook (v6, §10.5.2) advises against combining; and one for the
+  per-arm-standardized paired-t rows described above. Note that `morris_drm` rows mixed
+  with endpoint rows raise **nothing**: `d_rm` is precisely the transformation onto the
+  raw-score metric, so that combination is the legitimate one.
 - **`convert_df()` now reports its silent substitutions** (when `verbose = TRUE`): the
   coercion of `pre_post_to_smd = "bonett"/"morris_dav"` to `"cooper"` for mean-change and
   paired data, and the imputation of an unreported `r_pre_post` for rows that consume it
