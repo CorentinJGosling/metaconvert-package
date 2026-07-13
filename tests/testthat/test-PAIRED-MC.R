@@ -9,8 +9,8 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 # produce the same results as paired_t (all derive from the same underlying
 # statistics: mean change, SE of change, t = MC/SE, CI = MC ± t*SE, pval from t).
 #
-# SCOPE: these are equivalence tests of the LEGACY per-arm standardizer
-# (pool_sd = FALSE), NOT of the current pooled default (pool_sd = TRUE).
+# SCOPE: these are equivalence tests of the DEFAULT per-arm standardizer
+# (pool_sd = FALSE), NOT of the opt-in pooled standardizer (pool_sd = TRUE).
 #
 # Why they must be: a paired t (or its CI/p-value re-expressions) identifies each
 # arm's mean_change / sd_change, but it does NOT identify the two arms' SD ratio,
@@ -19,7 +19,7 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 # no pool_sd argument and always uses the per-arm construction (standardize each
 # arm by its OWN change SD, then subtract). The only pool_sd setting under which
 # "mean_change_* == paired_t" can hold is FALSE, so the mean-change side is
-# pinned to pool_sd = FALSE below. The pooled default (pool_sd = TRUE) is a
+# pinned to pool_sd = FALSE below. The opt-in pool_sd = TRUE is a
 # different, non-equivalent estimand; it is covered by the two tests at the
 # bottom of this file, which check the same format equivalence among the
 # mean-change routes under the shipped default and assert that the two
@@ -171,10 +171,10 @@ test_that("MC+pval vs paired_t — df.SMC (cooper, d and g; legacy per-arm stand
 # that is the only construction a paired t can be compared against (see header).
 # The format-equivalence property they check -- SD, SE, CI and p-value are four
 # encodings of the same change statistics, so they must yield one ES -- is
-# independent of the standardizer, and metaConvert now ships pool_sd = TRUE by
-# default. Re-check the equivalence under the shipped default, using
-# mean_change_sd (which the paired-t route cannot stand in for) as the reference.
-test_that("MC format equivalence holds under the pooled default (pool_sd = TRUE)", {
+# independent of the standardizer. Re-check the equivalence under the opt-in
+# pool_sd = TRUE, using mean_change_sd (which the paired-t route cannot stand in
+# for) as the reference.
+test_that("MC format equivalence holds under the opt-in pooled standardizer (pool_sd = TRUE)", {
   ref_d <- run_pathway(dat, "mean_change_sd", "d", "cooper", pool_sd = TRUE)
   expect_equal(unique(ref_d$info_used_crude), "mean_change_sd")
 

@@ -20,7 +20,7 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 #   8. es_from_paired_t_single_group()
 #
 # External validation sources:
-#   - metafor::escalc (SMCRH, SMCRP, SMCC, MN)
+#   - metafor::escalc (SMCRH, SMCRPH, SMCC, MN)
 #   - TOSTER::smd_calc (with raw data generation)
 #   - Morris & DeShon (2002) manual formulas
 #
@@ -28,7 +28,7 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 #
 # Tolerance standards:
 #   - 1e-9: bonett vs metafor SMCRH (exact match)
-#   - 1e-6: morris_dav vs metafor SMCRP (modified df)
+#   - 1e-6: morris_dav vs metafor SMCRPH (heteroscedasticity-robust, Bonett 2008)
 #   - 1e-10: Manual formula implementations
 #   - 1e-9: TOSTER g (effect size only, NOT SE - see note below)
 #
@@ -171,9 +171,9 @@ test_that("MEANS-SD-SG: cooper single-group matches Morris & DeShon 2002 (d + d_
 })
 
 # -----------------------------------------------------------------------------
-# Test 1.3: morris_dav single-group matches metafor SMCRP (g + g_se)
+# Test 1.3: morris_dav single-group matches metafor SMCRPH (g + g_se)
 # -----------------------------------------------------------------------------
-test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRP (g + g_se)", {
+test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRPH (g + g_se)", {
   # Prepare data (use only experimental group)
   res <- data.frame(
     study_id = df_base$study_id,
@@ -198,11 +198,12 @@ test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRP (g + g_se)
   # Verify correct hierarchy was used
   expect_equal(unique(es_mc$info_used_crude), "means_sd_pre_post_single_group")
 
-  # metafor SMCRP calculation
+  # metafor SMCRPH calculation (heteroscedasticity-robust average-SD standardizer
+  # = Bonett 2008 eq. 10). metaConvert's single-group d_av is bit-exact with it.
   yi_mf <- vi_mf <- rep(NA, nrow(res))
   for (i in seq_len(nrow(res))) {
     esc <- escalc(
-      measure = "SMCRP",
+      measure = "SMCRPH",
       m1i = res$mean_exp[i],
       m2i = res$mean_pre_exp[i],
       sd1i = res$mean_sd_exp[i],
@@ -214,16 +215,15 @@ test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRP (g + g_se)
     vi_mf[i] <- esc$vi
   }
 
-  # Test effect sizes and SEs
-  # Use 1e-6 tolerance due to modified df in SMCRP
+  # Test effect sizes and SEs (bit-exact; loose tol only for safety)
   expect_equal(es_mc$es_crude, yi_mf, tolerance = 1e-6)
   expect_equal(es_mc$se_crude, sqrt(vi_mf), tolerance = 1e-6)
 })
 
 # -----------------------------------------------------------------------------
-# Test 1.4: morris_dav single-group matches metafor SMCRP manual formula
+# Test 1.4: morris_dav single-group matches metafor SMCRPH manual formula
 # -----------------------------------------------------------------------------
-test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRP manual (d + d_se)", {
+test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRPH manual (d + d_se)", {
   # Prepare data (use only experimental group)
   res <- data.frame(
     study_id = df_base$study_id,
@@ -259,10 +259,14 @@ test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRP manual (d 
   J <- exp(lgamma(mi / 2) - log(sqrt(mi / 2)) - lgamma((mi - 1) / 2))
   g_av_manual <- d_av_manual * J
 
-  # Variance (metaConvert formula matching metafor SMCRP)
-  # var(g) = 2*(1-r)/n + g^2*(1+r^2)/(4*n)
-  g_av_var_manual <- 2 * (1 - res$r_pre_post_exp) / res$n_exp +
-    g_av_manual^2 * (1 + res$r_pre_post_exp^2) / (4 * res$n_exp)
+  # Variance: metafor SMCRPH "LS" == Bonett (2008) eq. 10 (heteroscedasticity-robust,
+  # not the homoscedastic SMCRP 2(1-r)/n + g^2(1+r^2)/(4n)). Both terms use df = n-1.
+  sd_diff2 <- res$mean_pre_sd_exp^2 + res$mean_sd_exp^2 -
+    2 * res$r_pre_post_exp * res$mean_pre_sd_exp * res$mean_sd_exp
+  fm <- res$mean_pre_sd_exp^4 + res$mean_sd_exp^4 +
+    2 * res$r_pre_post_exp^2 * res$mean_pre_sd_exp^2 * res$mean_sd_exp^2
+  g_av_var_manual <- sd_diff2 / (sd_av^2 * (res$n_exp - 1)) +
+    g_av_manual^2 * fm / (8 * sd_av^4 * (res$n_exp - 1))
   g_av_se_manual <- sqrt(g_av_var_manual)
 
   # Test effect sizes and SEs

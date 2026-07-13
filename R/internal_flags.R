@@ -861,6 +861,50 @@
     }
   }
 
+  # V30: baseline statistic copied into the endpoint slot (Kanukula 2024 #9/#10).
+  # Two timepoints from the same patients essentially never reproduce an
+  # identical SD (or mean); an exact baseline<->endpoint tie signals a copy.
+  # Complementary to V18, which tests the sd_baseline/sd_endpoint ratio and by
+  # design ignores the ratio = 1.00 a copy produces. Warn only, data preserved,
+  # always active (a high-specificity exact-equality check, like V24/V28).
+  .v30_equal <- function(pre_col, post_col, positive_only) {
+    if (!all(c(pre_col, post_col) %in% colnames(x))) return(rep(NA_real_, n))
+    pre  <- suppressWarnings(as.numeric(x[[pre_col]]))
+    post <- suppressWarnings(as.numeric(x[[post_col]]))
+    ok <- !is.na(pre) & !is.na(post) & pre == post
+    if (positive_only) ok <- ok & pre > 0
+    ifelse(ok, post, NA_real_)
+  }
+  v30_sd_e <- .v30_equal("mean_pre_sd_exp",  "mean_sd_exp",  TRUE)
+  v30_sd_n <- .v30_equal("mean_pre_sd_nexp", "mean_sd_nexp", TRUE)
+  v30_mn_e <- .v30_equal("mean_pre_exp",     "mean_exp",     FALSE)
+  v30_mn_n <- .v30_equal("mean_pre_nexp",    "mean_nexp",    FALSE)
+  for (i in seq_len(n)) {
+    sd_e <- v30_sd_e[i]; sd_n <- v30_sd_n[i]
+    has_e <- !is.na(sd_e); has_n <- !is.na(sd_n)
+    both_sd <- has_e && has_n
+    # a lone-arm SD tie needs >= 2 decimals to be distinctive (integer SDs
+    # collide by chance too often to flag on a single arm)
+    lone_val <- if (has_e && !has_n) sd_e else if (has_n && !has_e) sd_n else NA_real_
+    fire <- both_sd || (!is.na(lone_val) && .count_decimals(lone_val) >= 2)
+    if (!isTRUE(fire)) next
+    # NB: no "; " anywhere in this message - the flag merge in .flag_es_quality
+    # splits on "; ", so an internal one would shatter and mis-route the flag
+    parts <- character(0)
+    if (has_e) parts <- c(parts, sprintf("'mean_sd_exp' = 'mean_pre_sd_exp' = %s",
+                                          format(sd_e, scientific = FALSE)))
+    if (has_n) parts <- c(parts, sprintf("'mean_sd_nexp' = 'mean_pre_sd_nexp' = %s",
+                                          format(sd_n, scientific = FALSE)))
+    mean_note <- if (!is.na(v30_mn_e[i]) && !is.na(v30_mn_n[i])) {
+      " (both group means are identical across timepoints too - almost certainly a copied baseline block)"
+    } else {
+      ""
+    }
+    row_issues[[i]] <- c(row_issues[[i]], sprintf(
+      "[UNUSUAL] Baseline SD copied into endpoint slot (%s). Two timepoints from the same patients virtually never reproduce an identical SD - verify the endpoint (post-treatment) SD was not overwritten with the baseline SD%s",
+      paste(parts, collapse = " and "), mean_note))
+  }
+
   # V21: standardised baseline imbalance above threshold
   if (all(c("mean_pre_exp", "mean_pre_nexp",
             "mean_pre_sd_exp", "mean_pre_sd_nexp",
@@ -2325,8 +2369,16 @@
   f_std_mix <- vector("list", n)
   for (i in seq_len(n)) f_std_mix[[i]] <- character(0)
   smd_measures <- c("d", "g", "dw", "gw")
+  # Per-row effective standardizer method: a per-row pre_post_to_smd column (which the
+  # pipeline applies per row) overrides the dataset-wide scalar. Reading only the scalar
+  # would miss a mixed column -- the very configuration most likely to mix standardizers.
+  eff_method <- rep(as.character(pre_post_to_smd), n)
+  if (!is.null(raw_data) && "pre_post_to_smd" %in% colnames(raw_data)) {
+    col_method <- as.character(raw_data$pre_post_to_smd[row_idx_map])
+    eff_method <- ifelse(is.na(col_method) | col_method == "", eff_method, col_method)
+  }
   if (isTRUE(opts$enable_cross_row) && measure %in% smd_measures &&
-      !is.null(info_used) && identical(pre_post_to_smd, "morris_dz")) {
+      !is.null(info_used) && any(eff_method == "morris_dz", na.rm = TRUE)) {
     # methods whose standardizer is the change SD when pre_post_to_smd is dz
     change_metric_methods <- c(
       "means_sd_pre_post", "means_se_pre_post", "means_ci_pre_post",
@@ -2338,11 +2390,15 @@
       "mean_change_ci_single_group", "mean_change_pval_single_group",
       "paired_t_single_group"
     )
+    # A row is on the change-SD metric iff it used a change-eligible method AND its
+    # effective standardizer is morris_dz (a means_sd_pre_post row on bonett/d_rm is
+    # on the raw-score metric, not the change-SD metric).
+    row_is_change_all <- (info_used %in% change_metric_methods) & (eff_method == "morris_dz")
     valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
-    is_change <- info_used[valid_idx] %in% change_metric_methods
+    is_change <- row_is_change_all[valid_idx]
     if (any(is_change) && any(!is_change)) {
       for (i in valid_idx) {
-        row_is_change <- info_used[i] %in% change_metric_methods
+        row_is_change <- row_is_change_all[i]
         this_metric <- if (row_is_change) "the change-SD metric (d_z)" else "a raw-score-SD metric"
         other_metric <- if (row_is_change) "a raw-score-SD metric" else "the change-SD metric (d_z)"
         msuf <- .method_suffix(info_used[i])

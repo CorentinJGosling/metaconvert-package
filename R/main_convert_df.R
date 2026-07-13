@@ -27,7 +27,7 @@
 #'       is Morris's (2008) \eqn{d_{ppc2}} (his eq. 8-9), which he recommends: it is more efficient, but it
 #'       assumes the two arms' true standardizing SDs are equal.
 #'   }
-#' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown)
+#' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68\% too small (95\% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
 #' @param prop_to_es method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).
@@ -323,11 +323,12 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   x[.r_defaulted_exp, "r_pre_post_exp"] <- r_pre_post
   x[.r_defaulted_nexp, "r_pre_post_nexp"] <- r_pre_post
 
-  # Under the d_rm (cooper/morris_drm) standardizer the assumed correlation
-  # scales the POINT estimate, not only its precision, so an unreported r that
-  # is silently imputed is a substantive assumption. Warn once, and only for
-  # rows that actually feed an r-consuming (pre/post, mean-change, paired)
-  # route -- datasets with no such data never reach the formulas.
+  # An unreported r that is silently imputed is a substantive assumption. How it
+  # bites depends on the standardizer: for change-SD methods (morris_dz, cooper/
+  # morris_drm) the assumed r scales the POINT estimate; for baseline-SD (bonett) and
+  # average-SD (morris_dav) the point estimate is r-free and only the SE/CI move.
+  # Warn once, and only for rows that actually feed an r-consuming (pre/post, mean-
+  # change, paired) route -- datasets with no such data never reach the formulas.
   if (verbose) {
     .r_consuming_cols <- c(
       "mean_pre_exp", "mean_pre_nexp", "mean_pre_sd_exp", "mean_pre_sd_nexp",
@@ -344,13 +345,26 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       .rows_with_pp <- rowSums(!is.na(x[, .r_consuming_cols, drop = FALSE])) > 0
       .n_imputed <- sum((.r_defaulted_exp | .r_defaulted_nexp) & .rows_with_pp)
       if (.n_imputed > 0) {
+        # Change-SD standardizers make the point estimate itself depend on r; the
+        # mean-change and paired-t/F routes are always standardized by the change SD
+        # (coerced to cooper), so their point estimates depend on r regardless of the
+        # requested method.
+        .r_scales_point <- pre_post_to_smd %in% c("morris_dz", "morris_drm", "cooper")
+        .impact <- if (.r_scales_point) {
+          paste0("Under the '", pre_post_to_smd, "' standardizer the assumed\n",
+                 "  correlation scales the POINT estimate, not only the SE.")
+        } else {
+          paste0("Under the '", pre_post_to_smd, "' standardizer the point estimate is\n",
+                 "  r-free and only the SE/CI depend on the assumed correlation; note that\n",
+                 "  mean-change and paired-t/F rows are standardized by the change SD, whose\n",
+                 "  POINT estimate does depend on r.")
+        }
         message(
           "Note: r_pre_post was not reported for ", .n_imputed, " row(s) with pre/post, ",
           "mean-change or paired data;\n  the default r_pre_post = ", r_pre_post,
-          " was assumed. Under the default 'cooper'/'morris_drm' standardizer\n",
-          "  the assumed correlation scales the POINT estimate, not only the SE. ",
-          "Supply r_pre_post_exp/\n  r_pre_post_nexp when available, or run a ",
-          "sensitivity analysis over plausible values."
+          " was assumed. ", .impact,
+          "\n  Supply r_pre_post_exp/r_pre_post_nexp when available, or run a ",
+          "sensitivity analysis\n  over plausible values."
         )
       }
     }

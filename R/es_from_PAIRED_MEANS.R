@@ -57,8 +57,10 @@
 #' \deqn{cohen\_d\_exp = \frac{mean\_exp - mean\_pre\_exp}{sd\_change\_exp}}
 #' \deqn{cohen\_d\_nexp = \frac{mean\_nexp - mean\_pre\_nexp}{sd\_change\_nexp}}
 #'
-#' 4. In the approach described by Morris (\code{pre_post_to_smd = "morris_dav"}, recommended), the pre-post mean
-#' difference is standardized by the average of the baseline and follow up SDs (Morris, 2008):
+#' 4. In the approach described by Morris (\code{pre_post_to_smd = "morris_dav"}), the pre-post mean
+#' difference is standardized by the average of the baseline and follow up SDs (Morris, 2008). Note that
+#' Morris (2008, p.384) recommended \emph{against} this standardizer because its sampling variance was
+#' unknown to him; the variance used here is the heteroscedasticity-robust form of Bonett (2008, eq. 10/19):
 #' \deqn{cohen\_d\_exp = \frac{mean\_exp - mean\_pre\_exp}{\sqrt{(mean\_pre\_sd\_exp^2 + mean\_sd\_exp^2)/2}}}
 #' \deqn{cohen\_d\_nexp = \frac{mean\_nexp - mean\_pre\_nexp}{\sqrt{(mean\_pre\_sd\_nexp^2 + mean\_sd\_nexp^2)/2}}}
 #'

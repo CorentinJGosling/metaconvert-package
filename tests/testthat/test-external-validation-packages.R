@@ -13,13 +13,13 @@ has_TOSTER <- requireNamespace("TOSTER", quietly = TRUE)
 # METAFOR PACKAGE VALIDATIONS
 # =============================================================================
 
-# Test 1: Morris_dav vs metafor SMCRP - Two Group - Effect Size & SE ====
-test_that("metafor::SMCRP matches morris_dav two-group (ES + SE)", {
+# Test 1: Morris_dav vs metafor SMCRPH - Two Group - Effect Size & SE ====
+test_that("metafor::SMCRPH matches morris_dav two-group (ES + SE)", {
   skip_if_not(has_metafor, "metafor not available")
 
-  # NOTE: metafor SMCRP = "Standardized mean change using raw score standardization
-  # with pooled variances" - uses sqrt((sd_pre² + sd_post²) / 2) = AVERAGE SD
-  # This corresponds to metaConvert's morris_dav
+  # NOTE: metafor SMCRPH = the heteroscedasticity-robust average-SD standardizer
+  # (Bonett 2008 eq. 10) - standardizer sqrt((sd_pre² + sd_post²) / 2) = AVERAGE SD,
+  # robust variance. This corresponds to metaConvert's morris_dav.
 
   # Test data
   mean_pre_exp <- 50; mean_post_exp <- 60
@@ -34,7 +34,7 @@ test_that("metafor::SMCRP matches morris_dav two-group (ES + SE)", {
   exp_data <- data.frame(m1i = mean_pre_exp, m2i = mean_post_exp,
                          sd1i = sd_pre_exp, sd2i = sd_post_exp,
                          ni = n_exp, ri = r_exp)
-  result_mf_exp <- metafor::escalc(measure = "SMCRP", m1i = m1i, m2i = m2i,
+  result_mf_exp <- metafor::escalc(measure = "SMCRPH", m1i = m1i, m2i = m2i,
                                     sd1i = sd1i, sd2i = sd2i,
                                     ni = ni, ri = ri, data = exp_data)
 
@@ -74,7 +74,7 @@ test_that("metafor::SMCRP matches morris_dav single-group (ES + SE)", {
   mf_data <- data.frame(m1i = mean_pre, m2i = mean_post,
                         sd1i = sd_pre, sd2i = sd_post,
                         ni = n, ri = r)
-  result_mf <- metafor::escalc(measure = "SMCRP", m1i = m1i, m2i = m2i,
+  result_mf <- metafor::escalc(measure = "SMCRPH", m1i = m1i, m2i = m2i,
                                 sd1i = sd1i, sd2i = sd2i,
                                 ni = ni, ri = ri, data = mf_data)
 
@@ -596,7 +596,7 @@ test_that("morris_dav matches metafor SMCRP (live escalc + manual formula, ES + 
   # external check, and it is cheap and EXACT here (agreement to 0 on both g and
   # SE), so it is asserted at the same 1e-10 tolerance.
   # metafor computes m1i - m2i, so pass m1i = post, m2i = pre to get post - pre.
-  result_mf <- metafor::escalc(measure = "SMCRP",
+  result_mf <- metafor::escalc(measure = "SMCRPH",
                                m1i = mean_post, m2i = mean_pre,
                                sd1i = sd_post, sd2i = sd_pre,
                                ni = n, ri = r)
@@ -610,9 +610,11 @@ test_that("morris_dav matches metafor SMCRP (live escalc + manual formula, ES + 
 
   # --- SECONDARY: retained manual transcription ---------------------------------
   # Kept (not deleted) because it additionally pins the d / d_se de-correction by
-  # J, which escalc does not expose. metaConvert uses the metafor SMCRP approach:
-  # - Modified df: mi = 2*(n-1)/(1+r²)
-  # - var(g) = 2*(1-r)/n + g²*(1+r²)/(4*n), then var(d) = var(g)/J²
+  # J, which escalc does not expose. metaConvert uses the metafor SMCRPH approach
+  # (= Bonett 2008 eq. 10, heteroscedasticity-robust):
+  # - Modified df for J only: mi = 2*(n-1)/(1+r²)
+  # - var(g) = sd_diff²/(sd_av²(n-1)) + g²·(sd_pre⁴+sd_post⁴+2r²sd_pre²sd_post²)/(8 sd_av⁴(n-1))
+  #   then var(d) = var(g)/J²
   calc_J <- function(df) exp(lgamma(df/2) - 0.5*log(df/2) - lgamma((df-1)/2))
   mi <- 2 * (n - 1) / (1 + r^2)
   J <- calc_J(mi)
@@ -620,14 +622,17 @@ test_that("morris_dav matches metafor SMCRP (live escalc + manual formula, ES + 
   sd_av <- sqrt((sd_pre^2 + sd_post^2) / 2)
   d_av_manual <- (mean_post - mean_pre) / sd_av
   g_av_manual <- d_av_manual * J
-  var_g_av_manual <- 2 * (1 - r) / n + g_av_manual^2 * (1 + r^2) / (4 * n)
+  sd_diff2 <- sd_pre^2 + sd_post^2 - 2 * r * sd_pre * sd_post
+  fm <- sd_pre^4 + sd_post^4 + 2 * r^2 * sd_pre^2 * sd_post^2
+  var_g_av_manual <- sd_diff2 / (sd_av^2 * (n - 1)) +
+    g_av_manual^2 * fm / (8 * sd_av^4 * (n - 1))
   var_d_av_manual <- var_g_av_manual / J^2
   se_d_av_manual <- sqrt(var_d_av_manual)
 
   expect_equal(result_mc$d, d_av_manual, tolerance = 1e-10,
-               label = "morris_dav d matches metafor SMCRP")
+               label = "morris_dav d matches metafor SMCRPH")
   expect_equal(result_mc$d_se, se_d_av_manual, tolerance = 1e-10,
-               label = "morris_dav SE matches metafor SMCRP")
+               label = "morris_dav SE matches metafor SMCRPH")
 
   # The manual transcription and the live external anchor must agree -- if they
   # ever diverge, the transcription has drifted from metafor and is untrustworthy.

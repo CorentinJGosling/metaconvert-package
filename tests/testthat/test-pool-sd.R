@@ -306,7 +306,9 @@ test_that("pool_sd morris_drm method: manual formula verification", {
   m <- N - 2
   J <- metaConvert:::.d_j(m)
   mean_diff <- (mean_post1 - mean_pre1) - (mean_post2 - mean_pre2)
-  r_avg <- (n1 * r1 + n2 * r2) / N
+  # df-weighted mean of the per-arm correlations (matches the package: df-weighting
+  # is what makes the homoscedastic reduction to Viechtbauer's vi exact for n1 != n2)
+  r_avg <- ((n1 - 1) * r1 + (n2 - 1) * r2) / m
 
   sd_change1 <- sqrt(sd_pre1^2 + sd_post1^2 - 2 * r1 * sd_pre1 * sd_post1)
   sd_change2 <- sqrt(sd_pre2^2 + sd_post2^2 - 2 * r2 * sd_pre2 * sd_post2)
@@ -346,14 +348,14 @@ test_that("pool_sd morris_dav method: manual formula verification", {
   N <- n1 + n2
   m <- N - 2
   mean_diff <- (mean_post1 - mean_pre1) - (mean_post2 - mean_pre2)
-  r_avg <- (n1 * r1 + n2 * r2) / N
+  # df-weighted means of the raw r and of r^2 (the package uses r^2 df-weighted for nu)
+  r_avg <- ((n1 - 1) * r1 + (n2 - 1) * r2) / m
+  r2_avg <- ((n1 - 1) * r1^2 + (n2 - 1) * r2^2) / m
 
-  # d_av's standardizer is the quadratic mean of two CORRELATED SDs, so its
-  # effective df is nu = 2m/(1 + r^2), not m (Cousineau 2020 eq. 2; metafor SMCRP
-  # uses the same modified df per arm, and df add across independent arms).
-  # J must be evaluated at nu -- as metaConvert's own single-group dav branch
-  # already does. Using J(m) here over-shrinks g by ~1.6% at n = 10/arm.
-  nu <- 2 * m / (1 + r_avg^2)
+  # d_av's standardizer is the quadratic mean of two CORRELATED SDs. nu = 2m/(1+r^2)
+  # (Cousineau 2020 eq. 2, the two-arm generalization) is used ONLY for the Hedges
+  # bias correction J -- as metaConvert's own single-group dav branch does.
+  nu <- 2 * m / (1 + r2_avg)
   J <- metaConvert:::.d_j(nu)
 
   sd_av1 <- sqrt((sd_pre1^2 + sd_post1^2) / 2)
@@ -363,15 +365,17 @@ test_that("pool_sd morris_dav method: manual formula verification", {
   d_manual <- mean_diff / sd_pooled
   g_manual <- d_manual * J
 
-  # metafor SMCRP / Cousineau (2020) eq. 2 lifted to two arms: the standardizer is
-  # the quadratic mean of two correlated SDs, so its effective df is nu = 2m/(1+r^2)
-  # and the g^2 term is divided by 2*nu == (1 + r^2)/(4N) * ... ; the numerator term
-  # is the empirical one (robust to SD_pre != SD_post).
+  # Variance = Bonett (2008) eq. 19 (metafor SMCRPH carried across two arms): a robust
+  # change-SD leading term plus a per-arm FOURTH-MOMENT g^2 term (not the homoscedastic
+  # (1+r^2)/4 coefficient, which is only its SD_pre = SD_post special case).
   sd_chg1 <- sqrt(sd_pre1^2 + sd_post1^2 - 2 * r1 * sd_pre1 * sd_post1)
   sd_chg2 <- sqrt(sd_pre2^2 + sd_post2^2 - 2 * r2 * sd_pre2 * sd_post2)
   sd_chg_pooled <- sqrt(((n1 - 1) * sd_chg1^2 + (n2 - 1) * sd_chg2^2) / m)
   T1 <- (sd_chg_pooled^2 / sd_pooled^2) * (N / (n1 * n2))
-  var_g_manual <- T1 + g_manual^2 * (1 + r_avg^2) / (4 * N)
+  fm1 <- sd_pre1^4 + sd_post1^4 + 2 * r1^2 * sd_pre1^2 * sd_post1^2
+  fm2 <- sd_pre2^4 + sd_post2^4 + 2 * r2^2 * sd_pre2^2 * sd_post2^2
+  g2_coef <- (fm1 / (n1 - 1) + fm2 / (n2 - 1)) / (32 * sd_pooled^4)
+  var_g_manual <- T1 + g_manual^2 * g2_coef
 
   expect_equal(res$d, d_manual, tolerance = 1e-8)
   expect_equal(res$g, g_manual, tolerance = 1e-8)

@@ -1,16 +1,16 @@
 # =============================================================================
 # Calibration of the POOLED two-group pre/post variances.
 #
-# No published sampling variance exists for the pooled two-group form of d_z,
-# d_rm or d_av, so these formulas are delta-method generalizations of the
-# single-group results. That makes Monte-Carlo calibration part of the
-# specification, not an optional extra: these tests ARE the evidence.
+# Published references exist for pooled d_z (= escalc(SMD,"LS") on change scores)
+# and pooled d_av (Bonett 2008 eq. 19); d_rm follows from d_z by the exact rescaling
+# d_rm = d_z*sqrt(2(1-r)). The robust-bonett departure from Viechtbauer's homoscedastic
+# vi under heteroscedasticity has no closed-form two-group reference, so Monte-Carlo
+# calibration is part of its specification: those tests ARE the evidence.
 #
-# The rule every branch follows (the same one metafor's escalc() encodes for
-# SMD / SMCC / SMCR / SMCRH / SMCRP):
-#     Var(g) = Var(numerator)/SD_std^2 + g^2/(2*nu_std),  J = J(nu_std)
-# with no leading J^2, and Var(numerator) taken from the EMPIRICAL pooled change
-# SD rather than the 2*sigma^2*(1-r) identity (which assumes SD_pre = SD_post).
+# Each branch follows metafor's LS *pattern* (an empirical leading term plus a g^2 term
+# over 2N), with J = J(nu) at the standardizer df and Var(d) = Var(g)/J^2 (an exact
+# identity). The leading term is heteroscedasticity-robust (built from the EMPIRICAL
+# pooled change SD, not the 2*sigma^2*(1-r) identity that assumes SD_pre = SD_post).
 # =============================================================================
 
 # Slow (Monte Carlo): only run when explicitly asked.
@@ -116,21 +116,27 @@ test_that("all four pooled variances stay calibrated under SD HETEROSCEDASTICITY
 # -----------------------------------------------------------------------------
 # 3. Structural properties the formulas must have
 # -----------------------------------------------------------------------------
-test_that("no branch carries a leading J^2 (var_d is the d-scale twin, not var_g/J^2)", {
-  # Under the LS convention var_g = T1 + g^2/(2N) and var_d = T1 + d^2/(2N), so
-  # var_g / var_d != J^2 in general. If someone reinstates the LS2 pattern
-  # (var_g = J^2 * var_d) this test fails.
-  r <- es_from_means_sd_pre_post(
-    n_exp = 12, n_nexp = 11,
-    mean_pre_exp = 10, mean_exp = 16, mean_pre_sd_exp = 4, mean_sd_exp = 5,
-    mean_pre_nexp = 10, mean_nexp = 12, mean_pre_sd_nexp = 4, mean_sd_nexp = 5,
-    r_pre_post_exp = 0.5, r_pre_post_nexp = 0.5,
-    pre_post_to_smd = "morris_dz", pool_sd = TRUE
-  )
-  J <- metaConvert:::.d_j(12 + 11 - 2)
-  expect_false(isTRUE(all.equal(r$g_se^2, J^2 * r$d_se^2, tolerance = 1e-6)))
-  # and the ES relation still holds
-  expect_equal(r$g, J * r$d, tolerance = 1e-10)
+test_that("Var(g) = J^2 * Var(d) holds exactly on every pooled branch", {
+  # No leading J^2 on var_g (the LS convention: var_g = leading_term + g^2/(2N)), but
+  # because g = J*d with J a deterministic constant, var_d MUST equal var_g/J^2 exactly.
+  # The earlier code violated this (it set var_d to a separate "d-scale twin"); this
+  # test guards the restored identity. If someone re-introduces a leading J^2 on var_g
+  # (the LS2 pattern var_g = J^2 * (leading + d^2/2N)) the g/d relation still holds but
+  # the calibration tests above break -- so both are needed.
+  for (method in c("bonett", "morris_dz", "morris_drm", "morris_dav")) {
+    r <- es_from_means_sd_pre_post(
+      n_exp = 12, n_nexp = 11,
+      mean_pre_exp = 10, mean_exp = 16, mean_pre_sd_exp = 4, mean_sd_exp = 5,
+      mean_pre_nexp = 10, mean_nexp = 12, mean_pre_sd_nexp = 4, mean_sd_nexp = 5,
+      r_pre_post_exp = 0.5, r_pre_post_nexp = 0.5,
+      pre_post_to_smd = method, pool_sd = TRUE
+    )
+    J <- r$g / r$d
+    expect_equal(r$g_se^2, J^2 * r$d_se^2, tolerance = 1e-10,
+                 label = sprintf("var_g = J^2 * var_d for %s", method))
+    expect_equal(r$g, J * r$d, tolerance = 1e-10,
+                 label = sprintf("g = J*d for %s", method))
+  }
 })
 
 test_that("morris_dav uses the Cousineau (2020) effective df, not N - 2", {

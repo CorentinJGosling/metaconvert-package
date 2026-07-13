@@ -6,7 +6,7 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 # EXTERNAL VALIDATION: es_from_PAIRED_MEANS.R
 # ==============================================================================
 # Validates all functions in es_from_PAIRED_MEANS.R against external packages:
-#   - metafor (SMCRH for bonett, SMCRP for morris_dav, SMCC for morris_dz, MC for raw MD)
+#   - metafor (SMCRH for bonett, SMCRPH for morris_dav, SMCC for morris_dz, MC for raw MD)
 #   - TOSTER (rm_correction for cooper, rm_correction=FALSE for morris_dz)
 #
 # Tests cover:
@@ -22,7 +22,7 @@ if (identical(Sys.getenv("NOT_CRAN"), "true")) {
 # Every STANDARDIZED comparator in Section 1 (tests 1.1-1.4) is built the same
 # way: a within-group effect size is computed for EACH arm separately (each arm
 # standardized by its OWN SD) and the two are then SUBTRACTED, adding the two
-# arms' sampling variances (the arms are independent). metafor's SMCRH / SMCRP /
+# arms' sampling variances (the arms are independent). metafor's SMCRH / SMCRPH /
 # SMCC are single-group (pre-post) estimators, so an arm-wise call plus a
 # subtraction is the only way to build a between-group value out of them.
 #
@@ -196,8 +196,8 @@ test_that("MEANS-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) 
                label = "cooper d_se matches Morris & DeShon (2002)")
 })
 
-## 1.3 MORRIS_DAV vs metafor SMCRP ====
-test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (per-arm d_ppc1 standardizer, pool_sd = FALSE, the default)", {
+## 1.3 MORRIS_DAV vs metafor SMCRPH ====
+test_that("MEANS-SD: morris_dav two-group matches metafor SMCRPH (g + g_se) (per-arm d_ppc1 standardizer, pool_sd = FALSE, the default)", {
   skip_if_not(has_metafor, "metafor not available")
 
   res <- df.SMC[1:5, ]
@@ -214,9 +214,11 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (per-
   res$r_pre_post_exp <- 0.65
   res$r_pre_post_nexp <- 0.65
 
-  # metafor SMCRP for experimental group
+  # metafor SMCRPH (heteroscedasticity-robust average-SD standardizer = Bonett 2008
+  # eq. 10) for the experimental arm. d_av now uses the robust SMCRPH variance, not
+  # the homoscedastic SMCRP form.
   mf_exp <- metafor::escalc(
-    measure = "SMCRP",
+    measure = "SMCRPH",
     m1i = res$mean_pre_exp,
     m2i = res$mean_exp,
     sd1i = res$mean_pre_sd_exp,
@@ -225,9 +227,9 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (per-
     ri = res$r_pre_post_exp
   )
 
-  # metafor SMCRP for control group
+  # metafor SMCRPH for control group
   mf_nexp <- metafor::escalc(
-    measure = "SMCRP",
+    measure = "SMCRPH",
     m1i = res$mean_pre_nexp,
     m2i = res$mean_nexp,
     sd1i = res$mean_pre_sd_nexp,
@@ -237,7 +239,7 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (per-
   )
 
   # Calculate difference (negate metafor to match post-pre convention).
-  # SMCRP standardizes each arm by ITS OWN average pre/post SD, so subtracting the
+  # SMCRPH standardizes each arm by ITS OWN average pre/post SD, so subtracting the
   # two arm-wise values (and adding their variances) replicates the per-arm d_ppc1
   # rule -> pool_sd = FALSE below (the default, passed explicitly for clarity).
   g_expected <- (-as.numeric(mf_exp$yi)) - (-as.numeric(mf_nexp$yi))
@@ -259,9 +261,9 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRP (g + g_se) (per-
 
   # Test effect sizes and SEs
   expect_equal(es_mc$es_crude, g_expected, tolerance = 1e-6,
-               label = "morris_dav g matches metafor SMCRP")
+               label = "morris_dav g matches metafor SMCRPH")
   expect_equal(es_mc$se_crude, se_expected, tolerance = 1e-6,
-               label = "morris_dav g_se matches metafor SMCRP")
+               label = "morris_dav g_se matches metafor SMCRPH")
 })
 
 ## 1.4 MORRIS_DZ vs metafor SMCC ====

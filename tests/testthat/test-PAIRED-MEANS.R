@@ -9,18 +9,17 @@ library(metaConvert)
 
 # NOTE ON pool_sd IN THIS SECTION
 # --------------------------------
-# convert_df() now defaults to pool_sd = TRUE: the between-group SMD is the
-# difference in mean change divided by a SINGLE SD pooled across arms
-# (Morris 2008). The external comparators used below (metafor SMCRH, TOSTER
-# smd_calc) are built by computing a value for EACH ARM SEPARATELY and then
-# SUBTRACTING the two. That subtraction-of-per-arm-values IS the legacy
-# per-arm construction (each arm standardized by its OWN SD). The comparators
-# therefore pin the pool_sd = FALSE path, and these tests pass pool_sd = FALSE
-# explicitly. They remain valid regression tests OF THAT LEGACY PATH.
-# The pooled (new default) path stays covered by the "pre/post v change" and
-# "REVERSE" blocks further down, which call convert_df() with its defaults.
+# convert_df() defaults to pool_sd = FALSE: the between-group SMD is built by
+# computing a standardized mean change for EACH ARM (each standardized by its
+# OWN SD) and SUBTRACTING the two, the sampling variances adding (Morris 2008
+# d_ppc1 / Becker 1988). The external comparators used below (metafor SMCRH,
+# TOSTER smd_calc) are built the same way -- per arm, then subtracted -- so they
+# pin this default per-arm path, and these tests pass pool_sd = FALSE explicitly
+# (matching the default). The opt-in pooled path (pool_sd = TRUE: a single SD
+# pooled across arms, Morris 2008 d_ppc2) is covered separately, by the pooled
+# blocks that pass pool_sd = TRUE.
 
-test_that("D - Means/SD - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
+test_that("D - Means/SD - bonett (default per-arm standardizer, pool_sd = FALSE)", {
   res <- metaumbrella::df.SMC
 
   res$n_exp <- res$n_cases

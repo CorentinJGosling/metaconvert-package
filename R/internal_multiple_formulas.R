@@ -818,38 +818,53 @@
 ################# POOLED TWO-GROUP PRE POST to SMD ##############
 #' Between-group pre/post SMD, standardizing SD pooled across arms
 #'
-#' All four branches follow the single rule that metafor's own escalc() encodes for
-#' every pre/post measure (SMD, SMCC, SMCR, SMCRH, SMCRP):
+#' Point estimates are Morris (2008): the numerator is the difference in mean change
+#' between arms; the standardizer is pooled across arms (baseline SD for bonett /
+#' d_ppc2 eq. 8-9; change SD for d_z/d_rm; average SD for d_av / d_ppc3 eq. 12-14).
 #'
-#'     Var(g) = Var(numerator) / SD_standardizer^2  +  g^2 / (2 * nu_std)
-#'     J      = J(nu_std)
+#' Each branch's variance follows metafor's LS *pattern* for the corresponding measure
+#' -- an empirical leading term plus a g^2 term -- but note this is a pattern, not a
+#' single closed-form rule: metafor puts n (or n1+n2), NOT the standardizer df, in the
+#' g^2 denominator of its non-heteroscedastic LS forms, while evaluating J at the
+#' standardizer df; the two df deliberately differ. So the g^2 term below is over 2N,
+#' and J is J(nu) with nu the standardizer df. Var(d) = Var(g)/J^2 exactly, since
+#' g = J*d with J a deterministic constant.
 #'
-#' with NO leading J^2 factor, and Var(d) obtained by substituting d for g (NOT by
-#' dividing Var(g) by J^2 -- that is only an identity under the LS2 convention).
-#' nu_std is the degrees of freedom of the STANDARDIZER, which is what the g^2 term
-#' is divided by: N-2 for an SD pooled over both arms, and 2(N-2)/(1+r^2) for the
-#' quadratic-mean-of-two-correlated-SDs standardizer used by d_av (Cousineau, 2020).
+#' The leading term is heteroscedasticity-robust: it is built from the EMPIRICAL pooled
+#' change SD, not from Var(change) = 2*sigma^2*(1-r) (valid only when SD_pre = SD_post).
+#' For bonett this reduces EXACTLY to Viechtbauer's published two-group pre/post
+#' variance vi = 2(1-r)(1/nT + 1/nC) + g^2/(2N) when SD_pre = SD_post within each arm
+#' (the df-weighted r_avg makes the reduction exact even when n1 != n2); under
+#' heteroscedasticity it departs from that homoscedastic form, which understates the
+#' variance (its coverage falls to ~0.86 at SD_pre/SD_post ~ 0.64). d_av uses the
+#' two-group fourth-moment form Bonett (2008) eq. 19, metafor's SMCRPH carried across
+#' two independent arms.
 #'
-#' Var(numerator) is taken from the EMPIRICAL pooled change SD, not from the identity
-#' Var(change) = 2*sigma^2*(1-r), which is valid only when SD_pre = SD_post. This is
-#' the heteroscedasticity-robust choice (metafor SMCRH/SMCRPH, attributed to Bonett
-#' 2008) and it is already what this package's SINGLE-GROUP bonett branch does. It
-#' matters: with SD_pre/SD_post = 0.64 (the median in the authors' own PETRA data) the
-#' homoscedastic form understates Var(g_bonett) by ~43% and its CI coverage falls to
-#' 0.86; the robust form holds coverage at 0.95 in every regime tested.
+#' Publication status of each pooled variance:
+#'   - bonett: reduces to Viechtbauer's published vi (metafor-project Morris-2008 page)
+#'             under homoscedasticity; the robust departure is metafor SMCRH / Bonett
+#'             (2008) generalized across arms.
+#'   - d_z:    exactly metafor::escalc(measure = "SMD", vtype = "LS") on the change
+#'             scores (Hedges 1981) -- a published two-group variance.
+#'   - d_rm:   d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13, a definition),
+#'             so Var(d_rm) = 2(1-r)*Var(d_z) for known r.
+#'   - d_av:   Bonett (2008) eq. 19 (two-group mixed design, all-four-SD standardizer).
+#' The three pooled forms without a directly published two-group source (the robust
+#' bonett departure, and d_rm's algebra) are Monte-Carlo calibrated in
+#' tests/testthat/test-pooled-variance-calibration.R.
+#'
+#' CIs use qt(.975, m) with m = N - 2 the pooled standardizer df, for EVERY branch --
+#' including d_av, whose Cousineau effective df nu = 2m/(1 + r2_avg) feeds ONLY the bias
+#' correction J, not the interval (the single-group kernel follows the same split: its d_av
+#' CI is on n - 1, not on its Cousineau df). qt is a small-sample-conservative choice (it
+#' slightly over-covers at n ~ 10); metafor and Bonett (2008) use a normal (z) critical value.
 #'
 #' References:
-#'   Hedges (1981); Viechtbauer (2007) JEBS 32(1):39-60, eq. 31 -- two-sample SMD "LS"
-#'   Bonett (2008) Psych Methods 13(2):99-109 -- heteroscedasticity-robust variance
-#'   Cousineau (2020) TQMP 16(4):418-421, eq. 2 -- the (1 + r^2) effective df for d_av
-#'   Morris (2008) ORM 11(2):364-386 -- d_ppc2 / d_ppc3 point estimates (eq. 8-14)
-#'   Viechtbauer (2007, p.57) recommends the large-sample ("LS") forms over both the
-#'   plug-in-exact and the unbiased forms; metafor defaults to LS.
-#'
-#' NOTE: no published sampling variance exists for the POOLED TWO-GROUP form of d_z,
-#' d_rm or d_av. These are delta-method generalizations of the single-group results,
-#' obtained by carrying the standardizer's degrees of freedom across the two arms.
-#' They are Monte-Carlo calibrated in tests/testthat/test-pooled-variance-calibration.R.
+#'   Morris (2008) ORM 11(2):364-386 -- d_ppc1/d_ppc2/d_ppc3 point estimates (eq. 6-14)
+#'   Hedges (1981); Viechtbauer (2007) JEBS 32(1):39-60 -- two-sample SMD "LS"
+#'   Bonett (2008) Psych Methods 13(2):99-109 eq. 10/19 -- heteroscedasticity-robust var
+#'   Caldwell & Vigotsky (2020) PeerJ 8:e10314 eq. 13 -- d_rm = d_z * sqrt(2(1-r))
+#'   Cousineau (2020) TQMP 16(4):418-421 eq. 2 -- the (1+r^2) effective df (d_av J only)
 #'
 #' @noRd
 .pooled_pre_post_to_smd <- function(mean_pre_exp, mean_pre_sd_exp,
@@ -866,16 +881,30 @@
   r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
   r_pre_post_nexp <- .guard_r_pre_post(r_pre_post_nexp)
 
+  # A negative SD is invalid input (see .single_group_pre_post_to_smd): NA it out so a
+  # negative raw SD cannot flip the sign of the sd_change cross term and survive.
+  mean_pre_sd_exp  <- ifelse(is.finite(mean_pre_sd_exp)  & mean_pre_sd_exp  >= 0, mean_pre_sd_exp,  NA_real_)
+  mean_sd_exp      <- ifelse(is.finite(mean_sd_exp)      & mean_sd_exp      >= 0, mean_sd_exp,      NA_real_)
+  mean_pre_sd_nexp <- ifelse(is.finite(mean_pre_sd_nexp) & mean_pre_sd_nexp >= 0, mean_pre_sd_nexp, NA_real_)
+  mean_sd_nexp     <- ifelse(is.finite(mean_sd_nexp)     & mean_sd_nexp     >= 0, mean_sd_nexp,     NA_real_)
+
   N <- n_exp + n_nexp
   m <- N - 2 # pooled degrees of freedom
-  # m <= 0 breaks J; the variance additionally needs m > 0
-  m <- ifelse(is.finite(m) & m > 0, m, NA_real_)
+  # Each arm needs >= 2 observations: the (n-1) pooling weights must be positive and
+  # the between-arm factor N/(n1*n2) must be finite. m > 0 alone does not ensure this
+  # (e.g. n_exp = 0, n_nexp = 30 gives m = 28 but a negative weight and T_change = Inf).
+  valid_n <- is.finite(n_exp) & is.finite(n_nexp) & n_exp >= 2 & n_nexp >= 2
+  m <- ifelse(is.finite(m) & m > 0 & valid_n, m, NA_real_)
 
   change_exp <- mean_exp - mean_pre_exp
   change_nexp <- mean_nexp - mean_pre_nexp
   mean_diff <- change_exp - change_nexp
 
-  r_avg <- (n_exp * r_pre_post_exp + n_nexp * r_pre_post_nexp) / N
+  # df-weighted mean of the per-arm correlations. df-weighting (not n-weighting) is
+  # what makes the robust bonett/dz variances reduce EXACTLY to Viechtbauer's published
+  # vi = 2(1-r)(1/nT + 1/nC) + g^2/(2N) under homoscedasticity when the arms' SDs are
+  # equal but n1 != n2 (an n-weighted mean leaves a residual there).
+  r_avg <- ((n_exp - 1) * r_pre_post_exp + (n_nexp - 1) * r_pre_post_nexp) / m
 
   # Pooled change SD: the empirical scale of the numerator. Used by every branch,
   # so that no branch assumes SD_pre = SD_post.
@@ -902,7 +931,8 @@
 
     T1 <- (sd_change_pooled^2 / sd_pooled^2) * T_change
     var_g <- T1 + g^2 / (2 * N)
-    var_d <- T1 + d^2 / (2 * N)
+    # g = J*d with J a deterministic constant, so Var(d) = Var(g)/J^2 exactly.
+    var_d <- var_g / J^2
 
   } else if (pre_post_to_smd == "morris_dz") {
     # Change-score metric. Once the change SD is pooled across arms this is exactly
@@ -915,7 +945,7 @@
     g <- d * J
 
     var_g <- T_change + g^2 / (2 * N)
-    var_d <- T_change + d^2 / (2 * N)
+    var_d <- var_g / J^2
 
   } else if (pre_post_to_smd == "morris_drm") {
     # Raw-score metric: d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13).
@@ -930,32 +960,50 @@
 
     T1 <- 2 * (1 - r_avg) * T_change
     var_g <- T1 + g^2 / (2 * N)
-    var_d <- T1 + d^2 / (2 * N)
+    var_d <- var_g / J^2
 
   } else if (pre_post_to_smd == "morris_dav") {
     # Morris (2008) d_ppc3: standardizer = quadratic mean of the pre and post SDs,
-    # pooled across arms (eq. 12-13). Its effective df is nu = 2m/(1+r^2)
-    # (Cousineau 2020 eq. 2; metafor SMCRP uses 2(n-1)/(1+r^2) per arm, and df add
-    # across independent arms), so J is evaluated at nu and the g^2 term is divided
-    # by 2*nu -- which is exactly the (1 + r^2)/(4N) coefficient below.
+    # pooled across arms (eq. 12-13). Variance is the two-group heteroscedasticity-
+    # robust form Bonett (2008) eq. 19 (the mixed-design "difference-in-differences"
+    # standardized by all four cell SDs) == metafor SMCRPH carried across two
+    # independent arms: a robust change-SD leading term plus a per-arm fourth-moment
+    # g^2 term. This is NOT the homoscedastic SMCRP coefficient (1+r^2)/(4N), which is
+    # only its SD_pre = SD_post special case.
     sd_av_exp <- sqrt((mean_pre_sd_exp^2 + mean_sd_exp^2) / 2)
     sd_av_nexp <- sqrt((mean_pre_sd_nexp^2 + mean_sd_nexp^2) / 2)
     sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_av_exp^2 +
                                            (n_nexp - 1) * sd_av_nexp^2) / m))
-    nu <- 2 * m / (1 + r_avg^2)
+    # nu is used ONLY for the bias correction J. The (1+r^2) effective df is
+    # homoscedastic (Cousineau 2020 eq. 2), so we feed it the df-weighted mean of r^2
+    # (its two-arm generalization); the variance itself uses the fourth moments below.
+    r2_avg <- ((n_exp - 1) * r_pre_post_exp^2 + (n_nexp - 1) * r_pre_post_nexp^2) / m
+    nu <- 2 * m / (1 + r2_avg)
     J <- .d_j(nu)
     d <- mean_diff / sd_pooled
     g <- d * J
 
     T1 <- (sd_change_pooled^2 / sd_pooled^2) * T_change
-    var_g <- T1 + g^2 * (1 + r_avg^2) / (4 * N)
-    var_d <- T1 + d^2 * (1 + r_avg^2) / (4 * N)
+    # Bonett (2008) eq. 19 fourth-moment g^2 coefficient (sum of per-arm terms over
+    # 32*sd_pooled^4). Reduces to (1+r^2)/(4N)'s n-1 analogue when SD_pre = SD_post.
+    fm_exp <- mean_pre_sd_exp^4 + mean_sd_exp^4 +
+              2 * r_pre_post_exp^2 * mean_pre_sd_exp^2 * mean_sd_exp^2
+    fm_nexp <- mean_pre_sd_nexp^4 + mean_sd_nexp^4 +
+               2 * r_pre_post_nexp^2 * mean_pre_sd_nexp^2 * mean_sd_nexp^2
+    g2_coef <- (fm_exp / (n_exp - 1) + fm_nexp / (n_nexp - 1)) / (32 * sd_pooled^4)
+    var_g <- T1 + g^2 * g2_coef
+    var_d <- var_g / J^2
   }
 
-  d_ci_lo <- d - sqrt(var_d) * qt(.975, nu)
-  d_ci_up <- d + sqrt(var_d) * qt(.975, nu)
-  g_ci_lo <- g - sqrt(var_g) * qt(.975, nu)
-  g_ci_up <- g + sqrt(var_g) * qt(.975, nu)
+  # CI on the pooled standardizer df (N - 2 = m) for EVERY branch. dav's Cousineau
+  # effective df nu = 2m/(1 + r2_avg) feeds ONLY the bias correction J (as in the
+  # single-group kernel, whose dav CI is likewise on n - 1, not on its Cousineau df) --
+  # the variance is built on m, so the interval is too. For bonett/dz/drm nu == m, so
+  # this changes nothing there; it only homogenises the dav path.
+  d_ci_lo <- d - sqrt(var_d) * qt(.975, m)
+  d_ci_up <- d + sqrt(var_d) * qt(.975, m)
+  g_ci_lo <- g - sqrt(var_g) * qt(.975, m)
+  g_ci_up <- g + sqrt(var_g) * qt(.975, m)
 
   res <- cbind(
     d, var_d, d_ci_lo, d_ci_up,
@@ -990,6 +1038,23 @@
 
   r_pre_post <- .guard_r_pre_post(r_pre_post)
 
+  # A negative SD is invalid input. NA it out so the ES is NA rather than a silently
+  # corrupted one: a negative raw SD flips the sign of the -2*r*sd_pre*sd_post cross
+  # term in sd_diff, yielding a wrong-but-finite standardizer that the .guard_standardizer
+  # on the assembled denominator cannot catch. Zero is allowed: the mean-change wrappers
+  # legitimately pass mean_pre_sd = 0 (the pre slot is zeroed by construction).
+  mean_pre_sd  <- ifelse(is.finite(mean_pre_sd)  & mean_pre_sd  >= 0, mean_pre_sd,  NA_real_)
+  mean_post_sd <- ifelse(is.finite(mean_post_sd) & mean_post_sd >= 0, mean_post_sd, NA_real_)
+
+  # An arm needs n >= 2 for a variance/CI to exist. NA the standardizing SDs below 2 so
+  # d, var and CI are ALL NA. morris_drm's var_d = 2*(1-r)/n + d^2/(2n) carries no J, so
+  # the J(n-1) = NA path that silently nulls the other three branches leaves it finite at
+  # n = 1 (and Inf at n = 0); nulling the SDs here closes that leak and matches the
+  # pooled kernel's explicit n >= 2 guard.
+  bad_n <- !(is.finite(n) & n >= 2)
+  mean_pre_sd  <- ifelse(bad_n, NA_real_, mean_pre_sd)
+  mean_post_sd <- ifelse(bad_n, NA_real_, mean_post_sd)
+
   if (pre_post_to_smd == "bonett") {
     # Bonett method: standardize by baseline SD
     # Matches metafor SMCRH (heteroscedastic-robust variance formula)
@@ -1018,7 +1083,11 @@
 
     return(res)
   } else if (pre_post_to_smd == "morris_drm") {
-    # Morris d_rm (alias "cooper"): standardize by change SD, raw-score correction
+    # Morris d_rm (alias "cooper"): d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020),
+    # i.e. the change SD rescaled onto the raw-score metric. This equals metafor's SMCR
+    # (baseline/raw-SD standardizer) ONLY under homoscedasticity (SD_pre = SD_post); when
+    # they differ the two diverge, so d_rm is defined by the Caldwell rescaling here, not
+    # by SMCR. Its variance below is 2(1-r) * Var(d_z), the exact scaling of the SMCC form.
     # nb: the mean_change wrappers pass sd_change through mean_post_sd
     # (mean_pre = 0 and mean_pre_sd = 0, so sd_diff reduces to sd_change)
     J <- .d_j(n - 1)
@@ -1073,10 +1142,16 @@
 
     return(res)
   } else if (pre_post_to_smd == "morris_dav") {
-    # Morris & DeShon d_av: standardize by average SD
-    # Recommended by Morris (2008) as general-purpose measure
-    # Robust to variance heterogeneity
-    # modified df mi = 2*(n-1)/(1+r^2), matches metafor::escalc(measure = "SMCRP")
+    # Morris (2008) d_av (d_ppc3): standardize by the quadratic mean of the pre and
+    # post SDs. Its sampling variance is metafor SMCRPH == Bonett (2008) eq. 10: a
+    # heteroscedasticity-robust change-SD leading term PLUS a fourth-moment g^2 term.
+    # This is NOT the homoscedastic SMCRP form 2(1-r)/n + g^2(1+r^2)/(4n), which
+    # assumes SD_pre = SD_post and understates var(g) when they differ (its CI
+    # coverage falls to ~0.93 as SD_pre/SD_post moves away from 1). Morris (2008,
+    # p.384) recommended AGAINST d_av precisely because its variance was unknown to
+    # him; Bonett (2008) supplies it and this branch uses it.
+    # nu = 2(n-1)/(1+r^2) is used ONLY for the Hedges bias correction J (Cousineau
+    # 2020 eq. 2; metafor SMCRP/SMCRPH); the variance itself is on df = n-1.
     mi <- 2 * (n - 1) / (1 + r_pre_post^2)
     J <- .d_j(mi)
 
@@ -1085,9 +1160,11 @@
     d <- (mean_post - mean_pre) / sd_av
     g <- d * J
 
-    # Variance formula from metafor SMCRP (uses corrected g in formula)
-    # vi = 2*(1-r)/n + g^2*(1+r^2)/(4*n)
-    var_g <- 2 * (1 - r_pre_post) / n + g^2 * (1 + r_pre_post^2) / (4 * n)
+    # metafor SMCRPH "LS" == Bonett (2008) eq. 10 (verified: reproduces Bonett's
+    # worked Example 2 -- n=60, var=0.0148 -- to the printed digit).
+    sd_diff2 <- mean_pre_sd^2 + mean_post_sd^2 - 2 * r_pre_post * mean_pre_sd * mean_post_sd
+    fm <- mean_pre_sd^4 + mean_post_sd^4 + 2 * r_pre_post^2 * mean_pre_sd^2 * mean_post_sd^2
+    var_g <- sd_diff2 / (sd_av^2 * (n - 1)) + g^2 * fm / (8 * sd_av^4 * (n - 1))
     var_d <- var_g / (J^2)
 
     d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)

@@ -67,7 +67,7 @@ convert_df(
 
 \item{pre_post_to_smd}{formula used to obtain a SMD from pre/post means and SD of two independent groups.}
 
-\item{r_pre_post}{pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown)}
+\item{r_pre_post}{pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68\\% too small (95\\% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.}
 
 \item{cor_to_smd}{formula used to convert a correlation coefficient value into a SMD.}
 

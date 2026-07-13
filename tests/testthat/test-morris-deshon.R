@@ -79,8 +79,11 @@ test_that("morris_dz point estimate depends on r through sd_diff", {
 })
 
 # Test 2: Morris d_av formula verification ====
-test_that("morris_dav formula matches Morris & DeShon (2002) equation 9", {
-  # Example data
+test_that("morris_dav point estimate is the average-SD SMD; variance is metafor SMCRPH (Bonett 2008)", {
+  # NB: Morris (2008) gives NO sampling variance for d_av / d_ppc3 (p.373: "currently
+  # unknown"); the variance used is the heteroscedasticity-robust SMCRPH (Bonett 2008
+  # eq. 10), not a Morris & DeShon (2002) formula. Only the POINT estimate is the
+  # standard average-SD SMD.
   mean_pre <- 23.5
   mean_post <- 26.8
   sd_pre <- 3.1
@@ -108,13 +111,15 @@ test_that("morris_dav formula matches Morris & DeShon (2002) equation 9", {
   # Verify point estimate
   expect_equal(result$d, d_av_expected, tolerance = 1e-10)
 
-  # metaConvert uses metafor SMCRP approach for morris_dav:
-  # - Modified df: mi = 2*(n-1)/(1+r²)
-  # - var(g) = 2*(1-r)/n + g²*(1+r²)/(4*n), then var(d) = var(g)/J²
+  # Variance = metafor SMCRPH (Bonett 2008 eq. 10): robust change-SD leading term plus
+  # a fourth-moment g^2 term, both on df = n-1; mi = 2(n-1)/(1+r^2) is for J only.
   mi <- 2 * (n - 1) / (1 + r^2)
   J <- exp(lgamma(mi / 2) - 0.5 * log(mi / 2) - lgamma((mi - 1) / 2))
   g_expected <- d_av_expected * J
-  var_g_expected <- 2 * (1 - r) / n + g_expected^2 * (1 + r^2) / (4 * n)
+  sd_diff2 <- sd_pre^2 + sd_post^2 - 2 * r * sd_pre * sd_post
+  fm <- sd_pre^4 + sd_post^4 + 2 * r^2 * sd_pre^2 * sd_post^2
+  var_g_expected <- sd_diff2 / (sd_av_expected^2 * (n - 1)) +
+    g_expected^2 * fm / (8 * sd_av_expected^4 * (n - 1))
   var_d_expected <- var_g_expected / J^2
   expect_equal(result$d_se^2, var_d_expected, tolerance = 1e-10)
 })
@@ -581,12 +586,13 @@ test_that("morris_dz two-group OPT-IN pooled standardizer (pool_sd = TRUE) match
   expect_equal(result$g, as.numeric(mf$yi), tolerance = 1e-10)
 
   # Variance: the pooled morris_dz estimator is an independent-groups Hedges g on
-  # the change scores, so its variance is Hedges (1981) / metafor's default "LS":
-  #   var(g) = N/(n_t*n_c) + g^2/(2*N)      and    var(d) = N/(n_t*n_c) + d^2/(2*N)
-  # There is NO leading J^2 (that was the LS2 convention, which understated vi by
-  # up to 9% at small n), and NO 2*(1 - r) factor (that belongs to the raw-score
-  # metric d_rm, whose point estimate is rescaled by sqrt(2*(1 - r)); d_z is not).
-  # var(d) is the d-scale twin of var(g), NOT var(g)/J^2.
+  # the change scores, so var(g) is Hedges (1981) / metafor's default "LS":
+  #   var(g) = N/(n_t*n_c) + g^2/(2*N)
+  # There is NO leading J^2 on var(g) (that was the LS2 convention, which understated
+  # vi by up to 9% at small n), and NO 2*(1 - r) factor (that belongs to the raw-score
+  # metric d_rm; d_z is not rescaled). Because g = J*d with J a deterministic constant,
+  # var(d) = var(g)/J^2 EXACTLY (the code previously used a separate "d-scale twin",
+  # which violated this identity -- see the pooled-variance-calibration test).
   N <- n_t + n_c
   m <- N - 2
   J <- exp(lgamma(m / 2) - 0.5 * log(m / 2) - lgamma((m - 1) / 2))
@@ -594,7 +600,7 @@ test_that("morris_dz two-group OPT-IN pooled standardizer (pool_sd = TRUE) match
   d_expected <- ((mean_post_t - mean_pre_t) - (mean_post_c - mean_pre_c)) / sd_pooled
   g_expected <- d_expected * J
   var_g_expected <- N / (n_t * n_c) + g_expected^2 / (2 * N)
-  var_d_expected <- N / (n_t * n_c) + d_expected^2 / (2 * N)
+  var_d_expected <- var_g_expected / J^2
 
   expect_equal(result$d, d_expected, tolerance = 1e-10)
   expect_equal(result$d_se^2, var_d_expected, tolerance = 1e-10)
@@ -679,15 +685,20 @@ test_that("morris_dav correct for two-group design (per-arm standardizer, pool_s
   # Helper to calculate J
   calc_J <- function(df) exp(lgamma(df/2) - 0.5*log(df/2) - lgamma((df-1)/2))
 
-  # Manual calculation per metafor SMCRP approach (uses g in variance, modified df)
-  # morris_dav uses mi = 2*(n-1)/(1+r²) for degrees of freedom
+  # Manual calculation per metafor SMCRPH approach (Bonett 2008 eq. 10: robust
+  # change-SD leading term + fourth-moment g^2 term, both on df = n-1; the modified
+  # df mi = 2*(n-1)/(1+r^2) is used for the Hedges J only).
+  smcrph_var_g <- function(sd_pre, sd_post, r, n, sd_av, g) {
+    sd_diff2 <- sd_pre^2 + sd_post^2 - 2 * r * sd_pre * sd_post
+    fm <- sd_pre^4 + sd_post^4 + 2 * r^2 * sd_pre^2 * sd_post^2
+    sd_diff2 / (sd_av^2 * (n - 1)) + g^2 * fm / (8 * sd_av^4 * (n - 1))
+  }
   mi_t <- 2 * (n_t - 1) / (1 + r_t^2)
   J_t <- calc_J(mi_t)
   sd_av_t <- sqrt((sd_pre_t^2 + sd_post_t^2) / 2)
   d_av_t <- (mean_post_t - mean_pre_t) / sd_av_t
   g_av_t <- d_av_t * J_t
-  # metafor SMCRP variance: 2*(1-r)/n + g²*(1+r²)/(4*n)
-  var_g_av_t <- 2 * (1 - r_t) / n_t + g_av_t^2 * (1 + r_t^2) / (4 * n_t)
+  var_g_av_t <- smcrph_var_g(sd_pre_t, sd_post_t, r_t, n_t, sd_av_t, g_av_t)
   var_d_av_t <- var_g_av_t / J_t^2
 
   mi_c <- 2 * (n_c - 1) / (1 + r_c^2)
@@ -695,7 +706,7 @@ test_that("morris_dav correct for two-group design (per-arm standardizer, pool_s
   sd_av_c <- sqrt((sd_pre_c^2 + sd_post_c^2) / 2)
   d_av_c <- (mean_post_c - mean_pre_c) / sd_av_c
   g_av_c <- d_av_c * J_c
-  var_g_av_c <- 2 * (1 - r_c) / n_c + g_av_c^2 * (1 + r_c^2) / (4 * n_c)
+  var_g_av_c <- smcrph_var_g(sd_pre_c, sd_post_c, r_c, n_c, sd_av_c, g_av_c)
   var_d_av_c <- var_g_av_c / J_c^2
 
   # Combined
@@ -842,8 +853,9 @@ test_that("morris_dz variance increases as r decreases", {
 })
 
 test_that("morris_dav variance formula correct across r values", {
-  # metaConvert uses metafor SMCRP: var(g) = 2*(1-r)/n + g²*(1+r²)/(4*n), then var(d) = var(g)/J²
-  # where J uses modified df = 2*(n-1)/(1+r²)
+  # metaConvert uses metafor SMCRPH (Bonett 2008 eq. 10): a robust change-SD leading
+  # term + a fourth-moment g^2 term, both on df = n-1; then var(d) = var(g)/J^2, where
+  # J uses the modified df mi = 2*(n-1)/(1+r^2).
 
   mean_pre <- 45
   mean_post <- 52
@@ -865,7 +877,9 @@ test_that("morris_dav variance formula correct across r values", {
     )
   })
 
-  # Verify variance formula for each r using metafor SMCRP approach
+  sd_av <- sqrt((sd_pre^2 + sd_post^2) / 2)
+
+  # Verify variance formula for each r using the metafor SMCRPH approach
   for (i in seq_along(r_values)) {
     r <- r_values[i]
     result <- results[[i]]
@@ -875,8 +889,10 @@ test_that("morris_dav variance formula correct across r values", {
     J <- calc_J(mi)
     g <- result$d * J
 
-    # metafor SMCRP variance: 2*(1-r)/n + g²*(1+r²)/(4*n)
-    var_g_expected <- 2 * (1 - r) / n + g^2 * (1 + r^2) / (4 * n)
+    # metafor SMCRPH variance: sd_diff²/(sd_av²(n-1)) + g²(sd_pre⁴+sd_post⁴+2r²sd_pre²sd_post²)/(8 sd_av⁴(n-1))
+    sd_diff2 <- sd_pre^2 + sd_post^2 - 2 * r * sd_pre * sd_post
+    fm <- sd_pre^4 + sd_post^4 + 2 * r^2 * sd_pre^2 * sd_post^2
+    var_g_expected <- sd_diff2 / (sd_av^2 * (n - 1)) + g^2 * fm / (8 * sd_av^4 * (n - 1))
     var_expected <- var_g_expected / J^2
 
     expect_equal(result$d_se^2, var_expected, tolerance = 1e-10,
