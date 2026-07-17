@@ -51,8 +51,10 @@ test_that("pooled morris_dz is BIT-EXACT with escalc(measure = 'SMD') on change 
 # -----------------------------------------------------------------------------
 # Simulates bivariate-normal (pre, post) data, computes each estimator and its
 # package variance, and checks that E[vi] tracks the TRUE sampling variance and
-# that the 95% CI covers. Tolerances are deliberately loose (bias within 10%,
-# coverage within [0.93, 0.97]) so the test guards against a real regression --
+# that the 95% CI covers. Coverage is graded with the qt(.975, n1 + n2 - 2)
+# interval the package emits. Tolerances are deliberately loose (bias within
+# 10%, coverage within [0.93, 0.97] / [0.93, 0.98]) so the test guards against
+# a real regression --
 # e.g. reinstating the leading J^2 (which costs ~9% at n = 10/arm) or the
 # homoscedastic numerator (which costs ~43% on bonett at q = 0.64) -- without
 # being flaky.
@@ -78,7 +80,10 @@ mc_calibrate <- function(n1, n2, r, delta_raw, sd_pre, sd_post, method, nsim = 4
   g <- g[ok]; vi <- vi[ok]
   list(
     bias = mean(vi) / var(g) - 1,
-    coverage = mean(abs(g - mean(g)) <= qnorm(.975) * sqrt(vi))
+    # Grade coverage with the interval the package actually EMITS: the pooled
+    # pre/post CIs are built with qt(.975, n1 + n2 - 2), not qnorm (the old
+    # qnorm grading validated an interval the package does not ship).
+    coverage = mean(abs(g - mean(g)) <= qt(.975, n1 + n2 - 2) * sqrt(vi))
   )
 }
 
@@ -97,19 +102,28 @@ test_that("all four pooled variances are calibrated under HOMOSCEDASTICITY", {
 
 test_that("all four pooled variances stay calibrated under SD HETEROSCEDASTICITY", {
   skip_if_not_installed("MASS")
-  # SD_pre / SD_post = 0.64 -- the median in the authors' own PETRA data, and the
-  # regime metaConvert's V18 flag warns about. The OLD homoscedastic numerator
-  # understated Var(g_bonett) by ~43% here and dropped coverage to 0.86; this is
-  # the test that pins the fix.
+  # q = SD_pre / SD_post grid spanning BOTH sides of 1: q = 0.64 (the median in
+  # the authors' own PETRA data, and the regime metaConvert's V18 flag warns
+  # about), q = 1 (sanity overlap with the homoscedastic block), and its
+  # reciprocal q = 1.56 -- the audit showed the OLD homoscedastic numerator
+  # failed with OPPOSITE signs on the two sides of 1 (~43% variance
+  # understatement and coverage 0.86 for bonett at q = 0.64), so a single
+  # results-derived point could not pin the fix. Fewer reps per cell than the
+  # homoscedastic block keep total runtime sane; acceptance bands unchanged.
   set.seed(20260713)
-  for (method in c("bonett", "morris_dz", "morris_drm", "morris_dav")) {
-    out <- mc_calibrate(30, 30, r = 0.5, delta_raw = 0.8,
-                        sd_pre = 0.64, sd_post = 1.0, method = method)
-    expect_lt(abs(out$bias), 0.10,
-              label = sprintf("|E[vi]/Var(g) - 1| for %s under q = 0.64 (%.1f%%)",
-                              method, 100 * out$bias))
-    expect_gt(out$coverage, 0.93,
-              label = sprintf("coverage for %s under q = 0.64", method))
+  for (q in c(0.64, 1, 1.56)) {
+    for (method in c("bonett", "morris_dz", "morris_drm", "morris_dav")) {
+      out <- mc_calibrate(30, 30, r = 0.5, delta_raw = 0.8,
+                          sd_pre = q, sd_post = 1.0, method = method,
+                          nsim = 2000)
+      expect_lt(abs(out$bias), 0.10,
+                label = sprintf("|E[vi]/Var(g) - 1| for %s under q = %s (%.1f%%)",
+                                method, q, 100 * out$bias))
+      expect_gt(out$coverage, 0.93,
+                label = sprintf("coverage for %s under q = %s", method, q))
+      expect_lt(out$coverage, 0.98,
+                label = sprintf("coverage for %s under q = %s", method, q))
+    }
   }
 })
 

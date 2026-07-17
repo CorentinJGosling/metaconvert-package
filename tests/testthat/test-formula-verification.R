@@ -12,9 +12,12 @@ library(metaConvert)
 
 # Test 1: Bonett (2008) Formula Verification - Single Group ====
 test_that("bonett formula matches Bonett (2008) for single-group", {
-  # Bonett, D. G. (2008). Estimating effect sizes from pretest-posttest-control
-  # group designs. Organizational Research Methods, 11(2), 364-386.
-  # https://doi.org/10.1177/1094428106291059
+  # Variance formula (SMCRH): Bonett, D. G. (2008). Confidence intervals for
+  # standardized linear contrasts of means. Psychological Methods, 13(2),
+  # 99-109. https://doi.org/10.1037/1082-989X.13.2.99
+  # Pretest-posttest-control design context: Morris, S. B. (2008). Estimating
+  # effect sizes from pretest-posttest-control group designs. Organizational
+  # Research Methods, 11(2), 364-386. https://doi.org/10.1177/1094428106291059
 
   mean_pre <- 50
   mean_post <- 60
