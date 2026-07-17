@@ -46,20 +46,36 @@ This function computes an effect size from an ICC.
 \item When \code{icc_to_es = "bonett"} (default), the Bonett (2002) transformation
 is applied:
 \deqn{T(ICC) = \ln(1 - ICC)}
-For a single-measure ICC, the leading-order sampling variance of \eqn{T(ICC)}
-is the same for the two-way absolute-agreement ICC(2,1)
-(\code{icc_type = "agreement"}) and the two-way consistency ICC(3,1)
-(\code{icc_type = "consistency"}):
+with the one-way random-model / two-way-consistency leading-order sampling
+variance (Bonett, 2002; Donner & Eliasziw, 1987):
 \deqn{T\_se = \sqrt{\frac{2 (1 + (k-1) ICC)^2}{k (k - 1)(n - 1)}}}
 \item When \code{icc_to_es = "raw"}, the raw ICC is used and its standard error
-is obtained by the delta method.
+is obtained by the delta method (\eqn{(1 - ICC)} times the transformed-scale SE).
 }
 
-Both SEs use the one-way random-model / two-way-consistency leading-order
-variance (Bonett, 2002; Donner & Eliasziw, 1987). For ICC(3,1) this variance
-still depends on the ICC value (it is \emph{not} \eqn{\rho}-free): deriving it
-from \eqn{F_0 = MSR/MSE} (with degrees of freedom \eqn{n-1} and
-\eqn{(n-1)(k-1)}) reduces to the same expression as the agreement case.
+\strong{Scope of the SE formula.} For the two-way consistency ICC(3,1)
+(\code{icc_type = "consistency"}) this SE is exact at leading order: deriving
+it from \eqn{F_0 = MSR/MSE} (with degrees of freedom \eqn{n-1} and
+\eqn{(n-1)(k-1)}) reduces to the same expression, and it still depends on the
+ICC value (it is \emph{not} \eqn{\rho}-free). For the two-way
+absolute-agreement ICC(2,1) (\code{icc_type = "agreement"}, the default) the
+same formula is only a \strong{one-way approximation that assumes negligible
+between-rater variance}: when raters differ systematically
+(\eqn{\sigma^2_{rater} > 0}), the ICC(2,1) estimator depends on the
+between-rater mean square, which has only \eqn{k - 1} degrees of freedom, so
+its true sampling variance does not shrink at the \eqn{1/n} rate this formula
+assumes and the reported SE/CI can be markedly anti-conservative (simulation:
+95\\% CI coverage around 0.74-0.76 with moderate rater variance, degrading as
+\eqn{n} grows). The exact ICC(2,1) variance requires the rater-variance
+component, which summary data do not report; a per-row informational flag
+(V31) marks agreement-type rows for this reason. If the raters are known to
+be exchangeable (negligible rater variance), the approximation is accurate.
+
+\strong{Scale note.} Under the default \code{icc_to_es = "bonett"} the returned
+\code{icc_se} column is on the \eqn{\ln(1 - ICC)} scale. If you feed it to
+\code{\link{compute_sem}} (whose \code{icc_se} argument expects the RAW-scale
+SE), convert it first: \code{raw_se = icc_se * (1 - icc)} - or call
+\code{es_from_icc} with \code{icc_to_es = "raw"}.
 }
 \examples{
 es_from_icc(

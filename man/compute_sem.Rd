@@ -11,15 +11,25 @@ compute_sem(sd, icc, n_sample, icc_se, n_measurements = 2)
 
 \item{icc}{intraclass correlation coefficient (test-retest reliability)}
 
-\item{n_sample}{sample size (used for the SEM sampling-variance estimation)}
+\item{n_sample}{sample size (used for the SEM sampling-variance estimation).
+Required in BOTH variance regimes: it feeds \eqn{Var(SD)} in the
+external-\code{icc_se} delta method and the degrees of freedom of the
+same-sample chi-square variance, so when it is omitted the SEM standard
+error and CI are \code{NA}.}
 
-\item{icc_se}{standard error of the ICC (optional). When supplied, the ICC is
-treated as an independent external estimate; when omitted, the ICC and SD are
-assumed to come from the same sample (see Details).}
+\item{icc_se}{standard error of the ICC (optional), on the RAW ICC scale.
+Note that \code{\link{es_from_icc}} under its default
+\code{icc_to_es = "bonett"} returns a column named \code{icc_se} on the
+\eqn{\ln(1 - ICC)} scale: that value must be converted first
+(\code{raw_se = bonett_se * (1 - icc)}) before being passed here (or use
+\code{icc_to_es = "raw"}, which returns the raw-scale SE directly).
+When supplied, the ICC is treated as an independent external estimate;
+when omitted, the ICC and SD are assumed to come from the same sample
+(see Details).}
 
 \item{n_measurements}{number of measurement occasions or raters (k) used to
-estimate the ICC; default 2 (test-retest). Only used when \code{icc_se} is
-not supplied.}
+estimate the ICC; default 2 (test-retest); must be >= 2. Only used when
+\code{icc_se} is not supplied.}
 }
 \value{
 A data.frame with the SEM, its standard error and 95\% CI.
@@ -52,6 +62,19 @@ where \eqn{k} is the number of measurement occasions/raters
 and ICC as independent (the delta method of case 1) would overestimate this
 variance by roughly 2-6x, so the exact form is used instead.
 }
+
+The 95\% CI is likewise regime-specific. In the same-sample regime (case 2)
+the degrees of freedom \eqn{df = (n - 1)(k - 1)} are known, so the exact
+chi-square interval
+\deqn{[SEM \sqrt{df / \chi^2_{0.975, df}},\; SEM \sqrt{df / \chi^2_{0.025, df}}]}
+is returned; the symmetric Wald interval undercovers at small df (89.7\%
+instead of 95\% at n = 10, k = 2). When \code{icc_se} is supplied (case 1)
+the df behind the external estimate is unknown, so the Wald interval
+\eqn{SEM \pm 1.96 \times SE}, truncated at 0, is kept.
+
+Degenerate inputs: \code{n_measurements} = 1 makes the same-sample df zero,
+so the SE and CI are returned as \code{NA} with a warning; an ICC > 1 is
+impossible and yields \code{NA} for the SEM, its SE and CI (with a warning).
 }
 \examples{
 compute_sem(sd = 10, icc = 0.85, n_sample = 100)

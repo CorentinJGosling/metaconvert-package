@@ -65,9 +65,12 @@ for strong correlations:
 
 The converted Pearson's r is then further converted to a Fisher's z, Cohen's d, Hedges' g, and
 odds ratio using the same formulas as \code{\link{es_from_pearson_r}()}. This
-delta-method SE is propagated to the Fisher's z and (for the default
-\code{cor_to_smd = "viechtbauer"} path) to the Cohen's d, Hedges' g and odds
-ratio, so all measures share the corrected r variance.
+delta-method SE is propagated to the Fisher's z and (for the
+\code{cor_to_smd = "viechtbauer"} and \code{cor_to_smd = "cooper"} paths,
+whose SMD standard errors are proportional to the input r SE) to the Cohen's d,
+Hedges' g and odds ratio, so all measures share the corrected r variance.
+The \code{cor_to_smd = "mathur"} SMD variance contains no r SE term, so its
+d/g/OR standard errors are left as computed by \code{\link{es_from_pearson_r}()}.
 }
 \examples{
 es_from_spearman_rho(

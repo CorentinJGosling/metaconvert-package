@@ -27,14 +27,22 @@
 #' \eqn{prop\_corrected = \frac{x + 0.5}{n + 1}}. For the raw method this shifts the
 #' reported point estimate itself (a boundary proportion of exactly 0 or 1 is
 #' returned as \eqn{(x + 0.5)/(n + 1)}, i.e. nudged toward the interior), matching
-#' the convention of \code{metafor}'s \code{measure = "PR"}.
+#' the convention of \code{metafor}'s \code{measure = "PR"}. The corrected
+#' denominator \eqn{n + 1} also replaces \eqn{n} in the raw and logit standard
+#' errors for these boundary rows (i.e.,
+#' \eqn{\sqrt{p_c (1 - p_c) / (n + 1)}} and \eqn{\sqrt{1 / ((n + 1) \times p_c \times (1 - p_c))}}),
+#' matching \code{metafor}'s \code{"PR"}/\code{"PLO"} convention throughout.
+#'
+#' Proportions outside \eqn{[0, 1]} are set to NA with a warning (the affected
+#' rows return NA, but do not abort the run).
 #'
 #' @references
 #' Barendregt, J. J., Doi, S. A., Lee, Y. Y., Norman, R. E., & Vos, T. (2013).
 #' Meta-analysis of prevalence. Journal of Epidemiology and Community Health, 67(11), 974-978.
 #'
 #' Miller, J. J. (1978). The inverse of the Freeman-Tukey double arcsine transformation.
-#' The American Statistician, 32(4), 138-138.
+#' The American Statistician, 32(4), 138-138. (Back-transformation left to the
+#' user; not applied here: Freeman-Tukey results stay on the transformed scale.)
 #'
 #' @return
 #' This function estimates a single-group proportion.
@@ -73,8 +81,17 @@ es_from_prop_single_group <- function(prop, n_sample, prop_to_es = "raw", revers
                 "Possible inputs are: 'raw', 'logit', 'freeman_tukey'"))
   }
 
-  if (any(!is.na(prop) & (prop < 0 | prop > 1))) {
-    stop("Proportions must be between 0 and 1")
+  # P9: per-row NA + warning instead of a hard stop. convert_df() calls this
+  # function for every measure with no tryCatch, so a stop() here would abort
+  # an entire pipeline run (including unrelated measures) because of one bad
+  # cell. Tier-1 validation reports the issue in both correct_inputs modes.
+  out_of_range <- !is.na(prop) & (prop < 0 | prop > 1)
+  if (any(out_of_range)) {
+    warning(sprintf(
+      "es_from_prop_single_group: %d row(s) had a proportion outside [0, 1]; these proportions were set to NA.",
+      sum(out_of_range)
+    ), call. = FALSE)
+    prop[out_of_range] <- NA_real_
   }
 
   nn_miss <- which(!is.na(prop) & !is.na(n_sample))
@@ -94,14 +111,19 @@ es_from_prop_single_group <- function(prop, n_sample, prop_to_es = "raw", revers
     needs_correction <- (p == 0 | p == 1)
     p_corrected <- p
     p_corrected[needs_correction] <- (n_cases[needs_correction] + 0.5) / (ns[needs_correction] + 1)
+    # P5: the continuity-corrected denominator n + 1 must also flow into the
+    # SE for boundary rows (metafor PR/PLO convention: vi = 1/x_c + 1/(n_c - x_c)
+    # with x_c = x + 0.5, n_c = n + 1); interior rows keep the raw n.
+    ns_corrected <- ns
+    ns_corrected[needs_correction] <- ns[needs_correction] + 1
 
     if (prop_to_es == "raw") {
       prop_es[nn_miss] <- p_corrected
-      prop_es_se[nn_miss] <- sqrt(p_corrected * (1 - p_corrected) / ns)
+      prop_es_se[nn_miss] <- sqrt(p_corrected * (1 - p_corrected) / ns_corrected)
 
     } else if (prop_to_es == "logit") {
       prop_es[nn_miss] <- log(p_corrected / (1 - p_corrected))
-      prop_es_se[nn_miss] <- sqrt(1 / (ns * p_corrected * (1 - p_corrected)))
+      prop_es_se[nn_miss] <- sqrt(1 / (ns_corrected * p_corrected * (1 - p_corrected)))
 
     } else if (prop_to_es == "freeman_tukey") {
       # no correction for FT
@@ -152,6 +174,9 @@ es_from_prop_single_group <- function(prop, n_sample, prop_to_es = "raw", revers
 #'
 #' Then, calculations of the \code{\link{es_from_prop_single_group}()} are applied.
 #'
+#' Rows where \code{n_cases > n_sample} are set to NA (both values) with a
+#' warning; the affected rows return NA, but do not abort the run.
+#'
 #' @references
 #' Barendregt, J. J., Doi, S. A., Lee, Y. Y., Norman, R. E., & Vos, T. (2013).
 #' Meta-analysis of prevalence. Journal of Epidemiology and Community Health, 67(11), 974-978.
@@ -170,8 +195,17 @@ es_from_prop_single_group_counts <- function(n_cases, n_sample, prop_to_es = "ra
   if (missing(reverse_prop)) reverse_prop <- rep(FALSE, length(n_cases))
   reverse_prop[is.na(reverse_prop)] <- FALSE
 
-  if (any(!is.na(n_cases) & !is.na(n_sample) & n_cases > n_sample)) {
-    stop("Number of cases cannot exceed sample size")
+  # P9: per-row NA + warning instead of a hard stop (see
+  # es_from_prop_single_group). Both members of an inconsistent pair are set
+  # to NA, mirroring the Tier-1 part-total convention.
+  inconsistent <- !is.na(n_cases) & !is.na(n_sample) & n_cases > n_sample
+  if (any(inconsistent)) {
+    warning(sprintf(
+      "es_from_prop_single_group_counts: %d row(s) had n_cases > n_sample; both values were set to NA for these rows.",
+      sum(inconsistent)
+    ), call. = FALSE)
+    n_cases[inconsistent] <- NA_real_
+    n_sample[inconsistent] <- NA_real_
   }
 
   prop <- n_cases / n_sample

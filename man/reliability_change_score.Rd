@@ -20,12 +20,23 @@ Compute change-score reliability
 \details{
 Computes the reliability of a change (difference) score from a single-occasion
 reliability coefficient and the pre-post correlation of observed scores,
-assuming equal variances at pre and post (Lord, 1963; Cronbach & Furby, 1970):
+assuming equal variances AND equal reliabilities at pre and post
+(Lord, 1963; Cronbach & Furby, 1970):
 
 \deqn{rel_{change} = \frac{rel - r_{12}}{1 - r_{12}}}
 
+This is the equal-variance/equal-reliability special case of the general
+Lord (1963) formula; when the pre and post variances (or reliabilities)
+differ materially, the general formula should be used instead.
+
 This is useful for disattenuating change-score correlations, where the
 reliability of the change score is needed rather than the single-occasion reliability.
+
+A negative result (which occurs when \code{r_pre_post} exceeds
+\code{reliability}) is population-impossible under classical test theory
+and signals inconsistent inputs; it is returned as computed but triggers a
+warning, since a negative value fed to \code{\link{es_disattenuate}} as a
+reliability would produce \code{NaN} (square root of a negative number).
 }
 \examples{
 reliability_change_score(reliability = 0.85, r_pre_post = 0.60)

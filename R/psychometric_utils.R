@@ -6,12 +6,23 @@
 #' @details
 #' Computes the reliability of a change (difference) score from a single-occasion
 #' reliability coefficient and the pre-post correlation of observed scores,
-#' assuming equal variances at pre and post (Lord, 1963; Cronbach & Furby, 1970):
+#' assuming equal variances AND equal reliabilities at pre and post
+#' (Lord, 1963; Cronbach & Furby, 1970):
 #'
 #' \deqn{rel_{change} = \frac{rel - r_{12}}{1 - r_{12}}}
 #'
+#' This is the equal-variance/equal-reliability special case of the general
+#' Lord (1963) formula; when the pre and post variances (or reliabilities)
+#' differ materially, the general formula should be used instead.
+#'
 #' This is useful for disattenuating change-score correlations, where the
 #' reliability of the change score is needed rather than the single-occasion reliability.
+#'
+#' A negative result (which occurs when \code{r_pre_post} exceeds
+#' \code{reliability}) is population-impossible under classical test theory
+#' and signals inconsistent inputs; it is returned as computed but triggers a
+#' warning, since a negative value fed to \code{\link{es_disattenuate}} as a
+#' reliability would produce \code{NaN} (square root of a negative number).
 #'
 #' @export reliability_change_score
 #'
@@ -43,6 +54,14 @@ reliability_change_score <- function(reliability, r_pre_post) {
 
   rel_change <- (reliability - r_pre_post) / (1 - r_pre_post)
 
+  # r_pre_post > reliability is population-impossible under classical test
+  # theory (it would require a true-score correlation > 1); the negative
+  # output is preserved but flagged, since it will produce NaN downstream if
+  # used as a reliability in es_disattenuate().
+  if (any(!is.na(rel_change) & rel_change < 0, na.rm = TRUE)) {
+    warning("Negative change-score reliability produced (r_pre_post > reliability): inputs are inconsistent under classical test theory, and a negative value used as a reliability in es_disattenuate() will produce NaN")
+  }
+
   result <- data.frame(
     rel_change = rel_change
   )
@@ -55,13 +74,23 @@ reliability_change_score <- function(reliability, r_pre_post) {
 #'
 #' @param sd standard deviation of the PROM/test scores
 #' @param icc intraclass correlation coefficient (test-retest reliability)
-#' @param n_sample sample size (used for the SEM sampling-variance estimation)
-#' @param icc_se standard error of the ICC (optional). When supplied, the ICC is
-#'   treated as an independent external estimate; when omitted, the ICC and SD are
-#'   assumed to come from the same sample (see Details).
+#' @param n_sample sample size (used for the SEM sampling-variance estimation).
+#'   Required in BOTH variance regimes: it feeds \eqn{Var(SD)} in the
+#'   external-\code{icc_se} delta method and the degrees of freedom of the
+#'   same-sample chi-square variance, so when it is omitted the SEM standard
+#'   error and CI are \code{NA}.
+#' @param icc_se standard error of the ICC (optional), on the RAW ICC scale.
+#'   Note that \code{\link{es_from_icc}} under its default
+#'   \code{icc_to_es = "bonett"} returns a column named \code{icc_se} on the
+#'   \eqn{\ln(1 - ICC)} scale: that value must be converted first
+#'   (\code{raw_se = bonett_se * (1 - icc)}) before being passed here (or use
+#'   \code{icc_to_es = "raw"}, which returns the raw-scale SE directly).
+#'   When supplied, the ICC is treated as an independent external estimate;
+#'   when omitted, the ICC and SD are assumed to come from the same sample
+#'   (see Details).
 #' @param n_measurements number of measurement occasions or raters (k) used to
-#'   estimate the ICC; default 2 (test-retest). Only used when \code{icc_se} is
-#'   not supplied.
+#'   estimate the ICC; default 2 (test-retest); must be >= 2. Only used when
+#'   \code{icc_se} is not supplied.
 #'
 #' @details
 #' Computes the standard error of measurement (SEM) from a reliability
@@ -89,6 +118,19 @@ reliability_change_score <- function(reliability, r_pre_post) {
 #' and ICC as independent (the delta method of case 1) would overestimate this
 #' variance by roughly 2-6x, so the exact form is used instead.
 #'
+#' The 95% CI is likewise regime-specific. In the same-sample regime (case 2)
+#' the degrees of freedom \eqn{df = (n - 1)(k - 1)} are known, so the exact
+#' chi-square interval
+#' \deqn{[SEM \sqrt{df / \chi^2_{0.975, df}},\; SEM \sqrt{df / \chi^2_{0.025, df}}]}
+#' is returned; the symmetric Wald interval undercovers at small df (89.7%
+#' instead of 95% at n = 10, k = 2). When \code{icc_se} is supplied (case 1)
+#' the df behind the external estimate is unknown, so the Wald interval
+#' \eqn{SEM \pm 1.96 \times SE}, truncated at 0, is kept.
+#'
+#' Degenerate inputs: \code{n_measurements} = 1 makes the same-sample df zero,
+#' so the SE and CI are returned as \code{NA} with a warning; an ICC > 1 is
+#' impossible and yields \code{NA} for the SEM, its SE and CI (with a warning).
+#'
 #' @export compute_sem
 #'
 #' @references
@@ -114,11 +156,31 @@ compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
     warning("Negative SD detected; SEM will be invalid")
   }
   if (any(!is.na(icc) & (icc < 0 | icc > 1), na.rm = TRUE)) {
-    warning("ICC outside [0, 1] detected; SEM will be invalid (NaN or negative)")
+    warning("ICC outside [0, 1] detected; SEM is invalid (set to NA when ICC > 1)")
+  }
+  # icc_se must be the RAW-scale SE of the ICC. A raw-scale SE larger than
+  # (1 - icc) is implausible and is the signature of es_from_icc()'s default
+  # Bonett output (the SE of ln(1 - ICC)) being passed through unchanged.
+  # Warn only - the value is used exactly as supplied.
+  scale_suspect <- !is.na(icc_se) & !is.na(icc) & icc < 1 & icc_se > (1 - icc)
+  if (any(scale_suspect, na.rm = TRUE)) {
+    warning("icc_se looks like a transformed-scale (Bonett, ln(1 - ICC)) standard error (icc_se > 1 - icc); compute_sem() needs the RAW-scale ICC standard error. If it comes from es_from_icc() with the default icc_to_es = 'bonett', convert it first: raw_se = bonett_se * (1 - icc). The value is used as supplied.")
   }
 
-  sem <- sd * sqrt(1 - icc)
+  # ICC > 1 is impossible: sqrt(1 - icc) would be NaN, and no variance is
+  # defensible - return NA (not NaN paired with a zero SE).
+  sem <- sd * sqrt(pmax(1 - icc, 0))
+  sem[!is.na(icc) & icc > 1] <- NA_real_
   k <- n_measurements
+
+  # Same-sample df = (n - 1)(k - 1); k = 1 (or n = 1) makes it zero, so the
+  # chi-square variance/CI below would divide by zero - invalidate the df and
+  # warn where the same-sample regime actually needs it.
+  df_sem <- (n_sample - 1) * (k - 1)
+  df_sem[!is.na(df_sem) & df_sem < 1] <- NA_real_
+  if (any(is.na(icc_se) & !is.na(k) & k < 2, na.rm = TRUE)) {
+    warning("n_measurements must be >= 2 to estimate the same-sample SEM sampling variance; SE and CI set to NA for the affected row(s)")
+  }
 
   # Sampling variance of SEM, in two regimes:
   #
@@ -137,14 +199,27 @@ compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
   #     Verified by simulation to within ~1%.
   var_sd <- sd^2 / (2 * (n_sample - 1))
   var_sem_delta <- (sd^2 / (4 * (1 - icc))) * icc_se^2 + (1 - icc) * var_sd
-  var_sem_exact <- sem^2 / (2 * (n_sample - 1) * (k - 1))
+  var_sem_exact <- sem^2 / (2 * df_sem)
 
-  var_sem <- ifelse(icc >= 1, 0,
-                    ifelse(!is.na(icc_se), var_sem_delta, var_sem_exact))
+  # icc > 1: no defensible variance (NA, not the old maximally-confident 0);
+  # icc == 1 exactly: the coherent degenerate case sem = 0, se = 0.
+  var_sem <- ifelse(!is.na(icc) & icc > 1, NA_real_,
+                    ifelse(!is.na(icc) & icc == 1, 0,
+                           ifelse(!is.na(icc_se), var_sem_delta, var_sem_exact)))
   sem_se <- sqrt(var_sem)
 
-  sem_ci_lo <- pmax(0, sem - qnorm(0.975) * sem_se)
-  sem_ci_up <- sem + qnorm(0.975) * sem_se
+  # CI, regime-specific:
+  # - same-sample (icc_se missing): df is known, use the exact chi-square
+  #   interval for sigma_e (the Wald interval undercovers at small df,
+  #   89.7% at n = 10, k = 2);
+  # - external icc_se: df unknown, keep the truncated Wald interval.
+  same_sample <- is.na(icc_se)
+  sem_ci_lo <- ifelse(same_sample,
+                      sem * sqrt(df_sem / qchisq(0.975, df_sem)),
+                      pmax(0, sem - qnorm(0.975) * sem_se))
+  sem_ci_up <- ifelse(same_sample,
+                      sem * sqrt(df_sem / qchisq(0.025, df_sem)),
+                      sem + qnorm(0.975) * sem_se)
 
   result <- data.frame(
     sem = sem,

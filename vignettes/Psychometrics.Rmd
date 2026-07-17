@@ -261,7 +261,7 @@ DT::datatable(summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
 
 <br>
 
-Note that studies using different ICC models (agreement vs. consistency) can coexist in the same analysis. The SE is computed correctly for each study based on its `icc_type`. When pooling, `icc_type` can be examined as a **moderator** variable.
+Note that studies using different ICC models (agreement vs. consistency) can coexist in the same analysis. Both types share the same leading-order SE formula: it is exact for consistency ICC(3,1), but for agreement ICC(2,1) it is a one-way approximation that assumes negligible between-rater variance -- when raters differ systematically, the reported SE is anti-conservative, and `summary()` marks agreement-type rows with an informational flag (see `?es_from_icc`). When pooling, `icc_type` can be examined as a **moderator** variable.
 
 ## Meta-analysis
 

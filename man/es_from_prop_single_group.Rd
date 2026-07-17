@@ -57,7 +57,14 @@ When prop is equal to 0 or 1, a 0.5 correction is applied for the raw and logit 
 \eqn{prop\_corrected = \frac{x + 0.5}{n + 1}}. For the raw method this shifts the
 reported point estimate itself (a boundary proportion of exactly 0 or 1 is
 returned as \eqn{(x + 0.5)/(n + 1)}, i.e. nudged toward the interior), matching
-the convention of \code{metafor}'s \code{measure = "PR"}.
+the convention of \code{metafor}'s \code{measure = "PR"}. The corrected
+denominator \eqn{n + 1} also replaces \eqn{n} in the raw and logit standard
+errors for these boundary rows (i.e.,
+\eqn{\sqrt{p_c (1 - p_c) / (n + 1)}} and \eqn{\sqrt{1 / ((n + 1) \times p_c \times (1 - p_c))}}),
+matching \code{metafor}'s \code{"PR"}/\code{"PLO"} convention throughout.
+
+Proportions outside \eqn{[0, 1]} are set to NA with a warning (the affected
+rows return NA, but do not abort the run).
 }
 \examples{
 es_from_prop_single_group(prop = 0.30, n_sample = 100)
@@ -67,5 +74,6 @@ Barendregt, J. J., Doi, S. A., Lee, Y. Y., Norman, R. E., & Vos, T. (2013).
 Meta-analysis of prevalence. Journal of Epidemiology and Community Health, 67(11), 974-978.
 
 Miller, J. J. (1978). The inverse of the Freeman-Tukey double arcsine transformation.
-The American Statistician, 32(4), 138-138.
+The American Statistician, 32(4), 138-138. (Back-transformation left to the
+user; not applied here: Freeman-Tukey results stay on the transformed scale.)
 }

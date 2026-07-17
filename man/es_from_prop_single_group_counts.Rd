@@ -36,6 +36,9 @@ The proportion is calculated as:
 \deqn{prop = \frac{n\_cases}{n\_sample}}
 
 Then, calculations of the \code{\link{es_from_prop_single_group}()} are applied.
+
+Rows where \code{n_cases > n_sample} are set to NA (both values) with a
+warning; the affected rows return NA, but do not abort the run.
 }
 \examples{
 es_from_prop_single_group_counts(n_cases = 25, n_sample = 100)

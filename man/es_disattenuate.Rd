@@ -7,7 +7,9 @@
 es_disattenuate(r, r_se, reliability_x, reliability_y, n_sample)
 }
 \arguments{
-\item{r}{observed correlation coefficient}
+\item{r}{observed correlation coefficient (values outside \eqn{[-1, 1]}
+trigger a warning; the arithmetic is still applied so the inputs can be
+inspected)}
 
 \item{r_se}{standard error of the observed correlation. Optional: when omitted,
 it is derived from \code{n_sample} (see Details).}
@@ -53,6 +55,14 @@ correlation for use in meta-analysis, with
 \eqn{SE(z_c) = SE(r_c) / (1 - r_c^2)} (delta method). The corrected-r
 confidence interval is obtained by back-transforming the Fisher-z interval
 (\eqn{\tanh}), so it always lies within (-1, 1).
+
+When the corrected correlation is extreme (\eqn{|r_c| > 0.999}, including
+the mathematically impossible \eqn{|r_c| \ge 1} that inconsistent inputs
+produce), no meaningful Fisher's z or CI exists: the corrected-r CI and all
+Fisher's z outputs (\code{z_corrected}, \code{z_corrected_se} and its CI
+bounds) are set to \code{NA} and a warning is emitted. The corrected point
+estimate and its first-order standard error are always returned as
+computed, so the offending inputs can be inspected.
 
 This function is typically applied to the results of
 \code{summary(convert_df(..., measure = "r"))}:

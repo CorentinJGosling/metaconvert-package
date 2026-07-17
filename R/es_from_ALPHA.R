@@ -66,7 +66,19 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
                 "Possible inputs are: 'bonett', 'raw'"))
   }
 
-  nn_miss <- which(!is.na(cronbach_alpha) & !is.na(n_sample) & !is.na(n_items))
+  # P16: per-element guards -- alpha > 1 is impossible (V11 upper bound),
+  # n <= 2 makes the SE denominator (n - 2) non-positive, and a single item
+  # (k < 2) leaves alpha undefined. alpha = 1 exactly is a valid boundary on
+  # the raw scale (es = 1, se = 0) but has no Bonett transform (log(0)).
+  # Direct calls degrade to NA instead of emitting Inf/NaN (the pipeline
+  # already NAs the impossible values via Tier-1 validation).
+  invalid <- (!is.na(cronbach_alpha) & cronbach_alpha > 1) |
+    (!is.na(cronbach_alpha) & cronbach_alpha == 1 & alpha_to_es == "bonett") |
+    (!is.na(n_sample) & n_sample <= 2) |
+    (!is.na(n_items) & n_items < 2)
+
+  nn_miss <- which(!is.na(cronbach_alpha) & !is.na(n_sample) & !is.na(n_items) &
+                     !invalid)
 
   n <- length(cronbach_alpha)
   alpha_es <- rep(NA_real_, n)

@@ -24,9 +24,12 @@
 #'
 #' The converted Pearson's r is then further converted to a Fisher's z, Cohen's d, Hedges' g, and
 #' odds ratio using the same formulas as \code{\link{es_from_pearson_r}()}. This
-#' delta-method SE is propagated to the Fisher's z and (for the default
-#' \code{cor_to_smd = "viechtbauer"} path) to the Cohen's d, Hedges' g and odds
-#' ratio, so all measures share the corrected r variance.
+#' delta-method SE is propagated to the Fisher's z and (for the
+#' \code{cor_to_smd = "viechtbauer"} and \code{cor_to_smd = "cooper"} paths,
+#' whose SMD standard errors are proportional to the input r SE) to the Cohen's d,
+#' Hedges' g and odds ratio, so all measures share the corrected r variance.
+#' The \code{cor_to_smd = "mathur"} SMD variance contains no r SE term, so its
+#' d/g/OR standard errors are left as computed by \code{\link{es_from_pearson_r}()}.
 #'
 #' @export es_from_spearman_rho
 #'
@@ -86,6 +89,12 @@ es_from_spearman_rho <- function(spearman_r, n_sample,
     unit_type <- rep(NA, length(spearman_r))
   }
 
+  # Mirror the sample-size fallback es_from_pearson_r applies internally, so a
+  # direct call supplying only n_exp/n_nexp gets the same delta-method r/z SEs
+  # (and corrected d/g/OR SEs) as the equivalent n_sample call, instead of NA
+  # r_se/z_se next to uncorrected SMD SEs.
+  n_sample <- ifelse(is.na(n_sample), n_exp + n_nexp, n_sample)
+
   # Rupinski & Dunlap (1996)
   r <- 2 * sin(pi / 6 * spearman_r)
 
@@ -113,13 +122,16 @@ es_from_spearman_rho <- function(spearman_r, n_sample,
 
   # Propagate the corrected r_p SE into the converted SMD/OR measures. For the
   # (default) viechtbauer path, d_se is proportional to the input r_se
-  # (d_se = |d(rtod)/dr_p| * r_se), so scaling d_se by r_se_delta / r_se_pearson
-  # yields delta-consistent d/g/OR SEs; g, OR and all CIs are then rebuilt by
-  # .es_from_d exactly as elsewhere in the package. The cooper/mathur SMD SEs use
-  # a different (slope-based) variance that does not route through r_se, so those
+  # (d_se = |d(rtod)/dr_p| * r_se), and the cooper path is likewise exactly
+  # linear in r_se (d_se = sqrt(4 * r_se^2 / (1 - r^2)^3)), so scaling d_se by
+  # r_se_delta / r_se_pearson yields delta-consistent d/g/OR SEs on both paths;
+  # g, OR and all CIs are then rebuilt by .es_from_d exactly as elsewhere in the
+  # package. Only the mathur SMD variance genuinely does not route through r_se
+  # (d_se = |d| * sqrt(1/(r^2 (n-3)) + 1/(2 (n-1))) has no r_se term), so those
   # rows are left unchanged (scale = 1).
   r_se_pearson <- es$r_se
-  scale <- ifelse(cor_to_smd == "viechtbauer" & !is.na(r_se_pearson) &
+  scale <- ifelse(cor_to_smd %in% c("viechtbauer", "cooper") &
+                    !is.na(r_se_pearson) &
                     r_se_pearson > 0 & is.finite(r_se_delta),
                   r_se_delta / r_se_pearson, 1)
   es <- .es_from_d(d = es$d, d_se = es$d_se * scale,
