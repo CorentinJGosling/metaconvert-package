@@ -14,6 +14,8 @@ es_from_means_ci(
   n_exp,
   n_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
+  smd_denom = "pooled",
   max_asymmetry = 10,
   reverse_means
 )
@@ -36,6 +38,10 @@ es_from_means_ci(
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+
+\item{smd_denom}{standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance.}
 
 \item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 

@@ -9,6 +9,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -68,7 +69,7 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
                                     ancova_mean_exp, ancova_mean_nexp,
                                     ancova_mean_sd_exp, ancova_mean_sd_nexp,
                                     cov_outcome_r, n_cov_ancova,
-                                    smd_to_cor = "viechtbauer", reverse_ancova_means) {
+                                    smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_ancova_means) {
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
@@ -82,7 +83,7 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
     ancova_mean_sd_pooled = ancova_mean_sd_pooled, cov_outcome_r = cov_outcome_r,
     n_cov_ancova = n_cov_ancova, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_ancova_means = reverse_ancova_means
   )
 
 
@@ -108,6 +109,7 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -151,7 +153,7 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
                                     ancova_mean_exp, ancova_mean_nexp,
                                     ancova_mean_se_exp, ancova_mean_se_nexp,
                                     cov_outcome_r, n_cov_ancova,
-                                    smd_to_cor = "viechtbauer", reverse_ancova_means) {
+                                    smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_ancova_means) {
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
 
@@ -166,7 +168,7 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
     ancova_mean_sd_exp = ancova_mean_sd_exp, ancova_mean_sd_nexp = ancova_mean_sd_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_ancova_means = reverse_ancova_means
   )
 
   es$info_used <- "ancova_means_se"
@@ -186,6 +188,7 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -228,7 +231,7 @@ es_from_ancova_means_ci <- function(n_exp, n_nexp,
                                     ancova_mean_exp, ancova_mean_ci_lo_exp, ancova_mean_ci_up_exp,
                                     ancova_mean_nexp, ancova_mean_ci_lo_nexp, ancova_mean_ci_up_nexp,
                                     cov_outcome_r, n_cov_ancova,
-                                    smd_to_cor = "viechtbauer", reverse_ancova_means) {
+                                    smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_ancova_means) {
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
 
@@ -244,7 +247,7 @@ es_from_ancova_means_ci <- function(n_exp, n_nexp,
     ancova_mean_nexp = ancova_mean_nexp,
     ancova_mean_se_nexp = ancova_se_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_ancova_means = reverse_ancova_means
   )
 
   es$info_used <- "ancova_means_ci"
@@ -261,6 +264,7 @@ es_from_ancova_means_ci <- function(n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -303,7 +307,7 @@ es_from_ancova_means_ci <- function(n_exp, n_nexp,
 es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp,
                                                ancova_mean_sd_pooled, cov_outcome_r,
                                                n_cov_ancova, n_exp, n_nexp,
-                                               smd_to_cor = "viechtbauer", reverse_ancova_means) {
+                                               smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_ancova_means) {
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
@@ -317,7 +321,7 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
     d = d, cov_outcome_r = cov_outcome_r,
     adjusted = TRUE,
     n_cov_ancova = n_cov_ancova, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_ancova_means
   )
 
   es$info_used <- "ancova_means_sd_pooled_adj"
@@ -343,6 +347,7 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -387,7 +392,7 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
 #' )
 es_from_ancova_means_sd_pooled_crude <- function(ancova_mean_exp, ancova_mean_nexp,
                                                  mean_sd_pooled, cov_outcome_r, n_cov_ancova,
-                                                 n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_ancova_means) {
+                                                 n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_ancova_means) {
   if (missing(reverse_ancova_means)) reverse_ancova_means <- rep(FALSE, length(ancova_mean_exp))
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
@@ -399,7 +404,7 @@ es_from_ancova_means_sd_pooled_crude <- function(ancova_mean_exp, ancova_mean_ne
     d = d, cov_outcome_r = cov_outcome_r,
     adjusted = TRUE,
     n_cov_ancova = n_cov_ancova, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_ancova_means
   )
 
   es$info_used <- "ancova_means_sd_pooled"

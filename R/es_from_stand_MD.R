@@ -5,6 +5,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -37,7 +38,8 @@
 #'
 #' @examples
 #' es_from_md_sd(md = 4, md_sd = 2, n_exp = 20, n_nexp = 22)
-es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_md) {
+es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer",
+                          smd_var = "borenstein", reverse_md) {
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
   if (length(reverse_md) == 1) reverse_md = c(rep(reverse_md, length(md)))
@@ -45,11 +47,12 @@ es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 
   d <- md / md_sd
 
-  d_se <- sqrt((n_exp + n_nexp) / (n_exp * n_nexp) + (d^2) / (2 * (n_exp + n_nexp)))
-
+  # P4: the default d_se is left to .es_from_d, which computes the large-sample
+  # variance under the requested smd_var convention (the "borenstein" branch is
+  # the exact formula previously hard-coded here, so defaults are unchanged).
   es <- .es_from_d(
-    d = d, d_se = d_se, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_md
+    d = d, n_exp = n_exp, n_nexp = n_nexp,
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_md
   )
 
   es$info_used <- "md_sd"
@@ -69,6 +72,7 @@ es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -102,7 +106,8 @@ es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #'
 #' @examples
 #' es_from_md_se(md = 4, md_se = 2, n_exp = 20, n_nexp = 22)
-es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_md) {
+es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer",
+                          smd_var = "borenstein", reverse_md) {
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
 
@@ -111,7 +116,7 @@ es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
   es <- es_from_md_sd(
     md = md, md_sd = md_sd,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_md = reverse_md
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_md = reverse_md
   )
 
   es$info_used <- "md_se"
@@ -127,6 +132,7 @@ es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
@@ -161,7 +167,8 @@ es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @examples
 #' es_from_md_ci(md = 4, md_ci_lo = 2, md_ci_up = 6, n_exp = 20, n_nexp = 22)
 es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
-                          smd_to_cor = "viechtbauer", max_asymmetry = 10, reverse_md) {
+                          smd_to_cor = "viechtbauer", smd_var = "borenstein",
+                          max_asymmetry = 10, reverse_md) {
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
 
@@ -172,7 +179,7 @@ es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
   es <- es_from_md_se(
     md = md, md_se = md_se,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_md = reverse_md
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_md = reverse_md
   )
 
   es$info_used <- "md_ci"
@@ -187,6 +194,7 @@ es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -218,7 +226,8 @@ es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
 #'
 #' @examples
 #' es_from_md_pval(md = 4, md_pval = 0.024, n_exp = 20, n_nexp = 22)
-es_from_md_pval <- function(md, md_pval, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_md) {
+es_from_md_pval <- function(md, md_pval, n_exp, n_nexp, smd_to_cor = "viechtbauer",
+                            smd_var = "borenstein", reverse_md) {
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
 
@@ -229,7 +238,7 @@ es_from_md_pval <- function(md, md_pval, n_exp, n_nexp, smd_to_cor = "viechtbaue
   es <- es_from_md_se(
     md = md, md_se = md_se,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_md = reverse_md
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_md = reverse_md
   )
 
   es$info_used <- "md_pval"

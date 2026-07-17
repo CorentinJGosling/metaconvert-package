@@ -10,6 +10,7 @@ es_from_md_pval(
   n_exp,
   n_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   reverse_md
 )
 }
@@ -23,6 +24,8 @@ es_from_md_pval(
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").}
 
 \item{reverse_md}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }

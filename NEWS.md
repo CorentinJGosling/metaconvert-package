@@ -1,4 +1,49 @@
-# metaConvert 2.1.0
+# metaConvert 2.0.0
+
+## New: SMD sampling-variance convention (`smd_var`) — opt-in, non-breaking
+
+- **New argument `smd_var`** on `convert_df()` and on every `es_from_*()` that builds a
+  Cohen's *d* / Hedges' *g* from the large-sample formula (means/SE/CI, pooled SD, Cohen's
+  *d*, Hedges' *g*, Student *t*, ANOVA *F*, eta-squared, unstandardized/standardized
+  regression coefficient, point-biserial *r*, median/range→SD, digitized plots, raw mean
+  difference + SD/SE/CI/p-value (`es_from_md_*`), and the ANCOVA-adjusted analogues). It selects the sampling-variance convention for the
+  standardized mean difference (values are author names, matching the package's other
+  method arguments):
+  - `"borenstein"` (**default, unchanged behaviour**) — `v_g = cm^2 (1/n1 + 1/n2 + d^2/2N)`,
+    bit-exact with `metafor::escalc(measure = "SMD", vtype = "LS2")` (Borenstein et al.,
+    2009).
+  - `"hedges_olkin"` (alias `"viechtbauer"`) — `v_g = 1/n1 + 1/n2 + g^2/2N`, bit-exact with
+    metafor's own default `vtype = "LS"` (Hedges & Olkin, 1985; Viechtbauer, 2007). This
+    unifies the endpoint/between-group family with the pre/post family (already on this
+    convention) and with metafor's default.
+  - The two differ by a `cm^2` (`J^2`) factor: the Hedges-Olkin variance is ~2–4% larger at
+    *n* ≈ 30/arm and ~8% larger at *n* ≈ 10/arm. The default is **not** changed, so existing
+    results and downstream numbers are unaffected; opt in explicitly.
+  - Like `smd_to_cor`, `smd_var` can be set globally or per row via a `smd_var` column.
+
+## New: control-SD standardizer / Glass's delta (`smd_denom`) — opt-in, non-breaking
+
+- **New argument `smd_denom`** on the endpoint means family (`es_from_means_sd()`,
+  `es_from_means_se()`, `es_from_means_ci()`) and `convert_df()`, letting the endpoint
+  mean difference be standardized by a denominator other than the pooled SD:
+  - `"pooled"` (**default, unchanged**) — pooled endpoint SD (Cohen's *d* / Hedges' *g*).
+  - `"glass"` (alias `"control"`) — the control (non-experimental) endpoint SD (**Glass's
+    delta**), with the Hedges correction and every variance term on the control degrees of
+    freedom (`n_nexp - 1`). Bit-exact with `metafor::escalc(measure = "SMD1")` when the
+    `vtype` is matched (`smd_var = "borenstein"` = `vtype = "LS2"`;
+    `smd_var = "hedges_olkin"` = `vtype = "LS"`, which is metafor's *default* `vtype` —
+    so plain `escalc(measure = "SMD1")` output matches only the `"hedges_olkin"` setting);
+    honours `smd_var` for its homoscedastic variance.
+  - `"glass_robust"` (alias `"control_robust"`) — Glass's delta with the
+    heteroscedasticity-consistent variance, bit-exact with `metafor::escalc(measure = "SMD1H")`.
+  - Like `smd_var` / `smd_to_cor`, `smd_denom` can be set globally or per row via a
+    `smd_denom` column.
+  - Motivation: holding the numerator (endpoint mean difference) fixed while varying the
+    denominator lets a reviewer separate **estimand mismatch** (different standardizer)
+    from **estimation error** when benchmarking the endpoint estimator against the
+    pre/post estimators.
+- Every `smd_var` × function and every `smd_denom` × variance combination is validated
+  bit-exactly against metafor in `tests/testthat/test-endpoint-smd-variance.R`.
 
 ## Behaviour of the two-group pre/post SMD (no default change)
 
@@ -30,7 +75,119 @@
   use the per-arm construction. If you set `pool_sd = TRUE` and such rows share a pool
   with poolable rows, `summary(..., flags = TRUE)` raises an informational flag.
 
+## Behaviour change: raw mean-difference CI from the endpoint means family
+
+- **`es_from_means_sd()` (and its SE/CI/median-range/plot delegates) now build the
+  `md_ci_lo`/`md_ci_up` bounds with the Welch–Satterthwaite degrees of freedom** instead of
+  the pooled `n1 + n2 - 2`, matching `t.test(var.equal = FALSE)` bit-exactly. Only the raw
+  MD confidence bounds change (d/g and every SE are untouched), and only when the arm
+  variances/sizes are unbalanced enough for the Welch df to matter. The `es_from_md_*()`
+  and ANCOVA-md routes keep pooled/adjusted-df CIs (they carry no per-arm SDs); the
+  `summary()` A6 CI-width check accepts the whole pooled-to-Welch df band for
+  package-computed md rows.
+
+## Formula-audit fixes (July 2026)
+
+A pre-release formula audit (multi-agent review with adversarial verification; tracker in
+`AUDIT-FIX-TRACKER.md`) produced the following fixes, each paired with a test that fails on
+the pre-fix code:
+
+- **Spearman → SMD under `cor_to_smd = "cooper"`**: the d/g/logOR standard errors now carry
+  the same Bonett–Wright Spearman delta correction as the r/z outputs in the same row
+  (Cooper's `v_d = 4 v_r/(1-r^2)^3` is exactly linear in `v_r`); they were 5–15%
+  anticonservative and internally contradictory with the corrected `r_se`. The `"mathur"`
+  path is genuinely `r_se`-free and is unchanged. `es_from_spearman_rho()` also gains the
+  `n_sample <- n_exp + n_nexp` fallback on direct calls.
+- **Proportions**: the two surviving hard `stop()`s (prop outside [0,1]; `n_cases >
+  n_sample`) are now per-row NA + warning, so one bad cell no longer aborts an entire
+  `convert_df()` run (any measure) under `correct_inputs = FALSE`. Boundary (p = 0/1)
+  raw/logit SEs now use the continuity-corrected denominator `n + 1`, matching
+  `metafor`'s `PR`/`PLO` convention exactly (previously `sqrt((n+1)/n)` too large).
+- **`es_disattenuate()`**: scalar `n_sample`/reliabilities now recycle across a vector `r`
+  (previously rows 2+ silently got NA SEs); rows with an extreme corrected r
+  (|r_c| > 0.999) now set the Fisher-z outputs to NA instead of emitting clamp artifacts
+  (`z = atanh(0.9999)` regardless of input); the extreme-row warning text describes what
+  actually happens; |r| > 1 inputs warn.
+- **`compute_sem()`**: the same-sample branch now returns the exact chi-square CI
+  (`df = (n-1)(k-1)`; the Wald interval covered 89.7% at n = 10, k = 2);
+  `n_measurements = 1` and `icc > 1` degrade to NA with a warning (previously Inf / a
+  NaN-with-SE-0 pair); a warning fires when `icc_se > 1 - icc`, the signature of
+  `es_from_icc()`'s default Bonett (ln(1-ICC)-scale) SE being passed where the raw-scale
+  SE is required (documented in both Rd files). `reliability_change_score()` warns on a
+  negative (population-impossible) result and documents the equal-variances AND
+  equal-reliabilities assumption.
+- **ICC "agreement" SE scope documented + flagged**: the shared leading-order SE is exact
+  for consistency ICC(3,1) but is a one-way approximation for absolute-agreement ICC(2,1)
+  that assumes negligible between-rater variance — with real rater variance it is
+  anti-conservative (simulated coverage ~0.74–0.76, worsening with n) and no exact fix is
+  possible from summary data. The Rd/vignette now say so, and a new informational flag
+  (V31) marks agreement-type rows in `summary(flags = TRUE)`.
+- **Direct-call edge guards for `es_from_cronbach_alpha()` / `es_from_icc()`**: impossible
+  or degenerate inputs (alpha > 1, alpha = 1 under Bonett, |ICC| ≥ 1, n too small for the
+  SE denominator, fewer than 2 items/raters) now return NA instead of Inf/NaN.
+- **Quality flags no longer contradict the package's own output**: the A6 CI-width check
+  accepts the Welch-df band for package-computed md rows, expects `qt(.975, n_nexp - 1)`
+  for Glass rows (SMD1 convention), and compares clamped raw-proportion CIs against the
+  [0,1]-clipped expected width; new [UNUSUAL] flags fire when a raw-scale alpha/ICC Wald CI
+  bound escapes the parameter space (with a pointer to the Bonett scale); E7 now also
+  discloses the per-arm fallback when a pool contains *only* paired t/F rows under
+  `pool_sd = TRUE`.
+- **`convert_df(smd_denom = "glass")` scoping made explicit**: only the endpoint means
+  family honours `smd_denom`; a one-time message now lists the methods that keep the
+  pooled-SD standardizer, and the `@param` text states it.
+- **Smaller consistency fixes**: `es_from_pt_bis_r()` now honours `smd_to_cor`; a per-row
+  `smd_var` NA falls back to the default (mirroring `smd_denom`); the deprecated `measure`
+  alias of `es_from_user_crude()`/`es_from_user_adj()` warns and no longer overrides an
+  explicitly supplied `user_es_target_measure_*`.
+- **Test infrastructure**: the psychometric suites (alpha, ICC, disattenuation, SEM/SDC,
+  Spearman, proportions) previously lived only in the build-ignored `tests_save/` archive —
+  R CMD check ran none of them. They now run from `tests/testthat/`, with the circular
+  expectations replaced by external anchors (`metafor` `ABT`/`ARAW`/`PR`/`PLO`/`PFT`,
+  hand-derived F-route ICC variance, `psychmeta` disattenuation comparisons), boundary-SE
+  assertions added against `metafor`, the pooled-variance Monte Carlo graded against the
+  `qt` interval the package actually emits over a q-grid (0.64/1/1.56), and a corrected
+  Morris/Bonett citation split.
+
 ## Bug fixes
+
+- **`es_from_cohen_d_adj()` now actually applies the covariate adjustment.** The exported
+  function passed `n_cov_ancova` / `cov_outcome_r` to the internal effect-size builder but
+  omitted `adjusted = TRUE`, so `cov_outcome_r` was silently ignored and the sampling
+  variance stayed on the *crude* form (its documented formula — Cooper Table 12.3,
+  `v_d = (n1+n2)/(n1 n2) (1 - r^2) + d^2/2N` with `df = n1 + n2 - 2 - n_cov_ancova` — was
+  never used). At `cov_outcome_r = 0.7` the reported SE was ~40% too wide. The
+  `es_from_ancova_*()` family was already correct; this aligns the standalone adjusted-*d*
+  input with it. Results change **only** for rows supplying `cohen_d_adj` together with a
+  non-zero `cov_outcome_r`.
+
+- **`es_from_etasq_adj()` point estimate moved to the marginal SD scale (and its variance
+  made coherent with it).** A partial eta-squared from an ANCOVA is natively defined on the
+  *residual* (covariate-adjusted) SD scale; the old `d = 2*sqrt(etasq_adj/(1-etasq_adj))`
+  stayed on that scale, so pairing it with the marginal-scale Cooper 12.3 variance would
+  understate the SE of its own estimator by ~45% at `cov_outcome_r = 0.7` (simulated 95% CI
+  coverage 0.71), and the function disagreed with `es_from_ancova_f()` fed the algebraically
+  equivalent statistic by `1/sqrt(1-r^2) * sqrt(N/df)`. The adjusted eta-squared is now
+  converted to the ANCOVA *F* it implies (`F = etasq_adj * df / (1 - etasq_adj)`,
+  `df = n1 + n2 - 2 - n_cov_ancova`) and routed through `es_from_ancova_f()`, making the
+  point estimate, variance, and CIs exactly consistent with the rest of the
+  `es_from_ancova_*` family. When `cov_outcome_r` is missing the output is now NA (the
+  marginal scale is unidentified) instead of a silent residual-scale value. The crude
+  `es_from_etasq()` is unchanged.
+
+- **`smd_denom` is honoured per row.** A per-row `smd_denom` column (or a length-*n* vector)
+  previously collapsed to the first row's value (`match.arg(...[1])`) and applied it to every
+  row; each row is now standardised by its own choice, and an unrecognised value raises a
+  clear error naming the argument. `smd_denom` also joins `smd_var` / `smd_to_cor` as a
+  recognised per-row column in `convert_df()`. Note: under `smd_denom = "control"` (Glass's
+  delta) the derived `r`/`z`/OR inherit the control-SD standardiser, so they coincide with the
+  pooled-SD conversion only when the arm SDs are equal.
+
+- **Restored backward-compatible argument names in `es_from_user_crude()` /
+  `es_from_user_adj()`.** The pre-2.0 argument names `measure` (target measure) and
+  `user_es_measure_crude` / `user_es_measure_adj` (entered measure) are re-accepted as
+  deprecated aliases for `user_es_target_measure_*` and `user_es_original_measure_*`. This
+  fixes a reverse-dependency failure in *metaumbrella*, which still calls the previous
+  names.
 
 - **All four pooled variances rebuilt.** Each pooled two-group variance follows the LS
   *pattern* of the corresponding `metafor` pre/post measure — an empirical leading term
@@ -54,8 +211,10 @@
     covered only **86%** of the time; with the df-weighted `r_avg` it now reduces
     *exactly* to Viechtbauer's published two-group variance
     `2(1 - r)(1/nT + 1/nC) + g^2/(2N)` under homoscedasticity (even when `n1 != n2`) and
-    covers at the nominal rate in every regime tested (Monte Carlo,
-    `tests/testthat/test-pooled-variance-calibration.R`).
+    covers at the nominal rate in every regime tested **given a correctly specified
+    `r_pre_post`** (Monte Carlo, `tests/testthat/test-pooled-variance-calibration.R`;
+    when the default `r_pre_post = 0.8` is imputed and the true correlation differs,
+    coverage degrades regardless of the variance formula — see `?convert_df`).
   - *Homoscedastic `morris_dav` variance.* Its `g^2` term used the coefficient
     `(1 + r^2)/(4N)` — metafor's homoscedastic `SMCRP`, the `SD_pre = SD_post` special
     case. It now uses the two-group fourth-moment form of **Bonett (2008) eq. 19**
@@ -124,7 +283,8 @@
   and runs under `R CMD check`; previously only `test-ANCOVA-MD.R` ran. Long-running files
   are gated on `NOT_CRAN`.
 
-# metaConvert 2.0.0
+## Summary of major additions
+
 - Implemented the metaDETECT framework of automated checks: a quality-flag system in summary() ('flags' argument) that detects inconsistent input data and implausible effect sizes
 - Added new effect size measures
 - Added psychometric and regression effect size conversions

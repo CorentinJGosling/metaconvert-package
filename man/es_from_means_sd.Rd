@@ -12,6 +12,8 @@ es_from_means_sd(
   n_exp,
   n_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
+  smd_denom = "pooled",
   reverse_means
 )
 }
@@ -29,6 +31,10 @@ es_from_means_sd(
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+
+\item{smd_denom}{standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance.}
 
 \item{reverse_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -56,8 +62,11 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \strong{To estimate a mean difference}  (formulas 12.1-12.6 in Cooper):
 \deqn{md = mean\_exp - mean\_nexp}
 \deqn{md\_se = \sqrt{\frac{mean\_sd\_exp^2}{n\_exp} + \frac{mean\_sd\_nexp^2}{n\_nexp}}}
-\deqn{md\_ci\_lo = md - md\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
-\deqn{md\_ci\_up = md + md\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
+The confidence interval uses the unequal-variance (Welch-Satterthwaite) degrees of freedom
+that match this standard error (as in \code{stats::t.test(var.equal = FALSE)}):
+\deqn{df = \frac{(s_e^2/n\_exp + s_n^2/n\_nexp)^2}{(s_e^2/n\_exp)^2/(n\_exp - 1) + (s_n^2/n\_nexp)^2/(n\_nexp - 1)}}
+\deqn{md\_ci\_lo = md - md\_se * qt(.975, df)}
+\deqn{md\_ci\_up = md + md\_se * qt(.975, df)}
 
 \strong{To estimate a Cohen's d} the following formulas are used (formulas 12.10-12.18 in Cooper):
 \deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * sd\_exp^2 + (n\_nexp - 1) * sd\_nexp^2}{n\_exp+n\_nexp-2}}}

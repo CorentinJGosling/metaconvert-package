@@ -4,7 +4,14 @@
 \alias{es_from_cohen_d}
 \title{Convert a Cohen's d value to several effect size measures}
 \usage{
-es_from_cohen_d(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_d)
+es_from_cohen_d(
+  cohen_d,
+  n_exp,
+  n_nexp,
+  smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
+  reverse_d
+)
 }
 \arguments{
 \item{cohen_d}{Cohen's d (i.e., standardized mean difference) value.}
@@ -14,6 +21,8 @@ es_from_cohen_d(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_d)
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
 
 \item{reverse_d}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }

@@ -17,6 +17,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_plot_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -92,7 +93,7 @@ es_from_plot_means <- function(n_exp, n_nexp,
                                plot_mean_se_up_exp, plot_mean_se_up_nexp,
                                plot_mean_ci_lo_exp, plot_mean_ci_lo_nexp,
                                plot_mean_ci_up_exp, plot_mean_ci_up_nexp,
-                               smd_to_cor = "viechtbauer", reverse_plot_means) {
+                               smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_plot_means) {
   if (missing(plot_mean_sd_lo_exp)) plot_mean_sd_lo_exp <- rep(NA_real_, length(n_exp))
   if (missing(plot_mean_sd_lo_nexp)) plot_mean_sd_lo_nexp <- rep(NA_real_, length(n_exp))
   if (missing(plot_mean_sd_up_exp)) plot_mean_sd_up_exp <- rep(NA_real_, length(n_exp))
@@ -144,14 +145,14 @@ es_from_plot_means <- function(n_exp, n_nexp,
     n_exp = n_exp, n_nexp = n_nexp,
     mean_exp = plot_mean_exp, mean_sd_exp = mean_sd_exp,
     mean_nexp = plot_mean_nexp, mean_sd_nexp = mean_sd_nexp,
-    smd_to_cor = smd_to_cor, reverse_means = reverse_plot_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_means = reverse_plot_means
   )
 
   es_1 <- es_from_means_se(
     n_exp = n_exp, n_nexp = n_nexp,
     mean_exp = plot_mean_exp, mean_se_exp = mean_se_exp,
     mean_nexp = plot_mean_nexp, mean_se_nexp = mean_se_nexp,
-    smd_to_cor = smd_to_cor, reverse_means = reverse_plot_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_means = reverse_plot_means
   )
 
   es_2 <- es_from_means_ci(
@@ -159,7 +160,7 @@ es_from_plot_means <- function(n_exp, n_nexp,
     mean_exp = plot_mean_exp, mean_nexp = plot_mean_nexp,
     mean_ci_lo_exp = plot_mean_ci_lo_exp, mean_ci_lo_nexp = plot_mean_ci_lo_nexp,
     mean_ci_up_exp = plot_mean_ci_up_exp, mean_ci_up_nexp = plot_mean_ci_up_nexp,
-    smd_to_cor = smd_to_cor, reverse_means = reverse_plot_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_means = reverse_plot_means
   )
 
   row_miss <- which(is.na(es$d) & is.na(es$d_se))
@@ -197,6 +198,7 @@ es_from_plot_means <- function(n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_plot_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -268,7 +270,7 @@ es_from_plot_ancova_means <- function(n_exp, n_nexp,
                                       plot_ancova_mean_ci_lo_exp, plot_ancova_mean_ci_lo_nexp,
                                       plot_ancova_mean_ci_up_exp, plot_ancova_mean_ci_up_nexp,
                                       cov_outcome_r, n_cov_ancova,
-                                      smd_to_cor = "viechtbauer", reverse_plot_ancova_means) {
+                                      smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_plot_ancova_means) {
   if (missing(plot_ancova_mean_sd_lo_exp)) plot_ancova_mean_sd_lo_exp <- rep(NA_real_, length(n_exp))
   if (missing(plot_ancova_mean_sd_lo_nexp)) plot_ancova_mean_sd_lo_nexp <- rep(NA_real_, length(n_exp))
   if (missing(plot_ancova_mean_sd_up_exp)) plot_ancova_mean_sd_up_exp <- rep(NA_real_, length(n_exp))
@@ -320,7 +322,7 @@ es_from_plot_ancova_means <- function(n_exp, n_nexp,
     ancova_mean_nexp = plot_ancova_mean_nexp,
     ancova_mean_sd_nexp = ancova_mean_sd_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_plot_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_ancova_means = reverse_plot_ancova_means
   )
   es_1 <- es_from_ancova_means_se(
     n_exp = n_exp, n_nexp = n_nexp,
@@ -329,7 +331,7 @@ es_from_plot_ancova_means <- function(n_exp, n_nexp,
     ancova_mean_nexp = plot_ancova_mean_nexp,
     ancova_mean_se_nexp = ancova_mean_se_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_plot_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_ancova_means = reverse_plot_ancova_means
   )
   es_2 <- es_from_ancova_means_ci(
     n_exp = n_exp, n_nexp = n_nexp,
@@ -340,7 +342,7 @@ es_from_plot_ancova_means <- function(n_exp, n_nexp,
     ancova_mean_ci_lo_nexp = plot_ancova_mean_ci_lo_nexp,
     ancova_mean_ci_up_nexp = plot_ancova_mean_ci_up_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_plot_ancova_means
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_ancova_means = reverse_plot_ancova_means
   )
   # ## CI ------
   # #### exp

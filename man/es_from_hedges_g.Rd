@@ -9,6 +9,7 @@ es_from_hedges_g(
   n_exp,
   n_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   reverse_g
 )
 }
@@ -20,6 +21,8 @@ es_from_hedges_g(
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the \code{hedges_g} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
 
 \item{reverse_g}{a logical value indicating whether the direction of the \code{hedges_g} value should be flipped.}
 }

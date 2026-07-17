@@ -26,3 +26,8 @@
 ^\.Rd2pdf.*$
 ^revdep$
 ^CRAN-SUBMISSION$
+^AUDIT-.*\.md$
+^HANDOFF-.*\.md$
+^VERDICT-.*\.md$
+^.*\.stackdump$
+^scratchpad.*$

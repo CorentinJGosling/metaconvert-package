@@ -1,3 +1,48 @@
+.normalize_smd_var <- function(smd_var) {
+  # Map the user-facing names for the SMD sampling-variance convention onto the
+  # internal canonical labels "LS" and "LS2" (metafor's vtype names). The
+  # user-facing names follow the package convention of author names (as for
+  # smd_to_cor = "viechtbauer", pre_post_to_smd = "bonett", etc.):
+  #   "borenstein" (default, current metaConvert behaviour) = Borenstein et al.
+  #     (2009, Introduction to Meta-Analysis, ch. 4): v_d = 1/n1 + 1/n2 + d^2/(2N)
+  #     then v_g = cm^2 * v_d  (bit-exact with metafor vtype = "LS2").
+  #   "hedges_olkin" (opt-in) = Hedges & Olkin (1985) / Viechtbauer (2007),
+  #     metafor's own default: v_g = 1/n1 + 1/n2 + g^2/(2N), v_d = v_g / cm^2. This
+  #     unifies the endpoint/between-group family with the pre/post family.
+  # The metafor codes "LS2"/"LS" are kept as accepted synonyms.
+  lut <- c(
+    "borenstein"  = "LS2",
+    "hedges_olkin" = "LS", "hedges-olkin" = "LS", "viechtbauer" = "LS"
+  )
+  key <- tolower(as.character(smd_var))
+  # NA (e.g. a blank cell in a per-row smd_var column on a direct call) falls
+  # back to the package default, mirroring .normalize_smd_denom's NA -> "pooled".
+  key[is.na(smd_var)] <- "borenstein"
+  out <- unname(lut[key])
+  if (any(is.na(out))) {
+    stop(paste0(
+      "'", paste(unique(smd_var[is.na(out)]), collapse = "', '"),
+      "' not in tolerated values for the 'smd_var' argument. Possible inputs are: ",
+      "'borenstein' (the default) or 'hedges_olkin' (alias 'viechtbauer')."
+    ), call. = FALSE)
+  }
+  out
+}
+
+.normalize_smd_denom <- function(smd_denom) {
+  # Map the user-facing names for the SMD standardiser onto the internal canonical
+  # labels "pooled" / "control" / "control_robust". Glass's delta (the control-SD
+  # standardiser) follows the package's author/name convention as "glass"; the
+  # descriptive "control" / "control_robust" spellings are kept as accepted synonyms.
+  # Returns NA for unrecognised values so the caller can raise a targeted error.
+  lut <- c(
+    "pooled" = "pooled",
+    "glass" = "control", "control" = "control",
+    "glass_robust" = "control_robust", "control_robust" = "control_robust"
+  )
+  unname(lut[tolower(as.character(smd_denom))])
+}
+
 .d_j <- function(x) {
   # Hedges' small-sample correction J(df) is only defined for df > 1.
   # When df <= 1, the correction (and hence Hedges' g) is returned as NA.
@@ -12,8 +57,59 @@
   return(j)
 }
 
+.glass_from_means <- function(mean_exp, mean_sd_exp, mean_nexp, mean_sd_nexp,
+                              n_exp, n_nexp, smd_to_cor = "viechtbauer",
+                              smd_var = "borenstein", reverse, robust = FALSE) {
+  # Glass's delta: the endpoint mean difference standardised by the CONTROL
+  # (non-experimental) endpoint SD instead of the pooled SD. Bit-exact with
+  # metafor measure = "SMD1" (homoscedastic variance, with the vtype matched to
+  # smd_var: "borenstein" = LS2, "hedges_olkin" = LS) and "SMD1H" (robust,
+  # heteroscedasticity-consistent variance). glass_robust/SMD1H has a single
+  # variance form, so smd_var is ignored for it. The Hedges small-sample
+  # correction and every variance term use the control-group degrees of freedom
+  # (n_nexp - 1), NOT the pooled df (this is what distinguishes SMD1 from SMD).
+  if (missing(reverse)) reverse <- rep(FALSE, length(mean_exp))
+  reverse[is.na(reverse)] <- FALSE
+  smd_var <- .normalize_smd_var(smd_var)
+  if (length(smd_var) == 1) smd_var <- rep(smd_var, length(mean_exp))
+
+  di   <- (mean_exp - mean_nexp) / mean_sd_nexp           # uncorrected Glass delta
+  df_g <- n_nexp - 1
+  cm_g <- .d_j(df_g)                                      # cm(n_nexp - 1)
+  g    <- cm_g * di
+
+  # g-scale sampling variance
+  vg_hom <- ifelse(smd_var == "LS",
+    1 / n_exp + 1 / n_nexp + g^2 / (2 * n_nexp),                          # SMD1, vtype "LS"
+    cm_g^2 * (1 / n_exp + 1 / n_nexp + di^2 / (2 * n_nexp))               # SMD1, vtype "LS2"
+  )
+  vg_rob <- (mean_sd_exp^2 / mean_sd_nexp^2) / (n_exp - 1) +
+    1 / (n_nexp - 1) + g^2 / (2 * (n_nexp - 1))                           # SMD1H
+  vg   <- if (robust) vg_rob else vg_hom
+  g_se <- sqrt(vg)
+  d_se <- g_se / cm_g                                     # d-scale SE (g_se = cm * d_se)
+
+  # r / z / logOR / d scaffolding from the uncorrected Glass delta + its SE
+  es <- .es_from_d(
+    d = di, d_se = d_se, n_exp = n_exp, n_nexp = n_nexp,
+    smd_to_cor = smd_to_cor, reverse = reverse
+  )
+
+  # override g with the control-df correction (.es_from_d used the pooled df)
+  g_signed <- ifelse(reverse, -g, g)
+  es$g      <- g_signed
+  es$g_se   <- g_se
+  es$g_ci_lo <- g_signed - qt(.975, df_g) * g_se
+  es$g_ci_up <- g_signed + qt(.975, df_g) * g_se
+  # keep the d CI on the same (control) df as g for internal consistency
+  es$d_ci_lo <- es$d - qt(.975, df_g) * es$d_se
+  es$d_ci_up <- es$d + qt(.975, df_g) * es$d_se
+  es
+}
+
 .es_from_d <- function(d, d_se, n_exp, n_nexp, n_sample, smd_to_cor = "viechtbauer",
-                       adjusted, n_cov_ancova, cov_outcome_r, reverse) {
+                       adjusted, n_cov_ancova, cov_outcome_r, reverse,
+                       smd_var = "borenstein") {
   if (missing(d_se)) d_se <- rep(NA_real_, length(d))
   if (missing(n_exp)) n_exp <- rep(NA_real_, length(d))
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, length(d))
@@ -38,6 +134,11 @@
     ))
   }
 
+  smd_var <- .normalize_smd_var(smd_var)
+  if (length(smd_var) == 1) smd_var <- rep(smd_var, length(d))
+  if (length(smd_var) != length(d)) stop("The length of the 'smd_var' argument is incorrectly specified.")
+  use_LS <- smd_var == "LS"
+
   # ========= FLIP THE EFFECT SIZE ========== #
   d <- ifelse(reverse, -d, d)
   # ========= homogeneize sample sizes ========== #
@@ -51,12 +152,28 @@
   )
 
   # ========= d_se ========= #
+  # Large-sample default variance (only used for rows where d_se was not supplied).
+  # The leading term is 1/n1 + 1/n2 (adjusted for the covariate multiple correlation
+  # in the ANCOVA case). g_se = d_se * J holds in BOTH conventions (see below), so the
+  # only thing smd_var changes is the *default* d_se:
+  #   LS2 (default): v_d = leading + d^2/(2N)                  -> v_g = cm^2 * v_d
+  #   LS  (opt-in) : v_g = leading + g^2/(2N), v_d = v_g/cm^2  (g = d * J, metafor default)
+  leading <- ifelse(adjusted,
+    (n_exp + n_nexp) / (n_exp * n_nexp) * (1 - cov_outcome_r^2),
+    (n_exp + n_nexp) / (n_exp * n_nexp)
+  )
+  if (any(use_LS)) {
+    J_var <- suppressWarnings(.d_j(df))
+    d_se_ls <- sqrt((leading + (d * J_var)^2 / (2 * (n_exp + n_nexp))) / J_var^2)
+  } else {
+    d_se_ls <- rep(NA_real_, length(d))
+  }
   d_se <- ifelse(
     !is.na(d_se),
     d_se,
-    ifelse(adjusted,
-      sqrt(((n_exp + n_nexp) / (n_exp * n_nexp) * (1 - cov_outcome_r^2)) + d^2 / (2 * (n_exp + n_nexp))),
-      sqrt((n_exp + n_nexp) / (n_exp * n_nexp) + d^2 / (2 * (n_exp + n_nexp)))
+    ifelse(use_LS,
+      d_se_ls,
+      sqrt(leading + d^2 / (2 * (n_exp + n_nexp)))
     )
   )
 

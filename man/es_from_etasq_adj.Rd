@@ -11,6 +11,7 @@ es_from_etasq_adj(
   n_cov_ancova,
   cov_outcome_r,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   reverse_etasq
 )
 }
@@ -26,6 +27,8 @@ es_from_etasq_adj(
 \item{cov_outcome_r}{correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
 
 \item{reverse_etasq}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -46,19 +49,34 @@ This function estimates and converts between several effect size measures.
 Convert an adjusted eta-squared value (i.e., from an ANCOVA) to various effect size measures
 }
 \details{
-This function first computes an adjusted Cohen's d (D) and Hedges' g (G)
-from the adjusted eta squared of a binary predictor (ANCOVA model).
+This function converts the adjusted (partial) eta-squared of a binary predictor
+(ANCOVA model) into the ANCOVA F-statistic it implies, and then relies on the
+calculations of the \code{\link{es_from_ancova_f}()} function. The returned
+Cohen's d (D) and Hedges' g (G) are therefore expressed on the
+\strong{marginal (unadjusted) SD scale} — consistent with the other
+\code{es_from_ancova_*} functions — not on the residual (covariate-adjusted)
+SD scale on which a partial eta-squared is natively defined.
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
-\strong{To estimate a Cohen's d} the following formula is used (Cohen, 1988):
-\deqn{d\_adj = 2 * \sqrt{\frac{etasq\_adj}{1 - etasq\_adj}}}
+\strong{To convert the adjusted eta-squared into an ANCOVA F-statistic},
+the following formula is used:
+\deqn{df = n\_exp + n\_nexp - 2 - n\_cov\_ancova}
+\deqn{ancova\_f = \frac{etasq\_adj * df}{1 - etasq\_adj}}
+
+\strong{To estimate a Cohen's d} the formula used is (table 12.3 in Cooper):
+\deqn{cohen\_d = \sqrt{ancova\_f * \frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp}} * \sqrt{1 - cov\_out\_cor^2}}
+
+Note that the back-transformation to the marginal SD scale requires
+\code{cov_outcome_r}; when it is missing, the effect size estimates are
+returned as NA (the marginal scale is not identified from the adjusted
+eta-squared alone).
 
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
 \examples{
-es_from_etasq_adj(etasq = 0.28, n_cov_ancova = 3, cov_outcome_r = 0.2, n_exp = 20, n_nexp = 22)
+es_from_etasq_adj(etasq_adj = 0.28, n_cov_ancova = 3, cov_outcome_r = 0.2, n_exp = 20, n_nexp = 22)
 }
 \references{
-Cohen, J. (1988). Statistical power analysis for the behavioral sciences. Routledge.
+Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 }

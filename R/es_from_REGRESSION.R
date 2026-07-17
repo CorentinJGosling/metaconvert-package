@@ -6,6 +6,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_beta_std a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -41,7 +42,7 @@
 #' @examples
 #' es_from_beta_std(beta_std = 0.35, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
 es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
-                             smd_to_cor = "viechtbauer", reverse_beta_std) {
+                             smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_beta_std) {
   if (missing(reverse_beta_std)) reverse_beta_std <- rep(FALSE, length(beta_std))
   reverse_beta_std[is.na(reverse_beta_std)] <- FALSE
   if (length(reverse_beta_std) == 1) reverse_beta_std = c(rep(reverse_beta_std, length(beta_std)))
@@ -56,7 +57,7 @@ es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
 
   es <- es_from_beta_unstd(
     beta_unstd = unstd_beta, sd_dv = sd_dv,
-    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor
+    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, smd_var = smd_var
   )
 
   es$info_used <- "beta_std"
@@ -72,6 +73,7 @@ es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_beta_unstd a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -110,7 +112,7 @@ es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
 #' @examples
 #' es_from_beta_unstd(beta_unstd = 0.7, sd_dv = 0.98, n_exp = 20, n_nexp = 22)
 es_from_beta_unstd <- function(beta_unstd, sd_dv, n_exp, n_nexp,
-                               smd_to_cor = "viechtbauer", reverse_beta_unstd) {
+                               smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_beta_unstd) {
   if (missing(reverse_beta_unstd)) reverse_beta_unstd <- rep(FALSE, length(beta_unstd))
   reverse_beta_unstd[is.na(reverse_beta_unstd)] <- FALSE
 
@@ -141,7 +143,7 @@ es_from_beta_unstd <- function(beta_unstd, sd_dv, n_exp, n_nexp,
 
   es <- .es_from_d(
     d = d, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_beta_unstd
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_beta_unstd
   )
 
   es$info_used <- "beta_unstd"

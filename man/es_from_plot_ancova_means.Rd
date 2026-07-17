@@ -24,6 +24,7 @@ es_from_plot_ancova_means(
   cov_outcome_r,
   n_cov_ancova,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   reverse_plot_ancova_means
 )
 }
@@ -65,6 +66,8 @@ es_from_plot_ancova_means(
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
 
 \item{reverse_plot_ancova_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }

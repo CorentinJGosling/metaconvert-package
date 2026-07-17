@@ -4,6 +4,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{student_t} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_student_t a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -22,7 +23,7 @@
 #' R's \code{t.test()}. A Welch t uses \eqn{\sqrt{s_1^2/n_1 + s_2^2/n_2}} rather than
 #' \eqn{s_{pooled}\sqrt{1/n_1 + 1/n_2}}, so when group sizes and variances both differ,
 #' plugging a Welch t into this formula yields a biased Cohen's d (the bias can exceed
-#' 50\% and may flip sign depending on which arm carries the larger variance; it vanishes
+#' 50% and may flip sign depending on which arm carries the larger variance; it vanishes
 #' only when \eqn{n_1 = n_2}). A Welch t cannot be converted to Cohen's d from
 #' \code{(t, n_exp, n_nexp)} alone: recovering the pooled SD requires the two arm SDs, in
 #' which case \code{\link{es_from_means_sd}} should be used directly.
@@ -50,7 +51,7 @@
 #' @examples
 #' es_from_student_t(student_t = 2.1, n_exp = 20, n_nexp = 22)
 es_from_student_t <- function(student_t, n_exp, n_nexp,
-                              smd_to_cor = "viechtbauer", reverse_student_t) {
+                              smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_student_t) {
   if (missing(reverse_student_t)) reverse_student_t <- rep(FALSE, length(student_t))
   reverse_student_t[is.na(reverse_student_t)] <- FALSE
 
@@ -59,7 +60,7 @@ es_from_student_t <- function(student_t, n_exp, n_nexp,
 
   es <- .es_from_d(
     d = d, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_student_t
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_student_t
   )
 
   es$info_used <- "student_t"
@@ -72,6 +73,7 @@ es_from_student_t <- function(student_t, n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{student_t_pval} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_student_t_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -110,7 +112,7 @@ es_from_student_t <- function(student_t, n_exp, n_nexp,
 #' @examples
 #' es_from_student_t_pval(student_t_pval = 0.24, n_exp = 20, n_nexp = 22)
 es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
-                                   smd_to_cor = "viechtbauer", reverse_student_t_pval) {
+                                   smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_student_t_pval) {
   if (missing(reverse_student_t_pval)) reverse_student_t_pval <- rep(FALSE, length(student_t_pval))
   reverse_student_t_pval[is.na(reverse_student_t_pval)] <- FALSE
 
@@ -118,7 +120,7 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
 
   es <- es_from_student_t(
     student_t = t, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_student_t = reverse_student_t_pval
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_student_t = reverse_student_t_pval
   )
 
   es$info_used <- "student_t_pval"
@@ -132,6 +134,7 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{anova_f} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_anova_f a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -172,7 +175,7 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
 #'
 #' @examples
 #' es_from_anova_f(anova_f = 2.01, n_exp = 20, n_nexp = 22)
-es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_anova_f) {
+es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_anova_f) {
   if (missing(reverse_anova_f)) reverse_anova_f <- rep(FALSE, length(anova_f))
   reverse_anova_f[is.na(reverse_anova_f)] <- FALSE
 
@@ -180,7 +183,7 @@ es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 
   es <- es_from_student_t(
     student_t = t, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_student_t = reverse_anova_f
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_student_t = reverse_anova_f
   )
 
   es$info_used <- "anova_f"
@@ -194,6 +197,7 @@ es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{anova_f_pval} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_anova_f_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -234,14 +238,14 @@ es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @examples
 #' es_from_anova_pval(anova_f_pval = 0.0012, n_exp = 20, n_nexp = 22)
 es_from_anova_pval <- function(anova_f_pval, n_exp, n_nexp, smd_to_cor = "viechtbauer",
-                               reverse_anova_f_pval) {
+                               smd_var = "borenstein", reverse_anova_f_pval) {
   if (missing(reverse_anova_f_pval)) reverse_anova_f_pval <- rep(FALSE, length(anova_f_pval))
   reverse_anova_f_pval[is.na(reverse_anova_f_pval)] <- FALSE
 
 
   es <- es_from_student_t_pval(
     student_t_pval = anova_f_pval, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_student_t_pval = reverse_anova_f_pval
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_student_t_pval = reverse_anova_f_pval
   )
 
   es$info_used <- "anova_f_pval"

@@ -9,6 +9,7 @@
 #' @param q3_nexp third quartile of the non-experimental/non-exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_med a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -49,7 +50,7 @@
 #' )
 es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
                                q1_nexp, med_nexp, q3_nexp, n_nexp,
-                               smd_to_cor = "viechtbauer", reverse_med) {
+                               smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_med) {
   if (missing(reverse_med)) reverse_med <- rep(FALSE, length(q1_exp))
   reverse_med[is.na(reverse_med)] <- FALSE
 
@@ -87,7 +88,7 @@ es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
     mean_exp = mean_exp, mean_nexp = mean_nexp,
     mean_sd_exp = sd_exp, mean_sd_nexp = sd_nexp,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_means = reverse_med
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_means = reverse_med
   )
 
   es$info_used <- "med_quarts"
@@ -110,6 +111,7 @@ es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
 #' @param max_nexp maximum value of the non-experimental/non-exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_med a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -164,7 +166,7 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
                                        min_exp, max_exp, n_exp,
                                        q1_nexp, med_nexp, q3_nexp,
                                        min_nexp, max_nexp, n_nexp,
-                                       smd_to_cor = "viechtbauer", reverse_med) {
+                                       smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_med) {
   if (missing(reverse_med)) reverse_med <- rep(FALSE, length(min_exp))
   reverse_med[is.na(reverse_med)] <- FALSE
 
@@ -223,7 +225,7 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
     mean_exp = mean_exp, mean_nexp = mean_nexp,
     mean_sd_exp = sd_exp, mean_sd_nexp = sd_nexp,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_means = reverse_med
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_means = reverse_med
   )
 
   es$info_used <- "med_min_max_quarts"
@@ -242,6 +244,7 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 #' @param max_nexp maximum value of the non-experimental/non-exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_med a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -313,7 +316,7 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 #' )
 es_from_med_min_max <- function(min_exp, med_exp, max_exp, n_exp,
                                 min_nexp, med_nexp, max_nexp, n_nexp,
-                                smd_to_cor = "viechtbauer", reverse_med) {
+                                smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_med) {
   if (missing(reverse_med)) reverse_med <- rep(FALSE, length(min_exp))
   reverse_med[is.na(reverse_med)] <- FALSE
 
@@ -340,7 +343,7 @@ es_from_med_min_max <- function(min_exp, med_exp, max_exp, n_exp,
     mean_exp = mean_exp, mean_nexp = mean_nexp,
     mean_sd_exp = sd_exp, mean_sd_nexp = sd_nexp,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_means = reverse_med
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_means = reverse_med
   )
 
   es$info_used <- "med_min_max"

@@ -4,6 +4,7 @@
 #' @param n_exp total number of participants in the exposed group
 #' @param n_nexp total number of participants in the non exposed group
 #' @param smd_to_cor formula used to convert the \code{pt_bis_r} value into a coefficient correlation.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_pt_bis_r a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -41,7 +42,7 @@
 #'
 #' @examples
 #' es_from_pt_bis_r(pt_bis_r = 0.2, n_exp = 121, n_nexp = 121)
-es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_pt_bis_r) {
+es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_pt_bis_r) {
   if (missing(reverse_pt_bis_r)) reverse_pt_bis_r <- rep(FALSE, length(pt_bis_r))
   reverse_pt_bis_r[is.na(reverse_pt_bis_r)] <- FALSE
   if (length(reverse_pt_bis_r) == 1) reverse_pt_bis_r = c(rep(reverse_pt_bis_r, length(pt_bis_r)))
@@ -54,7 +55,8 @@ es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer"
 
   d <- pt_bis_r * sqrt(h) / sqrt(1 - pt_bis_r^2)
   d <- ifelse(reverse_pt_bis_r, -d, d)
-  es <- .es_from_d(d = d, n_exp = n_exp, n_nexp = n_nexp)
+  es <- .es_from_d(d = d, n_exp = n_exp, n_nexp = n_nexp,
+                   smd_to_cor = smd_to_cor, smd_var = smd_var)
 
   es$info_used <- "pt_bis_r"
 
@@ -67,6 +69,7 @@ es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer"
 #' @param n_exp total number of participants in the exposed group
 #' @param n_nexp total number of participants in the non exposed group
 #' @param smd_to_cor formula used to convert the \code{pt_bis_r_pval} value into a coefficient correlation.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_pt_bis_r_pval a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -104,7 +107,7 @@ es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer"
 #' @examples
 #' es_from_pt_bis_r_pval(pt_bis_r_pval = 0.2, n_exp = 121, n_nexp = 121)
 es_from_pt_bis_r_pval <- function(pt_bis_r_pval, n_exp, n_nexp,
-                                  smd_to_cor = "viechtbauer", reverse_pt_bis_r_pval) {
+                                  smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_pt_bis_r_pval) {
   if (missing(reverse_pt_bis_r_pval)) reverse_pt_bis_r_pval <- rep(FALSE, length(n_exp))
   reverse_pt_bis_r_pval[is.na(reverse_pt_bis_r_pval)] <- FALSE
 
@@ -112,7 +115,7 @@ es_from_pt_bis_r_pval <- function(pt_bis_r_pval, n_exp, n_nexp,
 
   es <- es_from_student_t(
     student_t = t, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_student_t = reverse_pt_bis_r_pval
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_student_t = reverse_pt_bis_r_pval
   )
 
   es$info_used <- "pt_bis_r_pval"

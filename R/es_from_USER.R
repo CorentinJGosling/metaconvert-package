@@ -334,6 +334,8 @@
 #' @param smd_to_cor formula used to convert a SMD value into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD (see \code{\link{es_from_pearson_r}}).
 #' @param rr_to_or formula used to convert a risk ratio value into an odds ratio (see \code{\link{es_from_rr_se}}).
+#' @param measure deprecated alias for \code{user_es_target_measure_crude}, kept for backward compatibility with metaConvert <= 1.0.3.
+#' @param user_es_measure_crude deprecated alias for \code{user_es_original_measure_crude}, kept for backward compatibility with metaConvert <= 1.0.3.
 #'
 #' @details
 #' This function is a generic function allowing to include any crude effect size measure value + variance.
@@ -381,7 +383,21 @@ es_from_user_crude <- function(user_es_original_measure_crude,
                                 or_to_cor = "pearson",
                                 smd_to_cor = "viechtbauer",
                                 cor_to_smd = "viechtbauer",
-                                rr_to_or = "metaumbrella") {
+                                rr_to_or = "metaumbrella",
+                                measure, user_es_measure_crude) {
+
+  # Backward compatibility with the pre-2.0 argument names (metaConvert <= 1.0.3,
+  # still used by the published metaumbrella): 'user_es_measure_crude' was the
+  # entered (original) measure and 'measure' was the requested (target) measure.
+  if (!missing(user_es_measure_crude) && missing(user_es_original_measure_crude))
+    user_es_original_measure_crude <- user_es_measure_crude
+  # The alias must not silently override an explicitly supplied new-style
+  # argument, and its use should be visible to the caller.
+  if (!missing(measure) && missing(user_es_target_measure_crude)) {
+    warning("The 'measure' argument of es_from_user_crude() is deprecated; use 'user_es_target_measure_crude'.",
+            call. = FALSE)
+    user_es_target_measure_crude <- measure
+  }
 
   len <- length(user_es_original_measure_crude)
 
@@ -577,6 +593,8 @@ es_from_user_crude <- function(user_es_original_measure_crude,
 #' @param smd_to_cor formula used to convert a SMD value into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD (see \code{\link{es_from_pearson_r}}).
 #' @param rr_to_or formula used to convert a risk ratio value into an odds ratio (see \code{\link{es_from_rr_se}}).
+#' @param measure deprecated alias for \code{user_es_target_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.
+#' @param user_es_measure_adj deprecated alias for \code{user_es_original_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.
 #'
 #' @details
 #' This function is a generic function allowing to include any adjusted effect size measure value + variance.
@@ -624,7 +642,21 @@ es_from_user_adj <- function(user_es_original_measure_adj,
                               or_to_cor = "pearson",
                               smd_to_cor = "viechtbauer",
                               cor_to_smd = "viechtbauer",
-                              rr_to_or = "metaumbrella") {
+                              rr_to_or = "metaumbrella",
+                              measure, user_es_measure_adj) {
+
+  # Backward compatibility with the pre-2.0 argument names (metaConvert <= 1.0.3):
+  # 'user_es_measure_adj' was the entered (original) measure and 'measure' was the
+  # requested (target) measure.
+  if (!missing(user_es_measure_adj) && missing(user_es_original_measure_adj))
+    user_es_original_measure_adj <- user_es_measure_adj
+  # The alias must not silently override an explicitly supplied new-style
+  # argument, and its use should be visible to the caller.
+  if (!missing(measure) && missing(user_es_target_measure_adj)) {
+    warning("The 'measure' argument of es_from_user_adj() is deprecated; use 'user_es_target_measure_adj'.",
+            call. = FALSE)
+    user_es_target_measure_adj <- measure
+  }
 
   len <- length(user_es_original_measure_adj)
 

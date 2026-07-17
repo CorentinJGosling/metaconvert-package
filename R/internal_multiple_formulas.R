@@ -849,7 +849,7 @@
 #'   - d_rm:   d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13, a definition),
 #'             so Var(d_rm) = 2(1-r)*Var(d_z) for known r.
 #'   - d_av:   Bonett (2008) eq. 19 (two-group mixed design, all-four-SD standardizer).
-#' The three pooled forms without a directly published two-group source (the robust
+#' The two pooled forms without a directly published two-group source (the robust
 #' bonett departure, and d_rm's algebra) are Monte-Carlo calibrated in
 #' tests/testthat/test-pooled-variance-calibration.R.
 #'

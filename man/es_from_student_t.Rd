@@ -9,6 +9,7 @@ es_from_student_t(
   n_exp,
   n_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   reverse_student_t
 )
 }
@@ -20,6 +21,8 @@ es_from_student_t(
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the \code{student_t} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
 
 \item{reverse_student_t}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -55,7 +58,7 @@ It should NOT be used with a Welch (unequal-variance) t-test, which is the defau
 R's \code{t.test()}. A Welch t uses \eqn{\sqrt{s_1^2/n_1 + s_2^2/n_2}} rather than
 \eqn{s_{pooled}\sqrt{1/n_1 + 1/n_2}}, so when group sizes and variances both differ,
 plugging a Welch t into this formula yields a biased Cohen's d (the bias can exceed
-50\\% and may flip sign depending on which arm carries the larger variance; it vanishes
+50\% and may flip sign depending on which arm carries the larger variance; it vanishes
 only when \eqn{n_1 = n_2}). A Welch t cannot be converted to Cohen's d from
 \code{(t, n_exp, n_nexp)} alone: recovering the pooled SD requires the two arm SDs, in
 which case \code{\link{es_from_means_sd}} should be used directly.

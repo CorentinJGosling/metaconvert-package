@@ -22,7 +22,9 @@ es_from_user_adj(
   or_to_cor = "pearson",
   smd_to_cor = "viechtbauer",
   cor_to_smd = "viechtbauer",
-  rr_to_or = "metaumbrella"
+  rr_to_or = "metaumbrella",
+  measure,
+  user_es_measure_adj
 )
 }
 \arguments{
@@ -61,6 +63,10 @@ es_from_user_adj(
 \item{cor_to_smd}{formula used to convert a correlation coefficient value into a SMD (see \code{\link{es_from_pearson_r}}).}
 
 \item{rr_to_or}{formula used to convert a risk ratio value into an odds ratio (see \code{\link{es_from_rr_se}}).}
+
+\item{measure}{deprecated alias for \code{user_es_target_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.}
+
+\item{user_es_measure_adj}{deprecated alias for \code{user_es_original_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.}
 }
 \value{
 This function allows to directly input any of the available effect size measures

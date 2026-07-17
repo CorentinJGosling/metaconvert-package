@@ -1,7 +1,7 @@
 Package: metaConvert
 Type: Package
 Title: An Automatic Suite for Estimation of Various Effect Size Measures 
-Version: 2.1.0
+Version: 2.0.0
 Authors@R: c(
         person(given = c("Corentin", "J."), family= "Gosling",  role = c("aut", "cre"),
                 email = "corentin.gosling@parisnanterre.fr"),

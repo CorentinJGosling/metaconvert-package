@@ -21,6 +21,8 @@ convert_df(
   or_to_rr = "metaumbrella_cases",
   or_to_cor = "bonett",
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
+  smd_denom = "pooled",
   pre_post_to_smd = "bonett",
   r_pre_post = 0.8,
   cor_to_smd = "viechtbauer",
@@ -65,9 +67,13 @@ convert_df(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation.}
 
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+
+\item{smd_denom}{standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance. Only the endpoint means family (es_from_means_sd/se/ci) honours this argument: rows whose effect size comes from any other method (t/F, cohen_d/hedges_g, eta-squared, point-biserial r, medians/ranges, plots, ANCOVA, raw mean differences) always use the pooled-SD standardizer, and a message lists the scoping when a non-pooled value is requested ("glass_robust" additionally has a single variance form, so smd_var is ignored for it).}
+
 \item{pre_post_to_smd}{formula used to obtain a SMD from pre/post means and SD of two independent groups.}
 
-\item{r_pre_post}{pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68\\% too small (95\\% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.}
+\item{r_pre_post}{pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68\% too small (95\% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.}
 
 \item{cor_to_smd}{formula used to convert a correlation coefficient value into a SMD.}
 

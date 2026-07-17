@@ -306,6 +306,26 @@
     }
   }
 
+  # V31: agreement-type ICC rows use a one-way variance approximation that
+  # assumes negligible between-rater variance -- the SE is anti-conservative
+  # when raters differ systematically (informational, always active, like
+  # V18/V21). icc_type = NA or an absent column resolves to the package
+  # default "agreement".
+  if ("icc" %in% colnames(x)) {
+    icc_type_eff <- if ("icc_type" %in% colnames(x)) {
+      tt <- as.character(x[["icc_type"]])
+      tt[is.na(tt)] <- "agreement"
+      tt
+    } else {
+      rep("agreement", nrow(x))
+    }
+    agr <- which(!is.na(x[["icc"]]) & icc_type_eff == "agreement")
+    for (i in agr) {
+      row_issues[[i]] <- c(row_issues[[i]],
+        "[INFO] ICC agreement-type SE assumes negligible between-rater variance and can be anti-conservative when raters differ systematically (see the es_from_icc documentation)")
+    }
+  }
+
   # Check CI consistency
   for (tri in .ci_triplets()) {
     if (!all(c(tri$val, tri$lo, tri$up) %in% colnames(x))) next
@@ -1101,9 +1121,11 @@
 #' @noRd
 .flag_numeric_integrity <- function(es, se, ci_lo, ci_up, info_used = NULL,
                                      measure = NULL, exp = FALSE,
-                                     n_total = NULL, n_exp = NULL,
+                                     n_total = NULL, n_exp = NULL, n_nexp = NULL,
                                      enable_informational = FALSE,
-                                     r_defaulted = NULL) {
+                                     r_defaulted = NULL,
+                                     prop_to_es = "raw",
+                                     smd_denom = NULL) {
   n <- length(es)
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
@@ -1158,6 +1180,7 @@
       # paired measures: df = n_pairs - 1 (n_total double counts the subjects)
       within_measures <- c("dw", "gw", "mdw")
       n_exp_i <- if (!is.null(n_exp)) n_exp[i] else NA_real_
+      n_nexp_i <- if (!is.null(n_nexp)) n_nexp[i] else NA_real_
       if (!is.null(measure) && measure %in% within_measures &&
           !is.na(n_exp_i) && is.finite(n_exp_i) && n_exp_i > 2) {
         t_df <- n_exp_i - 1
@@ -1171,6 +1194,14 @@
       }
       is_user_es <- !is.null(info_used) && !is.na(info_used[i]) &&
                     grepl("^user_(es|input)", info_used[i])
+      # P7: Glass rows (smd_denom = control/control_robust) build their d/g CIs
+      # on the control-arm df (SMD1 convention), not the pooled N - 2.
+      glass_row <- !is_user_es && !is.null(smd_denom) &&
+        length(smd_denom) >= i && !is.na(smd_denom[i]) &&
+        smd_denom[i] %in% c("control", "control_robust") &&
+        !is.null(measure) && measure %in% c("d", "g") &&
+        !is.na(n_nexp_i) && is.finite(n_nexp_i) && n_nexp_i > 2
+      if (glass_row) t_df <- n_nexp_i - 1
       if (is_user_es) {
         z_crit <- stats::qnorm(0.975)
       } else if (!is.null(measure) && measure %in% qt_measures &&
@@ -1182,8 +1213,33 @@
       expected_width <- 2 * z_crit * se[i]
       # ~10% at N=9, ~5% at N=36
       tol <- if (!is.na(n_eff) && n_eff > 0) max(0.05, 0.30 / sqrt(n_eff)) else 0.10
-      if (expected_width > 0 &&
-          abs(ci_width - expected_width) / expected_width > tol) {
+      # P8: raw-scale proportion CIs are deliberately clamped to [0, 1] by
+      # es_from_prop_single_group(); when a bound sits at the clamp, compare
+      # against the [0, 1]-clipped expected width instead of 2 * z * se.
+      prop_clamped <- !is_user_es && identical(measure, "prop") &&
+        identical(prop_to_es, "raw") &&
+        (isTRUE(all.equal(ci_lo[i], 0)) || isTRUE(all.equal(ci_up[i], 1)))
+      if (prop_clamped) {
+        expected_width <- min(es[i] + z_crit * se[i], 1) -
+          max(es[i] - z_crit * se[i], 0)
+      }
+      fires_a6 <- expected_width > 0 &&
+        abs(ci_width - expected_width) / expected_width > tol
+      # P6: package-computed md CIs legitimately use any df between the Welch
+      # minimum (min(n1, n2) - 1; es_from_means_sd) and the pooled N - 2
+      # (es_from_md_*, ANCOVA md) -- accept the whole band before flagging.
+      if (fires_a6 && !is_user_es && identical(measure, "md") &&
+          !is.na(n_exp_i) && !is.na(n_nexp_i) &&
+          is.finite(n_exp_i) && is.finite(n_nexp_i) &&
+          min(n_exp_i, n_nexp_i) > 2 && !is.na(t_df)) {
+        w_pooled <- 2 * stats::qt(0.975, n_exp_i + n_nexp_i - 2) * se[i]
+        w_welch_min <- 2 * stats::qt(0.975, min(n_exp_i, n_nexp_i) - 1) * se[i]
+        fires_a6 <- ci_width < (1 - tol) * w_pooled ||
+          ci_width > (1 + tol) * w_welch_min
+        # report the closest band edge in the message
+        expected_width <- if (ci_width < w_pooled) w_pooled else w_welch_min
+      }
+      if (fires_a6) {
         matches_t <- FALSE
         if (is_user_es && !is.null(measure) && measure %in% qt_measures &&
             !is.na(t_df)) {
@@ -1346,6 +1402,16 @@
         flags[[i]] <- c(flags[[i]],
           paste0("[INVALID] Alpha exceeds 1: alpha = ", round(es[i], 3), msuf))
       }
+      # B7b: raw-scale Wald CI escaping the upper bound (the point estimate is
+      # valid, the symmetric interval is not; the bonett scale cannot overshoot)
+      if (!identical(alpha_to_es, "bonett") &&
+          !is.na(ci_up[i]) && is.finite(ci_up[i]) && ci_up[i] > 1 &&
+          es[i] <= 1) {
+        flags[[i]] <- c(flags[[i]],
+          paste0("[UNUSUAL] Raw-scale alpha CI upper bound exceeds 1 (",
+                 round(ci_up[i], 3),
+                 ") - the symmetric Wald interval escapes the parameter space; consider alpha_to_es = 'bonett'", msuf))
+      }
     }
 
     # B8: ICC bounds
@@ -1359,6 +1425,25 @@
       } else if (es[i] > 1) {
         flags[[i]] <- c(flags[[i]],
           paste0("[INVALID] ICC exceeds 1: icc = ", round(es[i], 3), msuf))
+      }
+      # B8b: raw-scale Wald CI escaping the parameter space [-1, 1]
+      if (!identical(icc_to_es, "bonett") &&
+          !is.na(es[i]) && es[i] <= 1 && es[i] >= -1) {
+        icc_bound_problems <- character(0)
+        if (!is.na(ci_up[i]) && is.finite(ci_up[i]) && ci_up[i] > 1) {
+          icc_bound_problems <- c(icc_bound_problems,
+                                  paste0("CI upper = ", round(ci_up[i], 3)))
+        }
+        if (!is.na(ci_lo[i]) && is.finite(ci_lo[i]) && ci_lo[i] < -1) {
+          icc_bound_problems <- c(icc_bound_problems,
+                                  paste0("CI lower = ", round(ci_lo[i], 3)))
+        }
+        if (length(icc_bound_problems) > 0) {
+          flags[[i]] <- c(flags[[i]],
+            paste0("[UNUSUAL] Raw-scale ICC CI bound outside [-1, 1]: ",
+                   paste(icc_bound_problems, collapse = ", "),
+                   " - the symmetric Wald interval escapes the parameter space; consider icc_to_es = 'bonett'", msuf))
+        }
       }
     }
   }
@@ -2204,7 +2289,8 @@
                              prop_to_es = "raw",
                              pre_post_to_smd = "bonett",
                              pool_sd = FALSE,
-                             r_defaulted = NULL) {
+                             r_defaulted = NULL,
+                             smd_denom = NULL) {
   n <- nrow(res)
   flag_col <- paste0("flags", suffix)
 
@@ -2219,6 +2305,12 @@
     as.logical(r_defaulted[row_idx_map])
   } else {
     rep(FALSE, n)
+  }
+  # per-row endpoint-SMD standardizer (Glass rows use control-df CIs -- A6)
+  smd_denom_row <- if (!is.null(smd_denom)) {
+    as.character(smd_denom[row_idx_map])
+  } else {
+    NULL
   }
   n_sample <- if ("n_sample" %in% colnames(raw_data)) {
     raw_data$n_sample[row_idx_map]
@@ -2272,8 +2364,11 @@
   f_a <- .flag_numeric_integrity(es, se, ci_lo, ci_up, info_used,
                                   measure = measure, exp = exp,
                                   n_total = n_total, n_exp = n_exp_vec,
+                                  n_nexp = n_nexp_vec,
                                   enable_informational = isTRUE(opts$enable_informational),
-                                  r_defaulted = r_def_row)
+                                  r_defaulted = r_def_row,
+                                  prop_to_es = prop_to_es,
+                                  smd_denom = smd_denom_row)
   f_b <- .flag_bounds_violations(es, se, ci_lo, ci_up, measure, exp, info_used,
                                   baseline_risk = baseline_risk_vec,
                                   baseline_rate = baseline_rate_vec,
@@ -2435,16 +2530,28 @@
     valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
     has_per_arm <- any(info_used[valid_idx] %in% per_arm_only_methods)
     has_pooled <- any(info_used[valid_idx] %in% pooled_capable_methods)
-    if (has_per_arm && has_pooled) {
+    # P25: under pool_sd = TRUE the per-arm fallback contradicts the user's
+    # explicit pooling request even when NO pooled-capable row coexists (a pool
+    # made only of paired t/F rows used to be silent); disclose it either way,
+    # with a message that fits each situation.
+    if (has_per_arm) {
       for (i in valid_idx) {
         if (!info_used[i] %in% per_arm_only_methods) next
         msuf <- .method_suffix(info_used[i])
-        f_paired_t_mix[[i]] <- paste0(
-          "[INFO] Per-arm standardizer: a paired t/F statistic does not identify ",
-          "the two arms' SD ratio", msuf, ", so this row standardizes each arm by ",
-          "its own SD, while other rows in this pool use an SD pooled across arms ",
-          "(you set pool_sd = TRUE). The two constructions coincide only when a ",
-          "study's arm SDs are equal")
+        f_paired_t_mix[[i]] <- if (has_pooled) {
+          paste0(
+            "[INFO] Per-arm standardizer: a paired t/F statistic does not identify ",
+            "the two arms' SD ratio", msuf, ", so this row standardizes each arm by ",
+            "its own SD, while other rows in this pool use an SD pooled across arms ",
+            "(you set pool_sd = TRUE). The two constructions coincide only when a ",
+            "study's arm SDs are equal")
+        } else {
+          paste0(
+            "[INFO] Per-arm standardizer: a paired t/F statistic does not identify ",
+            "the two arms' SD ratio", msuf, ", so this row standardizes each arm by ",
+            "its own SD although you set pool_sd = TRUE. The pooled construction ",
+            "is not recoverable from a paired t/F statistic")
+        }
       }
     }
   }

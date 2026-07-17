@@ -4,6 +4,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_d a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -93,14 +94,14 @@
 #'
 #' @examples
 #' es_from_cohen_d(cohen_d = 1, n_exp = 20, n_nexp = 20)
-es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_d) {
+es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_d) {
   if (missing(reverse_d)) reverse_d <- rep(FALSE, length(n_exp))
   reverse_d[is.na(reverse_d)] <- FALSE
 
 
   es <- .es_from_d(
     d = cohen_d, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_d
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_d
   )
 
   es$info_used <- "cohen_d"
@@ -115,6 +116,7 @@ es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_d a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -151,15 +153,15 @@ es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @examples
 #' es_from_cohen_d_adj(cohen_d_adj = 1, n_cov_ancova = 4, cov_outcome_r = .30, n_exp = 20, n_nexp = 20)
 es_from_cohen_d_adj <- function(cohen_d_adj, n_cov_ancova, cov_outcome_r, n_exp, n_nexp,
-                                smd_to_cor = "viechtbauer", reverse_d) {
+                                smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_d) {
   if (missing(reverse_d)) reverse_d <- rep(FALSE, length(n_exp))
   reverse_d[is.na(reverse_d)] <- FALSE
 
   es <- .es_from_d(
-    d = cohen_d_adj, n_cov_ancova = n_cov_ancova,
+    d = cohen_d_adj, adjusted = TRUE, n_cov_ancova = n_cov_ancova,
     cov_outcome_r = cov_outcome_r,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_d
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_d
   )
 
   es$info_used <- "cohen_d_adj"
@@ -172,6 +174,7 @@ es_from_cohen_d_adj <- function(cohen_d_adj, n_cov_ancova, cov_outcome_r, n_exp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{hedges_g} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
 #' @param reverse_g a logical value indicating whether the direction of the \code{hedges_g} value should be flipped.
 #'
 #' @details
@@ -214,7 +217,7 @@ es_from_cohen_d_adj <- function(cohen_d_adj, n_cov_ancova, cov_outcome_r, n_exp,
 #'
 #' @examples
 #' es_from_hedges_g(hedges_g = 0.243, n_exp = 20, n_nexp = 20)
-es_from_hedges_g <- function(hedges_g, n_exp, n_nexp, smd_to_cor = "viechtbauer", reverse_g) {
+es_from_hedges_g <- function(hedges_g, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_var = "borenstein", reverse_g) {
   if (missing(reverse_g)) reverse_g <- rep(FALSE, length(n_exp))
   reverse_g[is.na(reverse_g)] <- FALSE
   if (length(reverse_g) == 1) reverse_g = c(rep(reverse_g, length(hedges_g)))
@@ -227,7 +230,7 @@ es_from_hedges_g <- function(hedges_g, n_exp, n_nexp, smd_to_cor = "viechtbauer"
   J <- .d_j(df)
   d <- hedges_g / J
 
-  es <- .es_from_d(d = d, n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor)
+  es <- .es_from_d(d = d, n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, smd_var = smd_var)
 
   es$info_used <- "hedges_g"
   return(es)

@@ -11,6 +11,7 @@ es_from_md_ci(
   n_exp,
   n_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   max_asymmetry = 10,
   reverse_md
 )
@@ -27,6 +28,8 @@ es_from_md_ci(
 \item{n_nexp}{number of participants in the non-experimental/non-exposed group.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").}
 
 \item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 

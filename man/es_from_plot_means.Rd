@@ -22,6 +22,7 @@ es_from_plot_means(
   plot_mean_ci_up_exp,
   plot_mean_ci_up_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   reverse_plot_means
 )
 }
@@ -59,6 +60,8 @@ es_from_plot_means(
 \item{plot_mean_ci_up_nexp}{upper bound of an error bar depicting the 95\% CI of the mean of the non-experimental/non-exposed group (extracted from a plot).}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
 
 \item{reverse_plot_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }

@@ -27,8 +27,10 @@
 #'       is Morris's (2008) \eqn{d_{ppc2}} (his eq. 8-9), which he recommends: it is more efficient, but it
 #'       assumes the two arms' true standardizing SDs are equal.
 #'   }
-#' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68\% too small (95\% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.
+#' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68% too small (95% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance. Only the endpoint means family (es_from_means_sd/se/ci) honours this argument: rows whose effect size comes from any other method (t/F, cohen_d/hedges_g, eta-squared, point-biserial r, medians/ranges, plots, ANCOVA, raw mean differences) always use the pooled-SD standardizer, and a message lists the scoping when a non-pooled value is requested ("glass_robust" additionally has a single variance form, so smd_var is ignored for it).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
 #' @param prop_to_es method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).
 #' @param alpha_to_es method used to compute the effect size from Cronbach's alpha. Must be either "bonett" or "raw" (see \code{\link{es_from_cronbach_alpha}}).
@@ -276,6 +278,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
                        or_to_rr = "metaumbrella_cases",
                        or_to_cor = "bonett",
                        smd_to_cor = "viechtbauer",
+                       smd_var = "borenstein",
+                       smd_denom = "pooled",
                        pre_post_to_smd = "bonett",
                        r_pre_post = 0.8,
                        cor_to_smd = "viechtbauer",
@@ -376,6 +380,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
               "or_to_cor",
               # "table_2x2_to_cor",
               "smd_to_cor",
+              "smd_var",
+              "smd_denom",
               "pre_post_to_smd",
               "cor_to_smd",
               "unit_type")) {
@@ -390,6 +396,21 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       }
       x[, i] <- sapply(mget(i), function(x) x)
     }
+  }
+
+  # P10: smd_denom is honoured only by the endpoint means family; rows reaching
+  # the SMD via any other route keep the pooled-SD standardizer. Say so once,
+  # or a "Glass" analysis silently mixes estimands across methods.
+  .denom_used <- .normalize_smd_denom(x[, "smd_denom"])
+  if (any(!is.na(.denom_used) & .denom_used != "pooled")) {
+    message(
+      "Note: smd_denom is honoured by the endpoint means family only ",
+      "(es_from_means_sd, es_from_means_se, es_from_means_ci).\n  Rows whose effect size ",
+      "comes from any other method (t/F statistics, cohen_d/hedges_g, eta-squared,\n  ",
+      "point-biserial r, medians/ranges/quartiles, plots, ANCOVA, raw mean differences) ",
+      "use the pooled-SD\n  standardizer. Check 'info_used' in summary() to see which ",
+      "standardizer each row received."
+    )
   }
 
   # input validation
@@ -495,16 +516,16 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   # SMD ----------------------------------------------
   es_cohen_d <- with(x, es_from_cohen_d(
     cohen_d = cohen_d, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_d = reverse_d)
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_d = reverse_d)
   )
 
   es_cohen_d_adj <- with(x, es_from_cohen_d_adj(
     cohen_d_adj = cohen_d_adj, n_cov_ancova = n_cov_ancova, cov_outcome_r = cov_outcome_r,
-    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, reverse_d = reverse_d
+    n_exp = n_exp, n_nexp = n_nexp, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_d = reverse_d
   ))
   es_hedges_g <- with(x, es_from_hedges_g(
     hedges_g = hedges_g, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_g = reverse_g
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_g = reverse_g
   ))
 
 
@@ -573,7 +594,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     n_exp = n_exp, n_nexp = n_nexp,
     mean_exp = mean_exp, mean_sd_exp = mean_sd_exp,
     mean_nexp = mean_nexp, mean_sd_nexp = mean_sd_nexp,
-    smd_to_cor = smd_to_cor, reverse_means = reverse_means
+    smd_var = smd_var, smd_denom = smd_denom, smd_to_cor = smd_to_cor, reverse_means = reverse_means
   )
   )
   es_means_se_raw <- with(
@@ -582,7 +603,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       n_exp = n_exp, n_nexp = n_nexp,
       mean_exp = mean_exp, mean_se_exp = mean_se_exp,
       mean_nexp = mean_nexp, mean_se_nexp = mean_se_nexp,
-      smd_to_cor = smd_to_cor, reverse_means = reverse_means
+      smd_var = smd_var, smd_denom = smd_denom, smd_to_cor = smd_to_cor, reverse_means = reverse_means
     )
   )
   es_means_ci_raw <- with(
@@ -591,7 +612,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
       n_exp = n_exp, n_nexp = n_nexp,
       mean_exp = mean_exp, mean_ci_lo_exp = mean_ci_lo_exp, mean_ci_up_exp = mean_ci_up_exp,
       mean_nexp = mean_nexp, mean_ci_lo_nexp = mean_ci_lo_nexp, mean_ci_up_nexp = mean_ci_up_nexp,
-      smd_to_cor = smd_to_cor, reverse_means = reverse_means,
+      smd_var = smd_var, smd_denom = smd_denom, smd_to_cor = smd_to_cor, reverse_means = reverse_means,
       max_asymmetry = max_asymmetry
     )
   )
@@ -599,7 +620,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     x,
     es_from_means_sd_pooled(
       n_exp = n_exp, n_nexp = n_nexp, mean_exp = mean_exp, mean_nexp = mean_nexp,
-      mean_sd_pooled = mean_sd_pooled, smd_to_cor = smd_to_cor, reverse_means = reverse_means
+      mean_sd_pooled = mean_sd_pooled, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_means = reverse_means
     )
   )
   # plot
@@ -612,7 +633,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     plot_mean_se_up_exp = plot_mean_se_up_exp, plot_mean_se_up_nexp = plot_mean_se_up_nexp,
     plot_mean_ci_lo_exp = plot_mean_ci_lo_exp, plot_mean_ci_lo_nexp = plot_mean_ci_lo_nexp,
     plot_mean_ci_up_exp = plot_mean_ci_up_exp, plot_mean_ci_up_nexp = plot_mean_ci_up_nexp,
-    smd_to_cor = smd_to_cor,
+    smd_var = smd_var, smd_to_cor = smd_to_cor,
     reverse_plot_means = reverse_plot_means
   ))
   # PRE POST MEANS ----------------------------------------------
@@ -880,63 +901,63 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   # ANOVA, Student t-test  ----------------------------------------------
   es_t_student <- with(x, es_from_student_t(
     student_t = student_t, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_student_t = reverse_student_t
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_student_t = reverse_student_t
   ))
   es_t_student_pval <- with(x, es_from_student_t_pval(
     student_t_pval = student_t_pval, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_student_t_pval = reverse_student_t_pval
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_student_t_pval = reverse_student_t_pval
   ))
   es_anova_f <- with(x, es_from_anova_f(
     anova_f = anova_f, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_anova_f = reverse_anova_f
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_anova_f = reverse_anova_f
   ))
   es_anova_f_pval <- with(x, es_from_anova_pval(
     anova_f_pval = anova_f_pval, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_anova_f_pval = reverse_anova_f_pval
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_anova_f_pval = reverse_anova_f_pval
   ))
   es_etasq <- with(x, es_from_etasq(
     etasq = etasq, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_etasq = reverse_etasq
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_etasq = reverse_etasq
   ))
   es_etasq_adj <- with(x, es_from_etasq_adj(
     etasq_adj = etasq_adj, n_exp = n_exp, n_nexp = n_nexp, n_cov_ancova = n_cov_ancova,
-    cov_outcome_r = cov_outcome_r, smd_to_cor = smd_to_cor, reverse_etasq = reverse_etasq
+    cov_outcome_r = cov_outcome_r, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_etasq = reverse_etasq
   ))
 
   # MD   ----------------------------------------------
   es_md_sd <- with(x, es_from_md_sd(
     md = md, md_sd = md_sd, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_md = reverse_md
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_md = reverse_md
   ))
   es_md_se <- with(x, es_from_md_se(
     md = md, md_se = md_se, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_md = reverse_md
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_md = reverse_md
   ))
   es_md_ci <- with(x, es_from_md_ci(
     md = md, md_ci_lo = md_ci_lo, md_ci_up = md_ci_up, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_md = reverse_md,
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_md = reverse_md,
     max_asymmetry = max_asymmetry
   ))
   es_md_pval <- with(x, es_from_md_pval(
     md = md, md_pval = md_pval, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_md = reverse_md
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse_md = reverse_md
   ))
 
   # RANGE/QUARTILES  ----------------------------------------------
   es_med_quarts <- with(x, es_from_med_quarts(
     q1_exp = q1_exp, med_exp = med_exp, q3_exp = q3_exp, n_exp = n_exp,
     q1_nexp = q1_nexp, med_nexp = med_nexp, q3_nexp = q3_nexp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_med = reverse_med
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_med = reverse_med
   ))
   es_med_min_max <- with(x, es_from_med_min_max(
     min_exp = min_exp, med_exp = med_exp, max_exp = max_exp, n_exp = n_exp,
     min_nexp = min_nexp, med_nexp = med_nexp, max_nexp = max_nexp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_med = reverse_med
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_med = reverse_med
   ))
   es_med_min_max_quarts <- with(x, es_from_med_min_max_quarts(
     min_exp = min_exp, q1_exp = q1_exp, med_exp = med_exp, q3_exp = q3_exp, max_exp = max_exp, n_exp = n_exp,
     min_nexp = min_nexp, q1_nexp = q1_nexp, med_nexp = med_nexp, q3_nexp = q3_nexp, max_nexp = max_nexp,
-    n_nexp = n_nexp, smd_to_cor = smd_to_cor, reverse_med = reverse_med
+    n_nexp = n_nexp, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_med = reverse_med
   ))
 
   # ANCOVA MEANS ------------------------------------------------------------------
@@ -944,31 +965,31 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
     ancova_mean_sd_exp = ancova_mean_sd_exp, ancova_mean_sd_nexp = ancova_mean_sd_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
   ))
   es_ancova_means_se <- with(x, es_from_ancova_means_se(
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
     ancova_mean_se_exp = ancova_mean_se_exp, ancova_mean_se_nexp = ancova_mean_se_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
   ))
   es_ancova_means_ci <- with(x, es_from_ancova_means_ci(
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
     ancova_mean_ci_lo_exp = ancova_mean_ci_lo_exp, ancova_mean_ci_up_exp = ancova_mean_ci_up_exp,
     ancova_mean_ci_lo_nexp = ancova_mean_ci_lo_nexp, ancova_mean_ci_up_nexp = ancova_mean_ci_up_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
   ))
   es_ancova_means_sd_pooled_adj <- with(x, es_from_ancova_means_sd_pooled_adj(
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
     ancova_mean_sd_pooled = ancova_mean_sd_pooled,
     n_exp = n_exp, n_nexp = n_nexp, cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
   ))
   es_ancova_means_sd_pooled <- with(x, es_from_ancova_means_sd_pooled_crude(
     ancova_mean_exp = ancova_mean_exp, ancova_mean_nexp = ancova_mean_nexp,
     mean_sd_pooled = mean_sd_pooled, cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
+    n_exp = n_exp, n_nexp = n_nexp, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_means = reverse_ancova_means
   ))
   # plot
   es_plot_ancova_means <- with(x, es_from_plot_ancova_means(
@@ -981,48 +1002,48 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     plot_ancova_mean_ci_lo_exp = plot_ancova_mean_ci_lo_exp, plot_ancova_mean_ci_lo_nexp = plot_ancova_mean_ci_lo_nexp,
     plot_ancova_mean_ci_up_exp = plot_ancova_mean_ci_up_exp, plot_ancova_mean_ci_up_nexp = plot_ancova_mean_ci_up_nexp,
     cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    smd_to_cor = smd_to_cor, reverse_plot_ancova_means = reverse_plot_ancova_means
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_plot_ancova_means = reverse_plot_ancova_means
   ))
   # ANCOVA MD ------------------------------------------------------------------
   es_ancova_md_sd <- with(x, es_from_ancova_md_sd(ancova_md = ancova_md, ancova_md_sd = ancova_md_sd,
          cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
          n_exp = n_exp, n_nexp = n_nexp,
-         smd_to_cor = smd_to_cor,
+         smd_var = smd_var, smd_to_cor = smd_to_cor,
          reverse_ancova_md = reverse_ancova_md))
   es_ancova_md_se <- with(x, es_from_ancova_md_se(ancova_md = ancova_md, ancova_md_se = ancova_md_se,
          cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
          n_exp = n_exp, n_nexp = n_nexp,
-         smd_to_cor = smd_to_cor,
+         smd_var = smd_var, smd_to_cor = smd_to_cor,
          reverse_ancova_md = reverse_ancova_md))
   es_ancova_md_ci <- with(x, es_from_ancova_md_ci(ancova_md = ancova_md,
          ancova_md_ci_lo = ancova_md_ci_lo, ancova_md_ci_up = ancova_md_ci_up,
          cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
          n_exp = n_exp, n_nexp = n_nexp,
-         smd_to_cor = smd_to_cor,
+         smd_var = smd_var, smd_to_cor = smd_to_cor,
          reverse_ancova_md = reverse_ancova_md))
   es_ancova_md_pval <- with(x, es_from_ancova_md_pval(
         ancova_md = ancova_md,
         ancova_md_pval = ancova_md_pval,
         cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
         n_exp = n_exp, n_nexp = n_nexp,
-        smd_to_cor = smd_to_cor,
+        smd_var = smd_var, smd_to_cor = smd_to_cor,
         reverse_ancova_md = reverse_ancova_md))
   # ANCOVA F, T, P ------------------------------------------------------------------
   es_ancova_t <- with(x, es_from_ancova_t(
     ancova_t = ancova_t, cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, reverse_ancova_t = reverse_ancova_t
+    n_exp = n_exp, n_nexp = n_nexp, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_t = reverse_ancova_t
   ))
   es_ancova_f <- with(x, es_from_ancova_f(
     ancova_f = ancova_f, cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, reverse_ancova_f = reverse_ancova_f
+    n_exp = n_exp, n_nexp = n_nexp, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_f = reverse_ancova_f
   ))
   es_ancova_t_pval <- with(x, es_from_ancova_t_pval(
     ancova_t_pval = ancova_t_pval, cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, reverse_ancova_t_pval = reverse_ancova_t_pval
+    n_exp = n_exp, n_nexp = n_nexp, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_t_pval = reverse_ancova_t_pval
   ))
   es_ancova_f_pval <- with(x, es_from_ancova_f_pval(
     ancova_f_pval = ancova_f_pval, cov_outcome_r = cov_outcome_r, n_cov_ancova = n_cov_ancova,
-    n_exp = n_exp, n_nexp = n_nexp, smd_to_cor = smd_to_cor, reverse_ancova_f_pval = reverse_ancova_f_pval
+    n_exp = n_exp, n_nexp = n_nexp, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_ancova_f_pval = reverse_ancova_f_pval
   ))
 
   # CHI-SQ + PHI --------------------------------------------------------
@@ -1053,14 +1074,14 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   # COR-PB   --------------------------------------------------------
   es_r_point_bis <- with(x, es_from_pt_bis_r(
     pt_bis_r = pt_bis_r, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor,
+    smd_var = smd_var, smd_to_cor = smd_to_cor,
     reverse_pt_bis_r = reverse_pt_bis_r
   ))
 
   es_r_point_bis_pval <- with(x, es_from_pt_bis_r_pval(
     pt_bis_r_pval = pt_bis_r_pval,
     n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor,
+    smd_var = smd_var, smd_to_cor = smd_to_cor,
     reverse_pt_bis_r_pval = reverse_pt_bis_r_pval
   ))
 
@@ -1130,11 +1151,11 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   # regression
   es_std_beta <- with(x, es_from_beta_std(
     beta_std = beta_std, sd_dv = sd_dv, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_beta_std = reverse_beta_std
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_beta_std = reverse_beta_std
   ))
   es_unstd_beta <- with(x, es_from_beta_unstd(
     beta_unstd = beta_unstd, sd_dv = sd_dv, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse_beta_unstd = reverse_beta_unstd
+    smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_beta_unstd = reverse_beta_unstd
   ))
 
   # regression t-statistic (partial correlation)
@@ -1590,6 +1611,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   # standardizer used by the pre/post routes (drives the E6/E7 mixing flags)
   attr(res, "pre_post_to_smd") <- pre_post_to_smd
   attr(res, "pool_sd") <- pool_sd
+  # per-row endpoint-SMD standardizer ("pooled"/"control"/"control_robust"),
+  # used by the summary A6 CI-width check (Glass CIs are on qt(.975, n_nexp-1))
+  attr(res, "smd_denom_used") <- .normalize_smd_denom(x[, "smd_denom"])
   return(res)
 }
 # x_save2 = x; list_df = df_es; ordering = ordering_crude; digits = digits;
