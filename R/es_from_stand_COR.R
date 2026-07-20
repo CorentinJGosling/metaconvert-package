@@ -24,27 +24,30 @@
 #'
 #' 2. **The formula used to estimate the Fisher's z** are (Formula 12.28 & 12.29 in Cooper):
 #' \deqn{Z = atanh(r)}
-#' \deqn{Z\_se = \frac{1}{n\_sample - 3}}
+#' \deqn{Z\_se = \sqrt{\frac{1}{n\_sample - 3}}}
 #' \deqn{Z\_ci\_lo = Z - qnorm(.975) * Z\_se}
 #' \deqn{Z\_ci\_up = Z + qnorm(.975) * Z\_se}
 #'
 #' 3. Several approaches can be used to convert a correlation coefficient to a SMD.
 #'
 #' **A.** Mathur proposes to use this formula (Formula 1.2 in Mathur, \code{cor_to_smd = "mathur"}):
-#' \deqn{increase = ifelse(unit_type == "sd", unit\_increase\_iv * sd\_dv, unit\_increase\_iv)}
+#' \deqn{increase = ifelse(unit_type == "sd", unit\_increase\_iv * sd\_iv, unit\_increase\_iv)}
 #' \deqn{d = \frac{r * increase}{sd_iv * \sqrt{1 - r^2}}}
 #' \deqn{d\_se = abs(d) * \sqrt{\frac{1}{r^2 * (n\_sample - 3)} + \frac{1}{2*(n\_sample - 1))}}}
 #' The resulting Cohen's d is the average increase in the dependent variable associated with an increase of x units in the independent variable (with x = \code{unit_increase_iv}).
 #'
 #' **B.** Viechtbauer proposes to use the delta method to derive a Cohen's d from a correlation coefficient (Viechtbauer, 2023, \code{cor_to_smd = "viechtbauer"})
 #'
-#' **C.** Cooper proposes to use this formula (Formula 12.38 & 12.39 in Cooper, \code{cor_to_smd = cooper}):
-#' \deqn{increase = ifelse(unit_type == "sd", unit\_increase\_iv * sd\_dv, unit\_increase\_iv)}
-#' \deqn{d = \frac{r * increase}{sd\_iv * \sqrt{1 - r^2}}}
-#' \deqn{d\_se = abs(d) * \sqrt{\frac{1}{r^2 * (n\_sample - 3)} + \frac{1}{2*(n\_sample - 1))}}}
-#' Note that this formula was initially proposed for converting a point-biserial correlation to
-#' Cohen's d. It will thus produce similar results to the \code{cor_to_smd = "mathur"} option
-#' only when \code{unit_type = "sd"} and \code{unit_increase_iv = 2}.
+#' **C.** Cooper converts a point-biserial correlation to Cohen's d with the fixed
+#' per-2-SD transformation (Formula 12.38 & 12.39 in Cooper, \code{cor_to_smd = "cooper"}).
+#' Unlike the \code{"mathur"} option, this branch does NOT use \code{unit_increase_iv},
+#' \code{unit_type} or \code{sd_iv}; it always returns the standardized mean difference
+#' between two groups lying one predictor standard deviation apart:
+#' \deqn{d = \frac{2 * r}{\sqrt{1 - r^2}}}
+#' \deqn{d\_se = \sqrt{\frac{4 * R\_se^2}{(1 - r^2)^3}}}
+#' where \eqn{R\_se} is the standard error of the correlation. It therefore coincides
+#' with the \code{cor_to_smd = "mathur"} result only in the special case
+#' \code{unit_type = "sd"} and \code{unit_increase_iv = 2}.
 #'
 #' To know how the Cohen's d value is converted to other effect measures (G/OR), see details of the \code{\link{es_from_cohen_d}} function.
 #'

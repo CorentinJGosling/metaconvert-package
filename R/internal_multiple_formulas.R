@@ -411,11 +411,20 @@
     n_cases_exp_sim <- append(n_cases_exp_sim1, n_cases_exp_sim2)
 
     some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
+    # var(log RR) = 1/a - 1/n1 + 1/c - 1/n2: the two ARM-TOTAL terms are SUBTRACTED
+    # (delta method for log of a binomial proportion; identical to es_from_2x2()'s
+    # se_rr and the Cochrane Handbook). This is NOT the log-OR pattern 1/a+1/b+1/c+1/d
+    # (all added). Matching the candidate table to logrr_se^2 with the arm-total terms
+    # ADDED selected the wrong table along the RR-constrained family and biased the
+    # reconstructed OR (round-trip recovery of a known OR failed). Mapping of the sweep
+    # variables: a = n_cases - n_cases_nexp_sim, c = n_cases_nexp_sim,
+    # n1 (exposed total) = n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim),
+    # n2 (non-exposed total) = n_cases_nexp_sim + n_controls_nexp_sim.
     var_sim <- ifelse(some_zero,
-      1 / ((n_cases + 1) - (n_cases_nexp_sim + 0.5)) + 1 / ((n_cases + 1) + (n_controls + 1) - ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5))) +
-        1 / (n_cases_nexp_sim + 0.5) + 1 / ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5)),
-      1 / (n_cases - n_cases_nexp_sim) + 1 / (n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim)) +
-        1 / n_cases_nexp_sim + 1 / (n_cases_nexp_sim + n_controls_nexp_sim)
+      1 / ((n_cases + 1) - (n_cases_nexp_sim + 0.5)) - 1 / ((n_cases + 1) + (n_controls + 1) - ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5))) +
+        1 / (n_cases_nexp_sim + 0.5) - 1 / ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5)),
+      1 / (n_cases - n_cases_nexp_sim) - 1 / (n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim)) +
+        1 / n_cases_nexp_sim - 1 / (n_cases_nexp_sim + n_controls_nexp_sim)
     )
 
     best <- order((var_sim - logrr_se^2)^2)[1]
@@ -619,7 +628,14 @@
     r_lipsey <- d / sqrt(d^2 + 1 / (p * (1 - p)))
     vr_lipsey <- a^2 * vd / ((d^2 + a)^3)
     z_lipsey <- atanh(r_lipsey)
-    vz_lipsey <- vd / (vd + 1 / (p * (1 - p)))
+    # delta method for z = atanh(r), r = d / sqrt(d^2 + a) with a = 1/(p*(1-p)):
+    # dz/dd = 1/sqrt(d^2 + a), so Var(z) = vd / (d^2 + a). The additive denominator
+    # term is the SQUARED point estimate d^2, NOT the sampling variance vd. This makes
+    # vz_lipsey the EXACT Fisher transform of vr_lipsey above (vz = vr/(1-r^2)^2).
+    # NB: esc::convert_d2r() returns vd/(vd + a) here, which is NOT Fisher-consistent
+    # with its own r variance; metaConvert intentionally uses the consistent value, so
+    # the lipsey_cooper z-SE differs from esc for large |d| (they agree as d -> 0).
+    vz_lipsey <- vd / (d^2 + 1 / (p * (1 - p)))
     r_lo_lipsey <- r_lipsey - qt(.975, df = n_exp + n_nexp - 2) * sqrt(vr_lipsey)
     r_up_lipsey <- r_lipsey + qt(.975, df = n_exp + n_nexp - 2) * sqrt(vr_lipsey)
     z_lo_lipsey <- z_lipsey - qnorm(.975) * sqrt(vz_lipsey)

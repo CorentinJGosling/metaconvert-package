@@ -1251,9 +1251,14 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 
   smd_list_L1 = list(es_cohen_d = es_cohen_d,
                 es_hedges_g = es_hedges_g)
-  or_list_L2 = list(es_odds_ratio = es_odds_ratio,
-                 es_odds_ratio_se = es_odds_ratio_se,
+  # Reported precision (a logOR SE, or a reported CI) outranks es_odds_ratio, whose SE
+  # is *simulated* from the cell marginals (es_from_or) and runs ~1.5x wide. When a study
+  # reports an OR together with a CI/SE AND has n_cases/n_controls, the reported interval
+  # is the more reliable source and must not be discarded for the marginal reconstruction.
+  # This also aligns the OR order with the RR list (es_rr_se, es_rr_ci first).
+  or_list_L2 = list(es_odds_ratio_se = es_odds_ratio_se,
                  es_odds_ratio_ci = es_odds_ratio_ci,
+                 es_odds_ratio = es_odds_ratio,
                  es_odds_ratio_pval = es_odds_ratio_pval,
                  es_logreg_t = es_logreg_t)
   rr_list_L3 = list(es_rr_se = es_rr_se,

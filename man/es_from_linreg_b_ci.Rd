@@ -59,7 +59,7 @@ into several effect size measures
 }
 \details{
 This function derives the standard error from the 95\% confidence interval using a
-t-distribution with \eqn{df = n\_sample - n\_covariates - 1} degrees of freedom:
+t-distribution with \eqn{df = n\_sample - n\_covariates - 2} degrees of freedom:
 \deqn{SE(b) = \frac{ci\_up - ci\_lo}{2 \times qt(.975, df)}}
 
 Then, calculations of the \code{\link{es_from_linreg_b_se}} function are applied.

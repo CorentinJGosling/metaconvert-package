@@ -31,6 +31,14 @@
 #' Note that NNT confidence intervals are set to NA when the RD confidence interval crosses zero
 #' (discontinuous CI; Altman, 1998).
 #'
+#' **Direction convention.** The risk difference is defined as \eqn{rd = pc - pt}
+#' (control risk minus exposed risk), so a POSITIVE RD means the control group has the
+#' higher risk. This is the OPPOSITE direction to the OR and RR produced from the same
+#' 2x2 table, which are exposed-over-non-exposed (an OR/RR \eqn{> 1} means the exposed
+#' group has the higher risk). Consequently, for the same table, a protective exposure
+#' yields \eqn{OR < 1}, \eqn{RR < 1} but \eqn{RD > 0}; keep this in mind when pooling RD
+#' alongside OR/RR, and use \code{reverse_2x2} if you need to align the directions.
+#'
 #' **To convert the 2x2 table into a SMD**,
 #' the function estimates an OR value from the 2x2 table (formula above)
 #' that is then converted to a SMD

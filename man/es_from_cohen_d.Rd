@@ -69,21 +69,32 @@ Note that this conversion assumes that responses within the two groups follow lo
 \strong{To estimate the correlation coefficient and its standard error}, various formulas can be used.
 
 \strong{A.} To estimate the 'biserial' correlation (\code{smd_to_cor="viechtbauer"}), the following formulas are used (formulas 5, 8, 13, 17, 18, 19 in Viechtbauer):
-\deqn{h = \frac{n\_exp + n\_nexp}{n\_exp} + \frac{n\_exp + n\_nexp}{n\_nexp}}
+\deqn{df = n\_exp + n\_nexp - 2 - n\_cov\_ancova}
+\deqn{h = \frac{df}{n\_exp} + \frac{df}{n\_nexp}}
 \deqn{r.pb = \frac{cohen\_d}{\sqrt{cohen\_d^2 + h}}}
 \deqn{p = \frac{n\_exp}{n\_exp + n\_nexp}}
 \deqn{q = 1 - p}
-\deqn{R = \frac{\sqrt{p*q}}{dnorm(qnorm(1-p)) * r.pb}}
-\deqn{R\_var = \frac{1}{n\_exp + n\_nexp - 1} * (\frac{\sqrt{p*q}}{dnorm(qnorm(1-p))} - R^2)^2}
+\deqn{f = dnorm(qnorm(1-p))}
+\deqn{R = \frac{\sqrt{p*q}}{f} * r.pb}
+\deqn{R\_var = \frac{1}{n\_exp + n\_nexp - 1} * (\frac{p*q}{f^2} - (\frac{3}{2} + (1 - \frac{p*qnorm(1-p)}{f})(1 + \frac{q*qnorm(1-p)}{f})) R^2 + R^4)}
 \deqn{R\_se = \sqrt{R\_var}}
-\deqn{a = \frac{\sqrt{dnorm(qnorm(1-p))}}{(p*q)^\frac{1}{4}}}
+\deqn{a = \frac{\sqrt{f}}{(p*q)^\frac{1}{4}}}
 \deqn{Z = \frac{a}{2} * \log(\frac{1+a*R}{1-a*R})}
 \deqn{Z\_var = \frac{1}{n - 1}}
 \deqn{Z\_se = \sqrt{Z\_var}}
 \deqn{Z\_ci\_lo = Z - qnorm(.975) * Z\_se}
 \deqn{Z\_ci\_up = Z + qnorm(.975) * Z\_se}
-\deqn{R\_ci\_lo = tanh(Z\_lo)}
-\deqn{R\_ci\_up = tanh(Z\_up)}
+\deqn{R\_ci\_lo = \frac{1}{a} * tanh(\frac{Z\_lo}{a})}
+\deqn{R\_ci\_up = \frac{1}{a} * tanh(\frac{Z\_up}{a})}
+
+Note: this \eqn{Z} is Jacobs & Viechtbauer's (2017) variance-stabilizing transform of the
+biserial correlation (with variance \eqn{1/(n-1)}), which is analogous to -- but NOT the
+same as -- Fisher's \eqn{atanh(R)} z-transform for a Pearson correlation (the two coincide
+only as the effect approaches 0). It is intended for constructing the confidence interval
+of a single coefficient. For a meta-analysis that mixes standardized-mean-difference and
+genuine-correlation studies, pool on the correlation (\eqn{R}) scale, where biserial and
+product-moment correlations are directly comparable (Jacobs & Viechtbauer, 2017), rather
+than on this \eqn{Z} scale (which summary() labels "Fisher's z" for all correlation inputs).
 
 \strong{B.} To estimate the correlation coefficient according to Cooper et al. (2019) (formulas 12.40-42)
 and Borenstein et al. (2009) (formulas 54-56),
@@ -96,7 +107,7 @@ the following formulas are used (\code{smd_to_cor="lipsey_cooper"}):
 \deqn{R\_ci\_lo = R - qt(.975, n\_exp+n\_nexp- 2) * R\_se}
 \deqn{R\_ci\_up = R + qt(.975, n\_exp+n\_nexp- 2) * R\_se}
 \deqn{Z = atanh(R)}
-\deqn{Z\_var = \frac{cohen\_d\_se^2}{cohen\_d\_se^2 + (1 / p*(1-p))}}
+\deqn{Z\_var = \frac{cohen\_d\_se^2}{cohen\_d^2 + (1 / p*(1-p))}}
 \deqn{Z\_se = \sqrt{Z\_var}}
 \deqn{Z\_ci\_lo = Z - qnorm(.975) * Z\_se}
 \deqn{Z\_ci\_up = Z + qnorm(.975) * Z\_se}

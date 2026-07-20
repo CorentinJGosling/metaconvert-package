@@ -68,8 +68,8 @@ were then used to obtain the variance.
 This argument requires (rr + baseline_risk + rr_ci_lo + rr_ci_up) to generate a RR.
 The following formulas are used (br = baseline_risk):
 \deqn{or = \frac{rr * (1 - br)}{1 - rr * br}}
-\deqn{or\_ci\_lo = \frac{rr\_ci\_lo}{1 - br + br*rr\_ci\_lo}}
-\deqn{or\_ci\_up = \frac{rr\_ci\_up}{1 - br + br*rr\_ci\_up}}
+\deqn{or\_ci\_lo = \frac{rr\_ci\_lo * (1 - br)}{1 - rr\_ci\_lo * br}}
+\deqn{or\_ci\_up = \frac{rr\_ci\_up * (1 - br)}{1 - rr\_ci\_up * br}}
 \deqn{logor\_se = \frac{log(or\_ci\_up) - log(or\_ci\_lo)}{2 * qnorm(.975)}}
 
 \strong{B.} Second, the formulas implemented in the metaumbrella package can be used (\code{or_to_rr = "metaumbrella_exp"}).

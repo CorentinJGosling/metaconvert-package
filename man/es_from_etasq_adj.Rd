@@ -16,7 +16,15 @@ es_from_etasq_adj(
 )
 }
 \arguments{
-\item{etasq_adj}{an adjusted eta-squared value (i.e., obtained from an ANCOVA model)}
+\item{etasq_adj}{an adjusted eta-squared value obtained from an ANCOVA model. This
+must be the \strong{partial} eta-squared of the group effect,
+\eqn{\eta_p^2 = SS_{group} / (SS_{group} + SS_{error})} — the quantity that
+most software (SPSS, \code{car}, \code{effectsize}) prints for an ANCOVA term.
+Do \strong{not} supply the classical eta-squared \eqn{SS_{group} / SS_{total}}: in an
+ANCOVA the total sum of squares also contains the covariate variance, so the
+classical value is smaller than the partial one and would be inverted into too
+small an F, biasing the effect size toward zero. (In a covariate-free one-way
+ANOVA the two definitions coincide; see \code{\link{es_from_etasq}()}.)}
 
 \item{n_exp}{number of participants in the experimental/exposed group.}
 
@@ -59,7 +67,8 @@ SD scale on which a partial eta-squared is natively defined.
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
 \strong{To convert the adjusted eta-squared into an ANCOVA F-statistic},
-the following formula is used:
+the partial-eta-squared identity \eqn{\eta_p^2 = F / (F + df)} is inverted
+(this is why a \emph{partial} eta-squared, not a classical one, is required):
 \deqn{df = n\_exp + n\_nexp - 2 - n\_cov\_ancova}
 \deqn{ancova\_f = \frac{etasq\_adj * df}{1 - etasq\_adj}}
 
@@ -74,9 +83,20 @@ eta-squared alone).
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
+\note{
+Two cautions apply. (1) \code{etasq_adj} must be the \emph{partial} eta-squared (see
+the parameter description); a classical eta-squared biases the effect size
+toward zero. (2) The sampling variance is rebuilt from Cooper's eq. 12.26, which
+assumes a covariate balanced across groups and treats \code{cov_outcome_r} as
+known; in covariate-imbalanced designs the standard error is a lower bound
+(anti-conservative), while the point estimate remains unbiased. See Lai and
+Kelley (2012).
+}
 \examples{
 es_from_etasq_adj(etasq_adj = 0.28, n_cov_ancova = 3, cov_outcome_r = 0.2, n_exp = 20, n_nexp = 22)
 }
 \references{
 Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Lai, K., & Kelley, K. (2012). Accuracy in parameter estimation for ANCOVA and ANOVA contrasts: Sample size planning via narrow confidence intervals. British Journal of Mathematical and Statistical Psychology, 65(2), 350-370.
 }

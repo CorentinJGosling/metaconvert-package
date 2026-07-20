@@ -61,7 +61,7 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 
 \strong{To estimate a Cohen's d} the following formulas are used (formulas 12.10-12.18 in Cooper):
 \deqn{cohen\_d =  \frac{mean\_exp - mean\_nexp}{means\_sd\_pooled}}
-\deqn{cohen\_d\_se = \frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}
+\deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 \deqn{cohen\_d\_ci\_up = cohen\_d + cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 

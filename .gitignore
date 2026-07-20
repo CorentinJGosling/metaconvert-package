@@ -15,6 +15,10 @@ inst/doc
 .vscode/
 CLAUDE.md
 
+# AI / development audit artifacts (kept locally, not versioned)
+audit/
+CRAN-SUBMISSION
+
 # Documentation and Config
 cran-comments.md
 IMPORTANT_FILES

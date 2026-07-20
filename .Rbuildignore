@@ -10,7 +10,6 @@
 ^README\.Rmd$
 ^tests_save$
 ^SUMMARY_TESTS\.xlsx$
-^$SUMMARY_TESTS\.xlsx$
 ^doc$
 ^Meta$
 ^IMPORTANT_FILES$
@@ -20,13 +19,15 @@
 ^CLAUDE\.md$
 ^\.vscode$
 ^\.git$
+^\.github$
 ^\.gitignore$
 ^\.Rhistory$
 ^\.RData$
 ^\.Rd2pdf.*$
 ^revdep$
 ^CRAN-SUBMISSION$
-^AUDIT-.*\.md$
+^audit$
+^AUDIT[-_].*\.md$
 ^HANDOFF-.*\.md$
 ^VERDICT-.*\.md$
 ^.*\.stackdump$

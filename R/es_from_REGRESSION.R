@@ -247,8 +247,17 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
 
   df <- n_sample - n_covariates - 2
 
-  if (any(df <= 0, na.rm = TRUE)) {
-    stop("Degrees of freedom must be positive. Check n_sample and n_covariates.")
+  # A non-positive residual df makes the partial correlation undefined for THAT row.
+  # convert_df() calls this function on the whole column, so a hard stop() would abort
+  # the entire run because of one bad cell (violating the package's "one bad cell cannot
+  # abort a convert_df() run" convention). NA the offending rows and warn instead, so the
+  # valid rows still compute -- mirroring the sibling es_from_beta_unstd().
+  n_bad <- sum(df <= 0, na.rm = TRUE)
+  if (n_bad > 0) {
+    warning(sprintf(
+      "es_from_linreg_t: %d row(s) had a non-positive residual df (n_sample - n_covariates - 2 <= 0); their effect sizes were set to NA.",
+      n_bad), call. = FALSE)
+    df[!is.na(df) & df <= 0] <- NA_real_
   }
 
   rp <- linreg_t / sqrt(linreg_t^2 + df)
@@ -422,7 +431,7 @@ es_from_linreg_b_se <- function(linreg_b, linreg_b_se, n_sample, n_covariates,
 #'
 #' @details
 #' This function derives the standard error from the 95% confidence interval using a
-#' t-distribution with \eqn{df = n\_sample - n\_covariates - 1} degrees of freedom:
+#' t-distribution with \eqn{df = n\_sample - n\_covariates - 2} degrees of freedom:
 #' \deqn{SE(b) = \frac{ci\_up - ci\_lo}{2 \times qt(.975, df)}}
 #'
 #' Then, calculations of the \code{\link{es_from_linreg_b_se}} function are applied.
@@ -501,7 +510,7 @@ es_from_linreg_b_ci <- function(linreg_b, linreg_b_ci_lo, linreg_b_ci_up,
 #' @details
 #' This function recovers the t-statistic from the two-sided p-value:
 #' \deqn{t = qt(1 - pval/2, df) \times sign(b)}
-#' where \eqn{df = n\_sample - n\_covariates - 1}.
+#' where \eqn{df = n\_sample - n\_covariates - 2}.
 #'
 #' The sign of the regression coefficient gives the direction, which the two-tailed
 #' p-value does not carry.

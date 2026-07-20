@@ -120,6 +120,15 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
   d_var_exp <- ifelse(dz, d_var_exp_dz, d_var_exp_drm)
   d_var_nexp <- ifelse(dz, d_var_nexp_dz, d_var_nexp_drm)
 
+  # A within-subject arm needs n >= 2 to have any estimable variance. The morris_drm
+  # branch carries no J(n-1) factor, so unlike morris_dz it stays finite at n = 1 (and
+  # blows up to Inf at n = 0), leaking a spurious d/g/logOR/r downstream. NA such arms
+  # so this route matches the mean-change route (which NAs via the n >= 2 kernel guard).
+  bad_exp <- !(is.finite(n_exp) & n_exp >= 2)
+  bad_nexp <- !(is.finite(n_nexp) & n_nexp >= 2)
+  d_exp[bad_exp] <- NA_real_; d_var_exp[bad_exp] <- NA_real_
+  d_nexp[bad_nexp] <- NA_real_; d_var_nexp[bad_nexp] <- NA_real_
+
   g_exp <- J_exp * d_exp
   g_nexp <- J_nexp * d_nexp
 

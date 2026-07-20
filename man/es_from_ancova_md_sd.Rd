@@ -70,10 +70,24 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \strong{To estimate other effect size measures},
 Calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
+\note{
+The standardized effect size variance assumes the covariate is balanced across
+groups (Cooper eq. 12.26) and treats \code{cov_outcome_r} as known; it omits the
+covariate-imbalance ("leverage") term of the exact ANCOVA variance, which cannot
+be recovered from summary statistics. In observational or otherwise
+covariate-imbalanced designs the standard error is therefore a lower bound
+(anti-conservative), while the point estimate remains unbiased. See Lai and
+Kelley (2012).
+}
 \examples{
 es_from_ancova_md_sd(
   ancova_md = 4, ancova_md_sd = 2,
   cov_outcome_r = 0.5, n_cov_ancova = 5,
   n_exp = 20, n_nexp = 22
 )
+}
+\references{
+Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Lai, K., & Kelley, K. (2012). Accuracy in parameter estimation for ANCOVA and ANOVA contrasts: Sample size planning via narrow confidence intervals. British Journal of Mathematical and Statistical Psychology, 65(2), 350-370.
 }

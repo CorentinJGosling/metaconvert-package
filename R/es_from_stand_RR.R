@@ -25,8 +25,8 @@
 #' This argument requires (rr + baseline_risk + rr_ci_lo + rr_ci_up) to generate a RR.
 #' The following formulas are used (br = baseline_risk):
 #' \deqn{or = \frac{rr * (1 - br)}{1 - rr * br}}
-#' \deqn{or\_ci\_lo = \frac{rr\_ci\_lo}{1 - br + br*rr\_ci\_lo}}
-#' \deqn{or\_ci\_up = \frac{rr\_ci\_up}{1 - br + br*rr\_ci\_up}}
+#' \deqn{or\_ci\_lo = \frac{rr\_ci\_lo * (1 - br)}{1 - rr\_ci\_lo * br}}
+#' \deqn{or\_ci\_up = \frac{rr\_ci\_up * (1 - br)}{1 - rr\_ci\_up * br}}
 #' \deqn{logor\_se = \frac{log(or\_ci\_up) - log(or\_ci\_lo)}{2 * qnorm(.975)}}
 #'
 #' **B.** Second, the formulas implemented in the metaumbrella package can be used (\code{or_to_rr = "metaumbrella_exp"}).
@@ -163,8 +163,11 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
 
     es$logor[nn_miss] <- ifelse(reverse_rr[nn_miss], -res_or[, 1], res_or[, 1])
     es$logor_se[nn_miss] <- res_or[, 2]
-    es$logor_ci_lo[nn_miss] <- ifelse(reverse_rr[nn_miss], res_or[, 4], res_or[, 3])
-    es$logor_ci_up[nn_miss] <- ifelse(reverse_rr[nn_miss], res_or[, 3], res_or[, 4])
+    # On reverse the point estimate is negated, so the (symmetric, log-scale) CI must be
+    # NEGATED AND SWAPPED: new_lo = -old_up, new_up = -old_lo. Swapping alone left a
+    # wrong-signed, inverted interval (lo > up) that did not bracket the reversed estimate.
+    es$logor_ci_lo[nn_miss] <- ifelse(reverse_rr[nn_miss], -res_or[, 4], res_or[, 3])
+    es$logor_ci_up[nn_miss] <- ifelse(reverse_rr[nn_miss], -res_or[, 3], res_or[, 4])
   }
 
   # Risk difference from RR + baseline_risk
@@ -369,8 +372,12 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
   reverse_rr_pval[is.na(reverse_rr_pval)] <- FALSE
 
   rr <- ifelse(is.na(rr) & !is.na(logrr), exp(logrr), rr)
-  z_rr <- sign(log(rr)) * qnorm(rr_pval / 2, lower.tail = FALSE)
-  logrr_se <- log(rr) / z_rr
+  # Mirror es_from_or_pval: take the positive critical value and the absolute
+  # magnitude, so rr == 1 (log(rr) = 0) gives logrr_se = 0 (finite) rather than the
+  # 0/0 = NaN produced by the earlier sign(log(rr)) denominator. The direction of the
+  # effect is carried by rr itself, so the SE only needs its magnitude.
+  z_rr <- qnorm(rr_pval / 2, lower.tail = FALSE)
+  logrr_se <- abs(log(rr) / z_rr)
 
   es <- es_from_rr_se(
     rr = rr, logrr_se = logrr_se, n_cases = n_cases,

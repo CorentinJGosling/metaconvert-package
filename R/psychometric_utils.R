@@ -215,10 +215,10 @@ compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
   # - external icc_se: df unknown, keep the truncated Wald interval.
   same_sample <- is.na(icc_se)
   sem_ci_lo <- ifelse(same_sample,
-                      sem * sqrt(df_sem / qchisq(0.975, df_sem)),
+                      sem * sqrt(df_sem / stats::qchisq(0.975, df_sem)),
                       pmax(0, sem - qnorm(0.975) * sem_se))
   sem_ci_up <- ifelse(same_sample,
-                      sem * sqrt(df_sem / qchisq(0.025, df_sem)),
+                      sem * sqrt(df_sem / stats::qchisq(0.025, df_sem)),
                       sem + qnorm(0.975) * sem_se)
 
   result <- data.frame(

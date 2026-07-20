@@ -59,9 +59,20 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \strong{To estimate other effect size measures},
 Calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
+\note{
+The Cohen's d point estimate is recovered from the reported ANCOVA t (which
+already embeds the covariate adjustment), but its sampling variance is rebuilt
+from Cooper's eq. 12.26, which assumes a covariate balanced across groups and
+treats \code{cov_outcome_r} as known. In observational or otherwise
+covariate-imbalanced designs the standard error is a lower bound
+(anti-conservative), while the point estimate remains unbiased. See Lai and
+Kelley (2012).
+}
 \examples{
 es_from_ancova_t(ancova_t = 2, cov_outcome_r = 0.2, n_cov_ancova = 3, n_exp = 20, n_nexp = 20)
 }
 \references{
 Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+
+Lai, K., & Kelley, K. (2012). Accuracy in parameter estimation for ANCOVA and ANOVA contrasts: Sample size planning via narrow confidence intervals. British Journal of Mathematical and Statistical Psychology, 65(2), 350-370.
 }

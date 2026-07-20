@@ -310,8 +310,10 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
     res_rr$logrr_ci_up = unlist(res_rr$logrr_ci_up)
     es$logrr[nn_miss] <- ifelse(reverse_or[nn_miss], -res_rr[, 1], res_rr[, 1])
     es$logrr_se[nn_miss] <- res_rr[, 2]
-    es$logrr_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], res_rr[, 4], res_rr[, 3])
-    es$logrr_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], res_rr[, 3], res_rr[, 4])
+    # On reverse: negate AND swap the CI bounds (new_lo = -old_up, new_up = -old_lo);
+    # swapping alone left a wrong-signed, inverted interval that did not bracket -logrr.
+    es$logrr_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -res_rr[, 4], res_rr[, 3])
+    es$logrr_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -res_rr[, 3], res_rr[, 4])
   }
 
   # COR -------
@@ -346,14 +348,17 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
       or_to_cor = dat_cor$or_to_cor[nn_miss]
     ))
 
-    es$r[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 1], res_cor[, 1]) # res_cor[, 1]
+    # On reverse: negate AND swap each CI (new_lo = -old_up, new_up = -old_lo). For r,
+    # tanh is odd so negate-and-swap of the r bounds is correct even for the asymmetric,
+    # z-back-transformed r interval. Swapping alone left inverted, wrong-signed bounds.
+    es$r[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 1], res_cor[, 1])
     es$r_se[nn_miss] <- res_cor[, 2]
-    es$r_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], res_cor[, 4], res_cor[, 3]) # res_cor[, 3]
-    es$r_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], res_cor[, 3], res_cor[, 4])
-    es$z[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 5], res_cor[, 5]) # res_cor[, 5]
+    es$r_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 4], res_cor[, 3])
+    es$r_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 3], res_cor[, 4])
+    es$z[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 5], res_cor[, 5])
     es$z_se[nn_miss] <- res_cor[, 6]
-    es$z_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], res_cor[, 8], res_cor[, 7]) # res_cor[, 7]
-    es$z_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], res_cor[, 7], res_cor[, 8]) # res_cor[, 8]
+    es$z_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 8], res_cor[, 7])
+    es$z_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 7], res_cor[, 8])
   }
 
   # Risk difference from OR + baseline_risk (Grant 2014)

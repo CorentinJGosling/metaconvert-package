@@ -839,6 +839,14 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
   d <- ifelse(dz, d_dz, d_drm)
   d_var <- ifelse(dz, d_var_dz, d_var_drm)
 
+  # A single paired observation (n < 2) has no estimable within-subject variance. The
+  # morris_drm branch carries no J(n-1) factor, so it stays finite at n = 1 (and Inf at
+  # n = 0), leaking a spurious d/g/logOR/r (and an impossible |r| > 1) downstream. NA
+  # such rows so this route matches the mean-change route (which NAs via its n >= 2
+  # kernel guard); the qt(.975, n-1) CI is already NaN there.
+  bad_n <- !(is.finite(n_exp) & n_exp >= 2)
+  d[bad_n] <- NA_real_; d_var[bad_n] <- NA_real_
+
   d_se <- sqrt(d_var)
 
   d_ci_lo <- d - qt(0.975, n_exp - 1) * d_se

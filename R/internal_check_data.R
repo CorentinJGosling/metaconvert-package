@@ -209,7 +209,9 @@
   expected_cols_type[grepl("discard", expected_cols, fixed = TRUE)] <- "logical"
 
   expected_cols_type[which(expected_cols == "cov_outcome_r")] <- "numeric"
-  # n_measurements/n_items would otherwise match "measure" grepl and be set to "char"
+  # n_measurements contains "measure", so the grepl above would otherwise type it "char";
+  # force it numeric. n_items does NOT match any char-triggering grepl, so its override
+  # is a harmless belt-and-braces guard (kept for symmetry).
   expected_cols_type[which(expected_cols == "n_measurements")] <- "numeric"
   expected_cols_type[which(expected_cols == "n_items")] <- "numeric"
   expected_cols_type[which(expected_cols == "pool_side")] <- "char"
@@ -226,7 +228,15 @@
     column_errors <- column_errors[-removed_rows]
     column_type_errors <- column_type_errors[-removed_rows]
     x <- subset(x, !discard %in% c("yes", "Yes", "remove", "removed", "TRUE", TRUE))
-    situation <- situation[-removed_rows]
+    # NB: a stray `situation <- situation[-removed_rows]` was removed here. `situation`
+    # was never defined anywhere in this function, so any truthy value in the documented
+    # `discard` column aborted the whole convert_df() run with "object 'situation' not
+    # found". The actual row removal is performed by the subset() call above.
+    # row_id was assigned as 1:nrow() before the discard drop, so it is now
+    # non-contiguous (e.g. c(1, 3)). Downstream code (the dispersion merge in
+    # .generate_df) requires row_id == seq_len(nrow(x)); re-sequence it here so the
+    # retained rows are renumbered and the invariant holds.
+    x$row_id <- seq_len(nrow(x))
   }
 
   # set as NA columns not included in the dataset

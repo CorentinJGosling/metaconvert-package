@@ -142,7 +142,12 @@
 
   some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
   var_sim <- ifelse(some_zero,
-    1 / ((n_exp + 1) - (n_controls_exp_sim + 0.5) + 1 / (n_controls_exp_sim + 0.5) + 1 / ((n_nexp + 1) - (n_controls_nexp_sim + 0.5)) + 1 / (n_controls_nexp_sim + 0.5)),
+    # Continuity-corrected log-OR variance is a SUM of four reciprocals. Kept bit-for-bit
+    # in sync with the live copy in internal_multiple_formulas.R (this file's definition is
+    # shadowed by that one under the current source order); the missing ')' after the first
+    # term previously folded the whole sum into a single denominator -- fixed so a load-order
+    # change cannot reactivate the wrong formula (mirrors the .estimate_n_from_rr twin policy).
+    1 / ((n_exp + 1) - (n_controls_exp_sim + 0.5)) + 1 / (n_controls_exp_sim + 0.5) + 1 / ((n_nexp + 1) - (n_controls_nexp_sim + 0.5)) + 1 / (n_controls_nexp_sim + 0.5),
     1 / (n_exp - n_controls_exp_sim) + 1 / n_controls_exp_sim + 1 / (n_nexp - n_controls_nexp_sim) + 1 / n_controls_nexp_sim
   )
 
@@ -200,15 +205,17 @@
   n_cases_exp_sim <- append(n_cases_exp_sim1, n_cases_exp_sim2)
 
   some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
+  # var(log RR) = 1/a - 1/n1 + 1/c - 1/n2 (arm totals SUBTRACTED); mirrors the fixed
+  # live copy .metaumbrella_rr_se_to_or in R/internal_multiple_formulas.R. This helper
+  # is currently unused, but is kept in sync so a future load-order change cannot
+  # silently reintroduce the added-sign bug. (Also drops the old unconditional
+  # var_sim overwrite that had discarded the continuity-corrected branch.)
   var_sim <- ifelse(some_zero,
-    1 / ((n_cases + 1) - (n_cases_nexp_sim + 0.5)) + 1 / ((n_cases + 1) + (n_controls + 1) - ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5))) +
-      1 / (n_cases_nexp_sim + 0.5) + 1 / ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5)),
-    1 / (n_cases - n_cases_nexp_sim) + 1 / (n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim)) +
-      1 / n_cases_nexp_sim + 1 / (n_cases_nexp_sim + n_controls_nexp_sim)
+    1 / ((n_cases + 1) - (n_cases_nexp_sim + 0.5)) - 1 / ((n_cases + 1) + (n_controls + 1) - ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5))) +
+      1 / (n_cases_nexp_sim + 0.5) - 1 / ((n_cases_nexp_sim + 0.5) + (n_controls_nexp_sim + 0.5)),
+    1 / (n_cases - n_cases_nexp_sim) - 1 / (n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim)) +
+      1 / n_cases_nexp_sim - 1 / (n_cases_nexp_sim + n_controls_nexp_sim)
   )
-
-  var_sim <- 1 / (n_cases - n_cases_nexp_sim) + 1 / (n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim)) +
-    1 / n_cases_nexp_sim + 1 / (n_cases_nexp_sim + n_controls_nexp_sim)
 
   best <- order((var_sim - var)^2)[1]
   n_cases_nexp <- n_cases_nexp_sim[best]

@@ -58,8 +58,8 @@ The formulas used to obtain the log CVR are (formulas 6 and 16, Senior et al. 20
 \deqn{cvt = mean\_sd\_exp / mean\_exp}
 \deqn{cvc = mean\_sd\_nexp / mean\_nexp}
 \deqn{logcvr = log(\frac{cvt}{cvc}) + \frac{1}{2} * (\frac{1}{n\_exp - 1} - \frac{1}{n\_nexp - 1}) + \frac{1}{2} * (\frac{mean\_sd\_nexp^2}{n\_nexp * mean\_nexp^2} - \frac{mean\_sd\_exp^2}{n\_exp * mean\_exp^2})}
-\deqn{vt\_exp = \frac{mean\_sd\_exp^2}{n\_exp * mean\_exp^2} + \frac{mean\_sd\_exp^4}{2 * n\_exp^2 * mean\_exp^4} + \frac{n\_exp}{(n\_exp - 1)^2}}
-\deqn{vt\_nexp = \frac{mean\_sd\_nexp^2}{n\_nexp * mean\_nexp^2} + \frac{mean\_sd\_nexp^4}{2 * n\_nexp^2 * mean\_nexp^4} + \frac{n\_nexp}{(n\_nexp - 1)^2}}
+\deqn{vt\_exp = \frac{mean\_sd\_exp^2}{n\_exp * mean\_exp^2} + \frac{mean\_sd\_exp^4}{2 * n\_exp^2 * mean\_exp^4} + \frac{n\_exp}{2 * (n\_exp - 1)^2}}
+\deqn{vt\_nexp = \frac{mean\_sd\_nexp^2}{n\_nexp * mean\_nexp^2} + \frac{mean\_sd\_nexp^4}{2 * n\_nexp^2 * mean\_nexp^4} + \frac{n\_nexp}{2 * (n\_nexp - 1)^2}}
 \deqn{logcvr\_se = \sqrt{vt\_exp + vt\_nexp}}
 \deqn{logcvr\_ci\_lo = logcvr - qnorm(.975) * logcvr\_se}
 \deqn{logcvr\_ci\_up = logcvr + qnorm(.975) * logcvr\_se}

@@ -644,6 +644,15 @@
     return(c("cronbach_alpha", "user_input_crude"))
   } else if (measure == "icc") {
     return(c("icc", "user_input_crude"))
+  } else if (measure %in% c("hr", "loghr")) {
+    # HR needs per-subject time-to-event data the wide extraction sheet cannot hold,
+    # so convert_df() runs ONLY the user-input methods (hierarchy c(USER_crude,
+    # USER_adjusted)). Without this case HR fell through to the switch default and
+    # guidance offered ~55 means/SD/variability methods that can never yield a hazard
+    # ratio. Respect the crude/adjusted split so es_guidance_crude/_adjusted are right.
+    if (suffix == "_crude") return("user_input_crude")
+    if (suffix == "_adjusted") return("user_input_adj")
+    return(c("user_input_crude", "user_input_adj"))
   } else if (measure %in% c("rp", "zp")) {
     return(c(partial_cor, "user_input_crude"))
   }

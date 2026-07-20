@@ -21,8 +21,8 @@
 #' \deqn{cvt = mean\_sd\_exp / mean\_exp}
 #' \deqn{cvc = mean\_sd\_nexp / mean\_nexp}
 #' \deqn{logcvr = log(\frac{cvt}{cvc}) + \frac{1}{2} * (\frac{1}{n\_exp - 1} - \frac{1}{n\_nexp - 1}) + \frac{1}{2} * (\frac{mean\_sd\_nexp^2}{n\_nexp * mean\_nexp^2} - \frac{mean\_sd\_exp^2}{n\_exp * mean\_exp^2})}
-#' \deqn{vt\_exp = \frac{mean\_sd\_exp^2}{n\_exp * mean\_exp^2} + \frac{mean\_sd\_exp^4}{2 * n\_exp^2 * mean\_exp^4} + \frac{n\_exp}{(n\_exp - 1)^2}}
-#' \deqn{vt\_nexp = \frac{mean\_sd\_nexp^2}{n\_nexp * mean\_nexp^2} + \frac{mean\_sd\_nexp^4}{2 * n\_nexp^2 * mean\_nexp^4} + \frac{n\_nexp}{(n\_nexp - 1)^2}}
+#' \deqn{vt\_exp = \frac{mean\_sd\_exp^2}{n\_exp * mean\_exp^2} + \frac{mean\_sd\_exp^4}{2 * n\_exp^2 * mean\_exp^4} + \frac{n\_exp}{2 * (n\_exp - 1)^2}}
+#' \deqn{vt\_nexp = \frac{mean\_sd\_nexp^2}{n\_nexp * mean\_nexp^2} + \frac{mean\_sd\_nexp^4}{2 * n\_nexp^2 * mean\_nexp^4} + \frac{n\_nexp}{2 * (n\_nexp - 1)^2}}
 #' \deqn{logcvr\_se = \sqrt{vt\_exp + vt\_nexp}}
 #' \deqn{logcvr\_ci\_lo = logcvr - qnorm(.975) * logcvr\_se}
 #' \deqn{logcvr\_ci\_up = logcvr + qnorm(.975) * logcvr\_se}
@@ -75,14 +75,18 @@ es_variab_from_means_sd <- function(mean_exp, mean_nexp, mean_sd_exp, mean_sd_ne
   )
   es$logcvr <- ifelse(reverse_means_variability, -logcvr, logcvr)
 
-  # s2IND2 (equation 16) Nakagawa 202
+  # s2IND2 (equation 16) Senior et al. 2020.
+  # NB: the Var(ln s) term carries a 1/2 factor -- Var(ln s) ~= trigamma((n-1)/2)/4
+  # ~= 0.5 * n/(n-1)^2 for a normal sample -- and the SAME quantity in logvr_se below is
+  # correctly written 1/2 * n/(n-1)^2. Without the 1/2 the lnCVR variance is ~2x too
+  # large (SE ~40% too wide, inverse-variance weights ~2x off).
   es$logcvr_se <- sqrt(
     mean_sd_exp^2 / (n_exp * mean_exp^2) +
     mean_sd_exp^4 / (2 * n_exp^2 * mean_exp^4) +
-    n_exp / ((n_exp - 1)^2) +
+    0.5 * n_exp / ((n_exp - 1)^2) +
     mean_sd_nexp^2 / (n_nexp * mean_nexp^2) +
     mean_sd_nexp^4 / (2 * n_nexp^2 * mean_nexp^4) +
-    n_nexp / ((n_nexp - 1)^2))
+    0.5 * n_nexp / ((n_nexp - 1)^2))
 
   es$logcvr_ci_lo <- es$logcvr - qnorm(.975) * es$logcvr_se
   es$logcvr_ci_up <- es$logcvr + qnorm(.975) * es$logcvr_se
@@ -112,9 +116,10 @@ es_variab_from_means_sd <- function(mean_exp, mean_nexp, mean_sd_exp, mean_sd_ne
 #' @param reverse_means_variability a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
-#' This function converts the standard errors into standard deviations.
-#' \deqn{mean\_sd\_exp = mean\_se\_exp * \sqrt{n\_exp - 1}}
-#' \deqn{mean\_sd\_nexp = mean\_se\_nexp * \sqrt{n\_nexp - 1}}
+#' This function converts the standard errors into standard deviations
+#' (\eqn{SE = SD / \sqrt{n}}, so \eqn{SD = SE \times \sqrt{n}}).
+#' \deqn{mean\_sd\_exp = mean\_se\_exp * \sqrt{n\_exp}}
+#' \deqn{mean\_sd\_nexp = mean\_se\_nexp * \sqrt{n\_nexp}}
 #'
 #' Then, calculations of the \code{\link{es_variab_from_means_sd}} are applied.
 #'

@@ -487,6 +487,17 @@ aggregate_df <- function(x, dependence = "outcomes", cor_unit = 0.8,
   if (na.rm) {
     x <- x[!is.na(x$es) & !is.na(x$se), , drop = FALSE]
   }
+  # A non-positive or non-finite SE cannot enter inverse-variance weighting: 1/se^2
+  # becomes Inf/NaN, which turns the combined estimate into Inf/Inf = NaN paired with
+  # se = 0 (an incoherent result). Drop such rows -- se = 0 is itself pathological and
+  # is flagged upstream by the Tier-2 'SE is zero' check -- and warn so it is visible.
+  bad_se <- !is.finite(x$se) | x$se <= 0
+  if (any(bad_se)) {
+    warning(sprintf(
+      "aggregate_df: dropped %d effect size(s) with a non-positive/non-finite SE from a subgroup cluster before inverse-variance combination.",
+      sum(bad_se)))
+    x <- x[!bad_se, , drop = FALSE]
+  }
   if (nrow(x) == 0) {
     return(data.frame(es = NA_real_, se = NA_real_, row_index = row_index))
   }

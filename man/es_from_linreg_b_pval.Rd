@@ -57,7 +57,7 @@ into several effect size measures
 \details{
 This function recovers the t-statistic from the two-sided p-value:
 \deqn{t = qt(1 - pval/2, df) \times sign(b)}
-where \eqn{df = n\_sample - n\_covariates - 1}.
+where \eqn{df = n\_sample - n\_covariates - 2}.
 
 The sign of the regression coefficient gives the direction, which the two-tailed
 p-value does not carry.

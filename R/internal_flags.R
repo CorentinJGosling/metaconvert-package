@@ -243,6 +243,10 @@
     list(col = "prop",            lo = 0, up = 1, label = "proportion"),
     list(col = "pearson_r",       lo = -1, up = 1, label = "correlation"),
     list(col = "spearman_r",      lo = -1, up = 1, label = "correlation"),
+    # phi is a 2x2 correlation coefficient in [-1, 1]; an out-of-range value
+    # otherwise reaches metafor::conv.2x2(), which raises a HARD ERROR that would
+    # abort the whole convert_df() run (violating the one-bad-cell-cannot-abort rule)
+    list(col = "phi",             lo = -1, up = 1, label = "phi (correlation)"),
     # p-values must be in [0, 1]
     list(col = "student_t_pval",        lo = 0, up = 1, label = "p-value"),
     list(col = "anova_f_pval",          lo = 0, up = 1, label = "p-value"),
@@ -295,6 +299,35 @@
     }
   }
 
+  # V32: eta-squared must lie in [0, 1). A value >= 1 makes the Cohen's d
+  # conversion diverge -- d = 2*sqrt(eta2 / (1 - eta2)) for a raw eta-squared,
+  # and the implied ANCOVA F = eta2 * df / (1 - eta2) for an adjusted one -- so
+  # such a row is set to missing (correct_inputs = TRUE) or flagged (FALSE).
+  # Negatives are already caught by the non-negative-column check above. A
+  # large-but-valid eta-squared that implies a huge SMD is surfaced downstream
+  # by the post-computation Large-SMD check, so no separate plausibility tier is
+  # added here.
+  for (col in c("etasq", "etasq_adj")) {
+    if (!col %in% colnames(x)) next
+    vals <- x[[col]]
+    bad <- which(!is.na(vals) & vals >= 1)
+    if (length(bad) == 0) next
+    if (correct_inputs) {
+      x[[col]][bad] <- NA_real_
+      for (i in bad) {
+        row_issues[[i]] <- c(row_issues[[i]],
+          sprintf("[INVALID] Out-of-range eta-squared: '%s' = %g (valid: [0, 1)), set to missing",
+                  col, vals[i]))
+      }
+    } else {
+      for (i in bad) {
+        row_issues[[i]] <- c(row_issues[[i]],
+          sprintf("[INVALID] Out-of-range eta-squared: '%s' = %g (valid: [0, 1))",
+                  col, vals[i]))
+      }
+    }
+  }
+
   # V25: negative alpha/icc kept, warn only
   for (rel in list(c("cronbach_alpha", "alpha"), c("icc", "ICC"))) {
     if (!rel[1] %in% colnames(x)) next
@@ -331,8 +364,15 @@
     if (!all(c(tri$val, tri$lo, tri$up) %in% colnames(x))) next
     val <- x[[tri$val]]; lo <- x[[tri$lo]]; up <- x[[tri$up]]
 
-    # V2: Inverted CI (lo > up)
-    inverted <- which(!is.na(lo) & !is.na(up) & lo > up)
+    # V2: Inverted CI (lo > up) -- rounding-aware: only flag when the inversion
+    # exceeds the combined rounding error of the two bounds (mirrors V4/V28), so a
+    # borderline pair like lo = 0.15, up = 0.14 reported at different precisions is
+    # preserved rather than destroyed.
+    both_lu <- which(!is.na(lo) & !is.na(up) & lo > up)
+    inverted <- both_lu[vapply(both_lu, function(i) {
+      pad <- 0.5 * 10^(-.count_decimals(lo[i])) + 0.5 * 10^(-.count_decimals(up[i]))
+      lo[i] > up[i] + pad
+    }, logical(1))]
     if (length(inverted) > 0) {
       if (correct_inputs) {
         x[[tri$val]][inverted] <- NA_real_
@@ -351,10 +391,21 @@
       }
     }
 
-    # V3: Value outside CI (re-read after V2 cleanup)
+    # V3: Value outside CI (re-read after V2 cleanup) -- rounding-aware. The point
+    # value and the CI bounds may be reported to different decimal precisions, so a
+    # value that merely rounds to a bound (e.g. md = 0.1 [1 dp] vs lo = 0.15 [2 dp],
+    # both consistent with a true md in [0.145, 0.155)) must NOT be destroyed. Flag
+    # (and, under correct_inputs, NA) only when the value lies outside by more than
+    # the combined rounding error of the value and the offending bound.
     val <- x[[tri$val]]; lo <- x[[tri$lo]]; up <- x[[tri$up]]
-    outside <- which(!is.na(val) & !is.na(lo) & !is.na(up) & lo <= up &
-                     (val < lo | val > up))
+    cand <- which(!is.na(val) & !is.na(lo) & !is.na(up) & lo <= up &
+                    (val < lo | val > up))
+    outside <- cand[vapply(cand, function(i) {
+      re_val <- 0.5 * 10^(-.count_decimals(val[i]))
+      pad_lo <- re_val + 0.5 * 10^(-.count_decimals(lo[i]))
+      pad_up <- re_val + 0.5 * 10^(-.count_decimals(up[i]))
+      (val[i] < lo[i] - pad_lo) || (val[i] > up[i] + pad_up)
+    }, logical(1))]
     if (length(outside) > 0) {
       if (correct_inputs) {
         x[[tri$val]][outside] <- NA_real_
@@ -1195,11 +1246,18 @@
       is_user_es <- !is.null(info_used) && !is.na(info_used[i]) &&
                     grepl("^user_(es|input)", info_used[i])
       # P7: Glass rows (smd_denom = control/control_robust) build their d/g CIs
-      # on the control-arm df (SMD1 convention), not the pooled N - 2.
+      # on the control-arm df (SMD1 convention), not the pooled N - 2. The Glass df
+      # applies ONLY when the SELECTED estimate actually came from the endpoint-means
+      # family -- the only methods that honour smd_denom. When the hierarchy picked a
+      # non-means method (cohen_d, etasq, t/F, ANCOVA, medians...), the CI is built on
+      # the pooled N - 2 regardless of the smd_denom input column, so keying the Glass
+      # df off the raw input alone would false-fire the A6 CI-width flag on valid rows.
       glass_row <- !is_user_es && !is.null(smd_denom) &&
         length(smd_denom) >= i && !is.na(smd_denom[i]) &&
         smd_denom[i] %in% c("control", "control_robust") &&
         !is.null(measure) && measure %in% c("d", "g") &&
+        !is.null(info_used) && !is.na(info_used[i]) &&
+        info_used[i] %in% c("means_sd", "means_se", "means_ci") &&
         !is.na(n_nexp_i) && is.finite(n_nexp_i) && n_nexp_i > 2
       if (glass_row) t_df <- n_nexp_i - 1
       if (is_user_es) {
@@ -1661,17 +1719,23 @@
                           es[has_both]^2 / (2 * (n_exp[has_both] + n_nexp[has_both])))
       expected_se[expected_se == 0] <- NA_real_
       se_for_iqr[has_both] <- se[has_both] / expected_se
-      # rows that cannot be normalised are excluded from the pool
-      # (balanced-arms approximation 2/sqrt(N) when only n_total is available)
-      not_norm <- !has_both & !is.na(se) & is.finite(se)
-      if (any(not_norm)) {
-        if (!is.null(n_total)) {
-          approx <- not_norm & !is.na(n_total) & is.finite(n_total) & n_total > 0
-          se_for_iqr[approx] <- se[approx] / (2 / sqrt(n_total[approx]))
-          se_for_iqr[not_norm & !approx] <- NA_real_
-        } else {
-          se_for_iqr[not_norm] <- NA_real_
-        }
+    }
+    # Balanced-arms 2/sqrt(N) fallback for rows WITHOUT both arm sizes. This must run
+    # whether or not ANY row had arm sizes: a pure pearson_r/fisher_z/spearman_r d or g
+    # pool carries only n_sample (n_exp/n_nexp stay NA in raw_data), so nesting this inside
+    # if(any(has_both)) left every row with its raw, N-dependent SE and falsely flagged a
+    # legitimately small-N study as an SE outlier. Mirrors the branch-level no_data
+    # fallback in the logOR/logRR branch below.
+    not_norm <- !has_both & !is.na(se) & is.finite(se)
+    if (any(not_norm)) {
+      if (!is.null(n_total)) {
+        approx <- not_norm & !is.na(n_total) & is.finite(n_total) & n_total > 0
+        se_for_iqr[approx] <- se[approx] / (2 / sqrt(n_total[approx]))
+        # only null out un-normalisable rows once SOME row has been normalised, to avoid
+        # collapsing the whole pool to NA (matches the logOR branch's any()-guard)
+        if (any(has_both) || any(approx)) se_for_iqr[not_norm & !approx] <- NA_real_
+      } else if (any(has_both)) {
+        se_for_iqr[not_norm] <- NA_real_
       }
     }
   } else if (measure %in% c("logor", "logrr") &&

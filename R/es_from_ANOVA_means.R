@@ -28,7 +28,7 @@
 #' **To estimate a Cohen's d** the following formulas are used (formulas 12.10-12.18 in Cooper):
 #' \deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * sd\_exp^2 + (n\_nexp - 1) * sd\_nexp^2}{n\_exp+n\_nexp-2}}}
 #' \deqn{cohen\_d =  \frac{mean\_exp - mean\_nexp}{mean\_sd\_pooled}}
-#' \deqn{cohen\_d\_se = \frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}
+#' \deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 #' \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 #' \deqn{cohen\_d\_ci\_up = cohen\_d + cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 #'
@@ -239,7 +239,7 @@ es_from_means_se <- function(mean_exp, mean_se_exp, mean_nexp, mean_se_nexp, n_e
 #'
 #' **To estimate a Cohen's d** the following formulas are used (formulas 12.10-12.18 in Cooper):
 #' \deqn{cohen\_d =  \frac{mean\_exp - mean\_nexp}{means\_sd\_pooled}}
-#' \deqn{cohen\_d\_se = \frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}
+#' \deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 #' \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 #' \deqn{cohen\_d\_ci\_up = cohen\_d + cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 #'

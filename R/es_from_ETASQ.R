@@ -1,6 +1,10 @@
 #' Convert an eta-squared value to various effect size measures
 #'
-#' @param etasq an eta-squared value (binary predictor, ANOVA model))
+#' @param etasq an eta-squared value (binary predictor, ANOVA model), defined as
+#'   \eqn{SS_{effect} / SS_{total}}. For a one-way, two-group ANOVA this equals the
+#'   partial eta-squared \eqn{SS_{effect} / (SS_{effect} + SS_{error})}, so the two
+#'   coincide and either label is correct here (unlike the ANCOVA case handled by
+#'   \code{\link{es_from_etasq_adj}()}, which requires the partial form specifically).
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
@@ -14,6 +18,11 @@
 #'
 #' **To estimate a Cohen's d** the following formula is used (Cohen, 1988):
 #' \deqn{d = 2 * \sqrt{\frac{etasq}{1 - etasq}}}
+#'
+#' Note that this closed form is the large-sample, **equal-groups** (\eqn{n\_exp = n\_nexp})
+#' limit of the exact F-based conversion. For markedly unequal group sizes it is
+#' approximate; supplying the ANOVA F (\code{\link{es_from_anova_f}()}), which
+#' carries the per-group sample sizes, is more accurate.
 #'
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
@@ -59,7 +68,15 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
 
 #' Convert an adjusted eta-squared value (i.e., from an ANCOVA) to various effect size measures
 #'
-#' @param etasq_adj an adjusted eta-squared value (i.e., obtained from an ANCOVA model)
+#' @param etasq_adj an adjusted eta-squared value obtained from an ANCOVA model. This
+#'   must be the **partial** eta-squared of the group effect,
+#'   \eqn{\eta_p^2 = SS_{group} / (SS_{group} + SS_{error})} — the quantity that
+#'   most software (SPSS, \code{car}, \code{effectsize}) prints for an ANCOVA term.
+#'   Do **not** supply the classical eta-squared \eqn{SS_{group} / SS_{total}}: in an
+#'   ANCOVA the total sum of squares also contains the covariate variance, so the
+#'   classical value is smaller than the partial one and would be inverted into too
+#'   small an F, biasing the effect size toward zero. (In a covariate-free one-way
+#'   ANOVA the two definitions coincide; see \code{\link{es_from_etasq}()}.)
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param cov_outcome_r correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).
@@ -79,7 +96,8 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
 #' **To convert the adjusted eta-squared into an ANCOVA F-statistic**,
-#' the following formula is used:
+#' the partial-eta-squared identity \eqn{\eta_p^2 = F / (F + df)} is inverted
+#' (this is why a *partial* eta-squared, not a classical one, is required):
 #' \deqn{df = n\_exp + n\_nexp - 2 - n\_cov\_ancova}
 #' \deqn{ancova\_f = \frac{etasq\_adj * df}{1 - etasq\_adj}}
 #'
@@ -107,8 +125,19 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
 #'  \tab \cr
 #' }
 #'
+#' @note
+#' Two cautions apply. (1) \code{etasq_adj} must be the *partial* eta-squared (see
+#' the parameter description); a classical eta-squared biases the effect size
+#' toward zero. (2) The sampling variance is rebuilt from Cooper's eq. 12.26, which
+#' assumes a covariate balanced across groups and treats \code{cov_outcome_r} as
+#' known; in covariate-imbalanced designs the standard error is a lower bound
+#' (anti-conservative), while the point estimate remains unbiased. See Lai and
+#' Kelley (2012).
+#'
 #' @references
 #' Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+#'
+#' Lai, K., & Kelley, K. (2012). Accuracy in parameter estimation for ANCOVA and ANOVA contrasts: Sample size planning via narrow confidence intervals. British Journal of Mathematical and Statistical Psychology, 65(2), 350-370.
 #'
 #' @export es_from_etasq_adj
 #'

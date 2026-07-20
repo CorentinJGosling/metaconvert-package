@@ -75,8 +75,8 @@ and mean difference (MD) from the medians and ranges of two independent groups.
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
 \strong{This function recreates means+SD of the two groups}  (Wan et al., 2014):
-\deqn{mean\_exp = \frac{min\_exp + 2*med\_exp + max\_exp}{4}}
-\deqn{mean\_nexp = \frac{min\_nexp + 2*med\_nexp + max\_nexp}{4}}
+\deqn{mean\_exp = \frac{min\_exp + 2*med\_exp + max\_exp}{4} + \frac{min\_exp - 2*med\_exp + max\_exp}{4*n\_exp}}
+\deqn{mean\_nexp = \frac{min\_nexp + 2*med\_nexp + max\_nexp}{4} + \frac{min\_nexp - 2*med\_nexp + max\_nexp}{4*n\_nexp}}
 \deqn{mean\_sd\_exp = \frac{max\_exp - min\_exp}{2*qnorm((n\_exp-0.375) / (n\_exp+0.25))}}
 \deqn{mean\_sd\_nexp = \frac{max\_nexp - min\_nexp}{2*qnorm((n\_nexp-0.375) / (n\_nexp+0.25))}}
 

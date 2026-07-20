@@ -14,7 +14,11 @@ es_from_etasq(
 )
 }
 \arguments{
-\item{etasq}{an eta-squared value (binary predictor, ANOVA model))}
+\item{etasq}{an eta-squared value (binary predictor, ANOVA model), defined as
+\eqn{SS_{effect} / SS_{total}}. For a one-way, two-group ANOVA this equals the
+partial eta-squared \eqn{SS_{effect} / (SS_{effect} + SS_{error})}, so the two
+coincide and either label is correct here (unlike the ANCOVA case handled by
+\code{\link{es_from_etasq_adj}()}, which requires the partial form specifically).}
 
 \item{n_exp}{number of participants in the experimental/exposed group.}
 
@@ -49,6 +53,11 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 
 \strong{To estimate a Cohen's d} the following formula is used (Cohen, 1988):
 \deqn{d = 2 * \sqrt{\frac{etasq}{1 - etasq}}}
+
+Note that this closed form is the large-sample, \strong{equal-groups} (\eqn{n\_exp = n\_nexp})
+limit of the exact F-based conversion. For markedly unequal group sizes it is
+approximate; supplying the ANOVA F (\code{\link{es_from_anova_f}()}), which
+carries the per-group sample sizes, is more accurate.
 
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d}()} are applied.

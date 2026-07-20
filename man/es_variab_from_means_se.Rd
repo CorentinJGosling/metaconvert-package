@@ -46,9 +46,10 @@ This function estimates VR and CVR
 Convert means and/or standard errors of two independent groups into two effect measures (VR/CVR)
 }
 \details{
-This function converts the standard errors into standard deviations.
-\deqn{mean\_sd\_exp = mean\_se\_exp * \sqrt{n\_exp - 1}}
-\deqn{mean\_sd\_nexp = mean\_se\_nexp * \sqrt{n\_nexp - 1}}
+This function converts the standard errors into standard deviations
+(\eqn{SE = SD / \sqrt{n}}, so \eqn{SD = SE \times \sqrt{n}}).
+\deqn{mean\_sd\_exp = mean\_se\_exp * \sqrt{n\_exp}}
+\deqn{mean\_sd\_nexp = mean\_se\_nexp * \sqrt{n\_nexp}}
 
 Then, calculations of the \code{\link{es_variab_from_means_sd}} are applied.
 }

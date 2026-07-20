@@ -33,8 +33,19 @@
 #'  \tab \cr
 #' }
 #'
+#' @note
+#' The Cohen's d point estimate is recovered from the reported ANCOVA t (which
+#' already embeds the covariate adjustment), but its sampling variance is rebuilt
+#' from Cooper's eq. 12.26, which assumes a covariate balanced across groups and
+#' treats \code{cov_outcome_r} as known. In observational or otherwise
+#' covariate-imbalanced designs the standard error is a lower bound
+#' (anti-conservative), while the point estimate remains unbiased. See Lai and
+#' Kelley (2012).
+#'
 #' @references
 #' Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+#'
+#' Lai, K., & Kelley, K. (2012). Accuracy in parameter estimation for ANCOVA and ANOVA contrasts: Sample size planning via narrow confidence intervals. British Journal of Mathematical and Statistical Psychology, 65(2), 350-370.
 #'
 #' @export es_from_ancova_t
 #'

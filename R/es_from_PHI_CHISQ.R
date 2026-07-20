@@ -21,22 +21,18 @@
 #'
 #' Then, the calculations of the \code{\link{es_from_2x2}()} function are applied.
 #'
-#' **To estimate the Cohen's d (D) and Hedges' g (G)**, the function first tries to convert it from
-#' the OR obtained using the approach described above. If not possible (e.g., the number of cases and exposed are missing)
-#' the function converts the Cohen's d from the Phi coefficient using the approach proposed by Lipsey et al. (2001):
-#' \deqn{d = \frac{2 * phi}{\sqrt{1 - phi^2}}}
-#' \deqn{d\_se = \sqrt{\frac{d}{phi^2 * n\_sample}}}
-#'
-#' **To estimate the correlation coefficients (R/Z)**, this function assumes that the
-#' phi coefficient is equal to a correlation coefficient, and then obtains the variance using the
-#' formula proposed by Lipsey et al. (2001):
-#' \deqn{r = phi}
-#' \deqn{z = atanh(r)}
-#' \deqn{z\_se = \frac{z^2}{phi^2 * n\_sample}}
-#' \deqn{effective\_n = \frac{1}{z\_se + 3}}
-#' \deqn{r\_se = \sqrt{\frac{(1 - r^2)^2}{effective\_n - 1}}}
-#'
-#' Note that the approach to determine the standard error of R was developed by our team.
+#' **To estimate D, G and the correlation coefficients (R/Z) when the 2x2 table cannot be
+#' reconstructed** (e.g., the number of cases or exposed participants is missing), the phi
+#' coefficient -- which is the Pearson correlation of the two binary variables -- is
+#' treated directly as a correlation coefficient and passed to
+#' \code{\link{es_from_pearson_r}()}. This yields R and Z with their standard large-sample
+#' sampling variances,
+#' \deqn{r = phi, \quad r\_se = \frac{1 - r^2}{\sqrt{n\_sample - 1}}}
+#' \deqn{z = atanh(r), \quad z\_se = \frac{1}{\sqrt{n\_sample - 3}}}
+#' and D and G are then obtained from R exactly as in \code{\link{es_from_pearson_r}()}
+#' (the R to D step assumes balanced groups). In this situation the OR, RR and NNT require
+#' the 2x2 margins and are returned as NA. When the 2x2 table can be reconstructed, D, G,
+#' R and Z are instead derived from it (see \code{\link{es_from_2x2}()}).
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -74,9 +70,18 @@ es_from_phi <- function(phi, n_cases, n_exp,
   if (length(reverse_phi) == 1) reverse_phi = c(rep(reverse_phi, length(phi)))
   if (length(reverse_phi) != length(phi)) stop("The length of the 'reverse_phi' argument is incorrectly specified.")
 
+  # A phi coefficient is a correlation and must lie in [-1, 1]; metafor::conv.2x2()
+  # raises a HARD ERROR (not a warning) on |phi| > 1, which would abort an entire
+  # convert_df() run over the other (valid) rows. Guard here so a single out-of-range
+  # value degrades to an all-NA row (the package's one-bad-cell-cannot-abort contract).
+  # convert_df()'s Tier-1 validation already NA's such values under correct_inputs =
+  # TRUE; this is the backstop for direct es_from_phi() calls.
+  phi_valid <- phi
+  phi_valid[!is.na(phi_valid) & abs(phi_valid) > 1] <- NA_real_
+
   cont_table <- suppressWarnings(
     metafor::conv.2x2(
-      ri = phi, ni = n_sample,
+      ri = phi_valid, ni = n_sample,
       n1i = n_exp, n2i = n_cases
     )
   )
@@ -88,24 +93,28 @@ es_from_phi <- function(phi, n_cases, n_exp,
     reverse_2x2 = reverse_phi
   )
 
-  # miss_d = which(is.na(es$d))
-  #
-  # es$d[miss_d] <- (2 * phi[miss_d]) / sqrt(1 - phi[miss_d]^2)
-  # X2 <- phi^2 * n_sample
-  # es$d_se[miss_d] = sqrt(es$d[miss_d]^2 / X2[miss_d])
-  # res_d <- .es_from_d(d = es$d, d_se = es$d_se, n_sample = n_sample, reverse = reverse_phi)
-  # cols_d <- c("d", "d_se", "d_ci_lo", "d_ci_up",
-  #            "g", "g_se", "g_ci_lo", "g_ci_up")
-  # es[miss_d, cols_d] <- res_d[miss_d, cols_d]
-  # es$r <- ifelse(reverse_phi, -phi, phi)
-  # es$z <- atanh(es$r)
-  # es$z_se <- sqrt(es$z^2 / X2)
-  # es$z_ci_lo <- es$z - qnorm(.975) * es$z_se
-  # es$z_ci_up <- es$z + qnorm(.975) * es$z_se
-  # es$r_ci_lo <- tanh(es$z_ci_lo)
-  # es$r_ci_up <- tanh(es$z_ci_up)
-  # effective_n = 1/(es$z_se^2) + 3
-  # es$r_se = sqrt((1 - es$r^2)^2 / (effective_n - 1))
+  # Fallback for rows where the 2x2 table could NOT be reconstructed (n_cases / n_exp
+  # missing, so conv.2x2 returns NA cells and OR/RR/NNT are NA): a phi coefficient IS the
+  # Pearson correlation of two binary variables, so deliver R/Z/D/G by treating phi as a
+  # Pearson r and delegating to the vetted es_from_pearson_r() engine. This gives the
+  # STANDARD sampling variances (z_se = 1/sqrt(n-3), r_se = (1-r^2)/sqrt(n-1), matching
+  # metafor) rather than the earlier ad hoc formula that inflated the SE by up to ~22% at
+  # large phi. A phi-only row therefore yields the SAME R/Z/D/G as an equivalent
+  # pearson_r row (internal consistency). NB: the R -> D step assumes balanced groups;
+  # OR/RR/NNT require the 2x2 margins and remain NA when they are missing.
+  miss <- which(is.na(es$r) & !is.na(phi) & !is.na(n_sample) & abs(phi) < 1)
+  if (length(miss) > 0) {
+    pr <- es_from_pearson_r(
+      pearson_r = phi[miss], n_sample = n_sample[miss],
+      reverse_pearson_r = reverse_phi[miss]
+    )
+    fb_cols <- intersect(
+      c("d", "d_se", "d_ci_lo", "d_ci_up", "g", "g_se", "g_ci_lo", "g_ci_up",
+        "r", "r_se", "r_ci_lo", "r_ci_up", "z", "z_se", "z_ci_lo", "z_ci_up"),
+      intersect(colnames(es), colnames(pr))
+    )
+    es[miss, fb_cols] <- pr[, fb_cols]
+  }
 
   es$info_used <- "phi"
 
@@ -127,7 +136,10 @@ es_from_phi <- function(phi, n_cases, n_exp,
 #' @details
 #' This function converts a chi-square value (with one degree of freedom)
 #' into a phi coefficient (Lipsey et al. 2001):
-#' \deqn{phi = \sqrt{\frac{chisq^2}{n\_sample}}}.
+#' \deqn{phi = \sqrt{\frac{chisq}{n\_sample}}}
+#' and then converts it to other effect size measures exactly as in
+#' \code{\link{es_from_phi}()} (including the correlation-based R/Z/D/G fallback with
+#' standard sampling variances when the 2x2 table cannot be reconstructed).
 #'
 #' Note that if \code{yates_chisq = TRUE}, the chi-square value is interpreted
 #' as Yates-corrected when back-transforming to a 2x2 contingency table; this is
@@ -189,25 +201,27 @@ es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
     reverse_2x2 = reverse_chisq
   )
 
-  # miss_d = which(is.na(es$d))
-  #
-  # es$d[miss_d] <- 2 * sqrt(chisq[miss_d] / (n_sample[miss_d] - chisq[miss_d]))
-  # es$d_se[miss_d] = sqrt(es$d[miss_d]^2 / chisq[miss_d])
-  # res_d <- .es_from_d(d = es$d, d_se = es$d_se,
-  #                     n_sample = n_sample, reverse = reverse_chisq)
-  # cols_d <- c("d", "d_se", "d_ci_lo", "d_ci_up",
-  #             "g", "g_se", "g_ci_lo", "g_ci_up")
-  # es[miss_d, cols_d] <- res_d[miss_d, cols_d]
-  # es$r <- sqrt(chisq/n_sample)
-  # es$r <- ifelse(reverse_chisq, -es$r, es$r)
-  # es$z <- atanh(es$r)
-  # es$z_se <- sqrt(es$z^2 / chisq)
-  # es$z_ci_lo <- es$z - qnorm(.975) * es$z_se
-  # es$z_ci_up <- es$z + qnorm(.975) * es$z_se
-  # es$r_ci_lo <- tanh(es$z_ci_lo)
-  # es$r_ci_lo <- tanh(es$z_ci_up)
-  # effective_n = 1/(es$z_se^2) + 3
-  # es$r_se = sqrt((1 - es$r^2)^2 / (effective_n - 1))
+  # Fallback for rows where the 2x2 table could NOT be reconstructed (n_cases / n_exp
+  # missing). For a 1-df chi-square, phi = sqrt(chisq / n) is the Pearson correlation of
+  # the two binary variables (its sign is not identified by chisq alone, so it is taken
+  # positive and flipped by reverse_chisq). Deliver R/Z/D/G by treating phi as a Pearson
+  # r via the vetted es_from_pearson_r() engine, giving the STANDARD SEs (matching
+  # metafor) rather than the earlier ad hoc, SE-inflating formula. OR/RR/NNT require the
+  # 2x2 margins and remain NA; the R -> D step assumes balanced groups.
+  r_chi <- suppressWarnings(sqrt(chisq / n_sample))
+  miss <- which(is.na(es$r) & !is.na(r_chi) & is.finite(r_chi) & r_chi < 1 & !is.na(n_sample))
+  if (length(miss) > 0) {
+    pr <- es_from_pearson_r(
+      pearson_r = r_chi[miss], n_sample = n_sample[miss],
+      reverse_pearson_r = reverse_chisq[miss]
+    )
+    fb_cols <- intersect(
+      c("d", "d_se", "d_ci_lo", "d_ci_up", "g", "g_se", "g_ci_lo", "g_ci_up",
+        "r", "r_se", "r_ci_lo", "r_ci_up", "z", "z_se", "z_ci_lo", "z_ci_up"),
+      intersect(colnames(es), colnames(pr))
+    )
+    es[miss, fb_cols] <- pr[, fb_cols]
+  }
 
   es$info_used <- "chisq"
 

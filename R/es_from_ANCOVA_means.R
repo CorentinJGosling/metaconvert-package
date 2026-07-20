@@ -30,7 +30,7 @@
 #' **To obtain the Cohen's d**, the following formulas are used (table 12.3 in Cooper):
 #' \deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * ancova\_mean\_sd\_exp^2 + (n\_nexp - 1) * ancova\_mean\_sd\_nexp^2}{n\_exp+n\_nexp-2}}}
 #' \deqn{cohen\_d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp}{mean\_sd\_pooled}}
-#' \deqn{cohen\_d\_se = \frac{(n\_exp+n\_nexp)*(1-cov\_outcome\_r^2)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}
+#' \deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)*(1-cov\_outcome\_r^2)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 #' \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, n\_exp + n\_nexp - 2 - n\_cov\_ancova)}
 #' \deqn{cohen\_d\_ci\_up = cohen\_d + cohen\_d\_se * qt(.975, n\_exp + n\_nexp - 2 - n\_cov\_ancova)}
 #'
@@ -50,8 +50,21 @@
 #'  \tab \cr
 #' }
 #'
+#' @note
+#' The sampling variance follows Cooper's eq. 12.26 and assumes the covariate is
+#' balanced across groups. It omits the covariate-imbalance ("leverage") term of
+#' the exact ANCOVA variance,
+#' \eqn{\sigma^2_{res}\,(1/n\_exp + 1/n\_nexp + (\bar{x}\_exp-\bar{x}\_nexp)^2 / SS_x)},
+#' which is not recoverable from summary statistics, and treats
+#' \code{cov_outcome_r} as known. In balanced/randomised designs the omission is
+#' negligible; in observational or otherwise covariate-imbalanced designs the
+#' standard error is a lower bound (anti-conservative), while the point estimate
+#' remains unbiased. See Lai and Kelley (2012).
+#'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+#'
+#' Lai, K., & Kelley, K. (2012). Accuracy in parameter estimation for ANCOVA and ANOVA contrasts: Sample size planning via narrow confidence intervals. British Journal of Mathematical and Statistical Psychology, 65(2), 350-370.
 #'
 #' @export es_from_ancova_means_sd
 #'

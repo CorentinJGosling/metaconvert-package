@@ -1,3 +1,17 @@
+# Bounds-safe lookup into a Wan (2014) / Hozo (2005) constant table. At index 0 R
+# silently DROPS the element (and does negative indexing at index < 0), which shortens
+# the result vector so the enclosing ifelse() recycles a constant onto the WRONG (valid)
+# row -- silently corrupting a neighbouring study's SD/effect size. Mapping every
+# out-of-range index to NA keeps the result the same length as the input, so each row
+# keeps its own constant and an out-of-range row is NA (n <= 1 for the IQR/quartile
+# tables, n <= 0 for the range table). This complements the Tier-1 V16 check in
+# internal_flags.R, which flags n == 1 rows as invalid (within-group variance undefined).
+.wan_table_lookup <- function(tbl, idx) {
+  idx <- as.integer(idx)
+  idx[!is.na(idx) & (idx < 1L | idx > length(tbl))] <- NA_integer_
+  tbl[idx]
+}
+
 #' Convert median and interquartile range of two independent groups into several effect size measures
 #'
 #' @param q1_exp first quartile of the experimental/exposed group.
@@ -71,7 +85,7 @@ es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
   mean_exp <- (q1_exp + med_exp + q3_exp) / 3
   Q_exp <- (n_exp - 1) / 4
   cor_exp <- ifelse(Q_exp <= 50,
-    e[ceiling(Q_exp)],
+    .wan_table_lookup(e, ceiling(Q_exp)),
     (2 * qnorm((0.75 * n_exp - 0.125) / (n_exp + 0.25)))
   )
   sd_exp <- (q3_exp - q1_exp) / cor_exp
@@ -79,7 +93,7 @@ es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
   mean_nexp <- (q1_nexp + med_nexp + q3_nexp) / 3
   Q_nexp <- (n_nexp - 1) / 4
   cor_nexp <- ifelse(Q_nexp <= 50,
-    e[ceiling(Q_nexp)],
+    .wan_table_lookup(e, ceiling(Q_nexp)),
     (2 * qnorm((0.75 * n_nexp - 0.125) / (n_nexp + 0.25)))
   )
   sd_nexp <- (q3_nexp - q1_nexp) / cor_nexp
@@ -197,12 +211,12 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 
   mean_exp <- (min_exp + 2 * q1_exp + 2 * med_exp + 2 * q3_exp + max_exp) / 8
   cor_m_exp <- ifelse(n_exp <= 50,
-    list1[n_exp],
+    .wan_table_lookup(list1, n_exp),
     2 * qnorm((n_exp - 0.375) / (n_exp + 0.25))
   )
   Q_exp <- (n_exp - 1) / 4
   cor_q_exp <- ifelse(Q_exp <= 50,
-    list2[ceiling(Q_exp)],
+    .wan_table_lookup(list2, ceiling(Q_exp)),
     (2 * qnorm((0.75 * n_exp - 0.125) / (n_exp + 0.25)))
   )
 
@@ -210,12 +224,12 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 
   mean_nexp <- (min_nexp + 2 * q1_nexp + 2 * med_nexp + 2 * q3_nexp + max_nexp) / 8
   cor_m_nexp <- ifelse(n_nexp <= 50,
-    list1[n_nexp],
+    .wan_table_lookup(list1, n_nexp),
     2 * qnorm((n_nexp - 0.375) / (n_nexp + 0.25))
   )
   Q_nexp <- (n_nexp - 1) / 4
   cor_q_nexp <- ifelse(Q_nexp <= 50,
-    list2[ceiling(Q_nexp)],
+    .wan_table_lookup(list2, ceiling(Q_nexp)),
     (2 * qnorm((0.75 * n_nexp - 0.125) / (n_nexp + 0.25)))
   )
 
@@ -253,8 +267,8 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
 #' **This function recreates means+SD of the two groups**  (Wan et al., 2014):
-#' \deqn{mean\_exp = \frac{min\_exp + 2*med\_exp + max\_exp}{4}}
-#' \deqn{mean\_nexp = \frac{min\_nexp + 2*med\_nexp + max\_nexp}{4}}
+#' \deqn{mean\_exp = \frac{min\_exp + 2*med\_exp + max\_exp}{4} + \frac{min\_exp - 2*med\_exp + max\_exp}{4*n\_exp}}
+#' \deqn{mean\_nexp = \frac{min\_nexp + 2*med\_nexp + max\_nexp}{4} + \frac{min\_nexp - 2*med\_nexp + max\_nexp}{4*n\_nexp}}
 #' \deqn{mean\_sd\_exp = \frac{max\_exp - min\_exp}{2*qnorm((n\_exp-0.375) / (n\_exp+0.25))}}
 #' \deqn{mean\_sd\_nexp = \frac{max\_nexp - min\_nexp}{2*qnorm((n\_nexp-0.375) / (n\_nexp+0.25))}}
 #'
@@ -332,11 +346,11 @@ es_from_med_min_max <- function(min_exp, med_exp, max_exp, n_exp,
   )
 
   mean_exp <- (min_exp + 2 * med_exp + max_exp) / 4 + (min_exp - 2 * med_exp + max_exp) / (4 * n_exp)
-  cor_exp <- ifelse(n_exp <= 50, list1[n_exp], 2 * qnorm((n_exp - 0.375) / (n_exp + 0.25)))
+  cor_exp <- ifelse(n_exp <= 50, .wan_table_lookup(list1, n_exp), 2 * qnorm((n_exp - 0.375) / (n_exp + 0.25)))
   sd_exp <- (max_exp - min_exp) / cor_exp
 
   mean_nexp <- (min_nexp + 2 * med_nexp + max_nexp) / 4 + (min_nexp - 2 * med_nexp + max_nexp) / (4 * n_nexp)
-  cor_nexp <- ifelse(n_nexp <= 50, list1[n_nexp], 2 * qnorm((n_nexp - 0.375) / (n_nexp + 0.25)))
+  cor_nexp <- ifelse(n_nexp <= 50, .wan_table_lookup(list1, n_nexp), 2 * qnorm((n_nexp - 0.375) / (n_nexp + 0.25)))
   sd_nexp <- (max_nexp - min_nexp) / cor_nexp
 
   es <- es_from_means_sd(

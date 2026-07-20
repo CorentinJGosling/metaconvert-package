@@ -48,22 +48,18 @@ this function reconstructs a 2x2 table (using the approach proposed by Viechtbau
 
 Then, the calculations of the \code{\link{es_from_2x2}()} function are applied.
 
-\strong{To estimate the Cohen's d (D) and Hedges' g (G)}, the function first tries to convert it from
-the OR obtained using the approach described above. If not possible (e.g., the number of cases and exposed are missing)
-the function converts the Cohen's d from the Phi coefficient using the approach proposed by Lipsey et al. (2001):
-\deqn{d = \frac{2 * phi}{\sqrt{1 - phi^2}}}
-\deqn{d\_se = \sqrt{\frac{d}{phi^2 * n\_sample}}}
-
-\strong{To estimate the correlation coefficients (R/Z)}, this function assumes that the
-phi coefficient is equal to a correlation coefficient, and then obtains the variance using the
-formula proposed by Lipsey et al. (2001):
-\deqn{r = phi}
-\deqn{z = atanh(r)}
-\deqn{z\_se = \frac{z^2}{phi^2 * n\_sample}}
-\deqn{effective\_n = \frac{1}{z\_se + 3}}
-\deqn{r\_se = \sqrt{\frac{(1 - r^2)^2}{effective\_n - 1}}}
-
-Note that the approach to determine the standard error of R was developed by our team.
+\strong{To estimate D, G and the correlation coefficients (R/Z) when the 2x2 table cannot be
+reconstructed} (e.g., the number of cases or exposed participants is missing), the phi
+coefficient -- which is the Pearson correlation of the two binary variables -- is
+treated directly as a correlation coefficient and passed to
+\code{\link{es_from_pearson_r}()}. This yields R and Z with their standard large-sample
+sampling variances,
+\deqn{r = phi, \quad r\_se = \frac{1 - r^2}{\sqrt{n\_sample - 1}}}
+\deqn{z = atanh(r), \quad z\_se = \frac{1}{\sqrt{n\_sample - 3}}}
+and D and G are then obtained from R exactly as in \code{\link{es_from_pearson_r}()}
+(the R to D step assumes balanced groups). In this situation the OR, RR and NNT require
+the 2x2 margins and are returned as NA. When the 2x2 table can be reconstructed, D, G,
+R and Z are instead derived from it (see \code{\link{es_from_2x2}()}).
 }
 \examples{
 es_from_phi(phi = 0.3, n_sample = 120, n_cases = 20, n_exp = 40)
