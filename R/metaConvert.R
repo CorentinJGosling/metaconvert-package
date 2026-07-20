@@ -157,10 +157,8 @@
 #'
 #' @md
 #'
-#' @docType package
-#'
 #' @name metaConvert-package
-NULL
+"_PACKAGE"
 
 #' @importFrom stats sd aggregate.data.frame df dnorm na.omit optimize pnorm pt qnorm qt
 #' @importFrom utils packageVersion

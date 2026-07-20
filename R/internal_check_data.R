@@ -1,6 +1,6 @@
 #' This function checks the input data to have the correct format and that it has no incongruencies
 #'
-#' @param x
+#' @param x a data.frame passed to convert_df() to be checked for correct format and consistency
 #'
 #' @noRd
 .check_data <- function(x, split_adjusted = TRUE, format = "wide", main_es = TRUE) {

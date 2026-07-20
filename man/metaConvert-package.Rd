@@ -172,6 +172,7 @@ depending on the function - some of the following columns:
 
 Authors:
 \itemize{
+  \item Corentin J. Gosling \email{corentin.gosling@parisnanterre.fr}
   \item Samuele Cortese \email{samuele.cortese@gmail.com}
   \item Marco Solmi \email{marco.solmi83@gmail.com}
   \item Belen Haza \email{hazabelen@gmail.com}
