@@ -32,7 +32,9 @@ web/
 papers/
 
 # Tests and Artifacts
-tests_save
+# NB tests_save/ is deliberately NOT ignored here: it holds the archived
+# conventions suite and must be versioned. It is excluded from the built
+# package by ^tests_save$ in .Rbuildignore instead.
 SUMMARY_TESTS.xlsx
 archive/
 metaConvert.Rcheck/

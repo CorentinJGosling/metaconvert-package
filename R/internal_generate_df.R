@@ -300,6 +300,16 @@
   # Early return if ordering is empty (e.g., no adjusted entries for single-group measures)
   if (length(ordering) == 0) return(x)
 
+  # Contract relied upon by the reshape()-based long expansion below: reshape()
+  # discards the real row_id (its `timevar` collides with it) and the synthetic
+  # 1..n index is renamed back to "row_id" positionally, which is only correct
+  # while row_id is exactly seq_len(nrow(x)). .check_data() guarantees this
+  # (internal_check_data.R:33, re-sequenced at :239); assert it rather than
+  # depend on it silently.
+  if (!identical(as.numeric(x$row_id), as.numeric(seq_len(nrow(x))))) {
+    stop("internal error: 'row_id' must be seq_len(nrow(x)) when .generate_df() is called")
+  }
+
   list_keep <- do.call(cbind, lapply(list_df, function(x) x$info_used))
   cols_keep <- which(as.character(list_keep[1, ]) %in% ordering)
   list_df_restrict <- list_df[cols_keep]
@@ -489,18 +499,20 @@
   dat_long = merge(x = dat_long,
                    y = dispersion)
 
+  # NOTE: both merges below MUST pass `by = "row_id"` explicitly. Letting merge()
+  # infer the key from intersect(names(x), names(y)) silently pulls in any
+  # user-supplied input column that happens to share a name with the carrier
+  # frame -- a column called "blank" or "dat_long" then joined on NA, produced a
+  # 0-row result, and crashed summary() on the DEFAULT path.
   if (main_es == TRUE & nrow(dat_long) != 0) {
-    dispersion$blank = NA
     dispersion$row_id = as.numeric(as.character(dispersion$row_id))
-    x_transit = merge(x = dispersion[,c("row_id", "blank")],
-                      y = x)
-    if (all(dispersion$row_id == x_transit$row_id)) {
+    x_transit = merge(x = dispersion[, "row_id", drop = FALSE],
+                      y = x, by = "row_id")
+    if (nrow(x_transit) == nrow(dispersion) && all(dispersion$row_id == x_transit$row_id)) {
       x_transit[, paste0("dispersion_es", suffix)] <- dispersion$dispersion_es
     } else {
       stop("an error occured when estimating the 'dispersion_es' variable")
     }
-
-    x_transit <- x_transit[, -which(names(x_transit) == "blank")]
 
     x_empty = x[!x$row_id %in% x_transit$row_id, ]
 
@@ -509,7 +521,7 @@
     x = x[order(x$row_id),]
 
   } else if (nrow(dat_long) != 0) {
-    x_transit = merge(x = dat_long[, c("dat_long", "row_id")], y = x)
+    x_transit = merge(x = dat_long[, "row_id", drop = FALSE], y = x, by = "row_id")
 
     x_transit[, paste0("info_used", suffix)] <- dat_long$info_used
     x_transit[, paste0("es", suffix)] <- dat_long$es
@@ -517,8 +529,6 @@
     x_transit[, paste0("es_ci_up", suffix)] <- dat_long$es_ci_up
     x_transit[, paste0("es_ci_lo", suffix)] <- dat_long$es_ci_lo
     x_transit[, paste0("dispersion_es", suffix)] <- dat_long$dispersion_es
-
-    x_transit <- x_transit[, -which(names(x_transit) == "dat_long")]
 
     x_empty = x[!x$row_id %in% x_transit$row_id, ]
 
@@ -528,8 +538,15 @@
 
   }
 
-  # INSERT FINAL ES if users prefer using minimum/maximum rather than hierarchy
-  if (es_selected == "minimum") {
+  # INSERT FINAL ES if users prefer using minimum/maximum rather than hierarchy.
+  # Guarded on `main_es`: under main_es = FALSE the frame has already been
+  # expanded to one row per estimation route above, and overwriting every one of
+  # those rows with the single comparison-level min/max would leave the row count
+  # inflated while destroying all per-route information (k byte-identical rows
+  # per comparison, which silently shrinks the pooled SE by ~sqrt(k)).
+  if (!main_es) {
+    x[, paste0("es_selected", suffix)] <- "no selection"
+  } else if (es_selected == "minimum") {
     x[, paste0("es_selected", suffix)] <- "minimum"
     x[, paste0("es", suffix)] <- x[, paste0("min_es_value", suffix)]
     x[, paste0("se", suffix)] <- x[, paste0("min_es_se", suffix)]

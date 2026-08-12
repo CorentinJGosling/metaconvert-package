@@ -300,7 +300,7 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
   )
 
   if (length(nn_miss) != 0) {
-    res_d <- t(mapply(.cor_to_smd,
+    res_d <- .cor_to_smd_vec(
       r = dat_cor$r[nn_miss],
       r_se = dat_cor$r_se[nn_miss],
       n_sample = dat_cor$n_sample[nn_miss],
@@ -308,7 +308,7 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
       unit_increase_iv = dat_cor$unit_increase_iv[nn_miss],
       unit_type = dat_cor$unit_type[nn_miss],
       cor_to_smd = dat_cor$cor_to_smd[nn_miss]
-    ))
+    )
 
     es$d[nn_miss] <- unlist(res_d[, 1])
     es$d_se[nn_miss] <- unlist(res_d[, 2])

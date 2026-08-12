@@ -57,6 +57,15 @@ and then relies on the calculations of the \code{\link{es_from_ancova_t}()} func
 \deqn{t = | qt(ancova\_t\_pval/2, df = df) |}
 Then, calculations of the \code{\link{es_from_ancova_t}()} are applied.
 }
+\note{
+Like \code{\link{es_from_ancova_t}()}, this route recovers \code{d} by inverting an
+expression that sets the covariate-imbalance ("leverage") term \eqn{D} of the exact
+ANCOVA variance to zero, so \strong{the point estimate is not unbiased under
+covariate imbalance}: \code{d} and its standard error are attenuated by the same
+factor, \eqn{1/\sqrt{1 + \delta_x^2/4}} for equal arms (about 3\% at
+\eqn{\delta_x = 0.5}, 11\% at \eqn{\delta_x = 1}, negligible when randomised). The
+p-value is unaffected. See \code{\link{es_from_ancova_t}()} for the full statement.
+}
 \examples{
 es_from_ancova_t_pval(
   ancova_t_pval = 0.05, cov_outcome_r = 0.2,

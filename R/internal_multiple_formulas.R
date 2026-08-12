@@ -1,5 +1,89 @@
 # # !!! for alll internal formulas, check whether nn_miss does not prevent the code to be ran
 # # important to check the input of the method before calling these functions
+
+# Row-wise mapply with memoisation on the argument tuple.
+#
+# The tetrachoric route (.contingency_to_cor -> .tet_r -> metafor::escalc with
+# measure = "RTET") has no closed form and is solved row by row by numerical ML over a
+# bivariate normal CDF (optim + mvtnorm::pmvnorm). Profiling es_from_2x2() and
+# es_from_or_se() puts ~83% of the total time inside pmvnorm and ~93% inside .tet_r, so
+# that single call dominates both. (.or_to_cor itself is closed-form arithmetic; it is
+# routed through here only because it is scalar-valued and shares the call shape.)
+#
+# Because each result is a deterministic function of that row's arguments alone, rows
+# with identical arguments are solved once and the solution reused. Counts repeat
+# heavily in real datasets and overwhelmingly in simulation grids (~250 distinct tables
+# per 1,500 draws at n = 50/arm): measured 44.75 s -> 1.31 s (34x) on 2,000 rows drawn
+# from 60 distinct tables. With all-distinct rows it costs one paste() and two match()
+# calls and is not slower (53.29 s -> 44.30 s on the same benchmark).
+#
+# Output is identical to t(mapply(FUN, ...)) for every input reachable from the exported
+# functions. One theoretical caveat: paste() renders doubles at 15 significant digits, so
+# two doubles agreeing to ~15 digits but not identical() share a key and hence a result.
+# The induced relative error is ~1e-15 -- far below the ML solver's own tolerance -- and
+# the memoised arguments are 2x2 counts, method names and reverse flags on one path and
+# or / logor_se / margins on the other. Integer counts cannot collide.
+# Which of estimraw::estim_raw()'s candidate 2x2 reconstructions are actually usable.
+#
+# When the reconstruction quadratic has a negative discriminant -- routine whenever the
+# outcome is not rare -- estim_raw() still returns its candidate list, but with NaN cell
+# counts. Distinguishing "no real solution" from "several real solutions" is what lets
+# the two callers below emit an accurate message instead of one that over-counts the
+# candidates and recommends a remedy that cannot work.
+#
+# Returns a logical vector, one element per candidate; all FALSE means no real solution.
+.estimraw_usable <- function(estim) {
+  vapply(seq_along(estim), function(k) {
+    cand <- estim[[k]]
+    cells <- suppressWarnings(as.numeric(
+      c(cand$a[1], cand$b[1], cand$c[1], cand$d[1])
+    ))
+    length(cells) == 4L && all(is.finite(cells))
+  }, logical(1))
+}
+
+# Extract column `j` of a t(mapply(...)) result as a plain numeric vector of
+# length nrow(m), whatever shape mapply chose.
+#
+# mapply() only simplifies to a numeric matrix when EVERY call returns the same
+# type. The conversion helpers (.or_to_rr, .rr_to_or, ...) mostly return a 1x4
+# cbind() matrix, but a failure branch may return a data.frame of NAs instead --
+# and one such row is enough to turn the whole result into a LIST-matrix. The
+# column then extracts as a list, and assigning it into a numeric vector
+# silently recycles values across rows: with or_to_rr supplied as a per-row
+# column, a trailing 'dipietrantonj' row that has no real 2x2 reconstruction
+# made every other row inherit the FIRST row's standard error, leaving each SE
+# inconsistent with its own confidence interval. Zero-length elements are mapped
+# to NA rather than dropped, so the result can never be short (and hence can
+# never be recycled).
+.mapply_col <- function(m, j) {
+  vapply(seq_len(nrow(m)), function(i) {
+    v <- m[i, j]
+    if (is.list(v)) v <- v[[1L]]
+    if (length(v) != 1L) return(NA_real_)
+    suppressWarnings(as.numeric(v))
+  }, numeric(1))
+}
+
+.mapply_memo <- function(FUN, ...) {
+  args <- list(...)
+  # mapply recycles short arguments; the memo branch below indexes them positionally
+  # and cannot. Both call sites pass equal-length data.frame columns, so this only
+  # guards against a future caller -- fall back to plain mapply rather than emit NA.
+  lens <- lengths(args)
+  if (length(unique(lens[lens > 0L])) > 1L) {
+    return(t(mapply(FUN, ...)))
+  }
+  key <- do.call(paste, c(args, list(sep = "\r")))
+  uniq_key <- unique(key)
+  if (length(uniq_key) == length(key)) {
+    return(t(mapply(FUN, ...)))
+  }
+  rep_row <- match(uniq_key, key)   # one representative row per distinct tuple
+  slot <- match(key, uniq_key)      # each input row -> its distinct tuple
+  res <- t(do.call(mapply, c(list(FUN), lapply(args, function(x) x[rep_row]))))
+  res[slot, , drop = FALSE]
+}
 #
 # "Re: Specific question 4. I've thought of a new strategy. Instead of pivoting on the p-value, we can pivot on the "effective n". In other words, we calculate the n that would result in vz, and then we calculated vr using its formula with this n:
 # effective_n = 1 / vz + 3
@@ -99,17 +183,60 @@
     )
 
     if (length(estim) != 4) {
-      numb = 1
-      if (!is.na(baseline_risk)) {
-        numb = which.min(
-          c(
-            abs(estim[[1]]$c[1] / (estim[[1]]$c[1] + estim[[1]]$d[1]) -
-                  baseline_risk),
-            abs(estim[[2]]$c[1] / (estim[[2]]$c[1] + estim[[2]]$d[1]) -
-                  baseline_risk)
-            )
+      # estimraw returns either one solution (a 4-element a/b/c/d list) or a list
+      # of candidate solutions. It can also return NO usable candidate: for a
+      # common outcome the reconstruction quadratic has a negative discriminant,
+      # so the cell counts come back NaN. In that case which.min() below sees only
+      # non-finite values and returns integer(0), and estim[[integer(0)]] raises
+      # "attempt to select less than one element" -- aborting the whole
+      # convert_df() run over a single unreconstructable row. Return NA instead:
+      # one bad cell must never stop a run.
+      numb <- 1L
+      usable <- .estimraw_usable(estim)
+      if (!is.na(baseline_risk) && length(estim) >= 2L) {
+        cand <- c(
+          abs(estim[[1]]$c[1] / (estim[[1]]$c[1] + estim[[1]]$d[1]) -
+                baseline_risk),
+          abs(estim[[2]]$c[1] / (estim[[2]]$c[1] + estim[[2]]$d[1]) -
+                baseline_risk)
         )
+        if (any(is.finite(cand))) numb <- which.min(cand)
       }
+      # Two distinct failure modes, previously conflated into one message that
+      # over-counted the candidates and recommended an inert remedy. Test the
+      # SELECTED candidate, not just "any": if the one that will be used has NaN
+      # cells, the result is NA whatever the others look like.
+      if (!any(usable) || !isTRUE(usable[numb])) {
+        # No real solution: the reconstruction quadratic has a negative discriminant.
+        # Common (not an edge case) whenever the outcome is not rare. baseline_risk
+        # cannot help, so do not suggest it.
+        warning("or_to_rr = 'dipietrantonj': the 2x2 reconstruction has no real ",
+                "solution for or = ", or, " with the supplied confidence interval and ",
+                "group sizes, so the risk ratio is returned as NA. This is expected ",
+                "when the outcome is not rare. Use another 'or_to_rr' method, or ",
+                "supply the 2x2 counts directly.")
+      } else if (is.na(baseline_risk) && sum(usable) >= 2L) {
+        # Genuinely ambiguous: several reconstructable candidates and nothing to
+        # discriminate between them, so the first is taken. Say so rather than
+        # returning a silently arbitrary RR.
+        warning("or_to_rr = 'dipietrantonj': ", sum(usable),
+                " candidate 2x2 reconstructions are compatible with or = ", or,
+                " and its confidence interval. 'baseline_risk' is missing, so the ",
+                "first candidate was used. Supply 'baseline_risk' (proportion of cases ",
+                "in the non-exposed group) to select the reconstruction matching the ",
+                "reported event rate.")
+      }
+
+      if (length(estim) < numb || length(numb) != 1L) {
+        # cbind(), NOT data.frame(): every other branch of this function returns a
+        # 1x4 matrix, and mapply() only simplifies to a numeric matrix when all
+        # calls agree on type. A single data.frame among them turned the result
+        # into a list-matrix, whose columns then recycled across rows in the
+        # caller (see .mapply_col()).
+        return(cbind(logrr = NA_real_, logrr_se = NA_real_,
+                     logrr_ci_lo = NA_real_, logrr_ci_up = NA_real_))
+      }
+
       calc_dipie <- es_from_2x2(
         n_cases_exp = estim[[numb]]$a[1],
         n_controls_exp = estim[[numb]]$b[1],
@@ -335,15 +462,39 @@
       m1 = n_exp, m2 = n_nexp, dec = n_dec, measure = "rr"
     )
     if (length(estim) != 4) {
-      numb = 1
-      if (!is.na(baseline_risk)) {
-        numb = which.min(
-          c(
-            abs(estim[[1]]$c[1] / (estim[[1]]$c[1] + estim[[1]]$d[1]) - baseline_risk),
-            abs(estim[[2]]$c[1] / (estim[[2]]$c[1] + estim[[2]]$d[1]) - baseline_risk)
-          )
+      # See the matching guard in the or_to_rr branch above: estimraw can return
+      # no usable candidate, in which case which.min() yields integer(0) and
+      # estim[[integer(0)]] aborts the whole convert_df() run. Return NA instead.
+      numb <- 1L
+      usable <- .estimraw_usable(estim)
+      if (!is.na(baseline_risk) && length(estim) >= 2L) {
+        cand <- c(
+          abs(estim[[1]]$c[1] / (estim[[1]]$c[1] + estim[[1]]$d[1]) - baseline_risk),
+          abs(estim[[2]]$c[1] / (estim[[2]]$c[1] + estim[[2]]$d[1]) - baseline_risk)
         )
+        if (any(is.finite(cand))) numb <- which.min(cand)
       }
+      # See the matching messages in the or_to_rr branch above.
+      if (!any(usable) || !isTRUE(usable[numb])) {
+        warning("rr_to_or = 'dipietrantonj': the 2x2 reconstruction has no real ",
+                "solution for rr = ", rr, " with the supplied confidence interval and ",
+                "group sizes, so the odds ratio is returned as NA. This is expected ",
+                "when the outcome is not rare. Use another 'rr_to_or' method, or ",
+                "supply the 2x2 counts directly.")
+      } else if (is.na(baseline_risk) && sum(usable) >= 2L) {
+        warning("rr_to_or = 'dipietrantonj': ", sum(usable),
+                " candidate 2x2 reconstructions are compatible with rr = ", rr,
+                " and its confidence interval. 'baseline_risk' is missing, so the ",
+                "first candidate was used. Supply 'baseline_risk' (proportion of cases ",
+                "in the non-exposed group) to select the reconstruction matching the ",
+                "reported event rate.")
+      }
+
+      if (length(estim) < numb || length(numb) != 1L) {
+        return(cbind(logor = NA_real_, logor_se = NA_real_,
+                     logor_ci_lo = NA_real_, logor_ci_up = NA_real_))
+      }
+
       calc_dipie <- es_from_2x2(
         n_cases_exp = estim[[numb]]$a[1],
         n_controls_exp = estim[[numb]]$b[1],
@@ -457,12 +608,19 @@
 
   if (table_2x2_to_cor == "lipsey") {
     # TO DO
+    #
+    # NB before enabling: the phi denominator below was previously written with
+    # (n_controls_exp + n_cases_nexp) as its last factor. That is a diagonal, not
+    # a margin. phi requires all four MARGINS:
+    #   (a+b)(c+d)(a+c)(b+d), i.e. the last factor is the CONTROLS margin
+    #   (n_controls_exp + n_controls_nexp). Corrected below.
+    #
     # log_or <- log((n_cases_exp * n_controls_nexp) / (n_cases_nexp * n_controls_exp))
     # v.log_or <- 1 / n_cases_exp + 1 / n_cases_nexp + 1 / n_controls_exp + 1 / n_controls_nexp
     #
     # r <- (n_cases_exp * n_controls_nexp - n_controls_exp * n_cases_nexp) /
     #   sqrt((n_cases_exp + n_controls_exp) * (n_cases_nexp + n_controls_nexp) *
-    #     (n_cases_exp + n_cases_nexp) * (n_controls_exp + n_cases_nexp))
+    #     (n_cases_exp + n_cases_nexp) * (n_controls_exp + n_controls_nexp))
     # r_lipsey <- ifelse(reverse_2x2, -r, r)
     # z_lipsey <- atanh(r_lipsey)
     # vz_lipsey <- v.log_or * (z_lipsey^2) / (log_or^2)
@@ -488,12 +646,21 @@
     res[res == "calculation failure"] <- NA
 
     # res[] <- lapply(res, function(x) as.numeric(as.character(x)))
+    # On reverse: negate AND swap each CI (new_lo = -old_up, new_up = -old_lo). Negating
+    # the bounds in place left lo > up -- a wrong-signed, inverted interval that did not
+    # bracket the negated point estimate. This is the same defect that was fixed on the
+    # OR path (see es_from_stand_OR.R, the .or_to_cor result block). Both intervals here
+    # are symmetric Wald bounds around their own estimate (r +- z*sqrt(vr) and
+    # z +- z*sqrt(vz)), so the reflected interval is exactly the interval recomputed
+    # around the negated estimate. Old bounds are saved first, since res is overwritten.
+    r_lo_raw <- res[3]; r_up_raw <- res[4]
+    z_lo_raw <- res[7]; z_up_raw <- res[8]
     res[1] <- ifelse(reverse_2x2, -res[1], res[1])
-    res[3] <- ifelse(reverse_2x2, -res[3], res[3])
-    res[4] <- ifelse(reverse_2x2, -res[4], res[4])
+    res[3] <- ifelse(reverse_2x2, -r_up_raw, r_lo_raw)
+    res[4] <- ifelse(reverse_2x2, -r_lo_raw, r_up_raw)
     res[5] <- ifelse(reverse_2x2, -res[5], res[5])
-    res[7] <- ifelse(reverse_2x2, -res[7], res[7])
-    res[8] <- ifelse(reverse_2x2, -res[8], res[8])
+    res[7] <- ifelse(reverse_2x2, -z_up_raw, z_lo_raw)
+    res[8] <- ifelse(reverse_2x2, -z_lo_raw, z_up_raw)
 
     return(res)
   } else {
@@ -685,12 +852,16 @@
     )
     res[res == "calculation failure"] <- NA
 
+    # Negate AND swap each CI on reverse -- see the identical block in
+    # .contingency_to_cor() for why negating in place is wrong.
+    r_lo_raw <- res[3]; r_up_raw <- res[4]
+    z_lo_raw <- res[7]; z_up_raw <- res[8]
     res[1] <- ifelse(reverse_phi, -res[1], res[1])
-    res[3] <- ifelse(reverse_phi, -res[3], res[3])
-    res[4] <- ifelse(reverse_phi, -res[4], res[4])
+    res[3] <- ifelse(reverse_phi, -r_up_raw, r_lo_raw)
+    res[4] <- ifelse(reverse_phi, -r_lo_raw, r_up_raw)
     res[5] <- ifelse(reverse_phi, -res[5], res[5])
-    res[7] <- ifelse(reverse_phi, -res[7], res[7])
-    res[8] <- ifelse(reverse_phi, -res[8], res[8])
+    res[7] <- ifelse(reverse_phi, -z_up_raw, z_lo_raw)
+    res[8] <- ifelse(reverse_phi, -z_lo_raw, z_up_raw)
 
     return(res)
   } else {
@@ -736,12 +907,16 @@
     )
     res[res == "calculation failure"] <- NA
 
+    # Negate AND swap each CI on reverse -- see the identical block in
+    # .contingency_to_cor() for why negating in place is wrong.
+    r_lo_raw <- res[3]; r_up_raw <- res[4]
+    z_lo_raw <- res[7]; z_up_raw <- res[8]
     res[1] <- ifelse(reverse_chisq, -res[1], res[1])
-    res[3] <- ifelse(reverse_chisq, -res[3], res[3])
-    res[4] <- ifelse(reverse_chisq, -res[4], res[4])
+    res[3] <- ifelse(reverse_chisq, -r_up_raw, r_lo_raw)
+    res[4] <- ifelse(reverse_chisq, -r_lo_raw, r_up_raw)
     res[5] <- ifelse(reverse_chisq, -res[5], res[5])
-    res[7] <- ifelse(reverse_chisq, -res[7], res[7])
-    res[8] <- ifelse(reverse_chisq, -res[8], res[8])
+    res[7] <- ifelse(reverse_chisq, -z_up_raw, z_lo_raw)
+    res[8] <- ifelse(reverse_chisq, -z_lo_raw, z_up_raw)
 
     return(res)
   } else {
@@ -852,9 +1027,9 @@
 #' variance vi = 2(1-r)(1/nT + 1/nC) + g^2/(2N) when SD_pre = SD_post within each arm
 #' (the df-weighted r_avg makes the reduction exact even when n1 != n2); under
 #' heteroscedasticity it departs from that homoscedastic form, which understates the
-#' variance (its coverage falls to ~0.86 at SD_pre/SD_post ~ 0.64). d_av uses the
-#' two-group fourth-moment form Bonett (2008) eq. 19, metafor's SMCRPH carried across
-#' two independent arms.
+#' variance (its coverage falls to ~0.86 at SD_pre/SD_post ~ 0.64). d_av takes its
+#' fourth-moment g^2 COEFFICIENT from Bonett (2008) eq. 19 but NOT its leading term --
+#' see the d_av entry below.
 #'
 #' Publication status of each pooled variance:
 #'   - bonett: reduces to Viechtbauer's published vi (metafor-project Morris-2008 page)
@@ -864,10 +1039,26 @@
 #'             scores (Hedges 1981) -- a published two-group variance.
 #'   - d_rm:   d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13, a definition),
 #'             so Var(d_rm) = 2(1-r)*Var(d_z) for known r.
-#'   - d_av:   Bonett (2008) eq. 19 (two-group mixed design, all-four-SD standardizer).
-#' The two pooled forms without a directly published two-group source (the robust
-#' bonett departure, and d_rm's algebra) are Monte-Carlo calibrated in
-#' tests/testthat/test-pooled-variance-calibration.R.
+#'   - d_av:   PARTLY Bonett (2008) eq. 19 (two-group mixed design, all-four-SD
+#'             standardizer). Only the fourth-moment g^2 coefficient is eq. 19's, and it
+#'             is reproduced exactly: eq. 19's first bracket
+#'             [(s1^4+s2^4+2 r12^2 s1^2 s2^2)/df1 + (s3^4+s4^4+2 r34^2 s3^2 s4^2)/df2]
+#'             /(32 s^4) is identical to g2_coef below (checked to 1e-14 over a grid of
+#'             arm sizes). The LEADING term is NOT eq. 19's. Eq. 19 uses the df-based
+#'             sum Sc1^2/(n1-1) + Sc2^2/(n2-1); this code uses metafor's n-based pooled
+#'             form (sd_change_pooled^2/sd_pooled^2) * N/(n1*n2), i.e. the two-sample
+#'             SMD leading term. Under homoscedasticity the ratio of the two is
+#'             (1/(n1-1) + 1/(n2-1)) / (1/n1 + 1/n2), so eq. 19 is LARGER by ~2% at
+#'             n = 50/50, ~3% at 30/30, ~10% at 12/11 and ~32% at 100/4 -- with
+#'             heteroscedastic SDs the departure reaches ~38% at n = 100/10 and is
+#'             unbounded as min(n1, n2) -> 2. The n-based form is the conventional and
+#'             more conservative (smaller-variance) choice, but at strongly unequal arm
+#'             sizes it is not eq. 19 and should not be described as such.
+#' The pooled forms without a directly published two-group source (the robust
+#' bonett departure, d_rm's algebra, and d_av's leading term) are Monte-Carlo calibrated
+#' in tests_save/checked/test-pooled-variance-calibration.R, whose coverage grid is
+#' n1, n2 in {10, 29, 90} -- imbalance up to 9:1, where the departure above is ~10%.
+#' Ratios beyond that (and small min(n) with a large imbalance) are uncalibrated.
 #'
 #' CIs use qt(.975, m) with m = N - 2 the pooled standardizer df, for EVERY branch --
 #' including d_av, whose Cousineau effective df nu = 2m/(1 + r2_avg) feeds ONLY the bias
@@ -1176,8 +1367,13 @@
     d <- (mean_post - mean_pre) / sd_av
     g <- d * J
 
-    # metafor SMCRPH "LS" == Bonett (2008) eq. 10 (verified: reproduces Bonett's
-    # worked Example 2 -- n=60, var=0.0148 -- to the printed digit).
+    # metafor SMCRPH "LS" == Bonett (2008) eq. 10. Verified as a FORMULA IDENTITY:
+    # 0 difference against metafor::escalc(measure = "SMCRPH"). It does NOT reproduce
+    # the var = 0.0148 printed for Bonett's worked Example 2 (n = 60): this branch
+    # gives 0.0146674131, and re-doing Bonett's own arithmetic for that example gives
+    # 0.0147449109, so 0.0148 is a rounding slip in the paper rather than a package
+    # error. Recomputing eq. 10 by hand with the bias-corrected g used here returns
+    # 0.0146674131, identical to 12 digits.
     sd_diff2 <- mean_pre_sd^2 + mean_post_sd^2 - 2 * r_pre_post * mean_pre_sd * mean_post_sd
     fm <- mean_pre_sd^4 + mean_post_sd^4 + 2 * r_pre_post^2 * mean_pre_sd^2 * mean_post_sd^2
     var_g <- sd_diff2 / (sd_av^2 * (n - 1)) + g^2 * fm / (8 * sd_av^4 * (n - 1))
@@ -1198,6 +1394,58 @@
 }
 
 ################# R/Z to SMD ###################
+# Vectorised front end for .cor_to_smd().
+#
+# .cor_to_smd() is scalar and was reached through a per-row mapply() at four call
+# sites. Its "viechtbauer" branch -- the DEFAULT for cor_to_smd -- builds a fresh
+# metafor::conv.delta() call per row, although conv.delta is itself vectorised:
+# 18.1 s per 10,000 rows versus 0.34 s for a single vectorised call.
+#
+# Memoisation (.mapply_memo) does not help here the way it does on the tetrachoric
+# path: correlations are continuous, so rows are effectively all distinct. The fix
+# has to be real vectorisation. Rows are grouped by their cor_to_smd value (it is a
+# per-row column) and each group is computed in one shot, then reassembled in the
+# original order.
+#
+# Agreement with the per-row path: the "viechtbauer" branch is bit-identical (0
+# mismatches in 200,000 rows, since conv.delta is itself vectorised). The closed-form
+# "cooper" and "mathur" branches agree to within 1-2 ULP (max |rel| 4.3e-16, ~0.02% of
+# rows) because R evaluates length-1 and length-n arithmetic on different code paths.
+#
+# NB all arguments must be per-row vectors of the same length; unlike mapply this
+# does NOT recycle a scalar. Every call site passes rep(x, length.out = n).
+.cor_to_smd_vec <- function(r, r_se, unit_increase_iv, sd_iv, unit_type,
+                            n_sample, cor_to_smd) {
+  n <- length(r)
+  out <- matrix(NA_real_, nrow = n, ncol = 2)
+  meth <- as.character(cor_to_smd)
+
+  for (m in unique(meth[!is.na(meth)])) {
+    i <- which(meth == m)
+    out[i, ] <- if (m == "viechtbauer") {
+      # transf.rtod output is the g; d is backed out as g / J. See the rationale
+      # (and the simulation that settles it) in .cor_to_smd() below.
+      rg <- metafor::conv.delta(yi = r[i], vi = r_se[i]^2,
+                                transf = metafor::transf.rtod,
+                                var.names = c("g", "g_var"))
+      J <- .d_j(n_sample[i] - 2)
+      cbind(rg$g / J, sqrt(rg$g_var / J^2))
+    } else if (m == "cooper") {
+      cbind(2 * r[i] / sqrt(1 - r[i]^2),
+            sqrt(4 * r_se[i]^2 / ((1 - r[i]^2)^3)))
+    } else if (m == "mathur") {
+      increase <- ifelse(unit_type[i] == "sd",
+                         unit_increase_iv[i] * sd_iv[i], unit_increase_iv[i])
+      d <- r[i] * increase / (sd_iv[i] * sqrt(1 - r[i]^2))
+      cbind(d, abs(d) * sqrt(1 / (r[i]^2 * (n_sample[i] - 3)) +
+                              1 / (2 * (n_sample[i] - 1))))
+    } else {
+      matrix(NA_real_, nrow = length(i), ncol = 2)
+    }
+  }
+  out
+}
+
 .cor_to_smd <- function(r, r_se,
                         unit_increase_iv, sd_iv, unit_type,
                         n_sample, cor_to_smd) {
@@ -1211,6 +1459,26 @@
     res <- cbind(d, d_se)
     return(res)
   } else if (cor_to_smd == "viechtbauer") {
+    # transf.rtod(r_hat) lands in the g slot, NOT the d slot, and this is
+    # deliberate. It is tempting to reason that transf.rtod is a population map
+    # with no df term, so its output "must" be an uncorrected d -- but which slot
+    # it belongs in is a question about ESTIMATOR BIAS, not about the algebra of
+    # the transform.
+    #
+    # Checked by simulation (bivariate normal, rho = 0.5, median split, true
+    # delta = 0.870126, nrep = 2e5), bias of the reported g against delta:
+    #
+    #   n     Hedges g from raw data    g = transf.rtod(r_hat)   g = J*transf.rtod
+    #   10          -0.004                    +0.033                  -0.055
+    #   25          -0.000                    +0.012                  -0.017
+    #  200          -0.000                    +0.002                  -0.002
+    #
+    # Putting transf.rtod in g is closer to unbiased at every n. The reason is
+    # that this route's small-sample bias is not the Hedges bias: E[r_hat] is
+    # biased DOWN, which partly cancels the upward bias the pooled-SD denominator
+    # induces in a directly computed d. Applying J on top over-corrects.
+    # Neither convention is exactly unbiased -- the residual is the uncancelled
+    # remainder, and it is small (<0.02 for n >= 25).
     res_g <- metafor::conv.delta(
       yi = r, vi = r_se^2, transf = metafor::transf.rtod, var.names = c("g", "g_var")
     )

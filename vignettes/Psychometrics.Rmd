@@ -55,7 +55,13 @@ p{
 ```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 library(metaConvert)
 library(metafor)
-library(DT)
+
+# DT is a Suggests-only dependency, so it is absent on the check flavour that
+# installs hard dependencies only. Fall back to a static table there.
+show_table <- function(x, ...) {
+  if (requireNamespace("DT", quietly = TRUE)) DT::datatable(x, ...)
+  else knitr::kable(x)
+}
 ```
 
 # Introduction
@@ -89,7 +95,7 @@ str(df.psychom)
 ```
 
 ```{r, echo=FALSE}
-DT::datatable(df.psychom, options = list(
+show_table(df.psychom, options = list(
     scrollX = TRUE,
     dom = c('t'),
     scrollY = "300px",
@@ -164,7 +170,7 @@ summary_alpha[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")]
 ```
 
 ```{r, echo=FALSE}
-DT::datatable(summary_alpha[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")],
+show_table(summary_alpha[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")],
               options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
                              rownames = FALSE, pageLength = 50,
                              columnDefs = list(
@@ -250,7 +256,7 @@ summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
 ```
 
 ```{r, echo=FALSE}
-DT::datatable(summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
+show_table(summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
                                 "icc_type", "info_used")],
               options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
                              rownames = FALSE, pageLength = 50,
@@ -352,7 +358,7 @@ measurement_error <- data.frame(
   sdc    = round(sdc_results$sdc, 3),
   sdc_se = round(sdc_results$sdc_se, 3)
 )
-DT::datatable(measurement_error,
+show_table(measurement_error,
               options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
                              rownames = FALSE, pageLength = 50,
                              columnDefs = list(
@@ -422,7 +428,7 @@ summary_r[, c("author", "es", "se", "info_used")]
 ```
 
 ```{r, echo=FALSE}
-DT::datatable(summary_r[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")],
+show_table(summary_r[, c("author", "es", "se", "es_ci_lo", "es_ci_up", "info_used")],
               options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
                              rownames = FALSE, pageLength = 50,
                              columnDefs = list(
@@ -499,7 +505,7 @@ comp <- data.frame(
   r_corrected        = round(corrected$r_corrected, 3),
   attenuation_factor = round(corrected$attenuation_factor, 3)
 )
-DT::datatable(comp,
+show_table(comp,
               options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
                              rownames = FALSE, pageLength = 50,
                              columnDefs = list(
@@ -607,7 +613,7 @@ resp_table <- data.frame(
   rel_change   = round(change_rel$rel_change, 3),
   r_corrected  = round(corrected_resp$r_corrected, 3)
 )
-DT::datatable(resp_table,
+show_table(resp_table,
               options = list(scrollX = TRUE, dom = 't', ordering = FALSE,
                              rownames = FALSE, pageLength = 50,
                              columnDefs = list(

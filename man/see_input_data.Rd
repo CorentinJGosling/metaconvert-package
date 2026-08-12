@@ -52,7 +52,7 @@ You can export a file in various formats outside R
 You can also visualise this dataset directly in R by setting \code{extension = "R"}.
 
 This table is designed to be used in combination with tables showing the combination of input data
-leading to estimate each of the effect size measures (https://metaconvert.org/html/input.html)
+leading to estimate each of the effect size measures (https://metaconvert.org/input.html)
 }
 }
 \examples{

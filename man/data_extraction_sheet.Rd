@@ -48,7 +48,7 @@ function allows you to \strong{convert} a contingency table into a "d", this req
 that is naturally estimated from the contingency table into a "d".
 
 This table is designed to be used in combination with tables showing the combination of input data
-leading to estimate each of the effect size measures (https://metaconvert.org/html/input.html)
+leading to estimate each of the effect size measures (https://metaconvert.org/input.html)
 }
 
 \subsection{Extension}{

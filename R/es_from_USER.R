@@ -149,10 +149,10 @@
       nn <- which(!is.na(r) & !is.na(r_se_user) & !is.na(n_s))
       d_val <- d_se_val <- rep(NA_real_, len)
       if (length(nn) > 0) {
-        d_res <- t(mapply(.cor_to_smd,
+        d_res <- .cor_to_smd_vec(
           r = r[nn], r_se = r_se_user[nn], n_sample = n_s[nn],
           sd_iv = NA, unit_increase_iv = NA, unit_type = NA,
-          cor_to_smd = cor_to_smd))
+          cor_to_smd = rep(cor_to_smd, length.out = length(nn)))
         d_val[nn] <- unlist(d_res[, 1])
         d_se_val[nn] <- unlist(d_res[, 2])
       }
@@ -185,10 +185,10 @@
       nn <- which(!is.na(r) & !is.na(r_se_user) & !is.na(n_s))
       d_val <- d_se_val <- rep(NA_real_, len)
       if (length(nn) > 0) {
-        d_res <- t(mapply(.cor_to_smd,
+        d_res <- .cor_to_smd_vec(
           r = r[nn], r_se = r_se_user[nn], n_sample = n_s[nn],
           sd_iv = NA, unit_increase_iv = NA, unit_type = NA,
-          cor_to_smd = cor_to_smd))
+          cor_to_smd = rep(cor_to_smd, length.out = length(nn)))
         d_val[nn] <- unlist(d_res[, 1])
         d_se_val[nn] <- unlist(d_res[, 2])
       }

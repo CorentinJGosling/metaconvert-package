@@ -102,7 +102,7 @@ assumes the two arms' true standardizing SDs are equal.
 
 \item{icc_to_es}{method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).}
 
-\item{correct_inputs}{a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'es_flags' column and kept in the data.}
+\item{correct_inputs}{a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'flags' column of summary() and kept in the data.}
 
 \item{flag_options}{a named list of thresholds used by the quality flags (see \code{\link{summary.metaConvert}} for the list of options and defaults).}
 }
@@ -128,7 +128,7 @@ dataset you pass to this function.
 Before the calculations, the input data are checked (negative sample
 sizes/SD/SE/p-values, inverted CI bounds, values outside their CI,
 asymmetric CI). By default invalid values are set to NA; issues appear
-in the 'es_flags' column of summary().
+in the 'flags' column of summary().
 }
 
 \subsection{Effect size measures}{

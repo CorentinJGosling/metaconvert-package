@@ -30,10 +30,15 @@
 #' \deqn{d\_z = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_change}}
 #' \deqn{var(g\_z) = \frac{1}{n} + \frac{g\_z^2}{2n}}
 #'
-#' 4. \code{"morris_dav"}: average SD standardizer (Bonett, 2008; equivalent to the SMCRP measure in metafor)
-#' \deqn{d\_av = \frac{mean\_post\_exp - mean\_pre\_exp}{\sqrt{(mean\_pre\_sd\_exp^2 + mean\_post\_sd\_exp^2)/2}}}
+#' 4. \code{"morris_dav"}: average SD standardizer (Bonett, 2008, eq. 10; equivalent to the SMCRPH measure in metafor)
+#' \deqn{sd\_av = \sqrt{(sd\_pre^2 + sd\_post^2)/2}}
+#' \deqn{d\_av = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_av}}
 #' \deqn{g\_av = d\_av \times J(mi), \quad mi = \frac{2(n\_exp - 1)}{1 + r\_pre\_post\_exp^2}}
-#' \deqn{var(g\_av) = J^2 \left[\frac{2(1 - r)}{n} + \frac{d^2(1 + r^2)}{4n}\right]}
+#' \deqn{var(g\_av) = \frac{sd\_change^2}{sd\_av^2 (n - 1)} + \frac{g\_av^2 (sd\_pre^4 + sd\_post^4 + 2 r^2 sd\_pre^2 sd\_post^2)}{8\, sd\_av^4 (n - 1)}}
+#'
+#' This heteroscedasticity-robust variance is used in preference to the homoscedastic
+#' form \eqn{2(1 - r)/n + g\_av^2(1 + r^2)/(4n)} (metafor's SMCRP), which assumes
+#' \eqn{sd\_pre = sd\_post} and understates \eqn{var(g\_av)} when the two differ.
 #'
 #' The within-group Hedges' g is obtained by applying a bias correction factor J to d:
 #' \deqn{g\_w = d\_w * J(n\_exp-1)}

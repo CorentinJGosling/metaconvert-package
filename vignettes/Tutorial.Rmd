@@ -54,7 +54,13 @@ p{
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 library(metaConvert)
-library(DT)
+
+# DT is a Suggests-only dependency, so it is absent on the check flavour that
+# installs hard dependencies only. Fall back to a static table there.
+show_table <- function(x, ...) {
+  if (requireNamespace("DT", quietly = TRUE)) DT::datatable(x, ...)
+  else knitr::kable(x)
+}
 ```
 
 
@@ -69,7 +75,7 @@ see_input_data(measure = "or")
 ```
 
 ```{r, echo=FALSE}
-DT::datatable(see_input_data(measure = "or", type_of_measure = "natural", extension="data.frame"), options = list(  
+show_table(see_input_data(measure = "or", type_of_measure = "natural", extension="data.frame"), options = list(  
     scrollX = TRUE,
     dom = c('t'),
     scrollY = "300px", 
@@ -91,7 +97,7 @@ data_extraction_sheet(measure = "or")
 ```
 
 ```{r, echo=FALSE}
-DT::datatable(data_extraction_sheet(measure = "or", extension="data.frame"), options = list(  
+show_table(data_extraction_sheet(measure = "or", extension="data.frame"), options = list(  
     scrollX = TRUE,
     dom = c('t'),
    ordering = FALSE,
@@ -147,7 +153,7 @@ summary(res)
 ```
 
 ```{r echo=FALSE}
-DT::datatable(summary(res), options = list(  
+show_table(summary(res), options = list(  
     scrollX = TRUE,
     dom = c('t'),
     ordering = FALSE,

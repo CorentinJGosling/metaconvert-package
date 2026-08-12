@@ -11,6 +11,7 @@
   flag_options = list(),
   guidance = TRUE,
   include_raw = TRUE,
+  formulas = FALSE,
   ...
 )
 }
@@ -19,7 +20,7 @@
 
 \item{digits}{an integer value specifying the number of decimal places for the rounding of numeric values. Default is 3.}
 
-\item{flags}{a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{es_flags} column includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.}
+\item{flags}{a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{flags} column (\code{flags_crude} / \code{flags_adjusted} when \code{split_adjusted = TRUE} and \code{format = "wide"}) includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.}
 
 \item{flag_options}{a named list of thresholds overriding the defaults (and any options set in \code{\link{convert_df}}).
 Available options:
@@ -34,11 +35,14 @@ Available options:
 \item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
 \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
 \item \code{direction_conflict_min} (default 2): number of significantly-positive and significantly-negative studies needed to raise the direction conflict flag (G1)
+\item \code{flag_group} (default NULL): one or more input-column names (e.g. \code{"outcome"} or \code{c("outcome", "subgroup")}) used to scope the CROSS-ROW checks (ES/SE/SD outliers, direction conflict, study-duplication, NNT-type and standardizer mixing). With the default \code{NULL} the whole dataset is one pool. Set it for multivariate / multi-outcome data, where a deviation or a repeated \code{study_id} is only meaningful WITHIN a group of comparable rows; a study contributing several outcomes is then no longer flagged as a duplicate, and outliers are judged against same-group peers. Per-row and cross-method checks, and the byte-identical templated-data check (V23), are unaffected.
 }}
 
 \item{guidance}{a logical value indicating whether missing data guidance should be generated for rows where the effect size is NA. Default is TRUE. When enabled, a column \code{es_guidance} (or \code{es_guidance_crude}/\code{es_guidance_adjusted}) is appended, listing the closest estimation methods and which specific columns are missing.}
 
 \item{include_raw}{a logical value indicating whether the raw input columns should be appended after the effect size columns in the returned dataframe. Default is TRUE.}
+
+\item{formulas}{a logical value indicating whether the sensitivity of each effect size to the choice of conversion formula (\code{or_to_rr}, \code{cor_to_smd}, \code{pre_post_to_smd}, ...) should be reported. Default is FALSE. When TRUE, a concise \code{[FORMULA]} message is appended to the flags column for every comparison whose estimate depends on such a choice, and the complete table of alternative estimates (as returned by \code{\link{es_formulas}}) is attached as the \code{"formulas"} attribute. This reports methodological uncertainty rather than a data quality problem: unlike the \code{[DISCORDANT]} flags, a discrepancy between conversion formulae reflects differing statistical assumptions rather than an extraction error. Each alternative formula requires one additional evaluation of \code{\link{convert_df}}.}
 
 \item{...}{other arguments that can be passed to the function}
 }
@@ -161,7 +165,7 @@ estimated from crude and adjusted input data.
 \tab \cr
 \code{overlap_min_max*} \tab \% of overlap between the 95\% CIs of the largest/smallest effect sizes for the comparison.\cr
 \tab \cr
-\code{dispersion_es*} \tab standard deviation of all effect sizes for the comparison.\cr
+\code{dispersion_es*} \tab maximum absolute deviation of the effect sizes from their median for the comparison (used by the cross-method discordance check).\cr
 \tab \cr
 }
 

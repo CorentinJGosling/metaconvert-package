@@ -15,6 +15,14 @@
     diff_max_logor = 2.0, # E3
     overlap_min = 0.85, # E2b
     enable_cross_row = TRUE, # D1/D2
+    # One or more raw-data column names to scope the CROSS-ROW checks by (D1/D2/D3,
+    # G, H, E4/E6/E7). NOT V23, which is a Tier-1 input-data property computed in
+    # .validate_input_data() and is deliberately left dataset-wide.
+    # NULL (default) = whole dataset is one pool, as before.
+    # Set it (e.g. "outcome", or c("outcome","subgroup")) for multivariate / multi-
+    # outcome extraction sheets, where deviations are only meaningful WITHIN a group
+    # of comparable rows. Per-row and cross-method checks are unaffected.
+    flag_group = NULL,
     alpha_max = 0.99, # C7
     icc_max = 0.99, # C8
     group_ratio_max = 10, # C10
@@ -36,6 +44,87 @@
     sd_outlier_ratio = 5, # V27/D3
     sd_outlier_smd = FALSE # V27/D3, off: smd pools mix instrument scales
   )
+}
+
+
+#' Build a per-row grouping key for the CROSS-ROW checks from opts$flag_group.
+#'
+#' Returns a length-n character vector used to scope D1/D2/D3, G, H and E4/E6/E7.
+#' V23 is NOT scoped: it is a Tier-1 input-data property evaluated in
+#' .validate_input_data(), which never sees this key.
+#' When flag_group is NULL / absent / names no present column, every row gets
+#' the same key ("__all__") -- i.e. one pool, the pre-existing whole-dataset
+#' behaviour. Rows with an NA in a grouping column fall into a shared "<NA>" level.
+#' The key doubles as the human-readable group label shown in flag messages.
+#'
+#' @param data data.frame the group column(s) are read from (the raw input data)
+#' @param flag_group NULL, or one or more column names in `data`
+#' @param idx integer row map (length n) from result rows to rows of `data`; NULL
+#'   means `data` is already row-aligned
+#' @param n number of rows the key must cover (defaults to length(idx) / nrow(data))
+#' @noRd
+.build_group_key <- function(data, flag_group, idx = NULL, n = NULL) {
+  if (is.null(n)) n <- if (!is.null(idx)) length(idx) else nrow(data)
+  if (is.null(flag_group) || length(flag_group) == 0) return(rep("__all__", n))
+  cols <- intersect(as.character(flag_group), colnames(data))
+  if (length(cols) == 0) return(rep("__all__", n))
+  parts <- lapply(cols, function(cn) {
+    v <- as.character(data[[cn]])
+    if (!is.null(idx)) v <- v[idx]
+    v[is.na(v)] <- "<NA>"
+    v
+  })
+  do.call(paste, c(parts, sep = " / "))
+}
+
+
+#' Split rows by group_key, run a cross-row flag function within each group, and
+#' reassemble a length-n list of flag vectors (global row order preserved).
+#'
+#' `fn` receives a vector of GLOBAL row indices for one group and must return a
+#' list of character vectors the same length, in that index order. When more than
+#' one group is present, each emitted flag gets a " (within group '<g>')" suffix
+#' (no "; ", so the downstream flag merge is unaffected) so the reviewer knows the
+#' comparison set. Requires self-contained messages (no absolute row-number
+#' references) -- true for the D-family and G checks.
+#'
+#' @param group_key length-n character vector from .build_group_key()
+#' @param n total number of rows
+#' @param fn function(idx) -> list of length(idx) character vectors
+#' @noRd
+.by_group <- function(group_key, n, fn) {
+  flags <- vector("list", n)
+  for (i in seq_len(n)) flags[[i]] <- character(0)
+  groups <- split(seq_len(n), group_key)
+  multi <- length(groups) > 1L
+  # Iterate positionally, NOT over names(groups): a group whose key is the empty
+  # string cannot be reached with groups[[""]] (it returns NULL) and its rows would
+  # silently lose every cross-row flag.
+  for (k in seq_along(groups)) {
+    idx <- groups[[k]]
+    sub <- fn(idx)
+    for (j in seq_along(idx)) {
+      msgs <- sub[[j]]
+      if (length(msgs) && multi) {
+        msgs <- paste0(msgs, " (within group '", .group_label(names(groups)[k]), "')")
+      }
+      flags[[idx[j]]] <- msgs
+    }
+  }
+  flags
+}
+
+
+#' Make a grouping-column value safe to interpolate into a flag message.
+#'
+#' The merged flag string is split on "; ", so a group label containing that
+#' sequence (e.g. an outcome named "HAM-D; total score") would create an untagged
+#' token downstream. Replace it with a comma.
+#'
+#' @param g character scalar, the raw group key
+#' @noRd
+.group_label <- function(g) {
+  gsub("; ", ", ", as.character(g), fixed = TRUE)
 }
 
 
@@ -140,6 +229,7 @@
     list(val = "logor",            lo = "logor_ci_lo",            up = "logor_ci_up",            scale = "additive"),
     list(val = "logrr",            lo = "logrr_ci_lo",            up = "logrr_ci_up",            scale = "additive"),
     list(val = "logirr",           lo = "logirr_ci_lo",           up = "logirr_ci_up",           scale = "additive"),
+    list(val = "loghr",            lo = "loghr_ci_lo",            up = "loghr_ci_up",            scale = "additive"),
     # Risk difference (additive scale)
     list(val = "rd",        lo = "rd_ci_lo",        up = "rd_ci_up",        scale = "additive"),
     # Regression coefficient (additive scale)
@@ -586,7 +676,7 @@
     if (length(mismatch) > 0) {
       for (i in mismatch) {
         row_issues[[i]] <- c(row_issues[[i]],
-          sprintf("[UNUSUAL] Sample size mismatch: n_exp + n_nexp = %g != n_sample = %g. Often legitimate (multi-arm trial, or n_sample is an analysis subset); verify these refer to the same pool",
+          sprintf("[UNUSUAL] Sample size mismatch: n_exp + n_nexp = %g != n_sample = %g. Often legitimate (multi-arm trial, or n_sample is an analysis subset) - verify these refer to the same pool",
                   ne[i] + nn[i], ns[i]))
       }
     }
@@ -622,6 +712,51 @@
             sprintf("[INVALID] 2x2 inconsistency: %s + %s != %s (sum=%g, total=%g)",
                     triple$a, triple$b, triple$total,
                     a[i] + b[i], total[i]))
+        }
+      }
+    }
+  }
+
+  # V33: reported proportion vs its own counts (rounding-aware, warn only, data
+  # preserved -- two independently transcribed values disagree and neither can be
+  # inferred to be the wrong one; both prop routes still compute and the generic
+  # cross-method discordance thresholds are far too coarse on the [0,1] scale to
+  # catch this). V33a: prop != n_cases/n_sample beyond the rounding error of the
+  # reported prop. V33b (GRIM-style, only when n_cases is absent): prop is not
+  # achievable as k/n_sample for ANY integer k, beyond the reported rounding --
+  # the count analogue of the mean-granularity (GRIM) test. Messages carry the
+  # quoted 'prop' so .v_flag_matches_scope routes them to the crude scope only.
+  if (all(c("prop", "n_sample") %in% colnames(x))) {
+    p_v  <- suppressWarnings(as.numeric(x[["prop"]]))
+    ns_v <- suppressWarnings(as.numeric(x[["n_sample"]]))
+    nc_v <- if ("n_cases" %in% colnames(x)) {
+      suppressWarnings(as.numeric(x[["n_cases"]]))
+    } else {
+      rep(NA_real_, n)
+    }
+    for (i in seq_len(n)) {
+      if (is.na(p_v[i]) || is.na(ns_v[i]) || ns_v[i] <= 0) next
+      if (p_v[i] < 0 || p_v[i] > 1) next  # V11's job
+      tol <- 0.5 * 10^(-.count_decimals(p_v[i])) + 1e-12
+      if (!is.na(nc_v[i])) {
+        # V33a: direct consistency against the reported counts
+        if (nc_v[i] > ns_v[i]) next  # V5's job
+        computed <- nc_v[i] / ns_v[i]
+        if (abs(p_v[i] - computed) > tol) {
+          row_issues[[i]] <- c(row_issues[[i]],
+            sprintf("[INVALID] Proportion inconsistent with counts: 'prop' = %g but n_cases/n_sample = %g/%g = %.4g. One of the three values is wrong - verify against the primary report",
+                    p_v[i], nc_v[i], ns_v[i], computed))
+        }
+      } else {
+        # V33b: achievable-fraction (GRIM-style) check, integer N only
+        if (ns_v[i] < 2 || ns_v[i] != round(ns_v[i])) next
+        k <- max(0, min(ns_v[i], round(p_v[i] * ns_v[i])))
+        nearest <- k / ns_v[i]
+        if (abs(p_v[i] - nearest) > tol) {
+          row_issues[[i]] <- c(row_issues[[i]],
+            sprintf("[UNUSUAL] Proportion not achievable for any integer count: 'prop' = %g with n_sample = %d (nearest achievable: %d/%d = %.4g). The proportion, the sample size, or both may be wrong - verify against the primary report",
+                    p_v[i], as.integer(ns_v[i]), as.integer(k),
+                    as.integer(ns_v[i]), nearest))
         }
       }
     }
@@ -796,7 +931,7 @@
                    (abs(implied_crit - t_crit) / t_crit <= paired_as_indep_tol)
         if (isTRUE(matches)) {
           row_issues[[i]] <- c(row_issues[[i]],
-            sprintf("[UNUSUAL] Within-subject design (%s) but the reported CI matches an independent-groups SE (n_exp = n_nexp = %g; implied critical value %.2f). Paired pre/post data analysed as two independent groups overestimates the variance - verify the SE formula (a paired/within-subject SE should be used)",
+            sprintf("[UNUSUAL] Within-subject design (%s) but the reported CI matches an independent-groups SE (n_exp = n_nexp = %g, implied critical value %.2f). Paired pre/post data analysed as two independent groups overestimates the variance - verify the SE formula (a paired/within-subject SE should be used)",
                     tolower(measure), ne, implied_crit))
         }
       }
@@ -926,7 +1061,7 @@
       q <- sp_pre / sp_post
       if (is.finite(q) && q < sd_ratio_bl_ep_min) {
         row_issues[[i]] <- c(row_issues[[i]],
-          sprintf("[INFO] SD_baseline / SD_endpoint = %.2f (below %.2f). Pre-post SMD formulas (Bonett, d_rm, d_av) target a baseline-SD-standardised estimand structurally different from the ANCOVA-on-endpoint-SD target at this variance regime; choice of estimand non-trivial",
+          sprintf("[INFO] SD_baseline / SD_endpoint = %.2f (below %.2f). Pre-post SMD formulas (Bonett, d_rm, d_av) target a baseline-SD-standardised estimand structurally different from the ANCOVA-on-endpoint-SD target at this variance regime - choice of estimand non-trivial",
                   q, sd_ratio_bl_ep_min))
       }
     }
@@ -993,7 +1128,7 @@
         imb <- abs(x$mean_pre_exp[i] - x$mean_pre_nexp[i]) / sp_pre
         if (is.finite(imb) && imb > baseline_imbalance_max) {
           row_issues[[i]] <- c(row_issues[[i]],
-            sprintf("[INFO] |standardised baseline imbalance| = %.2f (above %.2f). Endpoint-only SMD formulas inherit ANCOVA omitted-variable bias of magnitude r * imb_std; ANCOVA-adjusted statistics recommended at this imbalance level",
+            sprintf("[INFO] |standardised baseline imbalance| = %.2f (above %.2f). Endpoint-only SMD formulas inherit ANCOVA omitted-variable bias of magnitude r * imb_std - ANCOVA-adjusted statistics recommended at this imbalance level",
                     imb, baseline_imbalance_max))
         }
       }
@@ -1021,7 +1156,7 @@
   flagged_v22 <- which(any_ancova_sd & !cov_r_present)
   for (i in flagged_v22) {
     row_issues[[i]] <- c(row_issues[[i]],
-      "[UNUSUAL] ANCOVA residual SD provided but cov_outcome_r missing. Residual SD is conditional on the covariate(s); without cov_outcome_r the marginal-scale back-transformation 1/sqrt(1 - R^2) cannot be applied. Provide cov_outcome_r to avoid silent SMD underestimation by ~5-15% (Cochrane Handbook section 6.5.2.5 does not flag this step)")
+      "[UNUSUAL] ANCOVA residual SD provided but cov_outcome_r missing. Residual SD is conditional on the covariate(s) - without cov_outcome_r the marginal-scale back-transformation 1/sqrt(1 - R^2) cannot be applied. Provide cov_outcome_r to avoid silent SMD underestimation by ~5-15% (Cochrane Handbook section 6.5.2.5 does not flag this step)")
   }
 
   # V23: identical stat block across different study_id (templated data);
@@ -1055,7 +1190,7 @@
           if (length(others) == 0) next
           row_issues[[i]] <- c(row_issues[[i]], sprintf(
             paste0("[INFO] Identical %s summary statistics shared with %s (%s). ",
-                   "Independent studies rarely reproduce multi-decimal means/SDs exactly; ",
+                   "Independent studies rarely reproduce multi-decimal means/SDs exactly - ",
                    "verify these rows are not templated, cloned, or extracted from the same source"),
             bl_name, paste(.row_ref(others, sid), collapse = ", "),
             paste(sprintf("'%s'=%s", cols, format(vals, scientific = FALSE)), collapse = ", ")))
@@ -1308,7 +1443,7 @@
         if (matches_t) {
           if (enable_informational) {
             flags[[i]] <- c(flags[[i]],
-              sprintf("[INFO] CI width matches a t-based CI rather than Wald-z: z-expected %.3f, actual %.3f. Benign if the source built t CIs; if the source used Wald CIs, check the SE formula (e.g. paired vs independent)%s",
+              sprintf("[INFO] CI width matches a t-based CI rather than Wald-z: z-expected %.3f, actual %.3f. Benign if the source built t CIs. If the source used Wald CIs, check the SE formula (e.g. paired vs independent)%s",
                       expected_width, ci_width, msuf))
           }
         } else {
@@ -1354,6 +1489,32 @@
     if (measure == "r" && is.finite(es[i]) && abs(es[i]) > 1) {
       flags[[i]] <- c(flags[[i]],
         paste0("[INVALID] r outside [-1, 1]: r = ", round(es[i], 3), msuf))
+    }
+
+    # B1b: raw-scale Wald CI escaping [-1, 1] while the point estimate is valid.
+    # Same geometry as B7b/B8b for alpha and ICC: r is bounded identically and its
+    # interval is built identically (es +/- z*se), so a symmetric Wald interval can
+    # leave the parameter space near |r| = 1 even when r itself is fine. Common on
+    # the tetrachoric route with small off-diagonal cells; B1 above tests only the
+    # point estimate, so without this the bound passes through silently.
+    #
+    # [INFO], not [UNUSUAL], deliberately. The data, the table and the point
+    # estimate are all sound -- there is nothing to verify and nothing extracted
+    # wrongly. This is a property of the interval metaConvert itself constructs, and
+    # the user has no corrective action available (table_2x2_to_cor accepts only
+    # "tetrachoric"). That is V31's situation, not B7b/B8b's: B7b/B8b are [UNUSUAL]
+    # because they can point the user at alpha_to_es/icc_to_es = "bonett", which
+    # cannot overshoot. Here there is no such escape, so the flag is a disclosure.
+    if (measure == "r" && is.finite(es[i]) && abs(es[i]) <= 1) {
+      lo_out <- !is.na(ci_lo[i]) && is.finite(ci_lo[i]) && ci_lo[i] < -1
+      up_out <- !is.na(ci_up[i]) && is.finite(ci_up[i]) && ci_up[i] > 1
+      if (lo_out || up_out) {
+        bound <- if (up_out) ci_up[i] else ci_lo[i]
+        side <- if (up_out) "upper bound exceeds 1" else "lower bound is below -1"
+        flags[[i]] <- c(flags[[i]],
+          paste0("[INFO] Correlation CI ", side, " (", round(bound, 3),
+                 ") while r is valid - the symmetric Wald interval escapes the parameter space, interpret the interval with caution", msuf))
+      }
     }
 
     # B2: OR/RR/IRR non-positive on natural scale
@@ -1409,7 +1570,7 @@
           flags[[i]] <- c(flags[[i]],
             paste0("[INVALID] Minimum possible NNT = ", round(min_nnt, 1),
                    " (baseline_risk = ", round(br * 100, 1), "%)",
-                   "; reported |NNT| = ", round(abs(es[i]), 3), msuf))
+                   " - reported |NNT| = ", round(abs(es[i]), 3), msuf))
         }
       }
       if (!is.na(brate) && brate > 0) {
@@ -1418,7 +1579,7 @@
           flags[[i]] <- c(flags[[i]],
             paste0("[INVALID] Minimum possible person-time NNT = ", round(min_nnt_pt, 1),
                    " (baseline_rate = ", round(brate, 4), ")",
-                   "; reported |NNT| = ", round(abs(es[i]), 3), msuf))
+                   " - reported |NNT| = ", round(abs(es[i]), 3), msuf))
         }
       }
     }
@@ -1454,7 +1615,7 @@
         if (es[i] > 0) {
           flags[[i]] <- c(flags[[i]],
             paste0("[UNUSUAL] Bonett alpha ln(1-alpha) = ", round(es[i], 3),
-                   " > 0 implies a negative Cronbach's alpha - possible but indicates serious measurement problems; verify extraction", msuf))
+                   " > 0 implies a negative Cronbach's alpha - possible but indicates serious measurement problems, verify extraction", msuf))
         }
       } else if (es[i] > 1) {
         flags[[i]] <- c(flags[[i]],
@@ -1468,7 +1629,7 @@
         flags[[i]] <- c(flags[[i]],
           paste0("[UNUSUAL] Raw-scale alpha CI upper bound exceeds 1 (",
                  round(ci_up[i], 3),
-                 ") - the symmetric Wald interval escapes the parameter space; consider alpha_to_es = 'bonett'", msuf))
+                 ") - the symmetric Wald interval escapes the parameter space, consider alpha_to_es = 'bonett'", msuf))
       }
     }
 
@@ -1478,7 +1639,7 @@
         if (es[i] > 0) {
           flags[[i]] <- c(flags[[i]],
             paste0("[UNUSUAL] Bonett ICC ln(1-ICC) = ", round(es[i], 3),
-                   " > 0 implies a negative ICC - possible but indicates serious measurement problems; verify extraction", msuf))
+                   " > 0 implies a negative ICC - possible but indicates serious measurement problems, verify extraction", msuf))
         }
       } else if (es[i] > 1) {
         flags[[i]] <- c(flags[[i]],
@@ -1500,7 +1661,7 @@
           flags[[i]] <- c(flags[[i]],
             paste0("[UNUSUAL] Raw-scale ICC CI bound outside [-1, 1]: ",
                    paste(icc_bound_problems, collapse = ", "),
-                   " - the symmetric Wald interval escapes the parameter space; consider icc_to_es = 'bonett'", msuf))
+                   " - the symmetric Wald interval escapes the parameter space, consider icc_to_es = 'bonett'", msuf))
         }
       }
     }
@@ -1813,6 +1974,9 @@
       se_for_iqr[!has_n] <- NA_real_
     }
   }
+  # SE <= 0 is invalid (C2/A3 flag it) and must not anchor the outlier pool:
+  # a zero would sit in the median/IQR as a spurious extreme-low observation
+  se_for_iqr[!is.na(se) & is.finite(se) & se <= 0] <- NA_real_
   se_iqr_valid <- se_for_iqr[!is.na(se_for_iqr) & is.finite(se_for_iqr)]
   se_ratio_min <- opts$se_outlier_min_ratio
   if (length(se_iqr_valid) >= 4) {
@@ -1901,7 +2065,7 @@
               paste0("[UNUSUAL] SD outlier: spread = ", round(spread[i], 3),
                      " is ", round(sp_med / spread[i], 1),
                      "x below the pool median (", round(sp_med, 3),
-                     "); an SD this small for the scale can mean a standard error was entered as a standard deviation",
+                     ") - an SD this small for the scale can mean a standard error was entered as a standard deviation",
                      msuf))
           }
         }
@@ -1964,7 +2128,7 @@
   min_threshold <- if (!is.null(opts$direction_conflict_min)) {
     opts$direction_conflict_min
   } else {
-    1
+    2
   }
 
   pct_threshold <- if (!is.null(opts$direction_conflict_pct)) {
@@ -2040,7 +2204,8 @@
 #' @param info_used character vector of method names for traceability (optional)
 #' @return list of character vectors (one per row)
 #' @noRd
-.flag_cross_row_duplicates <- function(study_id, opts, info_used = NULL) {
+.flag_cross_row_duplicates <- function(study_id, opts, info_used = NULL,
+                                       group_key = NULL) {
   n <- length(study_id)
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
@@ -2052,21 +2217,32 @@
   valid <- !is.na(sid) & nzchar(sid)
   if (sum(valid) < 2) return(flags)
 
-  tab     <- table(sid[valid])
-  dup_ids <- names(tab[tab >= 2])
-  if (length(dup_ids) == 0) return(flags)
+  # Scope duplication WITHIN group: a repeated study_id counts as a duplicate only
+  # when the rows also share the same group. Multivariate / multi-outcome data
+  # legitimately repeats a study_id across outcome groups, so keying on study_id
+  # alone would flag it wholesale; keying on (group, study_id) does not. A NULL
+  # group_key collapses to a single group -> the previous whole-dataset behaviour.
+  grp <- if (is.null(group_key)) rep("__all__", n) else as.character(group_key)
+  multi_grp <- length(unique(grp[valid])) > 1L
+  dup_key <- paste(grp, sid, sep = "\r")
+
+  tab      <- table(dup_key[valid])
+  dup_keys <- names(tab[tab >= 2])
+  if (length(dup_keys) == 0) return(flags)
 
   # no method suffix, the duplicate is a row-level fact
-  for (dup_id in dup_ids) {
-    rows <- which(sid == dup_id & valid)
+  for (dk in dup_keys) {
+    rows   <- which(dup_key == dk & valid)
+    dup_id <- sid[rows[1]]
+    grp_txt <- if (multi_grp) paste0(" within group '", .group_label(grp[rows[1]]), "'") else ""
     for (i in rows) {
       others <- setdiff(rows, i)
       flags[[i]] <- c(flags[[i]],
-        paste0("[INFO] Duplicate study_id '", dup_id,
-               "': row shares study_id with ",
+        paste0("[INFO] Duplicate study_id '", dup_id, "'", grp_txt,
+               ": row shares study_id with ",
                paste(.row_ref(others, sid), collapse = ", "),
-               " - verify these are independent observations; ",
-               "use aggregate_df() if rows should be pooled, ",
+               " - verify these are independent observations. ",
+               "Use aggregate_df() if rows should be pooled, ",
                "or drop one row if they describe the same trial."))
     }
   }
@@ -2364,6 +2540,34 @@
   ci_up <- suppressWarnings(as.numeric(as.character(res[[paste0("es_ci_up", suffix)]])))
 
   row_idx_map <- match(res$row_id, raw_data$row_id)
+  # Per-row grouping key for the cross-row checks (D1/D2/D3, G, H, E4/E6/E7).
+  # NULL flag_group -> a single "__all__" pool (unchanged whole-dataset behaviour).
+  group_key <- .build_group_key(raw_data, opts$flag_group, idx = row_idx_map, n = n)
+
+  # ---- Comparison representatives (route view) --------------------------------
+  # Every CROSS-ROW check below assumes one row = one comparison: it compares a
+  # study against its peers. Under main_es = FALSE a comparison occupies one row
+  # per estimation route, so that invariant breaks and the checks silently change
+  # their unit of analysis -- a study with k routes enters the IQR pool k times
+  # (masking its own outlier status), counts k times toward the direction-conflict
+  # floor, and matches its own study_id k times in the duplication check.
+  #
+  # Fix: decide every cross-row property on ONE representative row per
+  # (row_id, scope), then broadcast the verdict back to that comparison's rows.
+  # When main_es = TRUE every row is its own representative, cmp_map is the
+  # identity and this is a no-op -- the default path is bit-for-bit unchanged.
+  cmp_key <- paste(res$row_id,
+                   if ("adjusted_input" %in% colnames(res)) res$adjusted_input else "",
+                   sep = "\r")
+  cmp_rep_i <- which(!duplicated(cmp_key))          # representative row indices
+  cmp_map <- match(cmp_key, cmp_key[cmp_rep_i])     # every row -> its representative slot
+  cmp_rep <- seq_len(n) %in% cmp_rep_i              # logical mask over all rows
+  # Expand a length(cmp_rep_i) list of flag tokens back to all n rows.
+  .cmp_broadcast <- function(sub) {
+    out <- vector("list", n)
+    for (i in seq_len(n)) out[[i]] <- sub[[cmp_map[i]]]
+    out
+  }
   # Per-row r_pre_post-default flag (aligned to raw_data rows, like input_validation)
   r_def_row <- if (!is.null(r_defaulted)) {
     as.logical(r_defaulted[row_idx_map])
@@ -2448,21 +2652,46 @@
   sd_nexp_vec <- if ("mean_sd_nexp" %in% colnames(raw_data)) {
     suppressWarnings(as.numeric(raw_data$mean_sd_nexp[match(res$row_id, raw_data$row_id)]))
   } else NULL
-  f_d <- .flag_cross_row_outliers(es, se, opts, info_used, measure, n_total = n_total,
-                                   n_exp = n_exp_vec, n_nexp = n_nexp_vec,
-                                   sd_exp = sd_exp_vec, sd_nexp = sd_nexp_vec,
-                                   suffix = suffix, exp = exp)
-  f_g <- .flag_cross_row_direction_conflict(es, ci_lo, ci_up, opts, info_used,
-                                             measure, exp)
+  # D1/D2/D3 and G run WITHIN each group (NULL flag_group -> one "__all__" pool).
+  # NULL vector args index to NULL, which the checks already tolerate. Their messages
+  # are self-contained, so .by_group can tag each with its group label.
+  # Run on comparison representatives only (identity when main_es = TRUE), then
+  # broadcast, so route replicates cannot inflate the pool or mask their own study.
+  nR <- length(cmp_rep_i)
+  esR <- es[cmp_rep_i]; seR <- se[cmp_rep_i]
+  ci_loR <- ci_lo[cmp_rep_i]; ci_upR <- ci_up[cmp_rep_i]
+  info_usedR <- if (is.null(info_used)) NULL else info_used[cmp_rep_i]
+  n_totalR <- n_total[cmp_rep_i]
+  n_expR <- n_exp_vec[cmp_rep_i]; n_nexpR <- n_nexp_vec[cmp_rep_i]
+  sd_expR <- if (is.null(sd_exp_vec)) NULL else sd_exp_vec[cmp_rep_i]
+  sd_nexpR <- if (is.null(sd_nexp_vec)) NULL else sd_nexp_vec[cmp_rep_i]
+  group_keyR <- group_key[cmp_rep_i]
+
+  f_d <- .cmp_broadcast(.by_group(group_keyR, nR, function(idx)
+    .flag_cross_row_outliers(esR[idx], seR[idx], opts, info_usedR[idx], measure,
+                             n_total = n_totalR[idx],
+                             n_exp = n_expR[idx], n_nexp = n_nexpR[idx],
+                             sd_exp = sd_expR[idx], sd_nexp = sd_nexpR[idx],
+                             suffix = suffix, exp = exp)))
+  f_g <- .cmp_broadcast(.by_group(group_keyR, nR, function(idx)
+    .flag_cross_row_direction_conflict(esR[idx], ci_loR[idx], ci_upR[idx], opts,
+                                       info_usedR[idx], measure, exp)))
 
   # H: Cross-row study duplication (reads study_id from raw_data;
-  # always pass a length-n vector so f_dup[[i]] is safe downstream)
+  # always pass a length-n vector so f_dup[[i]] is safe downstream). Scoped WITHIN
+  # group_key: sharing a study_id across different groups (e.g. one trial reporting
+  # several outcomes) is expected in multivariate data and must NOT be flagged.
   study_id_vec <- if ("study_id" %in% colnames(raw_data)) {
     as.character(raw_data$study_id[match(res$row_id, raw_data$row_id)])
   } else {
     rep(NA_character_, n)
   }
-  f_dup <- .flag_cross_row_duplicates(study_id_vec, opts, info_used)
+  # Representatives only: otherwise a single comparison's k route rows all share
+  # its study_id and the check reports the comparison as a duplicate of itself,
+  # recommending aggregate_df() or dropping rows -- both destructive here.
+  f_dup <- .cmp_broadcast(
+    .flag_cross_row_duplicates(study_id_vec[cmp_rep_i], opts, info_usedR,
+                               group_key = group_keyR))
 
   f_f <- .flag_se_sample_size(es, se, measure, n_total, info_used,
                               n_exp = n_exp_vec, n_nexp = n_nexp_vec)
@@ -2482,25 +2711,33 @@
                                      exp = exp, es = es,
                                      r_defaulted = r_def_row)
 
-  # E4: Cross-row NNT type mixing (risk-based vs rate-based)
+  # E4: Cross-row NNT type mixing (risk-based vs rate-based), scoped WITHIN group_key
+  # (only rows that would actually be pooled together can be "mixed").
   f_nnt_mix <- vector("list", n)
   for (i in seq_len(n)) f_nnt_mix[[i]] <- character(0)
   if (measure == "nnt" && !is.null(info_used)) {
     rate_methods <- "cases_time"
-    valid_info <- info_used[!is.na(info_used) & nchar(info_used) > 0 & !is.na(es)]
-    has_rate <- any(valid_info %in% rate_methods)
-    has_risk <- any(!valid_info %in% rate_methods)
-    if (has_rate && has_risk) {
-      for (i in seq_len(n)) {
-        if (is.na(info_used[i]) || is.na(es[i])) next
-        is_rate <- info_used[i] %in% rate_methods
-        this_type <- if (is_rate) "rate-based (person-time)" else "risk-based"
-        other_type <- if (is_rate) "risk-based" else "rate-based (person-time)"
-        msuf <- .method_suffix(info_used[i])
-        f_nnt_mix[[i]] <- paste0(
-          "[DISCORDANT] Mixed NNT types: this row uses ", this_type,
-          " NNT", msuf, ", but other rows use ", other_type,
-          " NNT - these have different units and should not be pooled together")
+    multi_grp <- length(unique(group_key)) > 1L
+    for (g in unique(group_key)) {
+      gi <- which(group_key == g & !is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
+      # Whether the POOL mixes NNT types is decided on the routes that would
+      # actually be selected; a non-selected cases_time route on one comparison
+      # must not make every other comparison report "Mixed NNT types".
+      gi_rep <- gi[cmp_rep[gi]]
+      if (length(gi_rep) < 2) next
+      vg <- info_used[gi_rep]
+      if (any(vg %in% rate_methods) && any(!vg %in% rate_methods)) {
+        gtxt <- if (multi_grp) paste0(" (within group '", .group_label(g), "')") else ""
+        for (i in gi) {
+          is_rate <- info_used[i] %in% rate_methods
+          this_type <- if (is_rate) "rate-based (person-time)" else "risk-based"
+          other_type <- if (is_rate) "risk-based" else "rate-based (person-time)"
+          msuf <- .method_suffix(info_used[i])
+          f_nnt_mix[[i]] <- paste0(
+            "[DISCORDANT] Mixed NNT types: this row uses ", this_type,
+            " NNT", msuf, ", but other rows use ", other_type,
+            " NNT - these have different units and should not be pooled together", gtxt)
+        }
       }
     }
   }
@@ -2554,9 +2791,20 @@
     # on the raw-score metric, not the change-SD metric).
     row_is_change_all <- (info_used %in% change_metric_methods) & (eff_method == "morris_dz")
     valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
-    is_change <- row_is_change_all[valid_idx]
-    if (any(is_change) && any(!is_change)) {
-      for (i in valid_idx) {
+    # Mixing is only meaningful among rows that would actually be pooled: decide it
+    # WITHIN each group_key so a change-SD outcome and a raw-SD outcome in a
+    # multivariate sheet are not cross-flagged.
+    multi_grp <- length(unique(group_key)) > 1L
+    for (g in unique(group_key[valid_idx])) {
+      gsel <- valid_idx[group_key[valid_idx] == g]
+      # Trigger on the routes that would actually be selected: under the route
+      # view a single comparison legitimately offers both an endpoint and a
+      # pre/post route, which is a within-comparison estimand difference (E1/E3),
+      # not the cross-row standardizer mixing this check is about.
+      ic <- row_is_change_all[gsel[cmp_rep[gsel]]]
+      if (!(any(ic) && any(!ic))) next
+      gtxt <- if (multi_grp) paste0(" (within group '", .group_label(g), "')") else ""
+      for (i in gsel) {
         row_is_change <- row_is_change_all[i]
         this_metric <- if (row_is_change) "the change-SD metric (d_z)" else "a raw-score-SD metric"
         other_metric <- if (row_is_change) "a raw-score-SD metric" else "the change-SD metric (d_z)"
@@ -2567,7 +2815,7 @@
           " - these differ by a factor 1/sqrt(2(1-r)) and should not be pooled ",
           "(Cochrane Handbook 10.5.2). Use pre_post_to_smd = 'morris_drm' (or ",
           "'bonett') to put pre/post rows on the raw-score-SD metric of the ",
-          "endpoint rows")
+          "endpoint rows", gtxt)
       }
     }
   }
@@ -2592,14 +2840,21 @@
       "mean_change_sd", "mean_change_se", "mean_change_ci", "mean_change_pval"
     )
     valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
-    has_per_arm <- any(info_used[valid_idx] %in% per_arm_only_methods)
-    has_pooled <- any(info_used[valid_idx] %in% pooled_capable_methods)
     # P25: under pool_sd = TRUE the per-arm fallback contradicts the user's
     # explicit pooling request even when NO pooled-capable row coexists (a pool
     # made only of paired t/F rows used to be silent); disclose it either way,
-    # with a message that fits each situation.
-    if (has_per_arm) {
-      for (i in valid_idx) {
+    # with a message that fits each situation. Scoped WITHIN group_key so the
+    # coexistence is decided among rows that would actually be pooled.
+    multi_grp <- length(unique(group_key)) > 1L
+    for (g in unique(group_key[valid_idx])) {
+      gsel <- valid_idx[group_key[valid_idx] == g]
+      # Coexistence decided on selected routes (see E4/E6 above).
+      gsel_rep <- gsel[cmp_rep[gsel]]
+      has_per_arm <- any(info_used[gsel_rep] %in% per_arm_only_methods)
+      has_pooled  <- any(info_used[gsel_rep] %in% pooled_capable_methods)
+      if (!has_per_arm) next
+      gtxt <- if (multi_grp) paste0(" (within group '", .group_label(g), "')") else ""
+      for (i in gsel) {
         if (!info_used[i] %in% per_arm_only_methods) next
         msuf <- .method_suffix(info_used[i])
         f_paired_t_mix[[i]] <- if (has_pooled) {
@@ -2608,13 +2863,13 @@
             "the two arms' SD ratio", msuf, ", so this row standardizes each arm by ",
             "its own SD, while other rows in this pool use an SD pooled across arms ",
             "(you set pool_sd = TRUE). The two constructions coincide only when a ",
-            "study's arm SDs are equal")
+            "study's arm SDs are equal", gtxt)
         } else {
           paste0(
             "[INFO] Per-arm standardizer: a paired t/F statistic does not identify ",
             "the two arms' SD ratio", msuf, ", so this row standardizes each arm by ",
             "its own SD although you set pool_sd = TRUE. The pooled construction ",
-            "is not recoverable from a paired t/F statistic")
+            "is not recoverable from a paired t/F statistic", gtxt)
         }
       }
     }

@@ -69,8 +69,9 @@ are converted from the odds ratio value.
 \strong{Estimation of the standard error of the log OR.}
 This function generates the standard error of an odds ratio (OR) based on the OR value and the number of cases and controls.
 More precisely, this function simulates all combinations of the possible number of cases and controls in the exposed and non-exposed groups
-compatible with the reported OR value and with the overall number of cases and controls. Then, our function assumes that the variance of the OR
-is equal to the mean of the standard error of all possible situations. This estimation thus necessarily comes with some imprecision and should not
+compatible with the reported OR value and with the overall number of cases and controls. Then, our function assumes that the variance of the log OR
+is equal to the mean of the variance of all possible situations (the reported standard error is the square root of that mean variance).
+This estimation thus necessarily comes with some imprecision and should not
 be used before having requested the value (or raw data) to authors of the original report.
 
 \strong{Conversion of other effect size measures.}

@@ -1,3 +1,22 @@
+#' Keep one placeholder row for comparisons no estimation route could reach.
+#'
+#' The long-format branches build the crude and adjusted pools with two separate
+#' \code{.generate_df()} calls and then drop every row whose \code{measure} is NA.
+#' That silently deleted whole comparisons from the output: the row count no
+#' longer matched the input, the console banner reported a vacuous
+#' "ES estimated: n/n (100%)", and -- because \code{.add_es_guidance()} only
+#' writes where \code{es} is NA -- the entire \code{es_guidance} feature became
+#' unreachable in these modes. Re-attach the untouched crude row for any
+#' comparison that survived in neither pool.
+#'
+#' @noRd
+.retain_unestimable <- function(res_transit, res_all) {
+  missing_ids <- setdiff(res_all$row_id, res_transit$row_id)
+  if (length(missing_ids) == 0) return(res_transit)
+  filler <- res_all[res_all$row_id %in% missing_ids, , drop = FALSE]
+  rbind(res_transit, filler)
+}
+
 #' @noRd
 .compact_measure_label <- function(measure, exp) {
   if (exp && measure == "logor") return("OR")
@@ -57,7 +76,10 @@
       paste0("min: ", res[[min_info_col]], " = ", round(min_val, digits),
              ", max: ", res[[max_info_col]], " = ", round(max_val, digits),
              ", overlap: ", round(overlap_raw * 100), "%",
-             ", SD: ", round(disp_raw, digits)),
+             # 'dispersion_es' is .dispersion_stat() = max|v - median(v)|, NOT a
+             # sample SD (see the rationale at internal_generate_df.R). Label it
+             # for what it is -- this string is the one place a user reads it.
+             ", max dev: ", round(disp_raw, digits)),
       "")
   )
   res
@@ -88,7 +110,7 @@
 #'
 #' @param object an object of class \dQuote{metaConvert}
 #' @param digits an integer value specifying the number of decimal places for the rounding of numeric values. Default is 3.
-#' @param flags a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{es_flags} column includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.
+#' @param flags a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{flags} column (\code{flags_crude} / \code{flags_adjusted} when \code{split_adjusted = TRUE} and \code{format = "wide"}) includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.
 #' @param flag_options a named list of thresholds overriding the defaults (and any options set in \code{\link{convert_df}}).
 #' Available options:
 #' \itemize{
@@ -102,9 +124,11 @@
 #'   \item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
 #'   \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
 #'   \item \code{direction_conflict_min} (default 2): number of significantly-positive and significantly-negative studies needed to raise the direction conflict flag (G1)
+#'   \item \code{flag_group} (default NULL): one or more input-column names (e.g. \code{"outcome"} or \code{c("outcome", "subgroup")}) used to scope the CROSS-ROW checks (ES/SE/SD outliers, direction conflict, study-duplication, NNT-type and standardizer mixing). With the default \code{NULL} the whole dataset is one pool. Set it for multivariate / multi-outcome data, where a deviation or a repeated \code{study_id} is only meaningful WITHIN a group of comparable rows; a study contributing several outcomes is then no longer flagged as a duplicate, and outliers are judged against same-group peers. Per-row and cross-method checks, and the byte-identical templated-data check (V23), are unaffected.
 #' }
 #' @param guidance a logical value indicating whether missing data guidance should be generated for rows where the effect size is NA. Default is TRUE. When enabled, a column \code{es_guidance} (or \code{es_guidance_crude}/\code{es_guidance_adjusted}) is appended, listing the closest estimation methods and which specific columns are missing.
 #' @param include_raw a logical value indicating whether the raw input columns should be appended after the effect size columns in the returned dataframe. Default is TRUE.
+#' @param formulas a logical value indicating whether the sensitivity of each effect size to the choice of conversion formula (\code{or_to_rr}, \code{cor_to_smd}, \code{pre_post_to_smd}, ...) should be reported. Default is FALSE. When TRUE, a concise \code{[FORMULA]} message is appended to the flags column for every comparison whose estimate depends on such a choice, and the complete table of alternative estimates (as returned by \code{\link{es_formulas}}) is attached as the \code{"formulas"} attribute. This reports methodological uncertainty rather than a data quality problem: unlike the \code{[DISCORDANT]} flags, a discrepancy between conversion formulae reflects differing statistical assumptions rather than an extraction error. Each alternative formula requires one additional evaluation of \code{\link{convert_df}}.
 #' @param ... other arguments that can be passed to the function
 #'
 #' @details
@@ -236,7 +260,7 @@
 #'  \tab \cr
 #'  \code{overlap_min_max*} \tab % of overlap between the 95% CIs of the largest/smallest effect sizes for the comparison.\cr
 #'  \tab \cr
-#'  \code{dispersion_es*} \tab standard deviation of all effect sizes for the comparison.\cr
+#'  \code{dispersion_es*} \tab maximum absolute deviation of the effect sizes from their median for the comparison (used by the cross-method discordance check).\cr
 #'  \tab \cr
 #' }
 #'
@@ -281,7 +305,7 @@
 #' summary(
 #'   convert_df(df.haza, measure = "g"),
 #'   digits = 5)
-summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options = list(), guidance = TRUE, include_raw = TRUE, ...) {
+summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options = list(), guidance = TRUE, include_raw = TRUE, formulas = FALSE, ...) {
   # object = convert_df(dat, verbose = FALSE,
   #                     or_to_rr = "dipietrantonj", measure="nnt")
   # digits = 3
@@ -393,7 +417,7 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
 
     res1_sub = subset(res1, !is.na(res1$measure))
     res2_sub = subset(res2, !is.na(res2$measure))
-    res_transit <- rbind(res1_sub, res2_sub)
+    res_transit <- .retain_unestimable(rbind(res1_sub, res2_sub), res1)
     res <- res_transit[order(res_transit$row_id), ]
 
   } else if (split_adjusted == FALSE & main_es == TRUE) {
@@ -404,6 +428,21 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     )
 
     res = subset(res, select = -c(adjusted_input))
+  } else if (main_es == FALSE & split_adjusted == FALSE) {
+    # split_adjusted = FALSE was previously ignored in the route view: crude and
+    # adjusted routes were always built as two separate pools, so a comparison
+    # offering both never had them compared against each other. Honour it here by
+    # running the routes through a single ordering, as main_es = TRUE does.
+    res <- .generate_df(
+      x = raw_data, list_df = df_es, ordering = ordering_tot, exp = exp,
+      digits = digits, suffix = "", measure = measure,
+      es_selected = es_selected, list_df_es_enh = list_df_es_enh,
+      main_es = FALSE
+    )
+    res <- .retain_unestimable(subset(res, !is.na(res$measure)), res)
+    res <- res[order(res$row_id), ]
+    res = subset(res, select = -c(adjusted_input))
+    res$es_selected = rep("no selection", nrow(res))
   } else if (main_es == FALSE) {
     res1 <- .generate_df(
       x = raw_data, list_df = df_es, ordering = ordering_crude, exp = exp,
@@ -425,9 +464,12 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
 
     res1_sub = subset(res1, !is.na(res1$measure))
     res2_sub = subset(res2, !is.na(res2$measure))
-    res_transit <- rbind(res1_sub, res2_sub)
+    res_transit <- .retain_unestimable(rbind(res1_sub, res2_sub), res1)
     res <- res_transit[order(res_transit$row_id), ]
-    res$es_selected = "no selection"
+    # rep() rather than a scalar: assigning a length-1 value to a 0-row
+    # data.frame is an error, and res can legitimately be empty when the input
+    # contains no estimable comparison at all.
+    res$es_selected = rep("no selection", nrow(res))
   } else {
     stop("The combination of 'main_es', 'format_adjusted' and 'split_adjusted' is incorrect. Check documentation for more info.")
   }
@@ -480,6 +522,36 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
                               prop_to_es = prop_method, pre_post_to_smd = pp_method,
                               pool_sd = pool_sd_used, r_defaulted = r_def,
                               smd_denom = smd_denom_used)
+    }
+  }
+
+  # Sensitivity to the conversion formula: append a concise [FORMULA] message to
+  # the flags column and attach the complete table of alternative estimates.
+  # Disabled by default, since each alternative formula requires one additional
+  # evaluation of convert_df(), and since this reports methodological uncertainty
+  # rather than a data quality problem: it must not appear unrequested alongside
+  # the metaDETECT flags.
+  fx_store <- NULL
+  if (isTRUE(formulas)) {
+    fx <- try(es_formulas(object, digits = digits, verbose = FALSE), silent = TRUE)
+    if (!inherits(fx, "try-error") && nrow(fx) > 0) {
+      tokens <- .formula_tokens(fx, digits)
+      if (!is.null(tokens)) {
+        for (sfx in if (split_adjusted == TRUE & format == "wide" & main_es == TRUE)
+                      c("_crude", "_adjusted") else "") {
+          fcol <- paste0("flags", sfx)
+          if (!fcol %in% colnames(res)) next
+          tok <- tokens[as.character(res$row_id)]
+          add <- !is.na(tok)
+          cur <- res[[fcol]]
+          cur[is.na(cur)] <- ""
+          res[[fcol]][add] <- ifelse(nchar(cur[add]) > 0,
+                                     paste0(cur[add], "; ", tok[add]), tok[add])
+        }
+      }
+      # attached at the very end: `[.data.frame` drops non-standard attributes,
+      # and res is still reordered/subset below.
+      fx_store <- fx
     }
   }
 
@@ -636,12 +708,22 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
   } else {
     info <- .summary_for_suffix(res, "")
     if (!is.null(info)) {
+      # In the route view a comparison occupies one row per estimation route, so
+      # nrow(res) counts routes, not studies. Report both, and do not claim a
+      # method was "selected" when main_es = FALSE selects nothing.
+      n_cmp <- length(unique(res$row_id))
+      route_view <- isFALSE(main_es)
       message("\n-- metaConvert summary --")
-      message("Measure: ", .measure_label(measure), "  |  ", info$n_total, " studies")
+      if (route_view) {
+        message("Measure: ", .measure_label(measure), "  |  ", n_cmp,
+                " comparisons  |  ", info$n_total, " estimation routes")
+      } else {
+        message("Measure: ", .measure_label(measure), "  |  ", info$n_total, " studies")
+      }
       message("ES estimated: ", info$n_estimated, "/", info$n_total,
               " (", info$pct, "%)")
       if (length(info$method_freq) > 0) {
-        message("\nMethods selected:")
+        message(if (route_view) "\nRoutes available:" else "\nMethods selected:")
         top <- utils::head(info$method_freq, 5)
         for (i in seq_along(top)) {
           message("  ", format(names(top)[i], width = 25), " ", top[i])
@@ -655,6 +737,8 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
       }
     }
   }
+
+  if (!is.null(fx_store)) attr(res, "formulas") <- fx_store
 
   return(res)
 }

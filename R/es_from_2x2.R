@@ -169,14 +169,14 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
     #   es$z[no_cooper] <- es$z_se[no_cooper] <-
     #   es$z_ci_lo[no_cooper] <- es$z_ci_up[no_cooper] <- NA
 
-    res_tet <- suppressWarnings(t(mapply(.contingency_to_cor,
+    res_tet <- suppressWarnings(.mapply_memo(.contingency_to_cor,
       n_cases_exp = dat2x2$n_cases_exp[nn_miss],
       n_controls_exp = dat2x2$n_controls_exp[nn_miss],
       n_cases_nexp = dat2x2$n_cases_nexp[nn_miss],
       n_controls_nexp = dat2x2$n_controls_nexp[nn_miss],
       table_2x2_to_cor = dat2x2$table_2x2_to_cor[nn_miss],
       reverse_2x2 = dat2x2$reverse_2x2[nn_miss]
-    )))
+    ))
 
     es$r[nn_miss] <- res_tet[, 1]
     es$r_se[nn_miss] <- suppressWarnings(sqrt(res_tet[, 2]))

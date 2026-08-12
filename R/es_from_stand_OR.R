@@ -25,11 +25,14 @@
 #'
 #' **To estimate the risk ratio and its standard error, various formulas can be used.**
 #'
-#' **A.** First, the approach described in Grant (2014) can be used.
-#' However, in the paper, only the formula to convert an OR value to a RR value
-#' is described.
-#' To derive the variance, we used this formula to convert the bounds of the 95% CI, which
-#' were then used to obtain the variance.
+#' **A.** First, the approach identified by the \code{or_to_rr = "grant"} argument value
+#' can be used. The estimator itself is due to Zhang and Yu (1998); Grant (2014) restates
+#' the same expression and is cited here for the communication framing (translating one OR
+#' into a range of plausible RRs), not as the source of the formula. The argument value
+#' \code{"grant"} is retained for backward compatibility.
+#' Neither paper gives a variance, standard error or confidence interval for the converted
+#' value. To derive the variance, we used this formula to convert the bounds of the 95% CI,
+#' which were then used to obtain the variance.
 #'
 #' This argument requires (or + baseline_risk + or_ci_lo + or_ci_up) to generate a RR.
 #' The following formulas are used (br = baseline_risk):
@@ -67,7 +70,7 @@
 #' **To estimate the NNT, the formulas used are :**
 #' \deqn{treatment\_risk = \frac{or \times br}{1 - br + or \times br}}
 #' \deqn{rd = br - treatment\_risk}
-#' \deqn{nnt = \frac{1}{rd} = \frac{1 - br \times (1 - or)}{br \times (1 - br)}}
+#' \deqn{nnt = \frac{1}{rd} = \frac{1 - br \times (1 - or)}{br \times (1 - br) \times (1 - or)}}
 #'
 #' **To estimate a correlation coefficient, various formulas can be used.**
 #'
@@ -100,17 +103,30 @@
 #' \deqn{r\_se = \sqrt{\frac{c^2}{4} * (1 - r^2)^2 * logor\_se^2}}
 #' \deqn{z = atanh(r)}
 #' \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
-#' \deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se}}
-#' \deqn{z\_ci\_up = z + qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se}}
+#' \deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
+#' \deqn{z\_ci\_up = z + qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
 #' \deqn{r\_ci\_lo = tanh(z\_lo)}
 #' \deqn{r\_ci\_up = tanh(z\_up)}
 #'
 #' **C.** Third, the approach described in Bonett (2005) can be used (\code{or_to_cor = "bonett"}).
-#' This argument requires (or + logor_se + n_cases + n_exp + small_margin_prop) to generate a R/Z.
+#' This argument requires (or + logor_se + n_sample + the 2x2 margins) to generate a R/Z.
 #' Note that the formula assumes that each cell of the 2x2 used to estimate the OR has been added 1/2 before estimating the OR value and its standard error.
 #' If it is not the case, formulas can produce slightly less accurate results.
 #'
-#' \deqn{c = \frac{\frac{1 - |n\_exp - n\_cases|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
+#' \code{small_margin_prop} is Bonett and Price's \eqn{p_{min}}, the smallest of the four
+#' marginal proportions of the underlying 2x2 table. When it is left blank it is derived
+#' as \eqn{min(n\_exp, n\_nexp, n\_cases, n\_controls) / n\_sample}, so the method runs on
+#' the margins alone. The two margin pairs (\code{n_exp}/\code{n_nexp} and
+#' \code{n_cases}/\code{n_controls}) each sum to \code{n_sample}, so it is enough to supply
+#' \code{n_sample} plus \emph{one member of each pair}: any of the four combinations
+#' (\code{n_exp} or \code{n_nexp}) x (\code{n_cases} or \code{n_controls}) works, and the
+#' missing margins are back-filled. A value supplied by the user always takes precedence.
+#' The derivation is skipped when the implied margins are not all strictly positive or do
+#' not sum to \code{n_sample}; such a row cannot use the Bonett conversion and its R/Z is
+#' left as the \code{"lipsey_cooper"} value if no row in the call could use it, or
+#' \code{NA} if some other row could.
+#'
+#' \deqn{c = \frac{1 - \frac{|\frac{n\_exp}{n\_sample} - \frac{n\_cases}{n\_sample}|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
 #' \deqn{r = \cos{\frac{\pi}{1+or^c}}}
 #' \deqn{r\_se = logor\_se * (\pi * c * or^c) * \frac{\sin(\frac{\pi}{1+or^c})}{(1+or^c)^2}}
 #' \deqn{or\_ci\_lo = exp(log(or) - qnorm(.975)*logor\_se)}
@@ -165,6 +181,8 @@
 #' Pearson, K. (1900). Mathematical Contributions to the Theory of Evolution. VII: On the Correlation of Characters Not Quantitatively Measurable. Philosophical Transactions of the Royal Statistical Society of London, Series A 19:1-47
 #'
 #' Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78-94. https://doi.org/10.1002/jrsm.1061
+#'
+#' Zhang, J., & Yu, K. F. (1998). What's the relative risk? A method of correcting the odds ratio in cohort studies of common outcomes. JAMA, 280(19), 1690-1691. https://doi.org/10.1001/jama.280.19.1690
 #'
 #' @examples
 #' es_from_or_se(or = 2.12, logor_se = 0.242, n_exp = 120, n_nexp = 44)
@@ -304,22 +322,88 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
       baseline_risk = dat_rr$baseline_risk[nn_miss],
       or_to_rr = dat_rr$or_to_rr[nn_miss]
     )))
-    res_rr$logrr = unlist(res_rr$logrr)
-    res_rr$logrr_se = unlist(res_rr$logrr_se)
-    res_rr$logrr_ci_lo = unlist(res_rr$logrr_ci_lo)
-    res_rr$logrr_ci_up = unlist(res_rr$logrr_ci_up)
-    es$logrr[nn_miss] <- ifelse(reverse_or[nn_miss], -res_rr[, 1], res_rr[, 1])
-    es$logrr_se[nn_miss] <- res_rr[, 2]
+    # Columns come out of t(mapply(...)) positionally as logrr / logrr_se /
+    # logrr_ci_lo / logrr_ci_up. .mapply_col() forces each to a plain numeric
+    # vector of the right length; the previous unlist()-based extraction was a
+    # no-op on the numeric-matrix path (the data.frame columns are named X1..X4,
+    # not logrr*) and silently recycled values on the list-matrix path.
+    rr_es    <- .mapply_col(res_rr, 1)
+    rr_se    <- .mapply_col(res_rr, 2)
+    rr_ci_lo <- .mapply_col(res_rr, 3)
+    rr_ci_up <- .mapply_col(res_rr, 4)
+    es$logrr[nn_miss] <- ifelse(reverse_or[nn_miss], -rr_es, rr_es)
+    es$logrr_se[nn_miss] <- rr_se
     # On reverse: negate AND swap the CI bounds (new_lo = -old_up, new_up = -old_lo);
     # swapping alone left a wrong-signed, inverted interval that did not bracket -logrr.
-    es$logrr_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -res_rr[, 4], res_rr[, 3])
-    es$logrr_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -res_rr[, 3], res_rr[, 4])
+    es$logrr_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -rr_ci_up, rr_ci_lo)
+    es$logrr_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -rr_ci_lo, rr_ci_up)
   }
 
   # COR -------
+  # Derive small_margin_prop when the user left it blank.
+  #
+  # Bonett & Price (2005, p. 216) define pmin as "the smallest marginal proportion" of
+  # the 2x2 table, i.e. min(p1+, p2+, p+1, p+2). Those four margins are exactly
+  # n_exp, n_nexp, n_cases and n_controls over n_sample. The two margin PAIRS
+  # (n_exp/n_nexp and n_cases/n_controls) each sum to n_sample, so n_sample plus one
+  # member of each pair determines the whole table -- there are four equivalent ways to
+  # describe it, and all four must work.
+  #
+  # The back-fill below is therefore SYMMETRIC. An earlier version derived only
+  # n_nexp from n_exp and n_controls from n_cases, so a user who entered the other
+  # member of either pair fell out of the gate and silently kept the lipsey_cooper
+  # value: for one table (n_exp 40, n_nexp 60, n_cases 30, n_controls 70, n_sample 100,
+  # or 2.5, logor_se 0.2) only n_exp + n_cases gave the bonett r = 0.326978458193; the
+  # other three gave 0.243943602135 / 0.243470956833 / 0.243943602135, bit-identical to
+  # or_to_cor = "lipsey_cooper" on the same inputs.
+  #
+  # n_exp and n_cases are then the ones .or_to_cor() consumes (its c formula names them
+  # directly), so the back-filled values, not the raw arguments, go into dat_cor.
+  #
+  # Without this, small_margin_prop was a user-entered column with no derivation
+  # anywhere, so a blank cell -- the normal case -- dropped the row out of the gate and
+  # silently left the lipsey_cooper r computed by .es_from_d() above in place. Since
+  # convert_df() defaults to or_to_cor = "bonett", the default method usually did not
+  # run: or = 2, logor_se = 0.2, n_exp = n_nexp = 50, n_cases = 40, n_controls = 60
+  # returned r = 0.1876806337 (lipsey_cooper) where bonett gives 0.2586008221.
+  # Worse, the fall-through was not even stable: because the block below NA's every
+  # non-lipsey_cooper row before refilling only the gated ones, a blank-pmin row
+  # returned NA rather than 0.1876806337 whenever some OTHER row in the same data
+  # frame did carry small_margin_prop -- so a row's own ES depended on another row.
+  #
+  # Margins are taken UNCORRECTED (no +0.5 per cell). That reproduces all three of
+  # Bonett & Price's worked examples as printed: Ex1 f=(203,186,167,374) -> .333/.048/
+  # (.237,.424); Ex2 f=(4,6,1,89) -> .831/.108/(.488,.956); Ex3 f=(143,52,41,164) ->
+  # .741/.0446/(.641,.817). The paper's own prose ("computed ... after 0.5 has been
+  # added to each cell frequency") would give .835 on Ex2, so its printed numbers use
+  # the uncorrected margins and this convention is the faithful one.
+  #
+  # A user-supplied small_margin_prop always wins. The derivation is skipped unless the
+  # four implied margins are strictly positive and both margin pairs sum to n_sample:
+  # a degenerate or self-contradictory table has no coherent pmin (and can send c
+  # negative, flipping the sign of r), so such a row keeps the old fall-through.
+  n_exp_marg <- ifelse(is.na(n_exp), n_sample - n_nexp, n_exp)
+  n_cases_marg <- ifelse(is.na(n_cases), n_sample - n_controls, n_cases)
+  n_nexp_marg <- ifelse(is.na(n_nexp), n_sample - n_exp_marg, n_nexp)
+  n_controls_marg <- ifelse(is.na(n_controls), n_sample - n_cases_marg, n_controls)
+  margins_ok <- !is.na(n_sample) &
+    !is.na(n_exp_marg) & !is.na(n_cases_marg) &
+    !is.na(n_nexp_marg) & !is.na(n_controls_marg) &
+    n_exp_marg > 0 & n_nexp_marg > 0 & n_cases_marg > 0 & n_controls_marg > 0 &
+    abs(n_exp_marg + n_nexp_marg - n_sample) <= 1e-8 * pmax(1, abs(n_sample)) &
+    abs(n_cases_marg + n_controls_marg - n_sample) <= 1e-8 * pmax(1, abs(n_sample))
+  small_margin_prop <- ifelse(
+    is.na(small_margin_prop) & margins_ok,
+    pmin(n_exp_marg, n_nexp_marg, n_cases_marg, n_controls_marg) / n_sample,
+    small_margin_prop
+  )
+
+  # Only hand .or_to_cor() a back-filled margin when the implied table is coherent;
+  # otherwise keep the raw value so an incoherent row still fails the gate below.
   dat_cor <- data.frame(
     or = or, logor_se = logor_se,
-    n_cases = n_cases, n_exp = n_exp,
+    n_cases = ifelse(margins_ok, n_cases_marg, n_cases),
+    n_exp = ifelse(margins_ok, n_exp_marg, n_exp),
     n_sample = n_sample,
     small_margin_prop = small_margin_prop,
     or_to_cor = or_to_cor
@@ -333,12 +417,34 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
       (or_to_cor == "digby" & !is.na(or) & !is.na(logor_se))
   ))
 
-  if (length(nn_miss) != 0) {
-    no_cooper = which(or_to_cor != "lipsey_cooper")
-    es$r[no_cooper] <- es$r_se[no_cooper] <- es$r_ci_lo[no_cooper] <- es$r_ci_up[no_cooper] <-
-      es$z[no_cooper] <- es$z_se[no_cooper] <- es$z_ci_lo[no_cooper] <- es$z_ci_up[no_cooper] <- NA
+  # A row that requested a conversion other than "lipsey_cooper" but does not carry that
+  # method's inputs keeps the "lipsey_cooper" R/Z computed earlier, and the substitution
+  # is reported. Such a row used to be blanked to NA, which had two consequences. First,
+  # activating the small_margin_prop derivation switched the blanking on for the whole
+  # call, so margin-poor rows that the previous release estimated came back as NA and the
+  # study was lost. Second, the decision was taken INSIDE the `if (length(nn_miss) != 0)`
+  # block, i.e. only when some OTHER row qualified, so one and the same row returned a
+  # number when called alone and NA when called beside an eligible peer.
+  # Note this is read from the RECYCLED column, not the raw argument: with a scalar
+  # or_to_cor, which(or_to_cor != "lipsey_cooper") has length 1 and names only row 1.
+  # Restricted to rows that actually have an odds ratio to convert: a row with no OR has
+  # no correlation by any method, so it has not "fallen back" to anything.
+  fallback <- setdiff(
+    which(dat_cor$or_to_cor != "lipsey_cooper" &
+            !is.na(dat_cor$or) & !is.na(dat_cor$logor_se)),
+    nn_miss
+  )
+  if (length(fallback) != 0) {
+    asked <- unique(as.character(dat_cor$or_to_cor[fallback]))
+    message("or_to_cor = '", paste(asked, collapse = "' / '"), "': row(s) ",
+            paste(fallback, collapse = ", "), " do not carry the inputs this conversion ",
+            "requires, so their R and Z were obtained with 'lipsey_cooper' instead. ",
+            "For 'bonett', supply 'small_margin_prop', or 'n_sample' together with one of ",
+            "('n_exp', 'n_nexp') and one of ('n_cases', 'n_controls').")
+  }
 
-    res_cor <- t(mapply(.or_to_cor,
+  if (length(nn_miss) != 0) {
+    res_cor <- .mapply_memo(.or_to_cor,
       or = dat_cor$or[nn_miss],
       logor_se = dat_cor$logor_se[nn_miss],
       n_cases = dat_cor$n_cases[nn_miss],
@@ -346,19 +452,20 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
       n_sample = dat_cor$n_sample[nn_miss],
       small_margin_prop = dat_cor$small_margin_prop[nn_miss],
       or_to_cor = dat_cor$or_to_cor[nn_miss]
-    ))
+    )
 
     # On reverse: negate AND swap each CI (new_lo = -old_up, new_up = -old_lo). For r,
     # tanh is odd so negate-and-swap of the r bounds is correct even for the asymmetric,
     # z-back-transformed r interval. Swapping alone left inverted, wrong-signed bounds.
-    es$r[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 1], res_cor[, 1])
-    es$r_se[nn_miss] <- res_cor[, 2]
-    es$r_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 4], res_cor[, 3])
-    es$r_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 3], res_cor[, 4])
-    es$z[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 5], res_cor[, 5])
-    es$z_se[nn_miss] <- res_cor[, 6]
-    es$z_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 8], res_cor[, 7])
-    es$z_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -res_cor[, 7], res_cor[, 8])
+    cor_v <- lapply(1:8, function(j) .mapply_col(res_cor, j))
+    es$r[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[1]], cor_v[[1]])
+    es$r_se[nn_miss] <- cor_v[[2]]
+    es$r_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[4]], cor_v[[3]])
+    es$r_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[3]], cor_v[[4]])
+    es$z[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[5]], cor_v[[5]])
+    es$z_se[nn_miss] <- cor_v[[6]]
+    es$z_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[8]], cor_v[[7]])
+    es$z_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[7]], cor_v[[8]])
   }
 
   # Risk difference from OR + baseline_risk (Grant 2014)
@@ -411,8 +518,9 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' **Estimation of the standard error of the log OR.**
 #' This function generates the standard error of an odds ratio (OR) based on the OR value and the number of cases and controls.
 #' More precisely, this function simulates all combinations of the possible number of cases and controls in the exposed and non-exposed groups
-#' compatible with the reported OR value and with the overall number of cases and controls. Then, our function assumes that the variance of the OR
-#' is equal to the mean of the standard error of all possible situations. This estimation thus necessarily comes with some imprecision and should not
+#' compatible with the reported OR value and with the overall number of cases and controls. Then, our function assumes that the variance of the log OR
+#' is equal to the mean of the variance of all possible situations (the reported standard error is the square root of that mean variance).
+#' This estimation thus necessarily comes with some imprecision and should not
 #' be used before having requested the value (or raw data) to authors of the original report.
 #'
 #' **Conversion of other effect size measures.**

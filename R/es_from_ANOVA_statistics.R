@@ -37,7 +37,7 @@
 #'  \code{converted effect size measure} \tab OR + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 11. ANOVA statistics, Student's t-test, or point-bis correlation'\cr
-#'  \tab https://metaconvert.org/html/input.html\cr
+#'  \tab https://metaconvert.org/input.html\cr
 #'  \tab \cr
 #' }
 #'
@@ -98,7 +98,7 @@ es_from_student_t <- function(student_t, n_exp, n_nexp,
 #'  \code{converted effect size measure} \tab OR + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 11. ANOVA statistics, Student's t-test, or point-bis correlation'\cr
-#'  \tab https://metaconvert.org/html/input.html\cr
+#'  \tab https://metaconvert.org/input.html\cr
 #'  \tab \cr
 #' }
 #'
@@ -162,7 +162,7 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
 #'  \code{converted effect size measure} \tab OR + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 11. ANOVA statistics, Student's t-test, or point-bis correlation'\cr
-#'  \tab https://metaconvert.org/html/input.html\cr
+#'  \tab https://metaconvert.org/input.html\cr
 #'  \tab \cr
 #' }
 #'
@@ -224,7 +224,7 @@ es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #'  \code{converted effect size measure} \tab OR + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 11. ANOVA statistics, Student's t-test, or point-bis correlation'\cr
-#'  \tab https://metaconvert.org/html/input.html\cr
+#'  \tab https://metaconvert.org/input.html\cr
 #'  \tab \cr
 #' }
 #'

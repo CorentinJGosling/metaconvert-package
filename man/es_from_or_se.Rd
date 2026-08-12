@@ -75,11 +75,14 @@ The following formulas are used (Cooper et al., 2019):
 
 \strong{To estimate the risk ratio and its standard error, various formulas can be used.}
 
-\strong{A.} First, the approach described in Grant (2014) can be used.
-However, in the paper, only the formula to convert an OR value to a RR value
-is described.
-To derive the variance, we used this formula to convert the bounds of the 95\% CI, which
-were then used to obtain the variance.
+\strong{A.} First, the approach identified by the \code{or_to_rr = "grant"} argument value
+can be used. The estimator itself is due to Zhang and Yu (1998); Grant (2014) restates
+the same expression and is cited here for the communication framing (translating one OR
+into a range of plausible RRs), not as the source of the formula. The argument value
+\code{"grant"} is retained for backward compatibility.
+Neither paper gives a variance, standard error or confidence interval for the converted
+value. To derive the variance, we used this formula to convert the bounds of the 95\% CI,
+which were then used to obtain the variance.
 
 This argument requires (or + baseline_risk + or_ci_lo + or_ci_up) to generate a RR.
 The following formulas are used (br = baseline_risk):
@@ -116,7 +119,7 @@ Di Pietrantonj (2006).
 \strong{To estimate the NNT, the formulas used are :}
 \deqn{treatment\_risk = \frac{or \times br}{1 - br + or \times br}}
 \deqn{rd = br - treatment\_risk}
-\deqn{nnt = \frac{1}{rd} = \frac{1 - br \times (1 - or)}{br \times (1 - br)}}
+\deqn{nnt = \frac{1}{rd} = \frac{1 - br \times (1 - or)}{br \times (1 - br) \times (1 - or)}}
 
 \strong{To estimate a correlation coefficient, various formulas can be used.}
 
@@ -149,17 +152,30 @@ If it is not the case, formulas can produce slightly less accurate results.
 \deqn{r\_se = \sqrt{\frac{c^2}{4} * (1 - r^2)^2 * logor\_se^2}}
 \deqn{z = atanh(r)}
 \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
-\deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se}}
-\deqn{z\_ci\_up = z + qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se}}
+\deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
+\deqn{z\_ci\_up = z + qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
 \deqn{r\_ci\_lo = tanh(z\_lo)}
 \deqn{r\_ci\_up = tanh(z\_up)}
 
 \strong{C.} Third, the approach described in Bonett (2005) can be used (\code{or_to_cor = "bonett"}).
-This argument requires (or + logor_se + n_cases + n_exp + small_margin_prop) to generate a R/Z.
+This argument requires (or + logor_se + n_sample + the 2x2 margins) to generate a R/Z.
 Note that the formula assumes that each cell of the 2x2 used to estimate the OR has been added 1/2 before estimating the OR value and its standard error.
 If it is not the case, formulas can produce slightly less accurate results.
 
-\deqn{c = \frac{\frac{1 - |n\_exp - n\_cases|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
+\code{small_margin_prop} is Bonett and Price's \eqn{p_{min}}, the smallest of the four
+marginal proportions of the underlying 2x2 table. When it is left blank it is derived
+as \eqn{min(n\_exp, n\_nexp, n\_cases, n\_controls) / n\_sample}, so the method runs on
+the margins alone. The two margin pairs (\code{n_exp}/\code{n_nexp} and
+\code{n_cases}/\code{n_controls}) each sum to \code{n_sample}, so it is enough to supply
+\code{n_sample} plus \emph{one member of each pair}: any of the four combinations
+(\code{n_exp} or \code{n_nexp}) x (\code{n_cases} or \code{n_controls}) works, and the
+missing margins are back-filled. A value supplied by the user always takes precedence.
+The derivation is skipped when the implied margins are not all strictly positive or do
+not sum to \code{n_sample}; such a row cannot use the Bonett conversion and its R/Z is
+left as the \code{"lipsey_cooper"} value if no row in the call could use it, or
+\code{NA} if some other row could.
+
+\deqn{c = \frac{1 - \frac{|\frac{n\_exp}{n\_sample} - \frac{n\_cases}{n\_sample}|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
 \deqn{r = \cos{\frac{\pi}{1+or^c}}}
 \deqn{r\_se = logor\_se * (\pi * c * or^c) * \frac{\sin(\frac{\pi}{1+or^c})}{(1+or^c)^2}}
 \deqn{or\_ci\_lo = exp(log(or) - qnorm(.975)*logor\_se)}
@@ -198,4 +214,6 @@ Grant R. L. (2014). Converting an odds ratio to a range of plausible relative ri
 Pearson, K. (1900). Mathematical Contributions to the Theory of Evolution. VII: On the Correlation of Characters Not Quantitatively Measurable. Philosophical Transactions of the Royal Statistical Society of London, Series A 19:1-47
 
 Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78-94. https://doi.org/10.1002/jrsm.1061
+
+Zhang, J., & Yu, K. F. (1998). What's the relative risk? A method of correcting the odds ratio in cohort studies of common outcomes. JAMA, 280(19), 1690-1691. https://doi.org/10.1001/jama.280.19.1690
 }

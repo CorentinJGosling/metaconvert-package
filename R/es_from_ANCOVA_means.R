@@ -151,6 +151,17 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
 #' @references
 #' Higgins JPT, Li T, Deeks JJ (editors). Chapter 6: Choosing effect size measures and computing estimates of effect. In: Higgins JPT, Thomas J, Chandler J, Cumpston M, Li T, Page MJ, Welch VA (editors). Cochrane Handbook for Systematic Reviews of Interventions version 6.3 (updated February 2022). Cochrane, 2022. Available from www.training.cochrane.org/handbook.
 #'
+#' @note
+#' Unlike \code{\link{es_from_ancova_means_sd}()}, which receives the residual SD
+#' directly, this route recovers each arm's standardizer as \code{SE * sqrt(n)}, i.e.
+#' with that arm's covariate leverage set to zero, so \strong{the point estimate is not
+#' unbiased under covariate imbalance}. The attenuation is smaller than on the routes
+#' built from the combined mean-difference standard error, because only each arm's own
+#' leverage \eqn{(\bar{x}_j - \bar{x})^2 / SS_x} is involved: for equal arms the factor
+#' is \eqn{1/\sqrt{1 + \delta_x^2/8}} (measured 0.942 at \eqn{\delta_x = 1}, n = 60/60,
+#' against 0.893 for \code{\link{es_from_ancova_t}()}). Negligible when randomised. See
+#' \code{\link{es_from_ancova_t}()} for the full statement.
+#'
 #' @export es_from_ancova_means_se
 #'
 #' @md

@@ -59,6 +59,17 @@ and then relies on the calculations of the \code{\link{es_from_ancova_md_sd}} fu
 \deqn{ancova\_md\_sd = \frac{ancova\_md\_se}{\sqrt{1 / n_exp + 1 / n_nexp}}}
 Calculations of the \code{\link{es_from_ancova_md_sd}()} are then applied.
 }
+\note{
+Unlike \code{\link{es_from_ancova_md_sd}()}, which receives the residual SD directly,
+this route recovers the standardizer as \code{ancova_md_se * sqrt(n)}, i.e. it sets
+the covariate-imbalance ("leverage") term \eqn{D} of the exact ANCOVA variance to
+zero. \strong{The point estimate is therefore not unbiased under covariate
+imbalance}: \code{d} and its standard error are attenuated by the same factor,
+\eqn{1/\sqrt{1 + \delta_x^2/4}} for equal arms (about 3\% at \eqn{\delta_x = 0.5},
+11\% at \eqn{\delta_x = 1}, negligible when randomised). The p-value is unaffected.
+See \code{\link{es_from_ancova_t}()} for the full statement, and prefer
+\code{\link{es_from_ancova_md_sd}()} when the residual SD is reported.
+}
 \examples{
 es_from_ancova_md_se(
   ancova_md = 4, ancova_md_se = 2,

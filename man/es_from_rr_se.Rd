@@ -60,41 +60,47 @@ to odds ratio (OR) and number needed to treat.
 
 \strong{To estimate the odds ratio and its standard error}, various formulas can be used.
 
-\strong{A.} First, the approach described in Grant (2014) can be used.
-However, in the paper, only the formula to convert an RR value to a OR value
-is described. To derive the variance, we used this formula to convert the bounds of the 95\% CI, which
-were then used to obtain the variance.
+\strong{A.} First, the approach identified by the \code{rr_to_or = "grant"} argument value
+can be used. The estimator is the inverse of the OR-to-RR conversion due to Zhang and
+Yu (1998); Grant (2014) restates the same expression and is cited here for the
+communication framing, not as the source of the formula. The argument value
+\code{"grant"} is retained for backward compatibility.
+Neither paper gives a variance, standard error or confidence interval for the converted
+value. To derive the variance, we used this formula to convert the bounds of the 95\% CI,
+which were then used to obtain the variance.
 
-This argument requires (rr + baseline_risk + rr_ci_lo + rr_ci_up) to generate a RR.
+This value requires (rr + logrr_se + baseline_risk) to generate an OR.
+The 95\% CI of the RR is reconstructed internally from \code{rr} and \code{logrr_se}.
 The following formulas are used (br = baseline_risk):
 \deqn{or = \frac{rr * (1 - br)}{1 - rr * br}}
 \deqn{or\_ci\_lo = \frac{rr\_ci\_lo * (1 - br)}{1 - rr\_ci\_lo * br}}
 \deqn{or\_ci\_up = \frac{rr\_ci\_up * (1 - br)}{1 - rr\_ci\_up * br}}
 \deqn{logor\_se = \frac{log(or\_ci\_up) - log(or\_ci\_lo)}{2 * qnorm(.975)}}
 
-\strong{B.} Second, the formulas implemented in the metaumbrella package can be used (\code{or_to_rr = "metaumbrella_exp"}).
-This argument requires (rr + logrr_se + n_exp + n_nexp) to generate a OR.
+\strong{B.} Second, the formulas implemented in the metaumbrella package can be used (\code{rr_to_or = "metaumbrella"}, the default).
+This value requires (rr + logrr_se + n_cases + n_controls) to generate an OR.
 More precisely, we previously developed functions that simulate all combinations of the possible number of cases and controls
 in the exposed and non-exposed groups compatible with the actual value of the RR.
 Then, the functions select the contingency table whose standard error coincides best with the standard error reported.
 The RR value and its standard are obtained from this estimated contingency table.
 
 \strong{C.} Third, it is possible to transpose the RR to a OR (\code{rr_to_or = "transpose"}).
-This argument requires (rr + logrr_se) to generate a OR.
+This value requires (rr + logrr_se) to generate an OR.
 It is known that OR and RR are similar when the baseline risk is small.
 Therefore, users can request to simply transpose the RR value & standard error into a OR value & standard error.
 \deqn{or = rr}
 \deqn{logor\_se = logrr\_se}
 
 \strong{D.} Fourth, it is possible to recreate the 2x2 table using the dipietrantonj's formulas (\code{rr_to_or = "dipietrantonj"}).
-This argument requires (rr + logrr_ci_lo + logrr_ci_lo) to generate a OR. Information on this approach can be retrieved in
+This value requires (rr + logrr_se + n_exp + n_nexp) to generate an OR. Information on this approach can be retrieved in
 Di Pietrantonj (2006).
 
 \strong{To estimate the NNT}, the formulas used are :
 \deqn{nnt = \frac{1}{br * (1 - rr)}}
 }
 \examples{
-es_from_rr_se(rr = 2.12, logrr_se = 0.242, n_exp = 120, n_nexp = 44)
+es_from_rr_se(rr = 2.12, logrr_se = 0.242, n_cases = 120, n_controls = 44,
+              baseline_risk = 0.20)
 }
 \references{
 Di Pietrantonj C. (2006). Four-fold table cell frequencies imputation in meta analysis. Statistics in medicine, 25(13), 2299-2322. https://doi.org/10.1002/sim.2287
@@ -104,4 +110,6 @@ Gosling, C. J., Solanes, A., Fusar-Poli, P., & Radua, J. (2023). metaumbrella: t
 Grant R. L. (2014). Converting an odds ratio to a range of plausible relative risks for better communication of research findings. BMJ (Clinical research ed.), 348, f7450. https://doi.org/10.1136/bmj.f7450
 
 Veroniki, A. A., Pavlides, M., Patsopoulos, N. A., & Salanti, G. (2013). Reconstructing 2x2 contingency tables from odds ratios using the Di Pietrantonj method: difficulties, constraints and impact in meta-analysis results. Research synthesis methods, 4(1), 78-94. https://doi.org/10.1002/jrsm.1061
+
+Zhang, J., & Yu, K. F. (1998). What's the relative risk? A method of correcting the odds ratio in cohort studies of common outcomes. JAMA, 280(19), 1690-1691. https://doi.org/10.1001/jama.280.19.1690
 }

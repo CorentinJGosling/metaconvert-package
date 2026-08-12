@@ -39,7 +39,7 @@
 #'  \code{converted effect size measure} \tab No conversion performed\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 23. User's input (crude)'\cr
-#'  \tab https://metaconvert.org/html/input.html\cr
+#'  \tab https://metaconvert.org/input.html\cr
 #'  \tab \cr
 #' }
 #'
@@ -132,7 +132,7 @@ es_variab_from_means_sd <- function(mean_exp, mean_nexp, mean_sd_exp, mean_sd_ne
 #'  \code{converted effect size measure} \tab No conversion performed\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 23. User's input (crude)'\cr
-#'  \tab https://metaconvert.org/html/input.html\cr
+#'  \tab https://metaconvert.org/input.html\cr
 #'  \tab \cr
 #' }
 #'
@@ -200,7 +200,7 @@ es_variab_from_means_se <- function(mean_exp, mean_nexp, mean_se_exp, mean_se_ne
 #'  \code{converted effect size measure} \tab No conversion performed\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 23. User's input (crude)'\cr
-#'  \tab https://metaconvert.org/html/input.html\cr
+#'  \tab https://metaconvert.org/input.html\cr
 #'  \tab \cr
 #' }
 #'

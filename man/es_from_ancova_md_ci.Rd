@@ -62,6 +62,16 @@ and then relies on the calculations of the \code{\link{es_from_ancova_md_se}} fu
 \deqn{md\_se = \frac{ancova\_md\_ci\_up - ancova\_md\_ci\_lo}{(2 * qt(0.975, n\_exp + n\_nexp - 2 - n\_cov\_ancova))}}
 Calculations of the \code{\link{es_from_ancova_md_se}()} are then applied.
 }
+\note{
+This route inherits the behaviour of \code{\link{es_from_ancova_md_se}()}:
+\strong{the point estimate is not unbiased under covariate imbalance}, because the
+standardizer is recovered with the leverage term \eqn{D} set to zero. \code{d} and
+its standard error are attenuated by the same factor, \eqn{1/\sqrt{1 + \delta_x^2/4}}
+for equal arms (about 3\% at \eqn{\delta_x = 0.5}, 11\% at \eqn{\delta_x = 1},
+negligible when randomised). The p-value is unaffected. See
+\code{\link{es_from_ancova_t}()} for the full statement, and prefer
+\code{\link{es_from_ancova_md_sd}()} when the residual SD is reported.
+}
 \examples{
 es_from_ancova_md_ci(
   ancova_md = 4, ancova_md_ci_lo = 2,

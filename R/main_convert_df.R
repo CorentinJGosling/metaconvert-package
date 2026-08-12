@@ -39,7 +39,7 @@
 #' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value" (see \code{\link{es_from_pearson_r}}).
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds. Asymmetric CIs are only flagged, not modified (see \code{\link{summary.metaConvert}}).
 #' @param verbose a logical variable indicating whether text outputs and messages should be generated. We recommend turning this option to FALSE only after having carefully read all the generated messages.
-#' @param correct_inputs a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'es_flags' column and kept in the data.
+#' @param correct_inputs a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'flags' column of summary() and kept in the data.
 #' @param flag_options a named list of thresholds used by the quality flags (see \code{\link{summary.metaConvert}} for the list of options and defaults).
 #'
 #' @details
@@ -51,7 +51,7 @@
 #' Before the calculations, the input data are checked (negative sample
 #' sizes/SD/SE/p-values, inverted CI bounds, values outside their CI,
 #' asymmetric CI). By default invalid values are set to NA; issues appear
-#' in the 'es_flags' column of summary().
+#' in the 'flags' column of summary().
 #'
 #' ## Effect size measures
 #' Possible effect size measures are:
@@ -496,6 +496,15 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     stop(paste0("'", es_selected, "' not in tolerated values for the 'es_selected' argument. Possible inputs are: 'minimum', 'maximum', 'hierarchy'"))
   } else if (!main_es %in% c(TRUE, FALSE)) {
     stop(paste0("'", main_es, "' not in tolerated values for the 'main_es' argument. Should be a logical value (TRUE/FALSE)"))
+  }
+
+  # 'es_selected' picks ONE effect size per comparison; 'main_es = FALSE' returns
+  # every estimation route. Combining them previously overwrote each route row
+  # with the same min/max value, leaving the row count inflated k-fold.
+  if (!main_es && es_selected %in% c("minimum", "maximum")) {
+    stop(paste0("'es_selected = \"", es_selected, "\"' selects a single effect size per comparison ",
+                "and is incompatible with 'main_es = FALSE', which returns every estimation route. ",
+                "Use es_selected = 'auto' or 'hierarchy' with main_es = FALSE."))
   }
 
   if (measure %in% c("or", "rr", "irr", "hr")) {
@@ -1619,6 +1628,18 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   # per-row endpoint-SMD standardizer ("pooled"/"control"/"control_robust"),
   # used by the summary A6 CI-width check (Glass CIs are on qt(.975, n_nexp-1))
   attr(res, "smd_denom_used") <- .normalize_smd_denom(x[, "smd_denom"])
+  # Conversion-formula choices, recorded so es_formulas() can re-run the
+  # conversion under each alternative formula without the user restating the call.
+  attr(res, "conversion_args") <- list(
+    table_2x2_to_cor = table_2x2_to_cor, rr_to_or = rr_to_or, or_to_rr = or_to_rr,
+    or_to_cor = or_to_cor, smd_to_cor = smd_to_cor, smd_var = smd_var,
+    smd_denom = smd_denom, pre_post_to_smd = pre_post_to_smd,
+    r_pre_post = r_pre_post[1], cor_to_smd = cor_to_smd, unit_type = unit_type,
+    yates_chisq = yates_chisq, pool_sd = pool_sd, prop_to_es = prop_to_es,
+    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es,
+    max_asymmetry = max_asymmetry, correct_inputs = correct_inputs,
+    selection_auto = selection_auto
+  )
   return(res)
 }
 # x_save2 = x; list_df = df_es; ordering = ordering_crude; digits = digits;

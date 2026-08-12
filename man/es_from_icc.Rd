@@ -65,7 +65,7 @@ between-rater variance}: when raters differ systematically
 between-rater mean square, which has only \eqn{k - 1} degrees of freedom, so
 its true sampling variance does not shrink at the \eqn{1/n} rate this formula
 assumes and the reported SE/CI can be markedly anti-conservative (simulation:
-95\\% CI coverage around 0.74-0.76 with moderate rater variance, degrading as
+95\% CI coverage around 0.74-0.76 with moderate rater variance, degrading as
 \eqn{n} grows). The exact ICC(2,1) variance requires the rater-variance
 component, which summary data do not report; a per-row informational flag
 (V31) marks agreement-type rows for this reason. If the raters are known to
