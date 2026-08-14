@@ -23,15 +23,15 @@ es_from_rd_pval(
 
 \item{baseline_risk}{proportion of cases in the non-exposed/control group}
 
-\item{n_exp}{number of participants in the exposed/treatment group}
+\item{n_exp}{number of participants in the exposed/treatment group (not used in the computation)}
 
-\item{n_nexp}{number of participants in the non-exposed/control group}
+\item{n_nexp}{number of participants in the non-exposed/control group (not used in the computation)}
 
-\item{n_cases}{number of cases/events across both groups}
+\item{n_cases}{number of cases/events across both groups (not used in the computation)}
 
-\item{n_controls}{number of controls/no-event across both groups}
+\item{n_controls}{number of controls/no-event across both groups (not used in the computation)}
 
-\item{n_sample}{total number of participants in the sample}
+\item{n_sample}{total number of participants in the sample (not used in the computation)}
 
 \item{reverse_rd_pval}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -61,7 +61,7 @@ Then, calculations of \code{\link{es_from_rd_se}()} are applied.
 \examples{
 es_from_rd_pval(
   rd = 0.15, rd_pval = 0.01,
-  baseline_risk = 0.30, n_exp = 100, n_nexp = 100
+  baseline_risk = 0.30
 )
 }
 \references{

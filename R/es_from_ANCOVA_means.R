@@ -4,12 +4,17 @@
 #' @param ancova_mean_nexp adjusted mean of participants in the non-experimental/non-exposed group.
 #' @param ancova_mean_sd_exp adjusted standard deviation of participants in the experimental/exposed group.
 #' @param ancova_mean_sd_nexp adjusted standard deviation of participants in the non-experimental/non-exposed group.
-#' @param cov_outcome_r correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   total-sample correlation, nor the square root of the whole model R-squared (which also
+#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -17,7 +22,7 @@
 #' Cohen's d (D) and Hedges' g (G) from the adjusted means and standard deviations.
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
-#' This function start by estimating the non-adjusted standard deviation of the two groups (formula 12.24 in Cooper);
+#' This function starts by estimating the non-adjusted standard deviation of the two groups (formula 12.24 in Cooper);
 #' \deqn{mean\_sd\_exp = \frac{ancova\_mean\_sd\_exp}{\sqrt{1 - cov\_outcome\_r^2}}}
 #' \deqn{mean\_sd\_nexp = \frac{ancova\_mean\_sd\_nexp}{\sqrt{1 - cov\_outcome\_r^2}}}
 #'
@@ -28,7 +33,7 @@
 #' \deqn{md\_ci\_up = md + md\_se * qt(.975, n\_exp+n\_nexp-2-n\_cov\_ancova)}
 #'
 #' **To obtain the Cohen's d**, the following formulas are used (table 12.3 in Cooper):
-#' \deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * ancova\_mean\_sd\_exp^2 + (n\_nexp - 1) * ancova\_mean\_sd\_nexp^2}{n\_exp+n\_nexp-2}}}
+#' \deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * mean\_sd\_exp^2 + (n\_nexp - 1) * mean\_sd\_nexp^2}{n\_exp+n\_nexp-2}}}
 #' \deqn{cohen\_d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp}{mean\_sd\_pooled}}
 #' \deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)*(1-cov\_outcome\_r^2)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 #' \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, n\_exp + n\_nexp - 2 - n\_cov\_ancova)}
@@ -51,15 +56,9 @@
 #' }
 #'
 #' @note
-#' The sampling variance follows Cooper's eq. 12.26 and assumes the covariate is
-#' balanced across groups. It omits the covariate-imbalance ("leverage") term of
-#' the exact ANCOVA variance,
-#' \eqn{\sigma^2_{res}\,(1/n\_exp + 1/n\_nexp + (\bar{x}\_exp-\bar{x}\_nexp)^2 / SS_x)},
-#' which is not recoverable from summary statistics, and treats
-#' \code{cov_outcome_r} as known. In balanced/randomised designs the omission is
-#' negligible; in observational or otherwise covariate-imbalanced designs the
-#' standard error is a lower bound (anti-conservative), while the point estimate
-#' remains unbiased. See Lai and Kelley (2012).
+#' The standard error assumes the two groups were balanced on the covariate; when they
+#' were not, it is slightly too small and the study carries a little too much weight.
+#' The effect size itself is unaffected. See Lai and Kelley (2012).
 #'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
@@ -117,12 +116,17 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
 #' @param ancova_mean_nexp adjusted mean of participants in the non-experimental/non-exposed group.
 #' @param ancova_mean_se_exp adjusted standard error of participants in the experimental/exposed group.
 #' @param ancova_mean_se_nexp adjusted standard error of participants in the non-experimental/non-exposed group.
-#' @param cov_outcome_r correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   total-sample correlation, nor the square root of the whole model R-squared (which also
+#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -152,15 +156,11 @@ es_from_ancova_means_sd <- function(n_exp, n_nexp,
 #' Higgins JPT, Li T, Deeks JJ (editors). Chapter 6: Choosing effect size measures and computing estimates of effect. In: Higgins JPT, Thomas J, Chandler J, Cumpston M, Li T, Page MJ, Welch VA (editors). Cochrane Handbook for Systematic Reviews of Interventions version 6.3 (updated February 2022). Cochrane, 2022. Available from www.training.cochrane.org/handbook.
 #'
 #' @note
-#' Unlike \code{\link{es_from_ancova_means_sd}()}, which receives the residual SD
-#' directly, this route recovers each arm's standardizer as \code{SE * sqrt(n)}, i.e.
-#' with that arm's covariate leverage set to zero, so \strong{the point estimate is not
-#' unbiased under covariate imbalance}. The attenuation is smaller than on the routes
-#' built from the combined mean-difference standard error, because only each arm's own
-#' leverage \eqn{(\bar{x}_j - \bar{x})^2 / SS_x} is involved: for equal arms the factor
-#' is \eqn{1/\sqrt{1 + \delta_x^2/8}} (measured 0.942 at \eqn{\delta_x = 1}, n = 60/60,
-#' against 0.893 for \code{\link{es_from_ancova_t}()}). Negligible when randomised. See
-#' \code{\link{es_from_ancova_t}()} for the full statement.
+#' This route has to assume the two groups were balanced on the covariate; when they were
+#' not, the effect size and its standard error are both attenuated, though less than on
+#' the routes built from a test statistic. Prefer
+#' \code{\link{es_from_ancova_means_sd}()} when the adjusted standard deviations are
+#' reported. 
 #'
 #' @export es_from_ancova_means_se
 #'
@@ -207,12 +207,17 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
 #' @param ancova_mean_ci_up_exp upper bound of the adjusted 95% CI of the mean of the experimental/exposed group
 #' @param ancova_mean_ci_lo_nexp lower bound of the adjusted 95% CI of the mean of the non-experimental/non-exposed group.
 #' @param ancova_mean_ci_up_nexp upper bound of the adjusted 95% CI of the mean of the non-experimental/non-exposed group.
-#' @param cov_outcome_r correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   total-sample correlation, nor the square root of the whole model R-squared (which also
+#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -240,6 +245,13 @@ es_from_ancova_means_se <- function(n_exp, n_nexp,
 #'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
+#'
+#' @note
+#' This route has to assume the two groups were balanced on the covariate; when they were
+#' not, the effect size and its standard error are both attenuated, though less than on
+#' the routes built from a test statistic. Prefer
+#' \code{\link{es_from_ancova_means_sd}()} when the adjusted standard deviations are
+#' reported.
 #'
 #' @export es_from_ancova_means_ci
 #'
@@ -283,17 +295,22 @@ es_from_ancova_means_ci <- function(n_exp, n_nexp,
 #' @param ancova_mean_exp adjusted mean of participants in the experimental/exposed group.
 #' @param ancova_mean_nexp adjusted mean of participants in the non-experimental/non-exposed group.
 #' @param ancova_mean_sd_pooled adjusted pooled standard deviation.
-#' @param cov_outcome_r correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   total-sample correlation, nor the square root of the whole model R-squared (which also
+#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
 #' This function converts the adjusted pooled standard deviations of two independent groups
-#' into a crude pooled standard deviation.
+#' into a crude pooled standard deviation,
 #' and then relies on the calculations of the \code{\link{es_from_ancova_means_sd_pooled_crude}()} function.
 #'
 #' **To convert the adjusted pooled SD into a crude pooled SD** (table 12.3 in Cooper):
@@ -337,6 +354,10 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
   if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument is incorrectly specified.")
 
+  # Divides by the supplied SD, so a non-positive one sign-flips d while md keeps
+  # its own sign. See R/internal_guards.R.
+  ancova_mean_sd_pooled <- .positive_or_na(ancova_mean_sd_pooled)
+
   sd_within <- ancova_mean_sd_pooled / sqrt(1 - cov_outcome_r^2)
 
   d <- (ancova_mean_exp - ancova_mean_nexp) / sd_within
@@ -366,12 +387,17 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
 #' @param ancova_mean_exp adjusted mean of participants in the experimental/exposed group.
 #' @param ancova_mean_nexp adjusted mean of participants in the non-experimental/non-exposed group.
 #' @param mean_sd_pooled crude pooled standard deviation.
-#' @param cov_outcome_r correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   total-sample correlation, nor the square root of the whole model R-squared (which also
+#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -380,10 +406,10 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
 #' **To estimate the Cohen's d**:
-#' \deqn{d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp\_adj}{mean\_sd\_pooled}}
+#' \deqn{d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp}{mean\_sd\_pooled}}
 #'
 #' **To estimate the mean difference**:
-#' \deqn{md =  ancova\_mean\_exp - ancova\_mean\_nexp\_adj}
+#' \deqn{md =  ancova\_mean\_exp - ancova\_mean\_nexp}
 #' \deqn{md\_se =  \sqrt{\frac{n\_exp + n\_nexp}{n\_exp * n\_nexp} * (1 - cov\_outcome\_r^2) * mean\_sd\_pooled^2}}
 #'
 #' Then, calculations of the \code{\link{es_from_ancova_means_sd}()} and \code{\link{es_from_cohen_d_adj}()} are applied.
@@ -421,6 +447,10 @@ es_from_ancova_means_sd_pooled_crude <- function(ancova_mean_exp, ancova_mean_ne
   reverse_ancova_means[is.na(reverse_ancova_means)] <- FALSE
   if (length(reverse_ancova_means) == 1) reverse_ancova_means = c(rep(reverse_ancova_means, length(ancova_mean_exp)))
   if (length(reverse_ancova_means) != length(ancova_mean_exp)) stop("The length of the 'reverse_ancova_means' argument is incorrectly specified.")
+
+  # Divides by the supplied SD, so a non-positive one sign-flips d while md keeps
+  # its own sign. See R/internal_guards.R.
+  mean_sd_pooled <- .positive_or_na(mean_sd_pooled)
 
   d <- (ancova_mean_exp - ancova_mean_nexp) / mean_sd_pooled
 

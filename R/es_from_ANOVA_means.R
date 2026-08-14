@@ -7,7 +7,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance.
 #' @param reverse_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
@@ -142,7 +142,7 @@ es_from_means_sd <- function(mean_exp, mean_sd_exp, mean_nexp, mean_sd_nexp, n_e
   return(es)
 }
 
-#' Convert means and standard errors of two independent groups several effect size measures
+#' Convert means and standard errors of two independent groups into several effect size measures
 #'
 #' @param mean_exp mean of participants in the experimental/exposed group.
 #' @param mean_nexp mean of participants in the non-experimental/non-exposed group.
@@ -151,7 +151,7 @@ es_from_means_sd <- function(mean_exp, mean_sd_exp, mean_nexp, mean_sd_nexp, n_e
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance.
 #' @param reverse_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
@@ -223,7 +223,7 @@ es_from_means_se <- function(mean_exp, mean_se_exp, mean_nexp, mean_se_nexp, n_e
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -233,12 +233,12 @@ es_from_means_se <- function(mean_exp, mean_se_exp, mean_nexp, mean_se_nexp, n_e
 #'
 #' **To estimate a mean difference**  (formulas 12.1-12.6 in Cooper):
 #' \deqn{md = mean\_exp - mean\_nexp}
-#' \deqn{md\_se = \sqrt{\frac{n_exp+n_nexp}{n_exp*n_nexp} * mean_sd_pooled^2}}
+#' \deqn{md\_se = \sqrt{\frac{n\_exp+n\_nexp}{n\_exp*n\_nexp} * mean\_sd\_pooled^2}}
 #' \deqn{md\_ci\_lo = md - md\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 #' \deqn{md\_ci\_up = md + md\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 #'
 #' **To estimate a Cohen's d** the following formulas are used (formulas 12.10-12.18 in Cooper):
-#' \deqn{cohen\_d =  \frac{mean\_exp - mean\_nexp}{means\_sd\_pooled}}
+#' \deqn{cohen\_d =  \frac{mean\_exp - mean\_nexp}{mean\_sd\_pooled}}
 #' \deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 #' \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 #' \deqn{cohen\_d\_ci\_up = cohen\_d + cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
@@ -279,6 +279,11 @@ es_from_means_sd_pooled <- function(mean_exp, mean_nexp, mean_sd_pooled, n_exp, 
   if (length(reverse_means) == 1) reverse_means = c(rep(reverse_means, length(mean_exp)))
   if (length(reverse_means) != length(mean_exp)) stop("The length of the 'reverse_means' argument is incorrectly specified.")
 
+  # Unlike es_from_means_sd(), which pools the two arm SDs and so squares them on
+  # the way, this route divides by the supplied SD directly: a negative one
+  # sign-flips d while md keeps its own sign. See R/internal_guards.R.
+  mean_sd_pooled <- .positive_or_na(mean_sd_pooled)
+
   d <- (mean_exp - mean_nexp) / mean_sd_pooled
 
   es <- .es_from_d(
@@ -300,7 +305,7 @@ es_from_means_sd_pooled <- function(mean_exp, mean_nexp, mean_sd_pooled, n_exp, 
   return(es)
 }
 
-#' Convert means and 95% CI of two independent groups several effect size measures
+#' Convert means and 95% CI of two independent groups into several effect size measures
 #'
 #' @param mean_exp mean of participants in the experimental/exposed group.
 #' @param mean_nexp mean of participants in the non-experimental/non-exposed group.
@@ -311,7 +316,7 @@ es_from_means_sd_pooled <- function(mean_exp, mean_nexp, mean_sd_pooled, n_exp, 
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance.
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param reverse_means a logical value indicating whether the direction of the generated effect sizes should be flipped.

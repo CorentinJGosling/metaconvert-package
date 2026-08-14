@@ -16,11 +16,17 @@ es_from_cohen_d_adj(
 )
 }
 \arguments{
-\item{cohen_d_adj}{Adjusted Cohen's d (i.e., standardized mean difference) value.}
+\item{cohen_d_adj}{Adjusted Cohen's d, standardized on the \strong{marginal} (unadjusted)
+within-group SD -- the scale used throughout the \code{es_from_ancova_*} family, so
+that adjusted and unadjusted studies remain poolable. If your source standardized on
+the residual (covariate-adjusted) SD, as software reporting an ANCOVA effect size
+typically does, multiply it by \code{sqrt(1 - cov_outcome_r^2)} first, or use
+\code{\link{es_from_ancova_md_sd}()} instead.}
 
 \item{n_cov_ancova}{number of covariates}
 
-\item{cov_outcome_r}{covariate-outcome correlation (in case of multiple covariates, the multiple correlation)}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the model includes several covariates).}
 
 \item{n_exp}{number of participants in the experimental/exposed group.}
 
@@ -28,7 +34,7 @@ es_from_cohen_d_adj(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_d}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -56,8 +62,15 @@ converts an odds ratio (OR) and correlation coefficients (R/Z).
 \deqn{d\_se = \sqrt{\frac{n\_exp+n\_nexp}{n\_exp*n\_nexp} * (1 - cov\_outcome\_r^2) + \frac{cohen\_d\_adj^2}{2*(n\_exp+n\_nexp)}}}
 
 \strong{To estimate other effect size measures}, calculations of the
-\code{\link{es_from_cohen_d}()} function are used (with the exception of the degree of freedom
-that is estimated as \code{df = n_exp + n_nexp - 2 - n_cov_ancova}).
+\code{\link{es_from_cohen_d}()} function are used, with two exceptions. The error
+degrees of freedom become \code{df = n_exp + n_nexp - 2 - n_cov_ancova}, which set
+Hedges' small-sample correction and every t-based confidence interval. And the
+correlation variances inherit the \eqn{(1 - cov\_outcome\_r^2)} shrink above, so
+\code{r_se} and \code{z_se} reflect the precision the covariate adjustment actually
+bought. The correlation POINT estimates are unchanged by \code{n_cov_ancova}: the
+supplied \code{cohen_d_adj} is on the marginal SD scale, so it maps to the marginal
+correlation a two-group study would report, via the point-biserial identity at
+\code{n_exp + n_nexp - 2}.
 }
 \examples{
 es_from_cohen_d_adj(cohen_d_adj = 1, n_cov_ancova = 4, cov_outcome_r = .30, n_exp = 20, n_nexp = 20)

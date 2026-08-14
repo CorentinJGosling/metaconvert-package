@@ -3,8 +3,8 @@
 #' @param student_t Student's t-test value.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
-#' @param smd_to_cor formula used to convert the \code{student_t} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_student_t a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -72,8 +72,8 @@ es_from_student_t <- function(student_t, n_exp, n_nexp,
 #' @param student_t_pval p-value (two-tailed) from a Student's t-test. If your p-value is one-tailed, simply multiply it by two.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
-#' @param smd_to_cor formula used to convert the \code{student_t_pval} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_student_t_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -133,8 +133,8 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
 #' @param anova_f ANOVA F-value (one-way, binary predictor).
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
-#' @param smd_to_cor formula used to convert the \code{anova_f} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_anova_f a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -196,8 +196,8 @@ es_from_anova_f <- function(anova_f, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @param anova_f_pval p-value (two-tailed) from an ANOVA (binary predictor). If your p-value is one-tailed, simply multiply it by two.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
-#' @param smd_to_cor formula used to convert the \code{anova_f_pval} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_anova_f_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details

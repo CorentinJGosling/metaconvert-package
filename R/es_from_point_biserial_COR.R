@@ -4,7 +4,7 @@
 #' @param n_exp total number of participants in the exposed group
 #' @param n_nexp total number of participants in the non exposed group
 #' @param smd_to_cor formula used to convert the \code{pt_bis_r} value into a coefficient correlation.
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_pt_bis_r a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -69,14 +69,14 @@ es_from_pt_bis_r <- function(pt_bis_r, n_exp, n_nexp, smd_to_cor = "viechtbauer"
 #' @param n_exp total number of participants in the exposed group
 #' @param n_nexp total number of participants in the non exposed group
 #' @param smd_to_cor formula used to convert the \code{pt_bis_r_pval} value into a coefficient correlation.
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_pt_bis_r_pval a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
 #' This function converts the p-value of a point biserial correlation into a Student's t-value.
 #'
 #' **The formula used to obtain this Student's t-value is**:
-#' \deqn{t = pt(\frac{pt\_bis\_r\_pval}{2}, df = n\_exp + n\_nexp - 2)}
+#' \deqn{t = qt(\frac{pt\_bis\_r\_pval}{2}, df = n\_exp + n\_nexp - 2, lower.tail = FALSE)}
 #'
 #' Calculations of the \code{\link{es_from_student_t}} function are then applied.
 #'

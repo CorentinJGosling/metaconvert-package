@@ -23,7 +23,7 @@
 #' @param q3_nexp third quartile of the non-experimental/non-exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_med a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -37,7 +37,9 @@
 #' \deqn{mean\_sd\_exp = \frac{q3\_exp - q1\_exp}{2*qnorm(\frac{0.75*n\_exp - 0.125}{n\_exp+0.25})}}
 #' \deqn{mean\_sd\_nexp = \frac{q3\_nexp - q1\_nexp}{2*qnorm(\frac{0.75*n\_nexp - 0.125}{n\_nexp+0.25})}}
 #'
-#' Note that if the group sample size is inferior to 50, a correction is applied to estimate the standard deviation.
+#' The denominator shown above is a large-sample approximation. When \eqn{Q = (n - 1)/4}
+#' is no greater than 50 - that is, for group sample sizes up to 201 - the tabulated
+#' constant of Wan et al. (2014) is used in its place.
 #'
 #' **From these means+SD, the function computes MD, D and G** using formulas
 #' described in \code{\link{es_from_means_sd}()}.
@@ -125,7 +127,7 @@ es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
 #' @param max_nexp maximum value of the non-experimental/non-exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_med a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -139,7 +141,10 @@ es_from_med_quarts <- function(q1_exp, med_exp, q3_exp, n_exp,
 #' \deqn{mean\_sd\_exp = \frac{max\_exp - min\_exp}{4*qnorm(\frac{n\_exp-0.375}{n\_exp+0.25})} + \frac{q3\_exp-q1\_exp}{4*qnorm(\frac{0.75*n\_exp-0.125}{n\_exp+0.25})}}
 #' \deqn{mean\_sd\_nexp = \frac{max\_nexp - min\_nexp}{4*qnorm(\frac{n\_nexp-0.375}{n\_nexp+0.25})} + \frac{q3\_nexp-q1\_nexp}{4*qnorm(\frac{0.75*n\_nexp-0.125}{n\_nexp+0.25})}}
 #'
-#' Note that if the group sample size is inferior to 50, a correction is applied to estimate the standard deviation.
+#' The two normal-quantile factors shown above are large-sample approximations, and each
+#' is replaced by a tabulated constant of Wan et al. (2014) at small samples: the range
+#' factor for group sample sizes no greater than 50, and the interquartile factor when
+#' \eqn{Q = (n - 1)/4} is no greater than 50 - that is, for group sample sizes up to 201.
 #'
 #' **From these means+SD, the function computes MD, D and G** using formulas
 #' described in \code{\link{es_from_means_sd}()}.
@@ -247,7 +252,7 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
   return(es)
 }
 
-#' Convert median, quartiles, and range of two independent groups into several effect size measures
+#' Convert median and range of two independent groups into several effect size measures
 #'
 #' @param min_exp minimum value of the experimental/exposed group.
 #' @param med_exp median value of the experimental/exposed group.
@@ -258,7 +263,7 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 #' @param max_nexp maximum value of the non-experimental/non-exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_med a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -272,7 +277,8 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 #' \deqn{mean\_sd\_exp = \frac{max\_exp - min\_exp}{2*qnorm((n\_exp-0.375) / (n\_exp+0.25))}}
 #' \deqn{mean\_sd\_nexp = \frac{max\_nexp - min\_nexp}{2*qnorm((n\_nexp-0.375) / (n\_nexp+0.25))}}
 #'
-#' Note that if the group sample size is inferior to 50, a correction is applied to estimate the standard deviation.
+#' The denominator shown above is a large-sample approximation. For group sample sizes
+#' no greater than 50, the tabulated constant of Wan et al. (2014) is used in its place.
 #'
 #' **From these means+SD, the function computes MD, D and G** using formulas
 #' described in \code{\link{es_from_means_sd}()}.
@@ -280,24 +286,11 @@ es_from_med_min_max_quarts <- function(q1_exp, med_exp, q3_exp,
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
 #'
-#' **Importantly,**, authors of the Cochrane Handbook stated
+#' The authors of the Cochrane Handbook stated
 #' "As a general rule, we recommend that ranges should not be used
 #' to estimate SDs." (see section 6.5.2.6).
 #' It is thus a good practice to explore the consequences of
 #' the use of this conversion in sensitivity analyses.
-#'
-#' @return
-#' This function estimates and converts between several effect size measures.
-#'
-#' \tabular{ll}{
-#'  \code{natural effect size measure} \tab \cr
-#'  \tab \cr
-#'  \code{converted effect size measure} \tab MD + D + G\cr
-#'  \tab OR + R + Z \cr
-#'  \code{required input data} \tab See 'Section 12. Median, range and/or interquartile range'\cr
-#'  \tab https://metaconvert.org/input.html\cr
-#'  \tab \cr
-#' }
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.

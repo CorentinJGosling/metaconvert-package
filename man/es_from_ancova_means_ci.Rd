@@ -37,13 +37,18 @@ es_from_ancova_means_ci(
 
 \item{ancova_mean_ci_up_nexp}{upper bound of the adjusted 95\% CI of the mean of the non-experimental/non-exposed group.}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
 \item{smd_to_cor}{formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -72,6 +77,13 @@ and then relies on the calculations of the \code{\link{es_from_ancova_means_se}(
 \deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_ci\_up\_exp - ancova\_mean\_ci\_lo\_exp}{2 * qt(0.975, df = n\_exp + n\_nexp - 2 - n\_cov\_ancova)}}
 \deqn{ancova\_mean\_se\_nexp = \frac{ancova\_mean\_ci\_up\_nexp - ancova\_mean\_ci\_lo\_nexp}{2 * qt(0.975, df = n\_exp + n\_nexp - 2 - n\_cov\_ancova)}}
 Calculations of the \code{\link{es_from_ancova_means_se}()} are then applied.
+}
+\note{
+This route has to assume the two groups were balanced on the covariate; when they were
+not, the effect size and its standard error are both attenuated, though less than on
+the routes built from a test statistic. Prefer
+\code{\link{es_from_ancova_means_sd}()} when the adjusted standard deviations are
+reported.
 }
 \examples{
 es_from_ancova_means_ci(

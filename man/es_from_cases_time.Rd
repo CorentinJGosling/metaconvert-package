@@ -30,11 +30,11 @@ es_from_cases_time(
 This function estimates IRR and, when baseline rate information is available, NNT.
 
 \tabular{ll}{
-\code{natural effect size measure} \tab IRR + NNT\cr
+\code{natural effect size measure} \tab IRR + IRD (returned in the \code{rd} columns) + NNT\cr
 \tab \cr
 \code{converted effect size measure} \tab N/A\cr
 \tab \cr
-\code{required input data} \tab See 'Section 5. Incidence Ratio Ratio'\cr
+\code{required input data} \tab See 'Section 5. Incidence Rate Ratio'\cr
 \tab https://metaconvert.org/input.html\cr
 \tab \cr
 }
@@ -46,15 +46,16 @@ Convert the number of cases and the person-time of disease-free observation in t
 This function estimates the incidence rate ratio from the number of cases and
 the person-time of disease-free observation in two independent groups.
 
-\strong{The formula used to obtain the IRR and its standard error} are (Cochrane Handbook (section 6.7.1):
-\deqn{logirr = log(\frac{n\_cases\_exp / time\_exp}{n\_cases\_nexp / time\_nexp)}}
+\strong{The formulas used to obtain the IRR and its standard error} are (Cochrane Handbook, section 6.7.1):
+\deqn{logirr = log(\frac{n\_cases\_exp / time\_exp}{n\_cases\_nexp / time\_nexp})}
 \deqn{logirr\_se = \sqrt{\frac{1}{n\_cases\_exp} + \frac{1}{n\_cases\_nexp}}}
 
 \strong{To estimate a person-time NNT} (Mayne et al., 2006), the following formulas are used:
 \deqn{ird = baseline\_rate \times (1 - irr)}
 \deqn{nnt = \frac{1}{ird}}
 where \code{ird} is the incidence rate difference and \code{baseline_rate} is the
-incidence rate in the control group.
+incidence rate in the control group. The incidence rate difference is returned in the
+\code{rd}, \code{rd_se}, \code{rd_ci_lo} and \code{rd_ci_up} columns.
 
 \strong{To estimate the standard error of the IRD}, two formulas are used.
 When \code{baseline_rate} is missing:

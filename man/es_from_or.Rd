@@ -30,7 +30,7 @@ es_from_or(
 
 \item{n_sample}{total number of participants in the sample}
 
-\item{small_margin_prop}{smallest margin proportion of the underlying 2x2 table}
+\item{small_margin_prop}{smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])}
 
 \item{baseline_risk}{proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)}
 
@@ -50,7 +50,7 @@ This function estimates and converts between several effect size measures.
 \tabular{ll}{
 \code{natural effect size measure} \tab N/A\cr
 \tab \cr
-\code{converted effect size measure} \tab OR + RR + NNT\cr
+\code{converted effect size measure} \tab OR + RR + NNT + RD\cr
 \code{} \tab D + G + R + Z\cr
 \tab \cr
 \code{required input data} \tab See 'Section 2. Odds Ratio'\cr
@@ -81,7 +81,8 @@ estimate the other effect size measures
 \examples{
 es_or_guess <- es_from_or(or = 0.5, n_cases = 210, n_controls = 220)
 es_or <- es_from_or_se(or = 0.5, logor_se = 0.4, n_cases = 210, n_controls = 220)
-round(es_or_guess$logor_se, 0.10) == round(es_or$logor_se, 0.10)
+es_or_guess$logor_se # standard error simulated from the margins
+es_or$logor_se # standard error as reported by the source study
 }
 \references{
 Gosling, C. J., Solanes, A., Fusar-Poli, P., & Radua, J. (2023). metaumbrella: the first comprehensive suite to perform data analysis in umbrella reviews with stratification of the evidence. BMJ mental health, 26(1), e300534. https://doi.org/10.1136/bmjment-2022-300534

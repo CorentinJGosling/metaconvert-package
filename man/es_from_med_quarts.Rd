@@ -37,7 +37,7 @@ es_from_med_quarts(
 
 \item{smd_to_cor}{formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_med}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -58,7 +58,9 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \deqn{mean\_sd\_exp = \frac{q3\_exp - q1\_exp}{2*qnorm(\frac{0.75*n\_exp - 0.125}{n\_exp+0.25})}}
 \deqn{mean\_sd\_nexp = \frac{q3\_nexp - q1\_nexp}{2*qnorm(\frac{0.75*n\_nexp - 0.125}{n\_nexp+0.25})}}
 
-Note that if the group sample size is inferior to 50, a correction is applied to estimate the standard deviation.
+The denominator shown above is a large-sample approximation. When \eqn{Q = (n - 1)/4}
+is no greater than 50 - that is, for group sample sizes up to 201 - the tabulated
+constant of Wan et al. (2014) is used in its place.
 
 \strong{From these means+SD, the function computes MD, D and G} using formulas
 described in \code{\link{es_from_means_sd}()}.

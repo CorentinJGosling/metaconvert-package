@@ -11,7 +11,7 @@ An object of class \code{data.frame} with 6 rows and 7 columns.
 df.compare2
 }
 \description{
-First fictitious dataset aiming to understand how the \code{\link{compare_df}} function works.
-Slightly different from \code{\link{df.compare2}}
+Second fictitious dataset aiming to understand how the \code{\link{compare_df}} function works.
+Slightly different from \code{\link{df.compare1}}
 }
 \keyword{datasets}

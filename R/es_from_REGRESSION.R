@@ -6,7 +6,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_beta_std a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -73,7 +73,7 @@ es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_beta_unstd a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
@@ -398,6 +398,11 @@ es_from_linreg_b_se <- function(linreg_b, linreg_b_se, n_sample, n_covariates,
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
 
+  # A non-positive standard error negates the t statistic and hence every effect
+  # size derived from it, while linreg_b keeps its own sign -- and d_se stays
+  # positive, so the row looks healthy. See R/internal_guards.R.
+  linreg_b_se <- .positive_or_na(linreg_b_se)
+
   linreg_t <- linreg_b / linreg_b_se
 
   es <- es_from_linreg_t(
@@ -476,7 +481,7 @@ es_from_linreg_b_ci <- function(linreg_b, linreg_b_ci_lo, linreg_b_ci_up,
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
 
   df <- n_sample - n_covariates - 2
-  linreg_b_se <- (linreg_b_ci_up - linreg_b_ci_lo) / (2 * qt(.975, df))
+  linreg_b_se <- .ci_width(linreg_b_ci_lo, linreg_b_ci_up) / (2 * qt(.975, df))
 
   es <- es_from_linreg_b_se(
     linreg_b = linreg_b, linreg_b_se = linreg_b_se,

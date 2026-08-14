@@ -24,7 +24,12 @@ es_from_ancova_means_sd_pooled_adj(
 
 \item{ancova_mean_sd_pooled}{adjusted pooled standard deviation.}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
@@ -34,7 +39,7 @@ es_from_ancova_means_sd_pooled_adj(
 
 \item{smd_to_cor}{formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -56,7 +61,7 @@ Convert means and adjusted pooled standard deviation of two independent groups o
 }
 \details{
 This function converts the adjusted pooled standard deviations of two independent groups
-into a crude pooled standard deviation.
+into a crude pooled standard deviation,
 and then relies on the calculations of the \code{\link{es_from_ancova_means_sd_pooled_crude}()} function.
 
 \strong{To convert the adjusted pooled SD into a crude pooled SD} (table 12.3 in Cooper):

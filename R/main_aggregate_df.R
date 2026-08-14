@@ -25,9 +25,9 @@
 #' is presented on the log scale.
 #'
 #' @return
-#' The object returned by the \code{aggregate_df} contains, is a dataframe containing at the very least,
-#' the aggregating factor, and the aggregated effect size values and standard errors. All columns indicated in the \code{col_*} arguments
-#' will also be included in this dataframe.
+#' The \code{aggregate_df()} function returns a dataframe containing, at a minimum, the aggregating factor
+#' and the aggregated effect size values and standard errors. All columns indicated in the \code{col_*} arguments
+#' are also included in this dataframe.
 #' \tabular{ll}{
 #'  \code{row_index} \tab the row number in the original dataset.\cr
 #'  \tab \cr

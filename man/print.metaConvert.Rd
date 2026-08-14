@@ -12,7 +12,8 @@
 \item{...}{other arguments that can be passed to the function}
 }
 \value{
-Implicitly calls the \code{\link{summary.metaConvert}} function.
+\code{x}, invisibly. Called for its side effect: the summary produced by
+\code{\link{summary.metaConvert}} is printed.
 }
 \description{
 Print a summary of an object of class \dQuote{metaConvert}

@@ -27,9 +27,11 @@ Authors@R: c(
                family= "Radua",  role = "aut",
                email = "radua@clinic.cat"))
 Maintainer: Corentin J. Gosling <corentin.gosling@parisnanterre.fr>
-Description: Automatically estimate 14 effect size measures from a well-formatted dataset, including Cohen's d, Hedges' g, mean difference, odds ratio, risk ratio, incidence rate ratio, risk difference, number needed to treat, Pearson correlation, Fisher's z, Cronbach's alpha, intraclass correlation coefficient, and single-group proportion. Provides a two-tier quality-flag diagnostic system for input validation and post-computation plausibility checks, missing-data guidance that tells users which columns would unlock additional estimators, post-hoc correction for attenuation due to measurement error, and standalone psychometric utilities (standard error of measurement, smallest detectable change, change-score reliability). Various other functions can help, for example, removing dependency between several effect sizes, or identifying differences between two datasets.
+Description: Automatically estimate 14 effect size measures from a well-formatted dataset, including Cohen's d, Hedges' g, mean difference, odds ratio, risk ratio, incidence rate ratio, hazard ratio, risk difference, number needed to treat, Pearson correlation, Fisher's z, Cronbach's alpha, intraclass correlation coefficient, and single-group proportion. Provides a two-tier quality-flag diagnostic system for input validation and post-computation plausibility checks, missing-data guidance that tells users which columns would unlock additional estimators, post-hoc correction for attenuation due to measurement error, and standalone psychometric utilities (standard error of measurement, smallest detectable change, change-score reliability). Various other functions can help, for example, removing dependency between several effect sizes, or identifying differences between two datasets.
     This package is mainly designed to assist in conducting a systematic review with a meta-analysis but can be useful to any researcher interested in estimating an effect size.
-Imports: compareDF, metafor, estimraw, rio 
+Imports: compareDF, metafor, estimraw, rio
+URL: https://metaconvert.org/, https://github.com/CorentinJGosling/metaconvert-package
+BugReports: https://github.com/CorentinJGosling/metaconvert-package/issues
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true

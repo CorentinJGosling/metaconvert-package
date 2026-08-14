@@ -5,10 +5,14 @@
 #'   partial eta-squared \eqn{SS_{effect} / (SS_{effect} + SS_{error})}, so the two
 #'   coincide and either label is correct here (unlike the ANCOVA case handled by
 #'   \code{\link{es_from_etasq_adj}()}, which requires the partial form specifically).
+#'   The model must be **one-way**: a partial eta-squared from a factorial ANOVA has a
+#'   smaller error degrees of freedom than \eqn{n\_exp + n\_nexp - 2} and is defined on
+#'   that model's residual SD, so it would be overstated here. Prefer the group means
+#'   and SDs in that case.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_etasq a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -16,13 +20,14 @@
 #' from the eta squared of a binary predictor (ANOVA model).
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
-#' **To estimate a Cohen's d** the following formula is used (Cohen, 1988):
-#' \deqn{d = 2 * \sqrt{\frac{etasq}{1 - etasq}}}
+#' **To estimate a Cohen's d**, the exact one-way, two-group identity
+#' \eqn{\eta^2 = F / (F + df_{err})} is inverted (with \eqn{df_{err} = n\_exp + n\_nexp - 2})
+#' and the result fed to Cohen's d from F (table 12.1 in Cooper):
+#' \deqn{d = \sqrt{\frac{etasq}{1 - etasq} * (n\_exp + n\_nexp - 2) * (\frac{1}{n\_exp} + \frac{1}{n\_nexp})}}
 #'
-#' Note that this closed form is the large-sample, **equal-groups** (\eqn{n\_exp = n\_nexp})
-#' limit of the exact F-based conversion. For markedly unequal group sizes it is
-#' approximate; supplying the ANOVA F (\code{\link{es_from_anova_f}()}), which
-#' carries the per-group sample sizes, is more accurate.
+#' Because this expression carries both arm sizes it is exact for unequal groups, and
+#' returns the same value as \code{\link{es_from_anova_f}()} and
+#' \code{\link{es_from_pt_bis_r}()} applied to the same study.
 #'
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
@@ -54,7 +59,18 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
   reverse_etasq[is.na(reverse_etasq)] <- FALSE
 
 
-  d <- 2 * (sqrt(etasq / (1 - etasq)))
+  # Invert the exact one-way, two-group identity eta^2 = F / (F + df_err) with
+  # df_err = n_exp + n_nexp - 2, then apply Cohen's d from F (table 12.1 in Cooper):
+  #   F = etasq * df_err / (1 - etasq)
+  #   d = sqrt(F * (n_exp + n_nexp) / (n_exp * n_nexp))
+  # which collapses to the single expression below. This carries BOTH arm sizes, so
+  # it is exact for unequal groups; the former closed form 2 * sqrt(etasq/(1 - etasq))
+  # is its equal-n, large-n limit (it replaces sqrt(df_err * (1/n_exp + 1/n_nexp)) by
+  # the constant 2) and understated d by up to 39% at n_exp/n_nexp = 10/90. This now
+  # agrees exactly with es_from_anova_f() and es_from_pt_bis_r(), which invert the
+  # same information, and with es_from_etasq_adj(), which already went through F.
+  df_err <- n_exp + n_nexp - 2
+  d <- sqrt(etasq / (1 - etasq) * df_err * (1 / n_exp + 1 / n_nexp))
 
   es <- .es_from_d(
     d = d, n_exp = n_exp, n_nexp = n_nexp,
@@ -79,10 +95,15 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
 #'   ANOVA the two definitions coincide; see \code{\link{es_from_etasq}()}.)
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
-#' @param cov_outcome_r correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   total-sample correlation, nor the square root of the whole model R-squared (which also
+#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_etasq a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -126,22 +147,13 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
 #' }
 #'
 #' @note
-#' Two cautions apply. (1) \code{etasq_adj} must be the *partial* eta-squared (see
-#' the parameter description); a classical eta-squared biases the effect size
-#' toward zero. (2) The sampling variance is rebuilt from Cooper's eq. 12.26, which
-#' sets the covariate-imbalance ("leverage") term
-#' \eqn{D = (\bar{x}_{exp} - \bar{x}_{nexp})^2 / SS_x} of the exact ANCOVA variance
-#' to zero (Lai & Kelley, 2012, eq. 5); \eqn{D} is not recoverable from summary
-#' statistics. Because partial eta-squared is an exact function of the t statistic
-#' (\eqn{\eta^2_p = t^2/(t^2 + df)}), this route inherits the behaviour of
-#' \code{\link{es_from_ancova_t}()}: \strong{the point estimate is NOT unbiased under
-#' covariate imbalance}. Both \code{d} and its standard error are attenuated by
-#' \eqn{1/\sqrt{1 + \delta_x^2/4}} for equal arms (about 3% at
-#' \eqn{\delta_x = 0.5}, 11% at \eqn{\delta_x = 1}, negligible when randomised).
-#' The p-value is unaffected because the two shrink together, but the magnitude is
-#' understated and the understatement does not average out on pooling. See
-#' \code{\link{es_from_ancova_t}()} for the full statement, and prefer
-#' \code{\link{es_from_ancova_means_sd}()} when adjusted means are available.
+#' Two cautions apply. First, \code{etasq_adj} must be the \emph{partial} eta-squared:
+#' a classical eta-squared will pull the effect size toward zero.
+#'
+#' Second, partial eta-squared is a direct function of the t statistic, so this route
+#' behaves exactly like \code{\link{es_from_ancova_t}()}. It has to assume the two
+#' groups were balanced on the covariate. Prefer
+#' \code{\link{es_from_ancova_means_sd}()} when adjusted means are reported.
 #'
 #' @references
 #' Cooper, H., Hedges, L. V., & Valentine, J. C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.

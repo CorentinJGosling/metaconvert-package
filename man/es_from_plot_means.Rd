@@ -61,7 +61,7 @@ es_from_plot_means(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_plot_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -84,7 +84,7 @@ Converts the means and bounds of an error bar (generally extracted from a plot) 
 \details{
 This function uses the bounds of an error bar of a mean obtained from a plot into a standard deviation.
 Then, a mean difference (MD), Cohen's d (D), and Hedges' g (G) are estimated.
-Odds ratio (OR), risk ratio (RR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
+Odds ratio (OR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
 
 \strong{To convert the bound of an error bar into a standard deviation,}
 this function always prioritizes information from the \code{plot_mean_sd_*} arguments,
@@ -95,32 +95,23 @@ then those from the \code{plot_mean_ci_*} arguments.
 \deqn{mean\_sd\_lo\_exp = plot\_mean\_exp - plot\_mean\_sd\_lo\_exp}
 \deqn{mean\_sd\_up\_exp = plot\_mean\_sd\_up\_exp - plot\_mean\_exp}
 \deqn{mean\_sd\_exp = \frac{mean\_sd\_lo\_exp + mean\_sd\_up\_exp}{2}}
-}
-
 \deqn{mean\_sd\_lo\_nexp = plot\_mean\_nexp - plot\_mean\_sd\_lo\_nexp}
 \deqn{mean\_sd\_up\_nexp = plot\_mean\_sd\_up\_nexp - plot\_mean\_nexp}
 \deqn{mean\_sd\_nexp = \frac{mean\_sd\_lo\_nexp + mean\_sd\_up\_nexp}{2}}
 
-Note that if only one bound (e.g., the upper bound) is provided, it will be the
-only information used to estimate the standard deviation value.
-
-Then, calculations of the \code{\link{es_from_means_sd}} are used.
-\enumerate{
+If only one bound (e.g., the upper bound) is provided, it is the only information
+used to estimate the standard deviation. Calculations of
+\code{\link{es_from_means_sd}} are then applied.
 \item If the bounds of the standard errors are provided, the following formulas are used:
 \deqn{mean\_se\_lo\_exp = plot\_mean\_exp - plot\_mean\_se\_lo\_exp}
 \deqn{mean\_se\_up\_exp = plot\_mean\_se\_up\_exp - plot\_mean\_exp}
 \deqn{mean\_se\_exp = \frac{mean\_se\_lo\_exp + mean\_se\_up\_exp}{2}}
-}
-
 \deqn{mean\_se\_lo\_nexp = plot\_mean\_nexp - plot\_mean\_se\_lo\_nexp}
 \deqn{mean\_se\_up\_nexp = plot\_mean\_se\_up\_nexp - plot\_mean\_nexp}
 \deqn{mean\_se\_nexp = \frac{mean\_se\_lo\_nexp + mean\_se\_up\_nexp}{2}}
 
-Note that if only one bound (e.g., the upper bound) is provided, it will be the
-only information used to estimate the standard error value.
-
-Then, calculations of the \code{\link{es_from_means_se}()} are used.
-\enumerate{
+If only one bound is provided, it is the only information used to estimate the
+standard error. Calculations of \code{\link{es_from_means_se}()} are then applied.
 \item If the bounds of the 95\% confidence intervals are provided, the calculations
 of the \code{\link{es_from_means_ci}} are used.
 }

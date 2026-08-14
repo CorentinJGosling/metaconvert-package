@@ -29,7 +29,7 @@ es_from_or_se(
 
 \item{baseline_risk}{proportion of cases in the non-exposed group}
 
-\item{small_margin_prop}{smallest margin proportion of cases/events in the underlying 2x2 table}
+\item{small_margin_prop}{smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])}
 
 \item{n_exp}{number of participants in the exposed group}
 
@@ -105,15 +105,17 @@ Then, the functions select the contingency table whose standard error coincides 
 the standard error reported.
 The RR value and its standard are obtained from this estimated contingency table.
 
-\strong{C.} Third, it is possible to transpose the RR to a OR (\code{or_to_rr = "transpose"}).
-This argument requires (or + logor_se) to generate a OR.
+\strong{C.} Third, it is possible to transpose the OR to a RR (\code{or_to_rr = "transpose"}).
+This argument requires (or + logor_se) to generate a RR.
 It is known that OR and RR are similar when the baseline risk is small.
 Therefore, users can request to simply transpose the OR value & standard error into a RR value & standard error.
 \deqn{rr = or}
 \deqn{logrr\_se = logor\_se}
 
 \strong{D.} Fourth, it is possible to recreate the 2x2 table using the dipietrantonj's formulas (\code{or_to_rr = "dipietrantonj"}).
-This argument requires (or + logor_ci_lo + logor_ci_lo) to generate a RR. Information on this approach can be retrieved in
+This argument requires (or + logor_se + n_exp + n_nexp) to generate a RR. The 95\% CI of
+the OR, from which the 2x2 table is reconstructed, is obtained internally from \code{or}
+and \code{logor_se}. Information on this approach can be retrieved in
 Di Pietrantonj (2006).
 
 \strong{To estimate the NNT, the formulas used are :}
@@ -138,8 +140,8 @@ If it is not the case, formulas can produce slightly less accurate results.
 \deqn{r\_ci\_up = cos(\frac{\pi}{1 + or\_ci\_up^c})}
 \deqn{z = atanh(r)}
 \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
-\deqn{z\_ci\_lo = atanh(r\_lo)}
-\deqn{z\_ci\_up = atanh(r\_up)}
+\deqn{z\_ci\_lo = atanh(r\_ci\_lo)}
+\deqn{z\_ci\_up = atanh(r\_ci\_up)}
 
 \strong{B.} Second, the approach described in Digby (1983) can be used (\code{or_to_cor = "digby"}).
 This argument requires (or + logor_se) to generate a R/Z.
@@ -154,8 +156,8 @@ If it is not the case, formulas can produce slightly less accurate results.
 \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
 \deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
 \deqn{z\_ci\_up = z + qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
-\deqn{r\_ci\_lo = tanh(z\_lo)}
-\deqn{r\_ci\_up = tanh(z\_up)}
+\deqn{r\_ci\_lo = tanh(z\_ci\_lo)}
+\deqn{r\_ci\_up = tanh(z\_ci\_up)}
 
 \strong{C.} Third, the approach described in Bonett (2005) can be used (\code{or_to_cor = "bonett"}).
 This argument requires (or + logor_se + n_sample + the 2x2 margins) to generate a R/Z.
@@ -169,11 +171,14 @@ the margins alone. The two margin pairs (\code{n_exp}/\code{n_nexp} and
 \code{n_cases}/\code{n_controls}) each sum to \code{n_sample}, so it is enough to supply
 \code{n_sample} plus \emph{one member of each pair}: any of the four combinations
 (\code{n_exp} or \code{n_nexp}) x (\code{n_cases} or \code{n_controls}) works, and the
-missing margins are back-filled. A value supplied by the user always takes precedence.
+missing margins are back-filled. A value supplied by the user always takes precedence;
+it must be a proportion in (0, 0.5], and a value outside that range is not validated
+and can drive \eqn{c} negative, which flips the sign of \code{r}.
 The derivation is skipped when the implied margins are not all strictly positive or do
-not sum to \code{n_sample}; such a row cannot use the Bonett conversion and its R/Z is
-left as the \code{"lipsey_cooper"} value if no row in the call could use it, or
-\code{NA} if some other row could.
+not sum to \code{n_sample}. A row that cannot use the Bonett conversion keeps the
+\code{"lipsey_cooper"} R/Z computed from the Cohen's d, and a message reports the
+substitution. This decision is taken row by row and does not depend on the other rows
+of the call.
 
 \deqn{c = \frac{1 - \frac{|\frac{n\_exp}{n\_sample} - \frac{n\_cases}{n\_sample}|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
 \deqn{r = \cos{\frac{\pi}{1+or^c}}}
@@ -184,8 +189,8 @@ left as the \code{"lipsey_cooper"} value if no row in the call could use it, or
 \deqn{r\_ci\_up = cos(\frac{\pi}{1 + or\_ci\_up^c})}
 \deqn{z = atanh(r)}
 \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}} }
-\deqn{z\_ci\_lo = atanh(r\_lo)}
-\deqn{z\_ci\_up = atanh(r\_up)}
+\deqn{z\_ci\_lo = atanh(r\_ci\_lo)}
+\deqn{z\_ci\_up = atanh(r\_ci\_up)}
 
 \strong{D.} Last, the approach described in Cooper et al. (2019) can be used (\code{or_to_cor = "lipsey_cooper"}).
 This argument requires (or + logor_se + n_exp + n_nexp) to generate a R/Z.

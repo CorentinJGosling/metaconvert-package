@@ -24,15 +24,15 @@ es_from_rr_pval(
 
 \item{rr_pval}{p-value of the risk ratio}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"} and \code{rr_to_or = "grant_2x2"} arguments).}
+\item{baseline_risk}{proportion of cases in the non-exposed group (required for \code{rr_to_or = "grant"}, and for the risk difference and the NNT)}
 
-\item{n_exp}{number of participants in the exposed group (only required for the \code{rr_to_or = "grant_CI"}, \code{rr_to_or = "grant_2x2"} arguments).}
+\item{n_exp}{number of participants in the exposed group (required for \code{rr_to_or = "dipietrantonj"})}
 
-\item{n_nexp}{number of participants in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"}, \code{rr_to_or = "grant_2x2"} arguments).}
+\item{n_nexp}{number of participants in the non-exposed group (required for \code{rr_to_or = "dipietrantonj"})}
 
-\item{n_cases}{number of cases/events}
+\item{n_cases}{number of cases/events (required for \code{rr_to_or = "metaumbrella"}, the default)}
 
-\item{n_controls}{number of controls/no-event}
+\item{n_controls}{number of controls/no-event (required for \code{rr_to_or = "metaumbrella"}, the default)}
 
 \item{rr_to_or}{formula used to convert the \code{rr} value into an odds ratio (see details).}
 
@@ -44,7 +44,7 @@ This function estimates and converts between several effect size measures.
 \tabular{ll}{
 \code{natural effect size measure} \tab RR\cr
 \tab \cr
-\code{converted effect size measure} \tab OR + NNT\cr
+\code{converted effect size measure} \tab OR + NNT + RD\cr
 \tab \cr
 \code{required input data} \tab See 'Section 3. Risk Ratio'\cr
 \tab https://metaconvert.org/input.html\cr

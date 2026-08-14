@@ -45,9 +45,13 @@
   z_up <- ifelse(additive & !is.na(es_val) & !is.na(se_val),
                  es_val + qnorm(.975) * se_val, NA_real_)
 
-  lo <- ifelse(user_gave_ci, ifelse(natural_ratio, log_lo, user_ci_lo), z_lo)
-  up <- ifelse(user_gave_ci, ifelse(natural_ratio, log_up, user_ci_up), z_up)
-  list(lo = lo, up = up, user_gave_ci = user_gave_ci)
+  lo_raw <- ifelse(user_gave_ci, ifelse(natural_ratio, log_lo, user_ci_lo), z_lo)
+  up_raw <- ifelse(user_gave_ci, ifelse(natural_ratio, log_up, user_ci_up), z_up)
+  # The user's own bounds are restored verbatim here, so a transposed pair would
+  # be handed back transposed -- the only route in the package that can emit an
+  # inverted interval without also emitting a negative SE. See R/internal_guards.R.
+  list(lo = .ci_lower(lo_raw, up_raw), up = .ci_upper(lo_raw, up_raw),
+       user_gave_ci = user_gave_ci)
 }
 
 .dispatch_user_conversion <- function(original_type, es_val, se_val,
@@ -340,7 +344,7 @@
 #' @details
 #' This function is a generic function allowing to include any crude effect size measure value + variance.
 #' Importantly, when the \code{user_es_original_measure_crude} is one of the known measures
-#' (d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, r, z, rd, nnt),
+#' (d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, loghr, r, z, rd, nnt),
 #' conversions towards the other effect size measures are performed.
 #' Otherwise, no conversion is performed (the effect size value + variance you enter is
 #' the value + variance exported by this function) and a warning is issued.
@@ -420,10 +424,14 @@ es_from_user_crude <- function(user_es_original_measure_crude,
     user_es_crude
   )
 
+  # .ci_width()/.positive_or_na(): a transposed interval describes the same
+  # interval, and a non-positive reported standard error is impossible; either
+  # would otherwise be carried into the output as a negative standard error.
+  # See R/internal_guards.R.
   se_val <- ifelse(is.na(user_se_crude) & !is.na(user_es_original_measure_crude) &
                     !is.na(user_ci_lo_crude) & !is.na(user_ci_up_crude),
-    (user_ci_up_crude - user_ci_lo_crude) / (2 * qnorm(.975)),
-    user_se_crude
+    .ci_width(user_ci_lo_crude, user_ci_up_crude) / (2 * qnorm(.975)),
+    .positive_or_na(user_se_crude)
   )
 
   ci_lo <- ifelse(is.na(user_ci_lo_crude) & !is.na(user_es_original_measure_crude) &
@@ -437,6 +445,9 @@ es_from_user_crude <- function(user_es_original_measure_crude,
     user_es_crude + user_se_crude * qnorm(.975),
     user_ci_up_crude
   )
+  # Bounds supplied by the user are passed straight through, so a transposed
+  # pair would leave the output interval transposed as well.
+  ci_lo_ord <- .ci_lower(ci_lo, ci_up); ci_up <- .ci_upper(ci_lo, ci_up); ci_lo <- ci_lo_ord
 
   target <- unique(user_es_target_measure_crude)
   if (length(target) != 1) target <- target[1]
@@ -450,9 +461,11 @@ es_from_user_crude <- function(user_es_original_measure_crude,
                           !is.na(user_ci_lo_crude) & !is.na(user_ci_up_crude) &
                           user_ci_lo_crude > 0 & user_ci_up_crude > 0)
   if (length(ratio_from_ci) > 0) {
-    log_lo <- log(user_ci_lo_crude[ratio_from_ci])
-    log_up <- log(user_ci_up_crude[ratio_from_ci])
-    se_val[ratio_from_ci] <- (log_up - log_lo) / (2 * qnorm(.975))
+    log_lo_raw <- log(user_ci_lo_crude[ratio_from_ci])
+    log_up_raw <- log(user_ci_up_crude[ratio_from_ci])
+    log_lo <- .ci_lower(log_lo_raw, log_up_raw)
+    log_up <- .ci_upper(log_lo_raw, log_up_raw)
+    se_val[ratio_from_ci] <- .ci_width(log_lo, log_up) / (2 * qnorm(.975))
     es_val[ratio_from_ci] <- ifelse(
       is.na(user_es_crude[ratio_from_ci]),
       (log_lo + log_up) / 2,
@@ -599,7 +612,7 @@ es_from_user_crude <- function(user_es_original_measure_crude,
 #' @details
 #' This function is a generic function allowing to include any adjusted effect size measure value + variance.
 #' Importantly, when the \code{user_es_original_measure_adj} is one of the known measures
-#' (d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, r, z, rd, nnt),
+#' (d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, loghr, r, z, rd, nnt),
 #' conversions towards the other effect size measures are performed.
 #' Otherwise, no conversion is performed (the effect size value + variance you enter is
 #' the value + variance exported by this function) and a warning is issued.
@@ -678,10 +691,11 @@ es_from_user_adj <- function(user_es_original_measure_adj,
     user_es_adj
   )
 
+  # See es_from_user_crude() above and R/internal_guards.R.
   se_val <- ifelse(is.na(user_se_adj) & !is.na(user_es_original_measure_adj) &
                     !is.na(user_ci_lo_adj) & !is.na(user_ci_up_adj),
-    (user_ci_up_adj - user_ci_lo_adj) / (2 * qnorm(.975)),
-    user_se_adj
+    .ci_width(user_ci_lo_adj, user_ci_up_adj) / (2 * qnorm(.975)),
+    .positive_or_na(user_se_adj)
   )
 
   ci_lo <- ifelse(is.na(user_ci_lo_adj) & !is.na(user_es_original_measure_adj) &
@@ -695,6 +709,8 @@ es_from_user_adj <- function(user_es_original_measure_adj,
     user_es_adj + user_se_adj * qnorm(.975),
     user_ci_up_adj
   )
+  # See es_from_user_crude() above.
+  ci_lo_ord <- .ci_lower(ci_lo, ci_up); ci_up <- .ci_upper(ci_lo, ci_up); ci_lo <- ci_lo_ord
 
   target <- unique(user_es_target_measure_adj)
   if (length(target) != 1) target <- target[1]
@@ -707,9 +723,11 @@ es_from_user_adj <- function(user_es_original_measure_adj,
                           !is.na(user_ci_lo_adj) & !is.na(user_ci_up_adj) &
                           user_ci_lo_adj > 0 & user_ci_up_adj > 0)
   if (length(ratio_from_ci) > 0) {
-    log_lo <- log(user_ci_lo_adj[ratio_from_ci])
-    log_up <- log(user_ci_up_adj[ratio_from_ci])
-    se_val[ratio_from_ci] <- (log_up - log_lo) / (2 * qnorm(.975))
+    log_lo_raw <- log(user_ci_lo_adj[ratio_from_ci])
+    log_up_raw <- log(user_ci_up_adj[ratio_from_ci])
+    log_lo <- .ci_lower(log_lo_raw, log_up_raw)
+    log_up <- .ci_upper(log_lo_raw, log_up_raw)
+    se_val[ratio_from_ci] <- .ci_width(log_lo, log_up) / (2 * qnorm(.975))
     es_val[ratio_from_ci] <- ifelse(
       is.na(user_es_adj[ratio_from_ci]),
       (log_lo + log_up) / 2,

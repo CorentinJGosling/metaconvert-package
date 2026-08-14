@@ -63,7 +63,7 @@ Convert pre-post means and 95\% CI of a single group into standard effect size m
 \details{
 This function converts the bounds of the 95\% CI of the pre/post means of a single group into standard errors (Section 6.3.1 in the Cochrane Handbook).
 \deqn{mean\_pre\_se\_exp = \frac{mean\_pre\_ci\_up\_exp - mean\_pre\_ci\_lo\_exp}{2 * qt{(0.975, df = n\_exp - 1)}}}
-\deqn{mean\_post\_se\_exp = \frac{mean\_post\_ci\_up\_exp - mean\_post\_ci\_lo\_exp}{2 * qt{(0.975, df = n\_exp - 1)}}}
+\deqn{mean\_se\_exp = \frac{mean\_ci\_up\_exp - mean\_ci\_lo\_exp}{2 * qt{(0.975, df = n\_exp - 1)}}}
 
 Then, calculations of the \code{\link{es_from_means_se_pre_post_single_group}()} are applied.
 }

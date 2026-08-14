@@ -95,12 +95,12 @@ This function converts the pre/post standard errors of two independent groups in
 Then, calculations of the \code{\link{es_from_means_sd_pre_post}()} are applied.
 }
 \examples{
-es_from_means_sd_pre_post(
+es_from_means_se_pre_post(
   n_exp = 36, n_nexp = 35,
   mean_pre_exp = 98, mean_exp = 102,
-  mean_pre_sd_exp = 16, mean_sd_exp = 17,
+  mean_pre_se_exp = 2.67, mean_se_exp = 2.83,
   mean_pre_nexp = 96, mean_nexp = 102,
-  mean_pre_sd_nexp = 14, mean_sd_nexp = 15,
+  mean_pre_se_nexp = 2.37, mean_se_nexp = 2.54,
   r_pre_post_exp = 0.8, r_pre_post_nexp = 0.8
 )
 }

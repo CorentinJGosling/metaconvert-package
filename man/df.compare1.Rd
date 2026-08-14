@@ -12,6 +12,6 @@ df.compare1
 }
 \description{
 First fictitious dataset aiming to understand how the \code{\link{compare_df}} function works.
-Slightly different from \code{\link{df.compare1}}
+Slightly different from \code{\link{df.compare2}}
 }
 \keyword{datasets}

@@ -14,7 +14,10 @@ see_input_data(
 )
 }
 \arguments{
-\item{measure}{Target effect size measure (one of the 14 available in metaConvert). Default is "all".}
+\item{measure}{Target effect size measure. One of "all", "d", "g", "md", "or", "rr",
+"nnt", "r", "z", "irr", "logvr" or "logcvr". Default is "all". The risk difference and
+the psychometric measures (rd, alpha, icc, prop, hr) are not covered by this table;
+use \code{\link{data_extraction_sheet}()} for those.}
 
 \item{type_of_measure}{One of "natural+converted" or "natural" (see details).}
 
@@ -49,7 +52,8 @@ the selected effect size measure
 
 You can export a file in various formats outside R
 (by indicating, for example, ".txt", ".xlsx", or ".csv") in the \code{extension} argument.
-You can also visualise this dataset directly in R by setting \code{extension = "R"}.
+You can also visualise this dataset directly in R by setting
+\code{extension = "data.frame"}.
 
 This table is designed to be used in combination with tables showing the combination of input data
 leading to estimate each of the effect size measures (https://metaconvert.org/input.html)

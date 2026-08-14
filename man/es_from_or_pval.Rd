@@ -2,7 +2,7 @@
 % Please edit documentation in R/es_from_stand_OR.R
 \name{es_from_or_pval}
 \alias{es_from_or_pval}
-\title{Convert an odds ratio value and its standard error to several effect size measures}
+\title{Convert an odds ratio value and its p-value to several effect size measures}
 \usage{
 es_from_or_pval(
   or,
@@ -29,7 +29,7 @@ es_from_or_pval(
 
 \item{baseline_risk}{proportion of cases in the non-exposed group (only required for the \code{or_to_rr = "grant"} argument).}
 
-\item{small_margin_prop}{smallest margin proportion of the underlying 2x2 table}
+\item{small_margin_prop}{smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])}
 
 \item{n_exp}{number of participants in the exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)}
 
@@ -53,7 +53,7 @@ This function estimates and converts between several effect size measures.
 \tabular{ll}{
 \code{natural effect size measure} \tab OR\cr
 \tab \cr
-\code{converted effect size measure} \tab RR + NNT\cr
+\code{converted effect size measure} \tab RR + NNT + RD\cr
 \code{} \tab D + G + R + Z\cr
 \tab \cr
 \code{required input data} \tab See 'Section 2. Odds Ratio'\cr
@@ -62,7 +62,7 @@ This function estimates and converts between several effect size measures.
 }
 }
 \description{
-Convert an odds ratio value and its standard error to several effect size measures
+Convert an odds ratio value and its p-value to several effect size measures
 }
 \details{
 This function computes the standard error of the (log) odds ratio into

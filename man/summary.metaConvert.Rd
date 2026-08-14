@@ -30,7 +30,7 @@ Available options:
 \item \code{log_or_max} (default 5): same, for |logOR| and |logRR|
 \item \code{n_min} (default 10): flag sample sizes below this value
 \item \code{iqr_mult} (default 3): IQR multiplier for the cross-row outlier detection
-\item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum SD of the ES across estimation methods (SMD, correlation, logOR/logRR)
+\item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum absolute deviation of the per-method estimates from their median, for the SMD family (d, g, dw, gw, md, mdw), for r, and for the log-ratio family (logOR, logRR, logIRR, logHR) respectively. Other measures use the SMD value
 \item \code{diff_max_smd} / \code{diff_max_r} / \code{diff_max_logor} (defaults 1.0 / 0.3 / 2.0): maximum min-max ES difference across estimation methods
 \item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
 \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
@@ -42,7 +42,7 @@ Available options:
 
 \item{include_raw}{a logical value indicating whether the raw input columns should be appended after the effect size columns in the returned dataframe. Default is TRUE.}
 
-\item{formulas}{a logical value indicating whether the sensitivity of each effect size to the choice of conversion formula (\code{or_to_rr}, \code{cor_to_smd}, \code{pre_post_to_smd}, ...) should be reported. Default is FALSE. When TRUE, a concise \code{[FORMULA]} message is appended to the flags column for every comparison whose estimate depends on such a choice, and the complete table of alternative estimates (as returned by \code{\link{es_formulas}}) is attached as the \code{"formulas"} attribute. This reports methodological uncertainty rather than a data quality problem: unlike the \code{[DISCORDANT]} flags, a discrepancy between conversion formulae reflects differing statistical assumptions rather than an extraction error. Each alternative formula requires one additional evaluation of \code{\link{convert_df}}.}
+\item{formulas}{a logical value indicating whether the sensitivity of each effect size to the choice of conversion formula (\code{or_to_rr}, \code{cor_to_smd}, \code{pre_post_to_smd}, ...) should be reported. Default is FALSE. When TRUE, a concise \code{[FORMULA]} message is appended to the flags column for every comparison whose estimate depends on such a choice, and the complete table of alternative estimates (as returned by \code{\link{es_formulas}}) is attached as the \code{"formulas"} attribute. \code{\link{es_formulas}} re-estimates one effect size per comparison, so the message is appended only where the reported \code{info_used} is the type of input data that estimate was derived from: an estimate obtained from other input data is left unannotated, even when it belongs to the same comparison. This reports methodological uncertainty rather than a data quality problem: unlike the \code{[DISCORDANT]} flags, a discrepancy between conversion formulae reflects differing statistical assumptions rather than an extraction error. Each alternative formula requires one additional evaluation of \code{\link{convert_df}}.}
 
 \item{...}{other arguments that can be passed to the function}
 }
@@ -215,7 +215,7 @@ largest effect size for each association/comparison
 }
 }
 \examples{
-### generate a summary of the results of an umbrella object
+### generate a summary of the results of a metaConvert object
 summary(
   convert_df(df.haza, measure = "g"),
   digits = 5)

@@ -18,21 +18,21 @@
 #' Four formulas can be used to convert the pre/post means into a SMD (\code{pre_post_to_smd} argument):
 #'
 #' 1. \code{"bonett"}: baseline SD standardizer (Bonett, 2008; equivalent to the SMCRH measure in metafor)
-#' \deqn{d\_w = \frac{mean\_post\_exp - mean\_pre\_exp}{mean\_pre\_sd\_exp}}
+#' \deqn{d\_w = \frac{mean\_exp - mean\_pre\_exp}{mean\_pre\_sd\_exp}}
 #' \deqn{var(g\_w) = \frac{sd\_change^2}{sd\_pre^2(n-1)} + \frac{g\_w^2}{2(n-1)}}
 #' where \deqn{sd\_change = \sqrt{sd\_pre^2 + sd\_post^2 - 2r\,sd\_pre\,sd\_post}}
 #'
 #' 2. \code{"cooper"} (alias: "morris_drm"): raw score standardizer (Cooper 2019, Morris & DeShon 2002)
-#' \deqn{d\_rm = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_change} * \sqrt{2 * (1 - r\_pre\_post\_exp)}}
+#' \deqn{d\_rm = \frac{mean\_exp - mean\_pre\_exp}{sd\_change} * \sqrt{2 * (1 - r\_pre\_post\_exp)}}
 #' \deqn{var(d\_rm) = \frac{2 * (1 - r\_pre\_post\_exp)}{n\_exp} + \frac{d\_rm^2}{2 * n\_exp}}
 #'
 #' 3. \code{"morris_dz"}: change score standardizer (Morris & DeShon, 2002; equivalent to the SMCC measure in metafor)
-#' \deqn{d\_z = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_change}}
+#' \deqn{d\_z = \frac{mean\_exp - mean\_pre\_exp}{sd\_change}}
 #' \deqn{var(g\_z) = \frac{1}{n} + \frac{g\_z^2}{2n}}
 #'
 #' 4. \code{"morris_dav"}: average SD standardizer (Bonett, 2008, eq. 10; equivalent to the SMCRPH measure in metafor)
 #' \deqn{sd\_av = \sqrt{(sd\_pre^2 + sd\_post^2)/2}}
-#' \deqn{d\_av = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_av}}
+#' \deqn{d\_av = \frac{mean\_exp - mean\_pre\_exp}{sd\_av}}
 #' \deqn{g\_av = d\_av \times J(mi), \quad mi = \frac{2(n\_exp - 1)}{1 + r\_pre\_post\_exp^2}}
 #' \deqn{var(g\_av) = \frac{sd\_change^2}{sd\_av^2 (n - 1)} + \frac{g\_av^2 (sd\_pre^4 + sd\_post^4 + 2 r^2 sd\_pre^2 sd\_post^2)}{8\, sd\_av^4 (n - 1)}}
 #'
@@ -44,7 +44,7 @@
 #' \deqn{g\_w = d\_w * J(n\_exp-1)}
 #'
 #' The within-group mean difference is simply:
-#' \deqn{md\_w = mean\_post\_exp - mean\_pre\_exp}
+#' \deqn{md\_w = mean\_exp - mean\_pre\_exp}
 #' \deqn{var(md\_w) = \frac{sd\_change^2}{n\_exp}}
 #'
 #' To estimate other effect size measures,
@@ -191,7 +191,7 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 #' @details
 #' This function converts the pre/post standard errors of a single group into standard deviations (Section 6.5.2.2 in the Cochrane Handbook).
 #' \deqn{mean\_pre\_sd\_exp = mean\_pre\_se\_exp * \sqrt{n\_exp}}
-#' \deqn{mean\_post\_sd\_exp = mean\_post\_se\_exp * \sqrt{n\_exp}}
+#' \deqn{mean\_sd\_exp = mean\_se\_exp * \sqrt{n\_exp}}
 #'
 #' Then, calculations of the \code{\link{es_from_means_sd_pre_post_single_group}()} are applied.
 #'
@@ -282,7 +282,7 @@ es_from_means_se_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 #' @details
 #' This function converts the bounds of the 95% CI of the pre/post means of a single group into standard errors (Section 6.3.1 in the Cochrane Handbook).
 #' \deqn{mean\_pre\_se\_exp = \frac{mean\_pre\_ci\_up\_exp - mean\_pre\_ci\_lo\_exp}{2 * qt{(0.975, df = n\_exp - 1)}}}
-#' \deqn{mean\_post\_se\_exp = \frac{mean\_post\_ci\_up\_exp - mean\_post\_ci\_lo\_exp}{2 * qt{(0.975, df = n\_exp - 1)}}}
+#' \deqn{mean\_se\_exp = \frac{mean\_ci\_up\_exp - mean\_ci\_lo\_exp}{2 * qt{(0.975, df = n\_exp - 1)}}}
 #'
 #' Then, calculations of the \code{\link{es_from_means_se_pre_post_single_group}()} are applied.
 #'
@@ -757,7 +757,7 @@ es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_p
 #'
 #' @details
 #' This function converts a paired t-test statistic from a single group
-#' into within-group Cohen's d, Hedges' g, and mean difference using the raw score standardizer (morris_drm/cooper).
+#' into a within-group Cohen's d (dw) and Hedges' g (gw).
 #'
 #' The paired t-test statistic is related to the mean difference and standard error of difference:
 #' \deqn{t\_paired = \frac{mean\_diff}{SE\_diff}}
@@ -766,16 +766,26 @@ es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_p
 #' \deqn{SE\_diff = \frac{SD\_diff}{\sqrt{n}}}
 #' \deqn{SD\_diff = \sqrt{SD\_pre^2 + SD\_post^2 - 2 \times r \times SD\_pre \times SD\_post}}
 #'
-#' This function calculates the raw score standardized mean difference (d_rm, Morris & DeShon 2002):
+#' With the default \code{pre_post_to_smd = "cooper"} (alias \code{"morris_drm"}), the change is
+#' standardized on the raw score metric (Morris & DeShon, 2002):
 #' \deqn{d\_rm = t\_paired \times \sqrt{\frac{2 \times (1 - r)}{n}}}
-#'
-#' The variance is calculated as:
 #' \deqn{var(d\_rm) = \frac{2 \times (1 - r)}{n} + \frac{d\_rm^2}{2 \times n}}
 #'
-#' The result depends on the pre-post correlation (0.8 assumed when \code{r_pre_post_exp}
+#' This estimate depends on the pre-post correlation (0.8 assumed when \code{r_pre_post_exp}
 #' is missing); see \code{\link{es_from_mean_change_sd_single_group}}.
 #'
+#' With \code{pre_post_to_smd = "morris_dz"}, the change is standardized by the standard deviation
+#' of the change score and the pre-post correlation is no longer involved (Morris & DeShon, 2002):
+#' \deqn{d\_z = \frac{paired\_t\_exp}{\sqrt{n\_exp}}}
+#' \deqn{var(g\_z) = \frac{1}{n\_exp} + \frac{g\_z^2}{2 \times n\_exp}}
+#' The variance is built on the bias-corrected g following the metafor SMCC convention, so that
+#' \eqn{var(d\_z) = var(g\_z) / J^2}.
+#'
 #' The within-group Hedges' g is obtained by applying a bias correction factor J to d.
+#'
+#' The raw mean difference is not identified by the t statistic alone and is returned as \code{NA}.
+#' Use \code{\link{es_from_mean_change_sd_single_group}()} when the mean change and its standard
+#' deviation are reported.
 #'
 #' To estimate other effect size measures, calculations of the \code{\link{es_from_cohen_d}()} are applied.
 #'
@@ -788,7 +798,7 @@ es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_p
 #' This function estimates and converts between several effect size measures.
 #'
 #' \tabular{ll}{
-#'  \code{natural effect size measure} \tab MDw + Dw + Gw\cr
+#'  \code{natural effect size measure} \tab Dw + Gw\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab OR + R + Z \cr
 #'  \tab \cr

@@ -16,9 +16,11 @@ df.haza
 \description{
 Dataset of a meta-analysis exploring the specificity of social functioning of children with ADHD (compared to healthy controls) in case-control studies.
 This dataset contains:
-1. several information coming from the same participants (due to the completion of multiple outcomes).
-1. several information coming from the same study (due to the presence of multiple subgroups).
-1. overlapping information for the same comparison
-1. several information types from which a standardized mean difference can be estimated/converted
+\enumerate{
+  \item several effect sizes coming from the same participants (due to the completion of multiple outcomes).
+  \item several effect sizes coming from the same study (due to the presence of multiple subgroups).
+  \item overlapping information for the same comparison.
+  \item several types of input data from which a standardized mean difference can be estimated or converted.
+}
 }
 \keyword{datasets}

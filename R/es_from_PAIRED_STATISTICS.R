@@ -168,10 +168,13 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
 #' This function converts the p-values of two paired t-test obtained from two independent groups value into a Cohen's d (D) and Hedges' g (G) (table 12.2 in Cooper).
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
-#' **To estimate the Cohen's d,** the following formulas are used (Cooper et al., 2019):
-#' This function converts a Student's t-test value into a Cohen's d (table 12.2 in Cooper).
-#' \deqn{paired\_t\_exp = qt(\frac{paired\_t\_pval\_exp}{2}, df = n\_exp - 1) * \sqrt{\frac{2 * (1 - r\_pre\_post\_exp)}{n\_exp}}}
-#' \deqn{paired\_t\_nexp = qt(\frac{paired\_t\_pval\_nexp}{2}, df = n\_nexp - 1) * \sqrt{\frac{2 * (1 - r\_pre\_post\_nexp)}{n\_nexp}}}
+#' **To estimate the Cohen's d,** the p-values are first converted into paired t-test values:
+#' \deqn{paired\_t\_exp = qt(1 - \frac{paired\_t\_pval\_exp}{2}, df = n\_exp - 1)}
+#' \deqn{paired\_t\_nexp = qt(1 - \frac{paired\_t\_pval\_nexp}{2}, df = n\_nexp - 1)}
+#'
+#' which are then converted into a Cohen's d (Cooper et al., 2019):
+#' \deqn{cohen\_d\_exp = paired\_t\_exp * \sqrt{\frac{2 * (1 - r\_pre\_post\_exp)}{n\_exp}}}
+#' \deqn{cohen\_d\_nexp = paired\_t\_nexp * \sqrt{\frac{2 * (1 - r\_pre\_post\_nexp)}{n\_nexp}}}
 #'
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_cohen_d}()} are applied.
@@ -245,8 +248,7 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
 #' This function converts the paired F-test obtained from two independent groups value into a Cohen's d (D) and Hedges' g (G) (table 12.2 in Cooper).
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
-#' **To estimate the Cohen's d,** the following formulas are used (Cooper et al., 2019):
-#' This function converts a Student's t-test value into a Cohen's d (table 12.2 in Cooper).
+#' **To estimate the Cohen's d,** the paired F values are first converted into paired t-test values:
 #' \deqn{paired\_t\_exp = \sqrt{paired\_f\_exp}}
 #' \deqn{paired\_t\_nexp = \sqrt{paired\_f\_nexp}}
 #'
@@ -324,10 +326,13 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
 #' This function converts the p-values of two paired F-test obtained from two independent groups value into a Cohen's d (D) and Hedges' g (G) (table 12.2 in Cooper).
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
-#' **To estimate the Cohen's d,** the following formulas are used (Cooper et al., 2019):
-#' This function converts a Student's t-test value into a Cohen's d (table 12.2 in Cooper).
-#' \deqn{paired\_t\_exp = qt(\frac{paired\_f\_pval\_exp}{2}, df = n\_exp - 1) * \sqrt{\frac{2 * (1 - r_pre_post_exp)}{n_exp}}}
-#' \deqn{paired\_t\_nexp = qt(\frac{paired\_f\_pval\_nexp}{2}, df = n\_nexp - 1) * \sqrt{\frac{2 * (1 - r_pre_post_nexp)}{n_nexp}}}
+#' **To estimate the Cohen's d,** the p-values are first converted into paired t-test values:
+#' \deqn{paired\_t\_exp = qt(1 - \frac{paired\_f\_pval\_exp}{2}, df = n\_exp - 1)}
+#' \deqn{paired\_t\_nexp = qt(1 - \frac{paired\_f\_pval\_nexp}{2}, df = n\_nexp - 1)}
+#'
+#' which are then converted into a Cohen's d (Cooper et al., 2019):
+#' \deqn{cohen\_d\_exp = paired\_t\_exp * \sqrt{\frac{2 * (1 - r\_pre\_post\_exp)}{n\_exp}}}
+#' \deqn{cohen\_d\_nexp = paired\_t\_nexp * \sqrt{\frac{2 * (1 - r\_pre\_post\_nexp)}{n\_nexp}}}
 #'
 #' **To estimate other effect size measures**,
 #' calculations of the \code{\link{es_from_paired_t}()} are applied.

@@ -141,13 +141,22 @@ test_that("P1: crude es_from_etasq regression pin (standard Cohen conversion)", 
   n2 <- 22
   res <- es_from_etasq(etasq = eta, n_exp = n1, n_nexp = n2)
 
-  d_hand <- 2 * sqrt(eta / (1 - eta))
-  v_hand <- (1 / n1 + 1 / n2) + d_hand^2 / (2 * (n1 + n2))
+  # NEWS.md 2.0.1: es_from_etasq() no longer uses the equal-n, large-n closed form
+  # 2*sqrt(eta/(1-eta)); it inverts eta^2 = F/(F + N - 2) exactly, so it carries both
+  # arm sizes and reproduces the raw-data Cohen's d at any split. The old pin was
+  # 1.247219129 (that closed form); it was 39% too small at n = 10/90.
   df <- n1 + n2 - 2
+  d_hand <- sqrt(eta / (1 - eta) * df * (1 / n1 + 1 / n2))
+  v_hand <- (1 / n1 + 1 / n2) + d_hand^2 / (2 * (n1 + n2))
   J <- .J_hand(df)
 
   # literal numeric pin of the current crude value
-  expect_equal(res$d, 1.247219129, tolerance = 1e-9)
+  expect_equal(res$d, 1.218543592, tolerance = 1e-9)
+  # and it must now agree with the F route, which inverts the same information
+  expect_equal(res$d,
+               es_from_anova_f(anova_f = eta * df / (1 - eta),
+                               n_exp = n1, n_nexp = n2)$d,
+               tolerance = 1e-10)
   expect_equal(res$d, d_hand, tolerance = 1e-10)
   expect_equal(res$d_se, sqrt(v_hand), tolerance = 1e-10)
   expect_equal(res$d_ci_lo, d_hand - qt(.975, df) * sqrt(v_hand), tolerance = 1e-10)

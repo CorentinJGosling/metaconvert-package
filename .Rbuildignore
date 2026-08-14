@@ -32,3 +32,4 @@
 ^VERDICT-.*\.md$
 ^.*\.stackdump$
 ^scratchpad.*$
+^tests/testthat/_problems$

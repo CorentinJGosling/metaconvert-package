@@ -30,7 +30,7 @@ es_from_paired_t_single_group(
 This function estimates and converts between several effect size measures.
 
 \tabular{ll}{
-\code{natural effect size measure} \tab MDw + Dw + Gw\cr
+\code{natural effect size measure} \tab Dw + Gw\cr
 \tab \cr
 \code{converted effect size measure} \tab OR + R + Z \cr
 \tab \cr
@@ -44,7 +44,7 @@ Convert paired t-test statistic from a single group into standard effect size me
 }
 \details{
 This function converts a paired t-test statistic from a single group
-into within-group Cohen's d, Hedges' g, and mean difference using the raw score standardizer (morris_drm/cooper).
+into a within-group Cohen's d (dw) and Hedges' g (gw).
 
 The paired t-test statistic is related to the mean difference and standard error of difference:
 \deqn{t\_paired = \frac{mean\_diff}{SE\_diff}}
@@ -53,16 +53,26 @@ where:
 \deqn{SE\_diff = \frac{SD\_diff}{\sqrt{n}}}
 \deqn{SD\_diff = \sqrt{SD\_pre^2 + SD\_post^2 - 2 \times r \times SD\_pre \times SD\_post}}
 
-This function calculates the raw score standardized mean difference (d_rm, Morris & DeShon 2002):
+With the default \code{pre_post_to_smd = "cooper"} (alias \code{"morris_drm"}), the change is
+standardized on the raw score metric (Morris & DeShon, 2002):
 \deqn{d\_rm = t\_paired \times \sqrt{\frac{2 \times (1 - r)}{n}}}
-
-The variance is calculated as:
 \deqn{var(d\_rm) = \frac{2 \times (1 - r)}{n} + \frac{d\_rm^2}{2 \times n}}
 
-The result depends on the pre-post correlation (0.8 assumed when \code{r_pre_post_exp}
+This estimate depends on the pre-post correlation (0.8 assumed when \code{r_pre_post_exp}
 is missing); see \code{\link{es_from_mean_change_sd_single_group}}.
 
+With \code{pre_post_to_smd = "morris_dz"}, the change is standardized by the standard deviation
+of the change score and the pre-post correlation is no longer involved (Morris & DeShon, 2002):
+\deqn{d\_z = \frac{paired\_t\_exp}{\sqrt{n\_exp}}}
+\deqn{var(g\_z) = \frac{1}{n\_exp} + \frac{g\_z^2}{2 \times n\_exp}}
+The variance is built on the bias-corrected g following the metafor SMCC convention, so that
+\eqn{var(d\_z) = var(g\_z) / J^2}.
+
 The within-group Hedges' g is obtained by applying a bias correction factor J to d.
+
+The raw mean difference is not identified by the t statistic alone and is returned as \code{NA}.
+Use \code{\link{es_from_mean_change_sd_single_group}()} when the mean change and its standard
+deviation are reported.
 
 To estimate other effect size measures, calculations of the \code{\link{es_from_cohen_d}()} are applied.
 }

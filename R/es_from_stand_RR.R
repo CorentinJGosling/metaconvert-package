@@ -94,6 +94,9 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
   if (missing(rr)) rr <- rep(NA_real_, length(logrr))
   if (missing(logrr)) logrr <- rep(NA_real_, length(rr))
   if (missing(logrr_se)) logrr_se <- rep(NA_real_, length(rr))
+  # Propagated unchanged into logrr_se and the OR/NNT conversions; a non-positive
+  # value becomes a negative sampling variance. See R/internal_guards.R.
+  logrr_se <- .positive_or_na(logrr_se)
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(rr))
   }
@@ -212,11 +215,11 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
 #' @param rr_ci_up upper bound of the 95% CI around the risk ratio value
 #' @param logrr_ci_lo lower bound of the 95% CI around the log risk ratio value
 #' @param logrr_ci_up upper bound of the 95% CI around the log risk ratio value
-#' @param n_cases number of cases/events
-#' @param n_controls number of controls/no-event
-#' @param n_exp number of participants in the exposed group (only required for the \code{rr_to_or = "grant_CI"}, \code{rr_to_or = "grant_2x2"} arguments).
-#' @param n_nexp number of participants in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"}, \code{rr_to_or = "grant_2x2"} arguments).
-#' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"} and \code{rr_to_or = "grant_2x2"} arguments).
+#' @param n_cases number of cases/events (required for \code{rr_to_or = "metaumbrella"}, the default)
+#' @param n_controls number of controls/no-event (required for \code{rr_to_or = "metaumbrella"}, the default)
+#' @param n_exp number of participants in the exposed group (required for \code{rr_to_or = "dipietrantonj"})
+#' @param n_nexp number of participants in the non-exposed group (required for \code{rr_to_or = "dipietrantonj"})
+#' @param baseline_risk proportion of cases in the non-exposed group (required for \code{rr_to_or = "grant"}, and for the risk difference and the NNT)
 #' @param reverse_rr a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
@@ -236,7 +239,7 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab RR\cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab OR + NNT\cr
+#'  \code{converted effect size measure} \tab OR + NNT + RD\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 3. Risk Ratio'\cr
 #'  \tab https://metaconvert.org/input.html\cr
@@ -297,7 +300,7 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
   logrr_ci_lo <- ifelse(is.na(logrr_ci_lo) & !is.na(rr_ci_lo), log(rr_ci_lo), logrr_ci_lo)
   logrr_ci_up <- ifelse(is.na(logrr_ci_up) & !is.na(rr_ci_up), log(rr_ci_up), logrr_ci_up)
 
-  logrr_se <- (logrr_ci_up - logrr_ci_lo) / (2 * qnorm(.975))
+  logrr_se <- .ci_width(logrr_ci_lo, logrr_ci_up) / (2 * qnorm(.975))
   es <- es_from_rr_se(
     rr = rr, logrr_se = logrr_se,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
@@ -315,11 +318,11 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
 #' @param rr risk ratio value
 #' @param logrr log risk ratio value
 #' @param rr_pval p-value of the risk ratio
-#' @param n_cases number of cases/events
-#' @param n_controls number of controls/no-event
-#' @param n_exp number of participants in the exposed group (only required for the \code{rr_to_or = "grant_CI"}, \code{rr_to_or = "grant_2x2"} arguments).
-#' @param n_nexp number of participants in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"}, \code{rr_to_or = "grant_2x2"} arguments).
-#' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{rr_to_or = "grant_CI"} and \code{rr_to_or = "grant_2x2"} arguments).
+#' @param n_cases number of cases/events (required for \code{rr_to_or = "metaumbrella"}, the default)
+#' @param n_controls number of controls/no-event (required for \code{rr_to_or = "metaumbrella"}, the default)
+#' @param n_exp number of participants in the exposed group (required for \code{rr_to_or = "dipietrantonj"})
+#' @param n_nexp number of participants in the non-exposed group (required for \code{rr_to_or = "dipietrantonj"})
+#' @param baseline_risk proportion of cases in the non-exposed group (required for \code{rr_to_or = "grant"}, and for the risk difference and the NNT)
 #' @param reverse_rr_pval a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
 #'
@@ -341,7 +344,7 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab RR\cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab OR + NNT\cr
+#'  \code{converted effect size measure} \tab OR + NNT + RD\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 3. Risk Ratio'\cr
 #'  \tab https://metaconvert.org/input.html\cr

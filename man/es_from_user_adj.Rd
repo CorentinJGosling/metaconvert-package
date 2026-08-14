@@ -87,7 +87,7 @@ Directly input an adjusted effect size value + variance, with optional conversio
 \details{
 This function is a generic function allowing to include any adjusted effect size measure value + variance.
 Importantly, when the \code{user_es_original_measure_adj} is one of the known measures
-(d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, r, z, rd, nnt),
+(d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, loghr, r, z, rd, nnt),
 conversions towards the other effect size measures are performed.
 Otherwise, no conversion is performed (the effect size value + variance you enter is
 the value + variance exported by this function) and a warning is issued.

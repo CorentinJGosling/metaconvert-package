@@ -79,8 +79,8 @@ the function estimates an OR value from the 2x2 table (formula above)
 that is then converted to a SMD
 (see formula in \code{\link{es_from_or_se}()}).
 
-\strong{To convert the 2x2 table into a correlation coefficient},
-For now, only the tetrachoric correlation is currently proposed
+\strong{To convert the 2x2 table into a correlation coefficient}, only the tetrachoric
+correlation is currently available:
 \itemize{
 \item \code{table_2x2_to_cor = "tetrachoric"}.
 Given the heavy calculations required for this effect size measure,

@@ -357,7 +357,10 @@
     list(col = "ancova_md_pval",        lo = 0, up = 1, label = "p-value"),
     list(col = "pt_bis_r_pval",         lo = 0, up = 1, label = "p-value"),
     # Baseline risk must be a proportion (0-1), not a percentage
-    list(col = "baseline_risk",          lo = 0, up = 1, label = "baseline risk (proportion)")
+    list(col = "baseline_risk",          lo = 0, up = 1, label = "baseline risk (proportion)"),
+    # Covariate-outcome (multiple) correlation of an ANCOVA. |R| = 1 is handled
+    # separately just below, because it is in range but still degenerate.
+    list(col = "cov_outcome_r",   lo = -1, up = 1, label = "covariate-outcome correlation")
   )
   for (bc in .bounded_columns) {
     if (!bc$col %in% colnames(x)) next
@@ -385,6 +388,28 @@
             sprintf("[INVALID] Out-of-range %s: '%s' = %g (valid: %s)",
                     bc$label, bc$col, vals[i], range_txt))
         }
+      }
+    }
+  }
+
+  # V34: |cov_outcome_r| == 1 is inside the [-1, 1] bound checked above but is still
+  # a non-identified input for every ANCOVA route, exactly as eta-squared = 1 is for
+  # V32. Cooper eq. 12.24 divides the residual SD by sqrt(1 - R^2) and eq. 12.26
+  # multiplies the leading variance term by (1 - R^2), so at |R| = 1 the marginal SD
+  # is infinite and the sampling variance collapses: 13 of the 14 ANCOVA routes return
+  # ES = 0 with SE = 0 (infinite meta-analytic weight), and the two that build the
+  # SMD from an already-marginal SD (ancova_means_sd_pooled_crude, cohen_d_adj) return
+  # a perfectly plausible ES with a silently deflated SE and no other flag. Handled
+  # here rather than by widening the bound so the message names the real problem.
+  if ("cov_outcome_r" %in% colnames(x)) {
+    vals <- x$cov_outcome_r
+    bad <- which(!is.na(vals) & abs(vals) == 1)
+    if (length(bad) > 0) {
+      if (correct_inputs) x$cov_outcome_r[bad] <- NA_real_
+      for (i in bad) {
+        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+          "[INVALID] Degenerate covariate-outcome correlation: 'cov_outcome_r' = %g implies a residual SD of zero, so the marginal-scale back-transformation 1/sqrt(1 - R^2) diverges and the sampling variance collapses to zero%s",
+          vals[i], if (correct_inputs) ", set to missing" else ""))
       }
     }
   }
@@ -1153,10 +1178,24 @@
   } else {
     rep(FALSE, n)
   }
+  # present-but-unusable is a different user error from never-supplied, and the two
+  # need different advice: one is "add the column", the other is "the value you gave
+  # cannot be a correlation"
+  cov_r_supplied <- if ("cov_outcome_r" %in% colnames(x)) !is.na(x$cov_outcome_r) else rep(FALSE, n)
   flagged_v22 <- which(any_ancova_sd & !cov_r_present)
   for (i in flagged_v22) {
-    row_issues[[i]] <- c(row_issues[[i]],
-      "[UNUSUAL] ANCOVA residual SD provided but cov_outcome_r missing. Residual SD is conditional on the covariate(s) - without cov_outcome_r the marginal-scale back-transformation 1/sqrt(1 - R^2) cannot be applied. Provide cov_outcome_r to avoid silent SMD underestimation by ~5-15% (Cochrane Handbook section 6.5.2.5 does not flag this step)")
+    why <- if (isTRUE(cov_r_supplied[i])) {
+      "cov_outcome_r is outside (-1, 1) and cannot be used"
+    } else {
+      "cov_outcome_r is missing"
+    }
+    row_issues[[i]] <- c(row_issues[[i]], paste0(
+      "[UNUSUAL] ANCOVA residual SD provided but ", why,
+      ". Residual SD is conditional on the covariate(s) - without a usable cov_outcome_r the",
+      " marginal-scale back-transformation 1/sqrt(1 - R^2) cannot be applied and the",
+      " standardized effect size is returned as NA. Supply the pooled within-group",
+      " correlation between the outcome and the covariate(s)",
+      " (Cochrane Handbook section 6.5.2.5 does not flag this step)"))
   }
 
   # V23: identical stat block across different study_id (templated data);
@@ -1311,7 +1350,8 @@
                                      enable_informational = FALSE,
                                      r_defaulted = NULL,
                                      prop_to_es = "raw",
-                                     smd_denom = NULL) {
+                                     smd_denom = NULL,
+                                     n_cov_ancova = NULL) {
   n <- length(es)
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
@@ -1395,6 +1435,23 @@
         info_used[i] %in% c("means_sd", "means_se", "means_ci") &&
         !is.na(n_nexp_i) && is.finite(n_nexp_i) && n_nexp_i > 2
       if (glass_row) t_df <- n_nexp_i - 1
+      # P9: an ADJUSTED row's d/g interval is built by .es_from_d() on
+      # qt(.975, n_exp + n_nexp - 2 - n_cov_ancova), so A6 must expect that df too --
+      # otherwise it compares the row's own CI against a wider-df expectation and
+      # fires [DISCORDANT] on a perfectly consistent interval. The gap only clears the
+      # tolerance at small n (17% against a 10% tolerance at N = 9, q = 3), but it is a
+      # pure false positive when it does. The adjusted routes are exactly those whose
+      # info_used starts with "ancova" or ends in "_adj" (see the es_from_ancova_*,
+      # es_from_cohen_d_adj and es_from_etasq_adj entry points); user-entered rows are
+      # excluded because the source's own CI construction is unknown and is checked
+      # against the Wald-z width instead.
+      if (!is_user_es && !is.null(info_used) && !is.na(info_used[i]) &&
+          grepl("^ancova|_adj$", info_used[i]) &&
+          !is.null(n_cov_ancova) && length(n_cov_ancova) >= i &&
+          !is.na(n_cov_ancova[i]) && is.finite(n_cov_ancova[i]) &&
+          n_cov_ancova[i] > 0 && !is.na(t_df) && t_df - n_cov_ancova[i] > 0) {
+        t_df <- t_df - n_cov_ancova[i]
+      }
       if (is_user_es) {
         z_crit <- stats::qnorm(0.975)
       } else if (!is.null(measure) && measure %in% qt_measures &&
@@ -2530,7 +2587,8 @@
                              pre_post_to_smd = "bonett",
                              pool_sd = FALSE,
                              r_defaulted = NULL,
-                             smd_denom = NULL) {
+                             smd_denom = NULL,
+                             es_order = NULL) {
   n <- nrow(res)
   flag_col <- paste0("flags", suffix)
 
@@ -2559,7 +2617,28 @@
   cmp_key <- paste(res$row_id,
                    if ("adjusted_input" %in% colnames(res)) res$adjusted_input else "",
                    sep = "\r")
-  cmp_rep_i <- which(!duplicated(cmp_key))          # representative row indices
+  # The representative is the route the hierarchy would actually SELECT, not simply the
+  # first row of the group. Under main_es = FALSE the rows of a comparison appear in the
+  # internal list-construction order, which is not the hierarchy order, so taking the
+  # first row picked an arbitrary route: every cross-row verdict was then computed from
+  # an estimate the user never sees, and an outlier carried by the selected route could
+  # go unreported (main_es = TRUE flagged it, main_es = FALSE did not).
+  # es_order is the vector of info_used values ranked by the hierarchy, supplied by
+  # summary(). Rows whose method is absent from it rank last, and when it is unavailable
+  # the previous first-row behaviour is kept. Under main_es = TRUE each comparison has a
+  # single row, so the choice is vacuous and the default path stays bit-for-bit identical.
+  cmp_rank <- if (!is.null(es_order) && "info_used" %in% colnames(res)) {
+    rk <- match(as.character(res$info_used), as.character(es_order))
+    ifelse(is.na(rk), .Machine$integer.max, rk)
+  } else {
+    seq_len(n)
+  }
+  cmp_rep_i <- if (n > 0L) {
+    sort(unname(vapply(split(seq_len(n), cmp_key),
+                       function(ix) ix[which.min(cmp_rank[ix])], integer(1))))
+  } else {
+    integer(0)
+  }
   cmp_map <- match(cmp_key, cmp_key[cmp_rep_i])     # every row -> its representative slot
   cmp_rep <- seq_len(n) %in% cmp_rep_i              # logical mask over all rows
   # Expand a length(cmp_rep_i) list of flag tokens back to all n rows.
@@ -2629,6 +2708,14 @@
     NULL
   }
 
+  # covariate count, for the A6 CI-width check: .es_from_d() builds the d/g interval
+  # of an ADJUSTED row on qt(.975, N - 2 - q), so A6 must expect the same df
+  n_cov_row <- if ("n_cov_ancova" %in% colnames(raw_data)) {
+    suppressWarnings(as.numeric(raw_data$n_cov_ancova[match(res$row_id, raw_data$row_id)]))
+  } else {
+    NULL
+  }
+
   f_a <- .flag_numeric_integrity(es, se, ci_lo, ci_up, info_used,
                                   measure = measure, exp = exp,
                                   n_total = n_total, n_exp = n_exp_vec,
@@ -2636,7 +2723,8 @@
                                   enable_informational = isTRUE(opts$enable_informational),
                                   r_defaulted = r_def_row,
                                   prop_to_es = prop_to_es,
-                                  smd_denom = smd_denom_row)
+                                  smd_denom = smd_denom_row,
+                                  n_cov_ancova = n_cov_row)
   f_b <- .flag_bounds_violations(es, se, ci_lo, ci_up, measure, exp, info_used,
                                   baseline_risk = baseline_risk_vec,
                                   baseline_rate = baseline_rate_vec,

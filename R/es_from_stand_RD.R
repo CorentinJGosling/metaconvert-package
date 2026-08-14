@@ -2,11 +2,11 @@
 #'
 #' @param rd risk difference value (control risk minus treatment risk)
 #' @param rd_se standard error of the risk difference
-#' @param n_exp number of participants in the exposed/treatment group
-#' @param n_nexp number of participants in the non-exposed/control group
-#' @param n_cases number of cases/events across both groups
-#' @param n_controls number of controls/no-event across both groups
-#' @param n_sample total number of participants in the sample
+#' @param n_exp number of participants in the exposed/treatment group (not used in the computation)
+#' @param n_nexp number of participants in the non-exposed/control group (not used in the computation)
+#' @param n_cases number of cases/events across both groups (not used in the computation)
+#' @param n_controls number of controls/no-event across both groups (not used in the computation)
+#' @param n_sample total number of participants in the sample (not used in the computation)
 #' @param baseline_risk proportion of cases in the non-exposed/control group.
 #'   Required for converting RD to OR and RR.
 #' @param reverse_rd a logical value indicating whether the direction of the generated effect sizes should be flipped.
@@ -44,6 +44,11 @@
 #'
 #' Note that the conversions to OR and RR assume the baseline risk is a fixed constant.
 #'
+#' The sample sizes (\code{n_exp}, \code{n_nexp}, \code{n_cases}, \code{n_controls} and
+#' \code{n_sample}) are accepted for consistency with the other entry points of the package,
+#' but they enter none of the formulas above: the results depend only on \code{rd},
+#' \code{rd_se} and \code{baseline_risk}.
+#'
 #' @references
 #' Deeks, J.J. (2002). Issues in the selection of a summary statistic for meta-analysis of clinical trials with binary outcomes. Statistics in Medicine, 21(11), 1575-1600.
 #'
@@ -64,8 +69,7 @@
 #' @md
 #'
 #' @examples
-#' es_from_rd_se(rd = 0.15, rd_se = 0.05,
-#'               baseline_risk = 0.30, n_exp = 100, n_nexp = 100)
+#' es_from_rd_se(rd = 0.15, rd_se = 0.05, baseline_risk = 0.30)
 es_from_rd_se <- function(rd, rd_se,
                           baseline_risk,
                           n_exp, n_nexp, n_cases, n_controls, n_sample,
@@ -73,6 +77,10 @@ es_from_rd_se <- function(rd, rd_se,
 
   if (missing(rd)) rd <- rep(NA_real_, length(rd_se))
   if (missing(rd_se)) rd_se <- rep(NA_real_, length(rd))
+  # Propagated unchanged into rd_se, nnt_se and the OR/RR conversions; a
+  # non-positive value becomes a negative sampling variance. See
+  # R/internal_guards.R.
+  rd_se <- .positive_or_na(rd_se)
   if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, length(rd))
   if (missing(n_exp)) n_exp <- rep(NA_real_, length(rd))
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, length(rd))
@@ -159,11 +167,11 @@ es_from_rd_se <- function(rd, rd_se,
 #' @param rd risk difference value
 #' @param rd_ci_lo lower bound of the 95% CI around the risk difference
 #' @param rd_ci_up upper bound of the 95% CI around the risk difference
-#' @param n_exp number of participants in the exposed/treatment group
-#' @param n_nexp number of participants in the non-exposed/control group
-#' @param n_cases number of cases/events across both groups
-#' @param n_controls number of controls/no-event across both groups
-#' @param n_sample total number of participants in the sample
+#' @param n_exp number of participants in the exposed/treatment group (not used in the computation)
+#' @param n_nexp number of participants in the non-exposed/control group (not used in the computation)
+#' @param n_cases number of cases/events across both groups (not used in the computation)
+#' @param n_controls number of controls/no-event across both groups (not used in the computation)
+#' @param n_sample total number of participants in the sample (not used in the computation)
 #' @param baseline_risk proportion of cases in the non-exposed/control group
 #' @param reverse_rd a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
@@ -196,7 +204,7 @@ es_from_rd_se <- function(rd, rd_se,
 #' @examples
 #' es_from_rd_ci(
 #'   rd = 0.15, rd_ci_lo = 0.05, rd_ci_up = 0.25,
-#'   baseline_risk = 0.30, n_exp = 100, n_nexp = 100
+#'   baseline_risk = 0.30
 #' )
 es_from_rd_ci <- function(rd, rd_ci_lo, rd_ci_up,
                           baseline_risk,
@@ -215,7 +223,7 @@ es_from_rd_ci <- function(rd, rd_ci_lo, rd_ci_up,
   if (missing(reverse_rd)) reverse_rd <- rep(FALSE, length(rd))
   reverse_rd[is.na(reverse_rd)] <- FALSE
 
-  rd_se <- (rd_ci_up - rd_ci_lo) / (2 * qnorm(.975))
+  rd_se <- .ci_width(rd_ci_lo, rd_ci_up) / (2 * qnorm(.975))
 
   es <- es_from_rd_se(
     rd = rd, rd_se = rd_se,
@@ -235,11 +243,11 @@ es_from_rd_ci <- function(rd, rd_ci_lo, rd_ci_up,
 #'
 #' @param rd risk difference value
 #' @param rd_pval p-value of the risk difference
-#' @param n_exp number of participants in the exposed/treatment group
-#' @param n_nexp number of participants in the non-exposed/control group
-#' @param n_cases number of cases/events across both groups
-#' @param n_controls number of controls/no-event across both groups
-#' @param n_sample total number of participants in the sample
+#' @param n_exp number of participants in the exposed/treatment group (not used in the computation)
+#' @param n_nexp number of participants in the non-exposed/control group (not used in the computation)
+#' @param n_cases number of cases/events across both groups (not used in the computation)
+#' @param n_controls number of controls/no-event across both groups (not used in the computation)
+#' @param n_sample total number of participants in the sample (not used in the computation)
 #' @param baseline_risk proportion of cases in the non-exposed/control group
 #' @param reverse_rd_pval a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
@@ -273,7 +281,7 @@ es_from_rd_ci <- function(rd, rd_ci_lo, rd_ci_up,
 #' @examples
 #' es_from_rd_pval(
 #'   rd = 0.15, rd_pval = 0.01,
-#'   baseline_risk = 0.30, n_exp = 100, n_nexp = 100
+#'   baseline_risk = 0.30
 #' )
 es_from_rd_pval <- function(rd, rd_pval,
                             baseline_risk,

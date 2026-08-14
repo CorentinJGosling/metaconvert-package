@@ -51,9 +51,9 @@ aggregate_df(
 \item{na.rm}{a logical vector indicating whether missing values should be ignored in the calculations for the \code{col_mean}, \code{col_weighted_mean}, \code{col_sum}, \code{col_min} and \code{col_max} arguments.}
 }
 \value{
-The object returned by the \code{aggregate_df} contains, is a dataframe containing at the very least,
-the aggregating factor, and the aggregated effect size values and standard errors. All columns indicated in the \code{col_*} arguments
-will also be included in this dataframe.
+The \code{aggregate_df()} function returns a dataframe containing, at a minimum, the aggregating factor
+and the aggregated effect size values and standard errors. All columns indicated in the \code{col_*} arguments
+are also included in this dataframe.
 \tabular{ll}{
 \code{row_index} \tab the row number in the original dataset.\cr
 \tab \cr

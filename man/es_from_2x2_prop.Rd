@@ -45,13 +45,16 @@ Convert the proportion of occurrence of a binary event in two independent groups
 \details{
 This function uses the proportions and sample size to
 recreate the 2x2 table, and
-then relies on the calculations of the \code{\link{es_from_2x2_sum}()} function.
+then relies on the calculations of the \code{\link{es_from_2x2}()} function.
 
-The formulas used is to obtain the 2x2 table are
-\deqn{n\_cases\_exp = prop\_cases\_exp * n\_exp}
-\deqn{n\_cases\_nexp = prop\_cases\_nexp * n\_nexp}
-\deqn{n\_controls\_exp = (1 - prop\_cases\_exp) * n\_exp}
-\deqn{n\_controls\_nexp = (1 - prop\_cases\_nexp) * n\_nexp}
+The formulas used to obtain the 2x2 table are
+\deqn{n\_cases\_exp = round(prop\_cases\_exp * n\_exp)}
+\deqn{n\_cases\_nexp = round(prop\_cases\_nexp * n\_nexp)}
+\deqn{n\_controls\_exp = n\_exp - n\_cases\_exp}
+\deqn{n\_controls\_nexp = n\_nexp - n\_cases\_nexp}
+The numbers of cases are rounded to integers so that the reconstructed table is a
+genuine contingency table. The resulting effect sizes therefore differ slightly from
+those obtained from the unrounded cell counts.
 }
 \examples{
 es_from_2x2_prop(prop_cases_exp = 0.80, prop_cases_nexp = 0.60, n_exp = 10, n_nexp = 20)

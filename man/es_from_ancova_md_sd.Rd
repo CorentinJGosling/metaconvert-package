@@ -21,7 +21,12 @@ es_from_ancova_md_sd(
 
 \item{ancova_md_sd}{covariate-adjusted pooled within-group standard deviation}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
@@ -31,7 +36,7 @@ es_from_ancova_md_sd(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_md}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -62,7 +67,7 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \deqn{md\_up = md + md\_se * qt(.975, n\_exp + n\_nexp-2-n\_cov\_ancova)}
 
 \strong{To recover the unadjusted pooled SD} (for Cohen's d, table 12.3 in Cooper):
-\deqn{md\_sd = \frac{ancova\_md\_sd}{\sqrt{1 - cor\_outcome\_r^2}}}
+\deqn{md\_sd = \frac{ancova\_md\_sd}{\sqrt{1 - cov\_outcome\_r^2}}}
 
 \strong{To estimate the Cohen's d} (table 12.3 in Cooper):
 \deqn{d = \frac{ancova\_md}{md\_sd}}
@@ -71,13 +76,9 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 Calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
 \note{
-The standardized effect size variance assumes the covariate is balanced across
-groups (Cooper eq. 12.26) and treats \code{cov_outcome_r} as known; it omits the
-covariate-imbalance ("leverage") term of the exact ANCOVA variance, which cannot
-be recovered from summary statistics. In observational or otherwise
-covariate-imbalanced designs the standard error is therefore a lower bound
-(anti-conservative), while the point estimate remains unbiased. See Lai and
-Kelley (2012).
+The standard error assumes the two groups were balanced on the covariate; when they
+were not, it is slightly too small and the study carries a little too much weight.
+The effect size itself is unaffected. See Lai and Kelley (2012).
 }
 \examples{
 es_from_ancova_md_sd(

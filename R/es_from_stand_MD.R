@@ -5,7 +5,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -45,6 +45,11 @@ es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer",
   if (length(reverse_md) == 1) reverse_md = c(rep(reverse_md, length(md)))
   if (length(reverse_md) != length(md)) stop("The length of the 'reverse_md' argument is incorrectly specified.")
 
+  # A standard deviation cannot be negative or zero; dividing by one sign-flips (or
+  # blows up) d while md keeps its own sign. Blank the row rather than return a
+  # confidently wrong effect size. See R/internal_guards.R.
+  md_sd <- .positive_or_na(md_sd)
+
   d <- md / md_sd
 
   # P4: the default d_se is left to .es_from_d, which computes the large-sample
@@ -72,7 +77,7 @@ es_from_md_sd <- function(md, md_sd, n_exp, n_nexp, smd_to_cor = "viechtbauer",
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -111,6 +116,7 @@ es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer",
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
 
+  md_se <- .positive_or_na(md_se)
   md_sd <- md_se / sqrt(1 / n_exp + 1 / n_nexp)
 
   es <- es_from_md_sd(
@@ -132,8 +138,8 @@ es_from_md_se <- function(md, md_se, n_exp, n_nexp, smd_to_cor = "viechtbauer",
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").
-#' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
+#' @param max_asymmetry not used by this function; asymmetry of the 95% CI bounds is checked by \code{\link{convert_df}} (see its \code{max_asymmetry} argument).
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -174,7 +180,10 @@ es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
 
 
 
-  md_se <- (md_ci_up - md_ci_lo) / (2 * qt(0.975, n_exp + n_nexp - 2))
+  # A transposed CI describes the same interval, so its width is the same; taken as
+  # ci_up - ci_lo it would be negative and sign-flip d while md keeps its own sign.
+  # See R/internal_guards.R.
+  md_se <- .ci_width(md_ci_lo, md_ci_up) / (2 * qt(0.975, n_exp + n_nexp - 2))
 
   es <- es_from_md_se(
     md = md, md_se = md_se,
@@ -194,7 +203,7 @@ es_from_md_ci <- function(md, md_ci_lo, md_ci_up, n_exp, n_nexp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_md a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details

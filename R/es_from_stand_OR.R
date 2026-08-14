@@ -9,7 +9,7 @@
 #' @param n_nexp number of participants in the non-exposed group
 #' @param n_sample total number of participants in the sample
 #' @param baseline_risk proportion of cases in the non-exposed group
-#' @param small_margin_prop smallest margin proportion of cases/events in the underlying 2x2 table
+#' @param small_margin_prop smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).
@@ -56,15 +56,17 @@
 #' the standard error reported.
 #' The RR value and its standard are obtained from this estimated contingency table.
 #'
-#' **C.** Third, it is possible to transpose the RR to a OR (\code{or_to_rr = "transpose"}).
-#' This argument requires (or + logor_se) to generate a OR.
+#' **C.** Third, it is possible to transpose the OR to a RR (\code{or_to_rr = "transpose"}).
+#' This argument requires (or + logor_se) to generate a RR.
 #' It is known that OR and RR are similar when the baseline risk is small.
 #' Therefore, users can request to simply transpose the OR value & standard error into a RR value & standard error.
 #' \deqn{rr = or}
 #' \deqn{logrr\_se = logor\_se}
 #'
 #' **D.** Fourth, it is possible to recreate the 2x2 table using the dipietrantonj's formulas (\code{or_to_rr = "dipietrantonj"}).
-#' This argument requires (or + logor_ci_lo + logor_ci_lo) to generate a RR. Information on this approach can be retrieved in
+#' This argument requires (or + logor_se + n_exp + n_nexp) to generate a RR. The 95% CI of
+#' the OR, from which the 2x2 table is reconstructed, is obtained internally from \code{or}
+#' and \code{logor_se}. Information on this approach can be retrieved in
 #' Di Pietrantonj (2006).
 #'
 #' **To estimate the NNT, the formulas used are :**
@@ -89,8 +91,8 @@
 #' \deqn{r\_ci\_up = cos(\frac{\pi}{1 + or\_ci\_up^c})}
 #' \deqn{z = atanh(r)}
 #' \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
-#' \deqn{z\_ci\_lo = atanh(r\_lo)}
-#' \deqn{z\_ci\_up = atanh(r\_up)}
+#' \deqn{z\_ci\_lo = atanh(r\_ci\_lo)}
+#' \deqn{z\_ci\_up = atanh(r\_ci\_up)}
 #'
 #' **B.** Second, the approach described in Digby (1983) can be used (\code{or_to_cor = "digby"}).
 #' This argument requires (or + logor_se) to generate a R/Z.
@@ -105,8 +107,8 @@
 #' \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}}}
 #' \deqn{z\_ci\_lo = z - qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
 #' \deqn{z\_ci\_up = z + qnorm(.975)*\sqrt{\frac{c^2}{4} * logor\_se^2}}
-#' \deqn{r\_ci\_lo = tanh(z\_lo)}
-#' \deqn{r\_ci\_up = tanh(z\_up)}
+#' \deqn{r\_ci\_lo = tanh(z\_ci\_lo)}
+#' \deqn{r\_ci\_up = tanh(z\_ci\_up)}
 #'
 #' **C.** Third, the approach described in Bonett (2005) can be used (\code{or_to_cor = "bonett"}).
 #' This argument requires (or + logor_se + n_sample + the 2x2 margins) to generate a R/Z.
@@ -120,11 +122,14 @@
 #' \code{n_cases}/\code{n_controls}) each sum to \code{n_sample}, so it is enough to supply
 #' \code{n_sample} plus \emph{one member of each pair}: any of the four combinations
 #' (\code{n_exp} or \code{n_nexp}) x (\code{n_cases} or \code{n_controls}) works, and the
-#' missing margins are back-filled. A value supplied by the user always takes precedence.
+#' missing margins are back-filled. A value supplied by the user always takes precedence;
+#' it must be a proportion in (0, 0.5], and a value outside that range is not validated
+#' and can drive \eqn{c} negative, which flips the sign of \code{r}.
 #' The derivation is skipped when the implied margins are not all strictly positive or do
-#' not sum to \code{n_sample}; such a row cannot use the Bonett conversion and its R/Z is
-#' left as the \code{"lipsey_cooper"} value if no row in the call could use it, or
-#' \code{NA} if some other row could.
+#' not sum to \code{n_sample}. A row that cannot use the Bonett conversion keeps the
+#' \code{"lipsey_cooper"} R/Z computed from the Cohen's d, and a message reports the
+#' substitution. This decision is taken row by row and does not depend on the other rows
+#' of the call.
 #'
 #' \deqn{c = \frac{1 - \frac{|\frac{n\_exp}{n\_sample} - \frac{n\_cases}{n\_sample}|}{5} - (0.5 - small\_margin\_prop)^2}{2}}
 #' \deqn{r = \cos{\frac{\pi}{1+or^c}}}
@@ -135,8 +140,8 @@
 #' \deqn{r\_ci\_up = cos(\frac{\pi}{1 + or\_ci\_up^c})}
 #' \deqn{z = atanh(r)}
 #' \deqn{z\_se = \sqrt{\frac{r\_se^2}{(1 - r^2)^2}} }
-#' \deqn{z\_ci\_lo = atanh(r\_lo)}
-#' \deqn{z\_ci\_up = atanh(r\_up)}
+#' \deqn{z\_ci\_lo = atanh(r\_ci\_lo)}
+#' \deqn{z\_ci\_up = atanh(r\_ci\_up)}
 #'
 #' **D.** Last, the approach described in Cooper et al. (2019) can be used (\code{or_to_cor = "lipsey_cooper"}).
 #' This argument requires (or + logor_se + n_exp + n_nexp) to generate a R/Z.
@@ -249,6 +254,10 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   if (length(reverse_or) != length(or)) stop("The length of the 'reverse_or' argument is incorrectly specified.")
 
   or <- ifelse(is.na(or) & !is.na(logor), exp(logor), or)
+
+  # A non-positive standard error would be carried unchanged into logor_se and
+  # from there into a negative sampling variance. See R/internal_guards.R.
+  logor_se <- .positive_or_na(logor_se)
 
   logOR <- suppressWarnings(log(or))
 
@@ -505,7 +514,7 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' @param n_nexp number of participants in the non-exposed group
 #' @param n_sample total number of participants in the sample
 #' @param baseline_risk proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)
-#' @param small_margin_prop smallest margin proportion of the underlying 2x2 table
+#' @param small_margin_prop smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).
@@ -538,7 +547,7 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab N/A\cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab OR + RR + NNT\cr
+#'  \code{converted effect size measure} \tab OR + RR + NNT + RD\cr
 #'  \code{} \tab D + G + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 2. Odds Ratio'\cr
@@ -551,7 +560,8 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' @examples
 #' es_or_guess <- es_from_or(or = 0.5, n_cases = 210, n_controls = 220)
 #' es_or <- es_from_or_se(or = 0.5, logor_se = 0.4, n_cases = 210, n_controls = 220)
-#' round(es_or_guess$logor_se, 0.10) == round(es_or$logor_se, 0.10)
+#' es_or_guess$logor_se # standard error simulated from the margins
+#' es_or$logor_se # standard error as reported by the source study
 es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
                        small_margin_prop, baseline_risk,
                        n_exp, n_nexp,
@@ -622,7 +632,7 @@ es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
 #' @param n_nexp number of participants in the non-exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)
 #' @param n_sample total number of participants in the sample
 #' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{or_to_rr = "grant"} argument).
-#' @param small_margin_prop smallest margin proportion of the underlying 2x2 table
+#' @param small_margin_prop smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
@@ -646,7 +656,7 @@ es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab OR\cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab RR + NNT\cr
+#'  \code{converted effect size measure} \tab RR + NNT + RD\cr
 #'  \code{} \tab D + G + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 2. Odds Ratio'\cr
@@ -716,7 +726,7 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
 
   logor_ci_lo <- ifelse(is.na(logor_ci_lo) & !is.na(or_ci_lo), log(or_ci_lo), logor_ci_lo)
   logor_ci_up <- ifelse(is.na(logor_ci_up) & !is.na(or_ci_up), log(or_ci_up), logor_ci_up)
-  logor_se <- (logor_ci_up - logor_ci_lo) / (2 * qnorm(.975))
+  logor_se <- .ci_width(logor_ci_lo, logor_ci_up) / (2 * qnorm(.975))
 
   es <- es_from_or_se(
     or = or, logor_se = logor_se,
@@ -732,7 +742,7 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
   return(es)
 }
 
-#' Convert an odds ratio value and its standard error to several effect size measures
+#' Convert an odds ratio value and its p-value to several effect size measures
 #'
 #' @param or odds ratio value
 #' @param logor log odds ratio value
@@ -743,7 +753,7 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
 #' @param n_nexp number of participants in the non-exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)
 #' @param n_sample total number of participants in the sample
 #' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{or_to_rr = "grant"} argument).
-#' @param small_margin_prop smallest margin proportion of the underlying 2x2 table
+#' @param small_margin_prop smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or_pval a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
@@ -762,7 +772,7 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
 #' \tabular{ll}{
 #'  \code{natural effect size measure} \tab OR\cr
 #'  \tab \cr
-#'  \code{converted effect size measure} \tab RR + NNT\cr
+#'  \code{converted effect size measure} \tab RR + NNT + RD\cr
 #'  \code{} \tab D + G + R + Z\cr
 #'  \tab \cr
 #'  \code{required input data} \tab See 'Section 2. Odds Ratio'\cr
@@ -851,7 +861,7 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
 #' @param n_nexp number of participants in the non-exposed group
 #' @param n_sample total number of participants in the sample
 #' @param baseline_risk proportion of cases in the non-exposed group
-#' @param small_margin_prop smallest margin proportion of cases/events in the underlying 2x2 table
+#' @param small_margin_prop smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_logreg_t a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).

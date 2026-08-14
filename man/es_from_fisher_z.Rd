@@ -21,7 +21,7 @@ es_from_fisher_z(
 
 \item{n_sample}{the total number of participants}
 
-\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value"}
+\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "raw_scale"}
 
 \item{n_exp}{number of the experimental/exposed group}
 
@@ -52,19 +52,17 @@ This function estimates and converts between several effect size measures.
 Convert a Fisher's z (r-to-z transformation) to several effect size measures
 }
 \details{
-This function converts estimates the standard error of the Fisher's z and performs the z-to-r Fisher's transformation.
+This function estimates the standard error of the Fisher's z and performs the z-to-r Fisher's transformation.
 
 Last, it converts this r value into a Cohen's d and OR (see details in \code{\link{es_from_pearson_r}()}).
 }
 \examples{
-es_from_fisher_z(
-  fisher_z = .21, n_sample = 44,
-)
+es_from_fisher_z(fisher_z = .21, n_sample = 44)
 }
 \references{
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 
-Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16-e18. https://doi.org/10.1097/EDE.0000000000001105
+Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's d for Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16-e18. https://doi.org/10.1097/EDE.0000000000001105
 
 Viechtbauer W (2010). "Conducting meta-analyses in R with the metafor package." Journal of Statistical Software, 36(3), 1-48. doi:10.18637/jss.v036.i03.
 }

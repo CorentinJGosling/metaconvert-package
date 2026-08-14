@@ -2666,8 +2666,10 @@ test_that("[V22-fix] a negative cov_outcome_r counts as provided", {
                     cov_outcome_r = c(-0.5, NA),
                     n_exp = c(50, 50), n_nexp = c(50, 50))
   out <- metaConvert:::.validate_input_data(dat, verbose = FALSE)
-  expect_false(grepl("cov_outcome_r missing", out$issues[1]))
-  expect_true(grepl("cov_outcome_r missing", out$issues[2]))
+  # 2.0.1 reworded V22 to distinguish absent from present-but-out-of-range; match
+  # either phrasing so the assertion tracks behaviour rather than wording.
+  expect_false(grepl("cov_outcome_r (is )?missing", out$issues[1]))
+  expect_true(grepl("cov_outcome_r (is )?missing", out$issues[2]))
 })
 
 test_that("[D1-fix] exp=TRUE runs the IQR outlier check on the log scale", {

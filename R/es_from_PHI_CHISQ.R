@@ -10,11 +10,11 @@
 #' The functions computes an odds ratio (OR), risk ratio (RR), and number needed to treat (NNT)
 #' from the the phi coefficient, the total number of participants,
 #' the total number of cases and the total number of people exposed.
-#' Cohen's d (D) and Hedges' g (G) are tried to be obtained from the OR, or are converted
-#' using the approach by Lipsey et al. (2001).
-#' The correlation coefficients (R/Z) are converted by assuming that the phi coefficient
-#' is equal to a R, and the variances of R and Z are obtained using the approach proposed
-#' by Lipsey et al. (2001) as well as by our own calculations.
+#' Cohen's d (D), Hedges' g (G) and the correlation coefficients (R/Z) are then derived
+#' from the reconstructed 2x2 table (see \code{\link{es_from_2x2}()}); the R/Z are
+#' therefore tetrachoric correlations, not the phi coefficient itself. When the table
+#' cannot be reconstructed, D, G, R and Z are obtained by treating the phi coefficient
+#' as a Pearson correlation (see below).
 #'
 #' **To estimate the OR, RR, NNT,**,
 #' this function reconstructs a 2x2 table (using the approach proposed by Viechtbauer, 2023).
@@ -135,7 +135,7 @@ es_from_phi <- function(phi, n_cases, n_exp,
 #'
 #' @details
 #' This function converts a chi-square value (with one degree of freedom)
-#' into a phi coefficient (Lipsey et al. 2001):
+#' into a phi coefficient (Lipsey and Wilson, 2001):
 #' \deqn{phi = \sqrt{\frac{chisq}{n\_sample}}}
 #' and then converts it to other effect size measures exactly as in
 #' \code{\link{es_from_phi}()} (including the correlation-based R/Z/D/G fallback with
@@ -241,8 +241,8 @@ es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
 #' @param reverse_chisq_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
-#' This function converts a chi-square value (with one degree of freedom)
-#' into a chi-square coefficient (Section 3.12 in Lipsey et al., 2001):
+#' This function converts the p-value of a chi-square test with one degree of freedom
+#' into the chi-square value it implies (Section 3.12 in Lipsey and Wilson, 2001):
 #' \deqn{chisq = qchisq(chisq\_pval, df = 1, lower.tail = FALSE)}
 #'
 #' Note that if \code{yates_chisq = TRUE}, the chi-square value is interpreted

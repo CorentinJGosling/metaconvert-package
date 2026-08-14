@@ -31,13 +31,18 @@ es_from_ancova_means_sd(
 
 \item{ancova_mean_sd_nexp}{adjusted standard deviation of participants in the non-experimental/non-exposed group.}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
 \item{smd_to_cor}{formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -62,7 +67,7 @@ This function first computes an "adjusted" mean difference (MD),
 Cohen's d (D) and Hedges' g (G) from the adjusted means and standard deviations.
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
-This function start by estimating the non-adjusted standard deviation of the two groups (formula 12.24 in Cooper);
+This function starts by estimating the non-adjusted standard deviation of the two groups (formula 12.24 in Cooper);
 \deqn{mean\_sd\_exp = \frac{ancova\_mean\_sd\_exp}{\sqrt{1 - cov\_outcome\_r^2}}}
 \deqn{mean\_sd\_nexp = \frac{ancova\_mean\_sd\_nexp}{\sqrt{1 - cov\_outcome\_r^2}}}
 
@@ -73,7 +78,7 @@ This function start by estimating the non-adjusted standard deviation of the two
 \deqn{md\_ci\_up = md + md\_se * qt(.975, n\_exp+n\_nexp-2-n\_cov\_ancova)}
 
 \strong{To obtain the Cohen's d}, the following formulas are used (table 12.3 in Cooper):
-\deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * ancova\_mean\_sd\_exp^2 + (n\_nexp - 1) * ancova\_mean\_sd\_nexp^2}{n\_exp+n\_nexp-2}}}
+\deqn{mean\_sd\_pooled = \sqrt{\frac{(n\_exp - 1) * mean\_sd\_exp^2 + (n\_nexp - 1) * mean\_sd\_nexp^2}{n\_exp+n\_nexp-2}}}
 \deqn{cohen\_d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp}{mean\_sd\_pooled}}
 \deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)*(1-cov\_outcome\_r^2)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, n\_exp + n\_nexp - 2 - n\_cov\_ancova)}
@@ -83,15 +88,9 @@ This function start by estimating the non-adjusted standard deviation of the two
 Calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
 \note{
-The sampling variance follows Cooper's eq. 12.26 and assumes the covariate is
-balanced across groups. It omits the covariate-imbalance ("leverage") term of
-the exact ANCOVA variance,
-\eqn{\sigma^2_{res}\,(1/n\_exp + 1/n\_nexp + (\bar{x}\_exp-\bar{x}\_nexp)^2 / SS_x)},
-which is not recoverable from summary statistics, and treats
-\code{cov_outcome_r} as known. In balanced/randomised designs the omission is
-negligible; in observational or otherwise covariate-imbalanced designs the
-standard error is a lower bound (anti-conservative), while the point estimate
-remains unbiased. See Lai and Kelley (2012).
+The standard error assumes the two groups were balanced on the covariate; when they
+were not, it is slightly too small and the study carries a little too much weight.
+The effect size itself is unaffected. See Lai and Kelley (2012).
 }
 \examples{
 es_from_ancova_means_sd(

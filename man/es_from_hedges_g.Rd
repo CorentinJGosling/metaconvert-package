@@ -22,7 +22,7 @@ es_from_hedges_g(
 
 \item{smd_to_cor}{formula used to convert the \code{hedges_g} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_g}{a logical value indicating whether the direction of the \code{hedges_g} value should be flipped.}
 }
@@ -53,7 +53,7 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \deqn{hedges\_g\_ci\_up = hedges\_g + hedges\_g\_se * qt(.975, df = n\_exp+n\_nexp-2)}
 
 \strong{To estimate the Cohen's d value}, the following formula is used (Hedges, 1981):
-\deqn{J = exp(\log_{gamma}(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - \log_{gamma}(\frac{df - 1}{2}))}
+\deqn{J = exp(lgamma(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - lgamma(\frac{df - 1}{2}))}
 \deqn{cohen\_d = \frac{hedges\_g}{J}}
 \deqn{cohen\_d\_se = \sqrt{(\frac{n\_exp+n\_nexp}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2*(n\_exp+n\_nexp)})}}
 

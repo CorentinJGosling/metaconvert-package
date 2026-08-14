@@ -22,7 +22,7 @@ es_from_cohen_d(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_d}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -53,7 +53,7 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 
 \strong{To estimate the Hedges' g and its standard error}, the following formulas are used (Hedges, 1981):
 \deqn{df = n\_exp + n\_nexp - 2}
-\deqn{J = exp(\log_{gamma}(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - \log_{gamma}(\frac{df - 1}{2}))}
+\deqn{J = exp(lgamma(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - lgamma(\frac{df - 1}{2}))}
 \deqn{hedges\_g = cohen\_d * J}
 \deqn{hedges\_g\_se = \sqrt{cohen\_d\_se^2 * J^2}}
 \deqn{hedges\_g\_ci\_lo = hedges\_g - hedges\_g\_se * qt(.975, df = n\_exp+n\_nexp-2)}
@@ -107,7 +107,7 @@ the following formulas are used (\code{smd_to_cor="lipsey_cooper"}):
 \deqn{R\_ci\_lo = R - qt(.975, n\_exp+n\_nexp- 2) * R\_se}
 \deqn{R\_ci\_up = R + qt(.975, n\_exp+n\_nexp- 2) * R\_se}
 \deqn{Z = atanh(R)}
-\deqn{Z\_var = \frac{cohen\_d\_se^2}{cohen\_d^2 + (1 / p*(1-p))}}
+\deqn{Z\_var = \frac{cohen\_d\_se^2}{cohen\_d^2 + 1 / (p * (1 - p))}}
 \deqn{Z\_se = \sqrt{Z\_var}}
 \deqn{Z\_ci\_lo = Z - qnorm(.975) * Z\_se}
 \deqn{Z\_ci\_up = Z + qnorm(.975) * Z\_se}

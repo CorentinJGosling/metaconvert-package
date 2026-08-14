@@ -2,7 +2,7 @@
 % Please edit documentation in R/es_from_ANCOVA_MD.R
 \name{es_from_ancova_md_pval}
 \alias{es_from_ancova_md_pval}
-\title{Convert an adjusted mean difference and adjusted standard deviation between two independent groups obtained from an ANCOVA model into several effect size measures}
+\title{Convert an adjusted mean difference and its p-value between two independent groups obtained from an ANCOVA model into several effect size measures}
 \usage{
 es_from_ancova_md_pval(
   ancova_md,
@@ -21,7 +21,12 @@ es_from_ancova_md_pval(
 
 \item{ancova_md_pval}{p-value (two-tailed) of the adjusted mean difference}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
@@ -31,7 +36,7 @@ es_from_ancova_md_pval(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_md}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -49,7 +54,7 @@ This function estimates and converts between several effect size measures.
 }
 }
 \description{
-Convert an adjusted mean difference and adjusted standard deviation between two independent groups obtained from an ANCOVA model into several effect size measures
+Convert an adjusted mean difference and its p-value between two independent groups obtained from an ANCOVA model into several effect size measures
 }
 \details{
 This function converts the mean difference (MD) p-value into a standard error,
@@ -61,14 +66,10 @@ and then relies on the calculations of the \code{\link{es_from_ancova_md_se}()} 
 Calculations of the \code{\link{es_from_ancova_md_se}()} are then applied.
 }
 \note{
-This route inherits the behaviour of \code{\link{es_from_ancova_md_se}()}:
-\strong{the point estimate is not unbiased under covariate imbalance}, because the
-standardizer is recovered with the leverage term \eqn{D} set to zero. \code{d} and
-its standard error are attenuated by the same factor, \eqn{1/\sqrt{1 + \delta_x^2/4}}
-for equal arms (about 3\% at \eqn{\delta_x = 0.5}, 11\% at \eqn{\delta_x = 1},
-negligible when randomised). The p-value is unaffected. See
-\code{\link{es_from_ancova_t}()} for the full statement, and prefer
-\code{\link{es_from_ancova_md_sd}()} when the residual SD is reported.
+This route has to assume the two groups were balanced on the covariate; when they were
+not, the effect size and its standard error are both attenuated. Prefer
+\code{\link{es_from_ancova_md_sd}()} when the residual standard deviation is
+reported.
 }
 \examples{
 es_from_ancova_md_pval(

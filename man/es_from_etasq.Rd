@@ -18,7 +18,11 @@ es_from_etasq(
 \eqn{SS_{effect} / SS_{total}}. For a one-way, two-group ANOVA this equals the
 partial eta-squared \eqn{SS_{effect} / (SS_{effect} + SS_{error})}, so the two
 coincide and either label is correct here (unlike the ANCOVA case handled by
-\code{\link{es_from_etasq_adj}()}, which requires the partial form specifically).}
+\code{\link{es_from_etasq_adj}()}, which requires the partial form specifically).
+The model must be \strong{one-way}: a partial eta-squared from a factorial ANOVA has a
+smaller error degrees of freedom than \eqn{n\_exp + n\_nexp - 2} and is defined on
+that model's residual SD, so it would be overstated here. Prefer the group means
+and SDs in that case.}
 
 \item{n_exp}{number of participants in the experimental/exposed group.}
 
@@ -26,7 +30,7 @@ coincide and either label is correct here (unlike the ANCOVA case handled by
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation.}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_etasq}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -51,13 +55,14 @@ This function first computes a Cohen's d (D) and Hedges' g (G)
 from the eta squared of a binary predictor (ANOVA model).
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
-\strong{To estimate a Cohen's d} the following formula is used (Cohen, 1988):
-\deqn{d = 2 * \sqrt{\frac{etasq}{1 - etasq}}}
+\strong{To estimate a Cohen's d}, the exact one-way, two-group identity
+\eqn{\eta^2 = F / (F + df_{err})} is inverted (with \eqn{df_{err} = n\_exp + n\_nexp - 2})
+and the result fed to Cohen's d from F (table 12.1 in Cooper):
+\deqn{d = \sqrt{\frac{etasq}{1 - etasq} * (n\_exp + n\_nexp - 2) * (\frac{1}{n\_exp} + \frac{1}{n\_nexp})}}
 
-Note that this closed form is the large-sample, \strong{equal-groups} (\eqn{n\_exp = n\_nexp})
-limit of the exact F-based conversion. For markedly unequal group sizes it is
-approximate; supplying the ANOVA F (\code{\link{es_from_anova_f}()}), which
-carries the per-group sample sizes, is more accurate.
+Because this expression carries both arm sizes it is exact for unequal groups, and
+returns the same value as \code{\link{es_from_anova_f}()} and
+\code{\link{es_from_pt_bis_r}()} applied to the same study.
 
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d}()} are applied.

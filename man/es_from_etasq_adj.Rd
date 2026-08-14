@@ -32,11 +32,16 @@ ANOVA the two definitions coincide; see \code{\link{es_from_etasq}()}.)}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_etasq}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -84,22 +89,13 @@ eta-squared alone).
 calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
 \note{
-Two cautions apply. (1) \code{etasq_adj} must be the \emph{partial} eta-squared (see
-the parameter description); a classical eta-squared biases the effect size
-toward zero. (2) The sampling variance is rebuilt from Cooper's eq. 12.26, which
-sets the covariate-imbalance ("leverage") term
-\eqn{D = (\bar{x}_{exp} - \bar{x}_{nexp})^2 / SS_x} of the exact ANCOVA variance
-to zero (Lai & Kelley, 2012, eq. 5); \eqn{D} is not recoverable from summary
-statistics. Because partial eta-squared is an exact function of the t statistic
-(\eqn{\eta^2_p = t^2/(t^2 + df)}), this route inherits the behaviour of
-\code{\link{es_from_ancova_t}()}: \strong{the point estimate is NOT unbiased under
-covariate imbalance}. Both \code{d} and its standard error are attenuated by
-\eqn{1/\sqrt{1 + \delta_x^2/4}} for equal arms (about 3\% at
-\eqn{\delta_x = 0.5}, 11\% at \eqn{\delta_x = 1}, negligible when randomised).
-The p-value is unaffected because the two shrink together, but the magnitude is
-understated and the understatement does not average out on pooling. See
-\code{\link{es_from_ancova_t}()} for the full statement, and prefer
-\code{\link{es_from_ancova_means_sd}()} when adjusted means are available.
+Two cautions apply. First, \code{etasq_adj} must be the \emph{partial} eta-squared:
+a classical eta-squared will pull the effect size toward zero.
+
+Second, partial eta-squared is a direct function of the t statistic, so this route
+behaves exactly like \code{\link{es_from_ancova_t}()}. It has to assume the two
+groups were balanced on the covariate. Prefer
+\code{\link{es_from_ancova_means_sd}()} when adjusted means are reported.
 }
 \examples{
 es_from_etasq_adj(etasq_adj = 0.28, n_cov_ancova = 3, cov_outcome_r = 0.2, n_exp = 20, n_nexp = 22)

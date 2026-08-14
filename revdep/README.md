@@ -1,3 +1,9 @@
+> **Stale.** This platform/dependency snapshot is from the 2026-07-19 revdepcheck run
+> against metaConvert **1.0.3**, and that run failed to install metaConvert at all.
+> The 2.0.1 reverse-dependency result is in `cran.md` / `problems.md`, produced with
+> `revdep/check-revdeps.R` because revdepcheck cannot build its private library on
+> this machine. Regenerate this file only from a successful revdepcheck run.
+
 # Platform
 
 |field    |value                                                                                |

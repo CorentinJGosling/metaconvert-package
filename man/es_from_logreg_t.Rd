@@ -36,7 +36,7 @@ es_from_logreg_t(
 
 \item{baseline_risk}{proportion of cases in the non-exposed group}
 
-\item{small_margin_prop}{smallest margin proportion of cases/events in the underlying 2x2 table}
+\item{small_margin_prop}{smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])}
 
 \item{n_exp}{number of participants in the exposed group}
 

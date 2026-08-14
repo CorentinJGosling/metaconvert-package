@@ -29,9 +29,9 @@ es_from_md_ci(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer").}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
-\item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
+\item{max_asymmetry}{not used by this function; asymmetry of the 95\% CI bounds is checked by \code{\link{convert_df}} (see its \code{max_asymmetry} argument).}
 
 \item{reverse_md}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }

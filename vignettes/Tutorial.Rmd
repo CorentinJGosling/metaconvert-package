@@ -66,7 +66,7 @@ show_table <- function(x, ...) {
 
 # Step 1. Protocol stage
 
-If you have not yet registered your protocol, you can benefit of our tools to select **a priori** the type of input data that could be extracted to estimate an effect size. 
+If you have not yet registered your protocol, you can benefit from our tools to select **a priori** the type of input data that could be extracted to estimate an effect size.
 
 - start by determining the effect size measure (SMD, OR, RR, etc.) you plan to estimate
 - then, identify all types of input data that can be used to estimate this effect size measure
@@ -122,7 +122,7 @@ compare_df(
 
 In grey, values that are consistent between the two data extractors. In green/red, the values that differ.  
 
-Only rows with differences between the two datasets are identified, and you can easily retrieve the row number by looking at the ID in the rowname column. If your dataset have rows in a different order (like in the example above), you can automatically reorder your datasets by indicating to the function the columns that store this information
+Only rows with differences between the two datasets are identified, and you can easily retrieve the row number by looking at the ID in the rowname column. If your datasets have rows in a different order (as in the example above), you can reorder them automatically by indicating to the function the columns that store this information.
 
 ```{r, message=FALSE, fig.width= 11}
 compare_df(
@@ -137,7 +137,7 @@ compare_df(
 
 ## Basic usage
 
-To generate an effect size from a dataset that contains approriate column names and information, you simply need to :<ul>
+To generate an effect size from a dataset that contains appropriate column names and information, you simply need to:<ul>
 <li> pass this dataset to the **convert_df()** function </li>
 <li> indicate the effect size measure that should be estimated </li>
 </ul>
@@ -171,29 +171,47 @@ To know more about the information stored in each column, refer to documentation
 
 ## More advanced usage
 
-A tutorial on a more advanced usage will be proposed in the companion paper of this tool; the link will be inserted as soon as the paper will be published.
+A tutorial on a more advanced usage is given in the companion paper of this tool: Gosling CJ, Cortese S, Solmi M, et al. metaConvert: an automatic suite for estimation of 11 different effect size measures and flexible conversion across them. *Research Synthesis Methods*. 2025. <a href="https://doi.org/10.1017/rsm.2025.11" target="_blank">doi:10.1017/rsm.2025.11</a>
 
-For now, you can refer to the documentation of the convert_df function in the R manual of this package, in which all options are described.
+You can also refer to the documentation of the convert_df function in the R manual of this package, in which all options are described.
 
 ## Risk difference and NNT
 
-Since version 1.1.0 the package natively supports **risk difference** (`measure = "rd"`) and **number needed to treat** (`measure = "nnt"`) alongside ratio measures. Both carry a proper standard error and a confidence interval. When the RD CI crosses zero, the NNT CI is set to NA to preserve the Altman (1998) discontinuous-CI convention - the point estimate and SE remain available.
+Version 1.1.0 added the **risk difference** (`measure = "rd"`) as a measure in its own right, and gave the **number needed to treat** (`measure = "nnt"`), available since 1.0.3, a standard error and a confidence interval; before that its uncertainty was always `NA`. When the RD CI crosses zero, the NNT CI is set to NA to preserve the Altman (1998) discontinuous-CI convention - the point estimate and SE remain available.
+
+Only the rows of `df.haza` that hold a complete 2x2 table can yield a risk difference, so the estimable rows are selected before printing.
 
 ```{r, message=FALSE}
 res_rd <- convert_df(df.haza, measure = "rd")
-head(summary(res_rd)[, c("row_id", "es_crude", "se_crude",
-                         "es_ci_lo_crude", "es_ci_up_crude", "info_used_crude")])
+s_rd <- summary(res_rd)
+head(s_rd[!is.na(s_rd$es_crude),
+          c("row_id", "es_crude", "se_crude",
+            "es_ci_lo_crude", "es_ci_up_crude", "info_used_crude")])
 ```
 
 ## Quality flags and missing-data guidance
 
-`summary()` can surface two diagnostic layers. `flags = TRUE` adds a `flags_crude` / `flags_adjusted` column with validation errors (Tier 1: input integrity checks such as negative SDs or inverted CIs) and plausibility warnings (Tier 2: e.g. implausibly large SMD, RD outside `[-1, 1]`, ES/SE outliers across rows). `guidance = TRUE` adds an `es_guidance_crude` column that, for rows where the effect size could not be estimated, explains which input columns the user would need to add to unlock additional estimators.
+`summary()` returns two diagnostic columns by default. The flags column (`flags_crude` and `flags_adjusted` when crude and adjusted estimates are split) reports validation errors (Tier 1: input integrity checks such as negative SDs or inverted CIs) and plausibility warnings (Tier 2: e.g. implausibly large SMD, RD outside `[-1, 1]`, ES/SE outliers across rows). The guidance column (`es_guidance_crude` / `es_guidance_adjusted`) explains, for rows where the effect size could not be estimated, which input columns would have to be added to unlock additional estimators. Both are controlled by the `flags` and `guidance` arguments of `summary()`, which default to `TRUE`; set either to `FALSE` to omit the corresponding column.
 
 ```{r, message=FALSE}
 res_flags <- convert_df(df.short, measure = "g")
-s_flags <- summary(res_flags, flags = TRUE, guidance = TRUE)
-head(s_flags[, c("row_id", "es_crude", "info_used_crude",
-                 "flags_crude", "es_guidance_crude")])
+s_flags <- summary(res_flags)
+head(s_flags[nzchar(s_flags$flags_crude),
+             c("row_id", "es_crude", "info_used_crude", "flags_crude")], 3)
+```
+
+The guidance column is only filled for rows without an effect size. In `df.short` such rows carry no usable input at all, so the example below builds a small dataset in which the second comparison reports means and sample sizes but no measure of variability:
+
+```{r, message=FALSE}
+df_gap <- data.frame(
+  study_id     = c("Study A", "Study B"),
+  n_exp        = c(40, 35),    n_nexp       = c(42, 38),
+  mean_exp     = c(12.4, 9.8), mean_nexp    = c(10.1, 9.9),
+  mean_sd_exp  = c(3.2, NA),   mean_sd_nexp = c(3.4, NA)
+)
+summary(convert_df(df_gap, measure = "g"))[, c("row_id", "es_crude",
+                                               "info_used_crude",
+                                               "es_guidance_crude")]
 ```
 
 ## Correction for attenuation due to measurement error
@@ -222,7 +240,7 @@ sdc_res
 # I do not like R
 
 If you prefer having a graphical user interface (GUI) when performing data analysis, 
-we are please to introduce you to our web-app that enables to perform ALL calculations of this
+we are pleased to introduce you to our web app, which enables you to perform ALL calculations of this
 package using an interactive GUI <a href="https://metaconvert.org/" target="_blank">https://metaconvert.org/</a>
 
 ---

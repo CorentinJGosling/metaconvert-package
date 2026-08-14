@@ -24,15 +24,15 @@ es_from_rd_se(
 \item{baseline_risk}{proportion of cases in the non-exposed/control group.
 Required for converting RD to OR and RR.}
 
-\item{n_exp}{number of participants in the exposed/treatment group}
+\item{n_exp}{number of participants in the exposed/treatment group (not used in the computation)}
 
-\item{n_nexp}{number of participants in the non-exposed/control group}
+\item{n_nexp}{number of participants in the non-exposed/control group (not used in the computation)}
 
-\item{n_cases}{number of cases/events across both groups}
+\item{n_cases}{number of cases/events across both groups (not used in the computation)}
 
-\item{n_controls}{number of controls/no-event across both groups}
+\item{n_controls}{number of controls/no-event across both groups (not used in the computation)}
 
-\item{n_sample}{total number of participants in the sample}
+\item{n_sample}{total number of participants in the sample (not used in the computation)}
 
 \item{reverse_rd}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -83,10 +83,14 @@ where the SE is derived via the delta method from \eqn{\frac{d(\log OR)}{d(RD)} 
 where the SE is derived via the delta method from \eqn{\frac{d(\log RR)}{d(RD)} = \frac{-1}{baseline\_risk - rd}}.
 
 Note that the conversions to OR and RR assume the baseline risk is a fixed constant.
+
+The sample sizes (\code{n_exp}, \code{n_nexp}, \code{n_cases}, \code{n_controls} and
+\code{n_sample}) are accepted for consistency with the other entry points of the package,
+but they enter none of the formulas above: the results depend only on \code{rd},
+\code{rd_se} and \code{baseline_risk}.
 }
 \examples{
-es_from_rd_se(rd = 0.15, rd_se = 0.05,
-              baseline_risk = 0.30, n_exp = 100, n_nexp = 100)
+es_from_rd_se(rd = 0.15, rd_se = 0.05, baseline_risk = 0.30)
 }
 \references{
 Deeks, J.J. (2002). Issues in the selection of a summary statistic for meta-analysis of clinical trials with binary outcomes. Statistics in Medicine, 21(11), 1575-1600.

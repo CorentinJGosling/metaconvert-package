@@ -31,7 +31,7 @@ es_from_pearson_r(
 
 \item{unit_increase_iv}{a value of the independent variable that will be used to estimate the Cohen's d (see details).}
 
-\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value"}
+\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "raw_scale"}
 
 \item{reverse_pearson_r}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -71,9 +71,9 @@ are (Formula 12.27 in Cooper):
 }
 
 \strong{A.} Mathur proposes to use this formula (Formula 1.2 in Mathur, \code{cor_to_smd = "mathur"}):
-\deqn{increase = ifelse(unit_type == "sd", unit\_increase\_iv * sd\_iv, unit\_increase\_iv)}
-\deqn{d = \frac{r * increase}{sd_iv * \sqrt{1 - r^2}}}
-\deqn{d\_se = abs(d) * \sqrt{\frac{1}{r^2 * (n\_sample - 3)} + \frac{1}{2*(n\_sample - 1))}}}
+\deqn{increase = ifelse(unit\_type == "sd", unit\_increase\_iv * sd\_iv, unit\_increase\_iv)}
+\deqn{d = \frac{r * increase}{sd\_iv * \sqrt{1 - r^2}}}
+\deqn{d\_se = abs(d) * \sqrt{\frac{1}{r^2 * (n\_sample - 3)} + \frac{1}{2*(n\_sample - 1)}}}
 The resulting Cohen's d is the average increase in the dependent variable associated with an increase of x units in the independent variable (with x = \code{unit_increase_iv}).
 
 \strong{B.} Viechtbauer proposes to use the delta method to derive a Cohen's d from a correlation coefficient (Viechtbauer, 2023, \code{cor_to_smd = "viechtbauer"})
@@ -82,7 +82,7 @@ The resulting Cohen's d is the average increase in the dependent variable associ
 per-2-SD transformation (Formula 12.38 & 12.39 in Cooper, \code{cor_to_smd = "cooper"}).
 Unlike the \code{"mathur"} option, this branch does NOT use \code{unit_increase_iv},
 \code{unit_type} or \code{sd_iv}; it always returns the standardized mean difference
-between two groups lying one predictor standard deviation apart:
+between two groups lying two predictor standard deviations apart:
 \deqn{d = \frac{2 * r}{\sqrt{1 - r^2}}}
 \deqn{d\_se = \sqrt{\frac{4 * R\_se^2}{(1 - r^2)^3}}}
 where \eqn{R\_se} is the standard error of the correlation. It therefore coincides
@@ -100,7 +100,9 @@ es_from_pearson_r(
 \references{
 Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
 
-Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's for d Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16-e18. https://doi.org/10.1097/EDE.0000000000001105
+Mathur, M. B., & VanderWeele, T. J. (2020). A Simple, Interpretable Conversion from Pearson's Correlation to Cohen's d for Continuous Exposures. Epidemiology (Cambridge, Mass.), 31(2), e16-e18. https://doi.org/10.1097/EDE.0000000000001105
 
 Viechtbauer W (2010). "Conducting meta-analyses in R with the metafor package." Journal of Statistical Software, 36(3), 1-48. doi:10.18637/jss.v036.i03.
+
+Viechtbauer (2023). Accessed at https://wviechtb.github.io/metafor/reference/conv.delta.html.
 }

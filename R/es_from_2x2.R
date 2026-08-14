@@ -44,8 +44,8 @@
 #' that is then converted to a SMD
 #' (see formula in \code{\link{es_from_or_se}()}).
 #'
-#' **To convert the 2x2 table into a correlation coefficient**,
-#' For now, only the tetrachoric correlation is currently proposed
+#' **To convert the 2x2 table into a correlation coefficient**, only the tetrachoric
+#' correlation is currently available:
 #' - \code{table_2x2_to_cor = "tetrachoric"}.
 #' Given the heavy calculations required for this effect size measure,
 #' we relied on the implementation of the formulas of the 'metafor' package. More
@@ -277,13 +277,16 @@ es_from_2x2_sum <- function(n_cases_exp, n_exp, n_cases_nexp, n_nexp,
 #' @details
 #' This function uses the proportions and sample size to
 #' recreate the 2x2 table, and
-#' then relies on the calculations of the \code{\link{es_from_2x2_sum}()} function.
+#' then relies on the calculations of the \code{\link{es_from_2x2}()} function.
 #'
-#' The formulas used is to obtain the 2x2 table are
-#' \deqn{n\_cases\_exp = prop\_cases\_exp * n\_exp}
-#' \deqn{n\_cases\_nexp = prop\_cases\_nexp * n\_nexp}
-#' \deqn{n\_controls\_exp = (1 - prop\_cases\_exp) * n\_exp}
-#' \deqn{n\_controls\_nexp = (1 - prop\_cases\_nexp) * n\_nexp}
+#' The formulas used to obtain the 2x2 table are
+#' \deqn{n\_cases\_exp = round(prop\_cases\_exp * n\_exp)}
+#' \deqn{n\_cases\_nexp = round(prop\_cases\_nexp * n\_nexp)}
+#' \deqn{n\_controls\_exp = n\_exp - n\_cases\_exp}
+#' \deqn{n\_controls\_nexp = n\_nexp - n\_cases\_nexp}
+#' The numbers of cases are rounded to integers so that the reconstructed table is a
+#' genuine contingency table. The resulting effect sizes therefore differ slightly from
+#' those obtained from the unrounded cell counts.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.

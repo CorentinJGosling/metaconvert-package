@@ -46,8 +46,8 @@ This function estimates and converts between several effect size measures.
 Convert a p-value of a chi-square to several effect size measures
 }
 \details{
-This function converts a chi-square value (with one degree of freedom)
-into a chi-square coefficient (Section 3.12 in Lipsey et al., 2001):
+This function converts the p-value of a chi-square test with one degree of freedom
+into the chi-square value it implies (Section 3.12 in Lipsey and Wilson, 2001):
 \deqn{chisq = qchisq(chisq\_pval, df = 1, lower.tail = FALSE)}
 
 Note that if \code{yates_chisq = TRUE}, the chi-square value is interpreted

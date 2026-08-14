@@ -54,7 +54,7 @@ Convert pre-post means and standard errors of a single group into standard effec
 \details{
 This function converts the pre/post standard errors of a single group into standard deviations (Section 6.5.2.2 in the Cochrane Handbook).
 \deqn{mean\_pre\_sd\_exp = mean\_pre\_se\_exp * \sqrt{n\_exp}}
-\deqn{mean\_post\_sd\_exp = mean\_post\_se\_exp * \sqrt{n\_exp}}
+\deqn{mean\_sd\_exp = mean\_se\_exp * \sqrt{n\_exp}}
 
 Then, calculations of the \code{\link{es_from_means_sd_pre_post_single_group}()} are applied.
 }

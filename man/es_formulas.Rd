@@ -29,14 +29,24 @@ A dataframe of class \code{metaConvert_formulas} containing one row per
 \code{study_id} \tab study identifier, when available.\cr
 \code{parameter} \tab the conversion parameter being varied.\cr
 \code{formula} \tab the formula applied on this row.\cr
-\code{is_active} \tab a logical value indicating whether this formula was applied in the original \code{convert_df()} call.\cr
+\code{is_active} \tab a logical value indicating whether this formula was the one applied to this comparison in the original \code{convert_df()} call.\cr
 \code{info_used} \tab type of source statistics from which the estimate was derived.\cr
 \code{es}, \code{se}, \code{es_ci_lo}, \code{es_ci_up} \tab the effect size, its standard error and its 95\% confidence interval under this formula.\cr
-\code{deviation} \tab the difference between \code{es} and the effect size obtained under the formula applied in the original call.\cr
+\code{deviation} \tab the difference between \code{es} and the effect size obtained under the formula applied to this comparison in the original call.\cr
 \code{scale_change} \tab a logical value indicating whether the options of this parameter lie on different analysis scales.\cr
 }
-The range of estimates spanned by each (comparison, parameter) combination is
-attached as the \code{"summary"} attribute.
+One row per (comparison, parameter) combination is attached as the
+\code{"summary"} attribute, ordered by decreasing \code{spread}:
+\tabular{ll}{
+\code{row_id}, \code{study_id}, \code{parameter} \tab as above.\cr
+\code{n_formulas} \tab number of formulas evaluated.\cr
+\code{n_estimated} \tab number of these formulas that produced an estimate. The remaining ones require input data the comparison does not report.\cr
+\code{active} \tab the formula applied to this comparison in the original call.\cr
+\code{active_estimated} \tab a logical value indicating whether that formula produced an estimate.\cr
+\code{es_min}, \code{es_max}, \code{spread} \tab the smallest and largest effect size, and their difference.\cr
+\code{se_min}, \code{se_max}, \code{se_spread} \tab the smallest and largest standard error, and their difference.\cr
+\code{scale_change} \tab as above.\cr
+}
 }
 \description{
 Recomputes the effect sizes of a \dQuote{metaConvert} object under all
@@ -48,7 +58,7 @@ Whereas \code{\link{convert_df}(main_es = FALSE)} evaluates variability in the
 \code{es_formulas()} evaluates the uncertainty of the
 \emph{analytical conversion} applied to those statistics. For example, it
 assesses the five methodological approaches available for converting an odds
-ratio into a risk ratio (\code{or_to_rr}), or the five pre-post
+ratio into a risk ratio (\code{or_to_rr}), or the four pre-post
 standardisation methods (\code{pre_post_to_smd}). Because alternative formulas
 encode different statistical assumptions rather than algebraic equivalencies,
 discrepancies among them constitute methodological uncertainty rather than
@@ -63,22 +73,29 @@ The conversion parameters that support several methodological formulas are:
 \code{or_to_cor} \tab pearson, digby, bonett, lipsey_cooper\cr
 \code{cor_to_smd} \tab viechtbauer, cooper, mathur\cr
 \code{smd_to_cor} \tab viechtbauer, lipsey_cooper\cr
-\code{pre_post_to_smd} \tab bonett, cooper, morris_dz, morris_drm, morris_dav\cr
-\code{smd_denom} \tab pooled, glass, glass_robust\cr
-\code{smd_var} \tab borenstein, hedges_olkin\cr
+\code{pre_post_to_smd} \tab bonett, morris_dz, morris_drm (alias cooper), morris_dav\cr
+\code{smd_denom} \tab pooled, glass (alias control), glass_robust (alias control_robust)\cr
+\code{smd_var} \tab borenstein, hedges_olkin (alias viechtbauer)\cr
 \code{prop_to_es} \tab raw, logit, freeman_tukey\cr
 \code{alpha_to_es} \tab bonett, raw\cr
 \code{icc_to_es} \tab bonett, raw\cr
 }
+Options documented under two names are evaluated once, under the name listed
+above.
 
 Each alternative estimate is obtained by re-evaluating \code{\link{convert_df}}
-with a single conversion parameter modified.
+with a single conversion parameter modified. When the original call supplied a
+conversion parameter as a column of the dataset rather than as a single value,
+the \code{deviation} of each comparison is measured against the formula that
+comparison itself received.
 
 For each comparison, \code{\link{convert_df}} returns one effect size, derived
 from one type of input data -- the type selected by the hierarchy and reported
 in the \code{info_used} column. A conversion parameter can therefore change the
-result only if that particular type of input data is converted through it, and
-parameters leaving every estimate unchanged are not reported. For example,
+result only if that particular type of input data is converted through it. A
+comparison is reported only if the parameter reached it: at least one formula
+must have produced an estimate, and the formulas must differ in the effect
+size or in its standard error. For example,
 \code{pre_post_to_smd} governs the conversion of pre-post data: if a comparison
 also reports endpoint means and standard deviations, and if the hierarchy selects
 \code{means_sd}, then no pre-post conversion is performed and
@@ -86,13 +103,29 @@ also reports endpoint means and standard deviations, and if the hierarchy select
 request the pre-post method explicitly through the \code{es_selected} and
 \code{hierarchy} arguments of \code{\link{convert_df}}.
 
+Some options leave the effect size untouched and alter only its standard error,
+and hence the weight the comparison receives in a meta-analysis:
+\code{smd_var} selects the sampling-variance formula, and \code{glass} and
+\code{glass_robust} share a standardizer but not a variance. These comparisons
+are reported with a \code{deviation} of zero, and the range of standard errors
+is given by the \code{se_min} and \code{se_max} columns of the
+\code{"summary"} attribute.
+
 Parameters whose options alter the analysis scale rather than the formula
 applied on a fixed scale (\code{alpha_to_es}, \code{icc_to_es},
-\code{prop_to_es}) are reported with \code{deviation} and \code{spread} set to
-\code{NA}. For these parameters, \code{"bonett"} returns a transformed
-quantity, such as \eqn{\ln(1 - \alpha)}, whereas \code{"raw"} returns the
-coefficient itself, so direct mathematical comparison between the two is
-invalid.
+\code{prop_to_es}) are reported with \code{deviation} set to \code{NA}, as are
+the \code{es_min}, \code{es_max} and \code{spread} columns of the
+\code{"summary"} attribute. For these parameters, \code{"bonett"} returns a
+transformed quantity, such as \eqn{\ln(1 - \alpha)}, whereas \code{"raw"}
+returns the coefficient itself, so direct mathematical comparison between the
+two is invalid.
+
+For the ratio measures reported on their natural scale (\code{or}, \code{rr},
+\code{irr}, \code{hr}), \code{deviation} and the \code{spread} column of the
+\code{"summary"} attribute are differences of ratios, not of their logarithms.
+They are comparable across the formulas of one comparison, but not across
+comparisons of different magnitude: a given ratio of two risk ratios yields a
+larger difference the larger the risk ratios are.
 
 \strong{Warning regarding meta-analytic pooling.} The rows returned by this
 function must never be pooled in a meta-analysis. They are structurally
@@ -102,8 +135,10 @@ mathematical assumptions, not independent effect size estimates.
 \examples{
 \donttest{
 ### sensitivity of the risk ratio to the odds ratio conversion formula
+### the case and control margins are required by two of the five formulas
 dat <- data.frame(or = 2.5, or_ci_lo = 1.6, or_ci_up = 3.9,
-                  n_exp = 100, n_nexp = 100, baseline_risk = 0.2)
+                  n_exp = 100, n_nexp = 100,
+                  n_cases = 60, n_controls = 140, baseline_risk = 0.2)
 es_formulas(convert_df(dat, measure = "rr", verbose = FALSE))
 }
 }

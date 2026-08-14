@@ -59,18 +59,18 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from Cohen
 Four formulas can be used to convert the pre/post means into a SMD (\code{pre_post_to_smd} argument):
 \enumerate{
 \item \code{"bonett"}: baseline SD standardizer (Bonett, 2008; equivalent to the SMCRH measure in metafor)
-\deqn{d\_w = \frac{mean\_post\_exp - mean\_pre\_exp}{mean\_pre\_sd\_exp}}
+\deqn{d\_w = \frac{mean\_exp - mean\_pre\_exp}{mean\_pre\_sd\_exp}}
 \deqn{var(g\_w) = \frac{sd\_change^2}{sd\_pre^2(n-1)} + \frac{g\_w^2}{2(n-1)}}
 where \deqn{sd\_change = \sqrt{sd\_pre^2 + sd\_post^2 - 2r\,sd\_pre\,sd\_post}}
 \item \code{"cooper"} (alias: "morris_drm"): raw score standardizer (Cooper 2019, Morris & DeShon 2002)
-\deqn{d\_rm = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_change} * \sqrt{2 * (1 - r\_pre\_post\_exp)}}
+\deqn{d\_rm = \frac{mean\_exp - mean\_pre\_exp}{sd\_change} * \sqrt{2 * (1 - r\_pre\_post\_exp)}}
 \deqn{var(d\_rm) = \frac{2 * (1 - r\_pre\_post\_exp)}{n\_exp} + \frac{d\_rm^2}{2 * n\_exp}}
 \item \code{"morris_dz"}: change score standardizer (Morris & DeShon, 2002; equivalent to the SMCC measure in metafor)
-\deqn{d\_z = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_change}}
+\deqn{d\_z = \frac{mean\_exp - mean\_pre\_exp}{sd\_change}}
 \deqn{var(g\_z) = \frac{1}{n} + \frac{g\_z^2}{2n}}
 \item \code{"morris_dav"}: average SD standardizer (Bonett, 2008, eq. 10; equivalent to the SMCRPH measure in metafor)
 \deqn{sd\_av = \sqrt{(sd\_pre^2 + sd\_post^2)/2}}
-\deqn{d\_av = \frac{mean\_post\_exp - mean\_pre\_exp}{sd\_av}}
+\deqn{d\_av = \frac{mean\_exp - mean\_pre\_exp}{sd\_av}}
 \deqn{g\_av = d\_av \times J(mi), \quad mi = \frac{2(n\_exp - 1)}{1 + r\_pre\_post\_exp^2}}
 \deqn{var(g\_av) = \frac{sd\_change^2}{sd\_av^2 (n - 1)} + \frac{g\_av^2 (sd\_pre^4 + sd\_post^4 + 2 r^2 sd\_pre^2 sd\_post^2)}{8\, sd\_av^4 (n - 1)}}
 }
@@ -83,7 +83,7 @@ The within-group Hedges' g is obtained by applying a bias correction factor J to
 \deqn{g\_w = d\_w * J(n\_exp-1)}
 
 The within-group mean difference is simply:
-\deqn{md\_w = mean\_post\_exp - mean\_pre\_exp}
+\deqn{md\_w = mean\_exp - mean\_pre\_exp}
 \deqn{var(md\_w) = \frac{sd\_change^2}{n\_exp}}
 
 To estimate other effect size measures,

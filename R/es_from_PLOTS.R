@@ -17,13 +17,13 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_plot_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
 #' This function uses the bounds of an error bar of a mean obtained from a plot into a standard deviation.
 #' Then, a mean difference (MD), Cohen's d (D), and Hedges' g (G) are estimated.
-#' Odds ratio (OR), risk ratio (RR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
+#' Odds ratio (OR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
 #'
 #' **To convert the bound of an error bar into a standard deviation,**
 #' this function always prioritizes information from the \code{plot_mean_sd_*} arguments,
@@ -31,35 +31,30 @@
 #' then those from the \code{plot_mean_ci_*} arguments.
 #'
 #' 1. If the bounds of the standard deviations are provided, the following formulas are used:
-#' \deqn{mean\_sd\_lo\_exp = plot\_mean\_exp - plot\_mean\_sd\_lo\_exp}
-#' \deqn{mean\_sd\_up\_exp = plot\_mean\_sd\_up\_exp - plot\_mean\_exp}
-#' \deqn{mean\_sd\_exp = \frac{mean\_sd\_lo\_exp + mean\_sd\_up\_exp}{2}}
+#'    \deqn{mean\_sd\_lo\_exp = plot\_mean\_exp - plot\_mean\_sd\_lo\_exp}
+#'    \deqn{mean\_sd\_up\_exp = plot\_mean\_sd\_up\_exp - plot\_mean\_exp}
+#'    \deqn{mean\_sd\_exp = \frac{mean\_sd\_lo\_exp + mean\_sd\_up\_exp}{2}}
+#'    \deqn{mean\_sd\_lo\_nexp = plot\_mean\_nexp - plot\_mean\_sd\_lo\_nexp}
+#'    \deqn{mean\_sd\_up\_nexp = plot\_mean\_sd\_up\_nexp - plot\_mean\_nexp}
+#'    \deqn{mean\_sd\_nexp = \frac{mean\_sd\_lo\_nexp + mean\_sd\_up\_nexp}{2}}
 #'
-#' \deqn{mean\_sd\_lo\_nexp = plot\_mean\_nexp - plot\_mean\_sd\_lo\_nexp}
-#' \deqn{mean\_sd\_up\_nexp = plot\_mean\_sd\_up\_nexp - plot\_mean\_nexp}
-#' \deqn{mean\_sd\_nexp = \frac{mean\_sd\_lo\_nexp + mean\_sd\_up\_nexp}{2}}
-#'
-#' Note that if only one bound (e.g., the upper bound) is provided, it will be the
-#' only information used to estimate the standard deviation value.
-#'
-#' Then, calculations of the \code{\link{es_from_means_sd}} are used.
+#'    If only one bound (e.g., the upper bound) is provided, it is the only information
+#'    used to estimate the standard deviation. Calculations of
+#'    \code{\link{es_from_means_sd}} are then applied.
 #'
 #' 2. If the bounds of the standard errors are provided, the following formulas are used:
-#' \deqn{mean\_se\_lo\_exp = plot\_mean\_exp - plot\_mean\_se\_lo\_exp}
-#' \deqn{mean\_se\_up\_exp = plot\_mean\_se\_up\_exp - plot\_mean\_exp}
-#' \deqn{mean\_se\_exp = \frac{mean\_se\_lo\_exp + mean\_se\_up\_exp}{2}}
+#'    \deqn{mean\_se\_lo\_exp = plot\_mean\_exp - plot\_mean\_se\_lo\_exp}
+#'    \deqn{mean\_se\_up\_exp = plot\_mean\_se\_up\_exp - plot\_mean\_exp}
+#'    \deqn{mean\_se\_exp = \frac{mean\_se\_lo\_exp + mean\_se\_up\_exp}{2}}
+#'    \deqn{mean\_se\_lo\_nexp = plot\_mean\_nexp - plot\_mean\_se\_lo\_nexp}
+#'    \deqn{mean\_se\_up\_nexp = plot\_mean\_se\_up\_nexp - plot\_mean\_nexp}
+#'    \deqn{mean\_se\_nexp = \frac{mean\_se\_lo\_nexp + mean\_se\_up\_nexp}{2}}
 #'
-#' \deqn{mean\_se\_lo\_nexp = plot\_mean\_nexp - plot\_mean\_se\_lo\_nexp}
-#' \deqn{mean\_se\_up\_nexp = plot\_mean\_se\_up\_nexp - plot\_mean\_nexp}
-#' \deqn{mean\_se\_nexp = \frac{mean\_se\_lo\_nexp + mean\_se\_up\_nexp}{2}}
-#'
-#' Note that if only one bound (e.g., the upper bound) is provided, it will be the
-#' only information used to estimate the standard error value.
-#'
-#' Then, calculations of the \code{\link{es_from_means_se}()} are used.
+#'    If only one bound is provided, it is the only information used to estimate the
+#'    standard error. Calculations of \code{\link{es_from_means_se}()} are then applied.
 #'
 #' 3. If the bounds of the 95% confidence intervals are provided, the calculations
-#' of the \code{\link{es_from_means_ci}} are used.
+#'    of the \code{\link{es_from_means_ci}} are used.
 #'
 #' @export es_from_plot_means
 #'
@@ -193,18 +188,23 @@ es_from_plot_means <- function(n_exp, n_nexp,
 #' @param plot_ancova_mean_ci_lo_nexp lower bound of an error bar depicting the 95% CI of the ancova_mean of the non-experimental/non-exposed group (extracted from a plot).
 #' @param plot_ancova_mean_ci_up_exp upper bound of an error bar depicting the 95% CI of the ancova_mean of the experimental/exposed group (extracted from a plot).
 #' @param plot_ancova_mean_ci_up_nexp upper bound of an error bar depicting the 95% CI of the ancova_mean of the non-experimental/non-exposed group (extracted from a plot).
-#' @param cov_outcome_r correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   total-sample correlation, nor the square root of the whole model R-squared (which also
+#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_plot_ancova_means a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #'
 #' @details
 #' This function uses the bounds of an error bar of a mean obtained from a plot into a standard deviation.
 #' Then, a mean difference (MD), Cohen's d (D), and Hedges' g (G) are estimated.
-#' Odds ratio (OR), risk ratio (RR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
+#' Odds ratio (OR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
 #'
 #' **To convert the bound of an error bar into a standard deviation,**
 #' this function always prioritizes information from the \code{plot_ancova_mean_sd_*} arguments,
@@ -212,29 +212,27 @@ es_from_plot_means <- function(n_exp, n_nexp,
 #' then those from the \code{plot_ancova_mean_ci_*} arguments.
 #'
 #' 1. If the bounds of the standard deviations are provided, the following formulas are used:
-#' \deqn{ancova\_mean\_sd\_lo\_exp = plot\_ancova\_mean\_exp - plot\_ancova\_mean\_sd\_lo\_exp}
-#' \deqn{ancova\_mean\_sd\_up\_exp = plot\_ancova\_mean\_sd\_up\_exp - plot\_ancova\_mean\_exp}
-#' \deqn{ancova\_mean\_sd\_exp = \frac{ancova\_mean\_sd\_lo\_exp + ancova\_mean\_sd\_up\_exp}{2}}
+#'    \deqn{ancova\_mean\_sd\_lo\_exp = plot\_ancova\_mean\_exp - plot\_ancova\_mean\_sd\_lo\_exp}
+#'    \deqn{ancova\_mean\_sd\_up\_exp = plot\_ancova\_mean\_sd\_up\_exp - plot\_ancova\_mean\_exp}
+#'    \deqn{ancova\_mean\_sd\_exp = \frac{ancova\_mean\_sd\_lo\_exp + ancova\_mean\_sd\_up\_exp}{2}}
+#'    \deqn{ancova\_mean\_sd\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_sd\_lo\_nexp}
+#'    \deqn{ancova\_mean\_sd\_up\_nexp = plot\_ancova\_mean\_sd\_up\_nexp - plot\_ancova\_mean\_nexp}
+#'    \deqn{ancova\_mean\_sd\_nexp = \frac{ancova\_mean\_sd\_lo\_nexp + ancova\_mean\_sd\_up\_nexp}{2}}
 #'
-#' \deqn{mean\_sd\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_sd\_lo\_nexp}
-#' \deqn{mean\_sd\_up\_nexp = plot\_ancova\_mean\_sd\_up\_nexp - plot\_ancova\_mean\_nexp}
-#' \deqn{mean\_sd\_nexp = \frac{mean\_sd\_lo\_nexp + mean\_sd\_up\_nexp}{2}}
-#'
-#' Then, calculations of the \code{\link{es_from_ancova_means_sd}} are used.
+#'    Calculations of the \code{\link{es_from_ancova_means_sd}} are then applied.
 #'
 #' 2. If the bounds of the standard errors are provided, the following formulas are used:
-#' \deqn{ancova\_mean\_se\_lo\_exp = plot\_ancova\_mean\_exp - plot\_ancova\_mean\_se\_lo\_exp}
-#' \deqn{ancova\_mean\_se\_up\_exp = plot\_ancova\_mean\_se\_up\_exp - plot\_ancova\_mean\_exp}
-#' \deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_se\_lo\_exp + ancova\_mean\_se\_up\_exp}{2}}
+#'    \deqn{ancova\_mean\_se\_lo\_exp = plot\_ancova\_mean\_exp - plot\_ancova\_mean\_se\_lo\_exp}
+#'    \deqn{ancova\_mean\_se\_up\_exp = plot\_ancova\_mean\_se\_up\_exp - plot\_ancova\_mean\_exp}
+#'    \deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_se\_lo\_exp + ancova\_mean\_se\_up\_exp}{2}}
+#'    \deqn{ancova\_mean\_se\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_se\_lo\_nexp}
+#'    \deqn{ancova\_mean\_se\_up\_nexp = plot\_ancova\_mean\_se\_up\_nexp - plot\_ancova\_mean\_nexp}
+#'    \deqn{ancova\_mean\_se\_nexp = \frac{ancova\_mean\_se\_lo\_nexp + ancova\_mean\_se\_up\_nexp}{2}}
 #'
-#' \deqn{mean\_se\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_se\_lo\_nexp}
-#' \deqn{mean\_se\_up\_nexp = plot\_ancova\_mean\_se\_up\_nexp - plot\_ancova\_mean\_nexp}
-#' \deqn{mean\_se\_nexp = \frac{mean\_se\_lo\_nexp + mean\_se\_up\_nexp}{2}}
-#'
-#' Then, calculations of the \code{\link{es_from_ancova_means_se}} are used.
+#'    Calculations of the \code{\link{es_from_ancova_means_se}} are then applied.
 #'
 #' 3. If the bounds of the 95% confidence intervals are provided, the calculations
-#' of the \code{\link{es_from_ancova_means_ci}()} are used.
+#'    of the \code{\link{es_from_ancova_means_ci}()} are used.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.

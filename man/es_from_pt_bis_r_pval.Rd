@@ -22,7 +22,7 @@ es_from_pt_bis_r_pval(
 
 \item{smd_to_cor}{formula used to convert the \code{pt_bis_r_pval} value into a coefficient correlation.}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_pt_bis_r_pval}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -46,7 +46,7 @@ Convert a p-value of a point-biserial correlation coefficient into several effec
 This function converts the p-value of a point biserial correlation into a Student's t-value.
 
 \strong{The formula used to obtain this Student's t-value is}:
-\deqn{t = pt(\frac{pt\_bis\_r\_pval}{2}, df = n\_exp + n\_nexp - 2)}
+\deqn{t = qt(\frac{pt\_bis\_r\_pval}{2}, df = n\_exp + n\_nexp - 2, lower.tail = FALSE)}
 
 Calculations of the \code{\link{es_from_student_t}} function are then applied.
 

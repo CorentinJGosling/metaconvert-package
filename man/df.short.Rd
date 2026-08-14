@@ -14,6 +14,6 @@ Haza B, Gosling CJ, Conty L & Pinabiaux C (2024). Social Functioning in Children
 df.short
 }
 \description{
-This dataset is a shoter version of the \code{\link{df.haza}} dataset.
+This dataset is a shorter version of the \code{\link{df.haza}} dataset.
 }
 \keyword{datasets}

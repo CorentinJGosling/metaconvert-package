@@ -115,8 +115,25 @@
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, length(d))
   if (missing(n_sample)) n_sample <- rep(NA_real_, length(d))
   if (missing(adjusted)) adjusted <- rep(FALSE, length(d))
+  # An omitted n_cov_ancova means "no covariates beyond the grouping", i.e. q = 0: it
+  # only costs degrees of freedom, so the crude default is a safe reading and keeps the
+  # returned row internally coherent.
   if (missing(n_cov_ancova)) n_cov_ancova <- rep(0, length(d))
-  if (missing(cov_outcome_r)) cov_outcome_r <- rep(0.5, length(d))
+  # cov_outcome_r is different: it scales the Cooper eq. 12.26 (1 - R^2) variance shrink,
+  # and there is no safe default value for it. It is read ONLY on the adjusted branch, so
+  # the 0.5 placeholder below is never used on the crude branch and stays. On the adjusted
+  # branch it must NOT be silently invented: R's missing() propagates through an unforced
+  # promise, so es_from_cohen_d_adj() -- the one adjusted entry point where cov_outcome_r
+  # never enters the POINT estimate, hence is never forced -- used to fall through to
+  # R = 0.5 and return a confidently wrong SE (weight inflated ~29%), while its 13 sibling
+  # routes hard-error on the same omission. NA propagates to d_se and from there to every
+  # variance-bearing output, blanking the row coherently; this matches what convert_df()
+  # already returns for an absent/NA column.
+  .is_adj <- rep_len(adjusted, length(d)) %in% TRUE
+  if (missing(cov_outcome_r)) {
+    cov_outcome_r <- rep(0.5, length(d))
+    cov_outcome_r[.is_adj] <- NA_real_
+  }
   if (missing(reverse)) reverse <- rep(FALSE, length(d))
   reverse[is.na(reverse)] <- FALSE
   if (length(reverse) == 1) reverse = c(rep(reverse, length(d)))

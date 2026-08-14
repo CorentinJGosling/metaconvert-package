@@ -37,7 +37,7 @@ This function estimates VR and CVR
 \tab \cr
 \code{converted effect size measure} \tab No conversion performed\cr
 \tab \cr
-\code{required input data} \tab See 'Section 23. User's input (crude)'\cr
+\code{required input data} \tab See 'Section 6. Variability indices'\cr
 \tab https://metaconvert.org/input.html\cr
 \tab \cr
 }

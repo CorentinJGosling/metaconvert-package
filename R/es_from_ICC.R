@@ -40,10 +40,13 @@
 #' be exchangeable (negligible rater variance), the approximation is accurate.
 #'
 #' **Scale note.** Under the default \code{icc_to_es = "bonett"} the returned
-#' \code{icc_se} column is on the \eqn{\ln(1 - ICC)} scale. If you feed it to
-#' \code{\link{compute_sem}} (whose \code{icc_se} argument expects the RAW-scale
-#' SE), convert it first: \code{raw_se = icc_se * (1 - icc)} - or call
-#' \code{es_from_icc} with \code{icc_to_es = "raw"}.
+#' \code{icc} column and its \code{icc_se} are both on the \eqn{\ln(1 - ICC)} scale:
+#' the example below returns \code{icc = -1.609} for an input ICC of 0.80. To recover
+#' the raw-scale SE - which is what the \code{icc_se} argument of
+#' \code{\link{compute_sem}} expects - multiply \code{icc_se} by \eqn{1 - ICC} using
+#' the ICC value you supplied, not the returned \code{icc} column. Calling
+#' \code{es_from_icc} with \code{icc_to_es = "raw"} returns both quantities on the
+#' raw scale directly.
 #'
 #' @export es_from_icc
 #'
@@ -60,7 +63,7 @@
 #' This function estimates the standard error of the ICC.
 #'
 #' \tabular{ll}{
-#'  \code{natural effect size measure} \tab icc\cr
+#'  \code{natural effect size measure} \tab icc, returned as ln(1 - icc) under the default \code{icc_to_es = "bonett"}\cr
 #'  \tab \cr
 #'  \code{converted effect size measure} \tab N/A\cr
 #'  \tab \cr

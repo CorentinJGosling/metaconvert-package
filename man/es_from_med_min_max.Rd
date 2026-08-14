@@ -2,7 +2,7 @@
 % Please edit documentation in R/es_from_ANOVA_med_range_quart.R
 \name{es_from_med_min_max}
 \alias{es_from_med_min_max}
-\title{Convert median, quartiles, and range of two independent groups into several effect size measures}
+\title{Convert median and range of two independent groups into several effect size measures}
 \usage{
 es_from_med_min_max(
   min_exp,
@@ -37,7 +37,7 @@ es_from_med_min_max(
 
 \item{smd_to_cor}{formula used to convert the generated \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_med}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
 }
@@ -53,21 +53,9 @@ This function estimates and converts between several effect size measures.
 \tab https://metaconvert.org/input.html\cr
 \tab \cr
 }
-
-This function estimates and converts between several effect size measures.
-
-\tabular{ll}{
-\code{natural effect size measure} \tab \cr
-\tab \cr
-\code{converted effect size measure} \tab MD + D + G\cr
-\tab OR + R + Z \cr
-\code{required input data} \tab See 'Section 12. Median, range and/or interquartile range'\cr
-\tab https://metaconvert.org/input.html\cr
-\tab \cr
-}
 }
 \description{
-Convert median, quartiles, and range of two independent groups into several effect size measures
+Convert median and range of two independent groups into several effect size measures
 }
 \details{
 This function first converts a Cohen's d (D), Hedges' g (G)
@@ -80,7 +68,8 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \deqn{mean\_sd\_exp = \frac{max\_exp - min\_exp}{2*qnorm((n\_exp-0.375) / (n\_exp+0.25))}}
 \deqn{mean\_sd\_nexp = \frac{max\_nexp - min\_nexp}{2*qnorm((n\_nexp-0.375) / (n\_nexp+0.25))}}
 
-Note that if the group sample size is inferior to 50, a correction is applied to estimate the standard deviation.
+The denominator shown above is a large-sample approximation. For group sample sizes
+no greater than 50, the tabulated constant of Wan et al. (2014) is used in its place.
 
 \strong{From these means+SD, the function computes MD, D and G} using formulas
 described in \code{\link{es_from_means_sd}()}.
@@ -88,7 +77,7 @@ described in \code{\link{es_from_means_sd}()}.
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d}()} are applied.
 
-\strong{Importantly,}, authors of the Cochrane Handbook stated
+The authors of the Cochrane Handbook stated
 "As a general rule, we recommend that ranges should not be used
 to estimate SDs." (see section 6.5.2.6).
 It is thus a good practice to explore the consequences of

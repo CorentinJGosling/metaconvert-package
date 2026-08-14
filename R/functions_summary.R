@@ -119,7 +119,7 @@
 #'   \item \code{log_or_max} (default 5): same, for |logOR| and |logRR|
 #'   \item \code{n_min} (default 10): flag sample sizes below this value
 #'   \item \code{iqr_mult} (default 3): IQR multiplier for the cross-row outlier detection
-#'   \item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum SD of the ES across estimation methods (SMD, correlation, logOR/logRR)
+#'   \item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum absolute deviation of the per-method estimates from their median, for the SMD family (d, g, dw, gw, md, mdw), for r, and for the log-ratio family (logOR, logRR, logIRR, logHR) respectively. Other measures use the SMD value
 #'   \item \code{diff_max_smd} / \code{diff_max_r} / \code{diff_max_logor} (defaults 1.0 / 0.3 / 2.0): maximum min-max ES difference across estimation methods
 #'   \item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
 #'   \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
@@ -128,7 +128,7 @@
 #' }
 #' @param guidance a logical value indicating whether missing data guidance should be generated for rows where the effect size is NA. Default is TRUE. When enabled, a column \code{es_guidance} (or \code{es_guidance_crude}/\code{es_guidance_adjusted}) is appended, listing the closest estimation methods and which specific columns are missing.
 #' @param include_raw a logical value indicating whether the raw input columns should be appended after the effect size columns in the returned dataframe. Default is TRUE.
-#' @param formulas a logical value indicating whether the sensitivity of each effect size to the choice of conversion formula (\code{or_to_rr}, \code{cor_to_smd}, \code{pre_post_to_smd}, ...) should be reported. Default is FALSE. When TRUE, a concise \code{[FORMULA]} message is appended to the flags column for every comparison whose estimate depends on such a choice, and the complete table of alternative estimates (as returned by \code{\link{es_formulas}}) is attached as the \code{"formulas"} attribute. This reports methodological uncertainty rather than a data quality problem: unlike the \code{[DISCORDANT]} flags, a discrepancy between conversion formulae reflects differing statistical assumptions rather than an extraction error. Each alternative formula requires one additional evaluation of \code{\link{convert_df}}.
+#' @param formulas a logical value indicating whether the sensitivity of each effect size to the choice of conversion formula (\code{or_to_rr}, \code{cor_to_smd}, \code{pre_post_to_smd}, ...) should be reported. Default is FALSE. When TRUE, a concise \code{[FORMULA]} message is appended to the flags column for every comparison whose estimate depends on such a choice, and the complete table of alternative estimates (as returned by \code{\link{es_formulas}}) is attached as the \code{"formulas"} attribute. \code{\link{es_formulas}} re-estimates one effect size per comparison, so the message is appended only where the reported \code{info_used} is the type of input data that estimate was derived from: an estimate obtained from other input data is left unannotated, even when it belongs to the same comparison. This reports methodological uncertainty rather than a data quality problem: unlike the \code{[DISCORDANT]} flags, a discrepancy between conversion formulae reflects differing statistical assumptions rather than an extraction error. Each alternative formula requires one additional evaluation of \code{\link{convert_df}}.
 #' @param ... other arguments that can be passed to the function
 #'
 #' @details
@@ -301,7 +301,7 @@
 #'
 #' @md
 #' @examples
-#' ### generate a summary of the results of an umbrella object
+#' ### generate a summary of the results of a metaConvert object
 #' summary(
 #'   convert_df(df.haza, measure = "g"),
 #'   digits = 5)
@@ -505,23 +505,30 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     if (is.null(pool_sd_used)) pool_sd_used <- FALSE
     smd_denom_used <- attr(object, "smd_denom_used")
 
+    # info_used values ranked by the hierarchy actually in force -- the same
+    # ordering_crude / ordering_adj this function already uses to select the reported
+    # effect size. The cross-row checks need it to pick, as a comparison's
+    # representative, the route that would actually be selected (see .flag_es_quality).
+    # NB the element order of the metaConvert list is fixed and does NOT track the
+    # hierarchy, so it cannot be used for this.
+
     if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
       res <- .flag_es_quality(res, measure, exp, "_crude", raw_data, opts, input_val,
                               alpha_to_es = alpha_method, icc_to_es = icc_method,
                               prop_to_es = prop_method, pre_post_to_smd = pp_method,
                               pool_sd = pool_sd_used, r_defaulted = r_def,
-                              smd_denom = smd_denom_used)
+                              smd_denom = smd_denom_used, es_order = ordering_crude)
       res <- .flag_es_quality(res, measure, exp, "_adjusted", raw_data, opts, input_val,
                               alpha_to_es = alpha_method, icc_to_es = icc_method,
                               prop_to_es = prop_method, pre_post_to_smd = pp_method,
                               pool_sd = pool_sd_used, r_defaulted = r_def,
-                              smd_denom = smd_denom_used)
+                              smd_denom = smd_denom_used, es_order = ordering_adj)
     } else {
       res <- .flag_es_quality(res, measure, exp, "", raw_data, opts, input_val,
                               alpha_to_es = alpha_method, icc_to_es = icc_method,
                               prop_to_es = prop_method, pre_post_to_smd = pp_method,
                               pool_sd = pool_sd_used, r_defaulted = r_def,
-                              smd_denom = smd_denom_used)
+                              smd_denom = smd_denom_used, es_order = ordering_tot)
     }
   }
 
@@ -537,12 +544,23 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     if (!inherits(fx, "try-error") && nrow(fx) > 0) {
       tokens <- .formula_tokens(fx, digits)
       if (!is.null(tokens)) {
+        # es_formulas() re-runs convert_df() with main_es = TRUE and
+        # split_adjusted = FALSE, so a token describes one estimate only: the
+        # one derived from the type of input data named in fx$info_used. Attach
+        # it where that input data is the one reported, or the disclosure lands
+        # on estimates it does not describe -- the adjusted column of a split
+        # run (whose estimate can be invariant to the parameter quoted, or
+        # missing altogether), or a route the parameter cannot reach.
+        described <- unique(paste(fx$row_id, as.character(fx$info_used), sep = "\r"))
         for (sfx in if (split_adjusted == TRUE & format == "wide" & main_es == TRUE)
                       c("_crude", "_adjusted") else "") {
           fcol <- paste0("flags", sfx)
-          if (!fcol %in% colnames(res)) next
+          icol <- paste0("info_used", sfx)
+          if (!fcol %in% colnames(res) || !icol %in% colnames(res)) next
+          info_row <- as.character(res[[icol]])
           tok <- tokens[as.character(res$row_id)]
-          add <- !is.na(tok)
+          add <- !is.na(tok) & !is.na(info_row) &
+            paste(res$row_id, info_row, sep = "\r") %in% described
           cur <- res[[fcol]]
           cur[is.na(cur)] <- ""
           res[[fcol]][add] <- ifelse(nchar(cur[add]) > 0,
@@ -649,7 +667,8 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     n_total <- nrow(res)
     es_vals <- res[[es_col]]
     n_estimated <- sum(!is.na(es_vals))
-    pct <- round(100 * n_estimated / n_total)
+    # floor, not round: 288/289 rounds up to a self-contradicting "100%"
+    pct <- floor(100 * n_estimated / n_total)
 
     info_vals <- res[[info_col]]
     info_vals <- info_vals[!is.na(info_vals) & info_vals != ""]
@@ -661,7 +680,10 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
       n_flags <- sum(!is.na(flag_vals) & nchar(flag_vals) > 0)
     }
 
-    missing_rows <- which(is.na(es_vals))
+    # the input row (row_id), not the position in res: the route view and the
+    # long format hold several rows per comparison, so a position identifies no
+    # study the reader can look up
+    missing_rows <- unique(res$row_id[is.na(es_vals)])
 
     list(n_total = n_total, n_estimated = n_estimated, pct = pct,
          method_freq = method_freq, n_flags = n_flags,
@@ -688,9 +710,9 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     }
     if (info_crude$n_flags > 0) message(info_crude$n_flags, " quality flag(s) raised")
     if (length(info_crude$missing_rows) > 0 && length(info_crude$missing_rows) <= 10) {
-      message("Missing ES in rows: ", paste(info_crude$missing_rows, collapse = ", "))
+      message("Missing ES in input rows: ", paste(info_crude$missing_rows, collapse = ", "))
     } else if (length(info_crude$missing_rows) > 10) {
-      message(length(info_crude$missing_rows), " rows with missing ES")
+      message(length(info_crude$missing_rows), " input rows with missing ES")
     }
 
     # Adjusted
@@ -708,15 +730,17 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
   } else {
     info <- .summary_for_suffix(res, "")
     if (!is.null(info)) {
-      # In the route view a comparison occupies one row per estimation route, so
-      # nrow(res) counts routes, not studies. Report both, and do not claim a
-      # method was "selected" when main_es = FALSE selects nothing.
+      # In the route view a comparison occupies one row per estimation route,
+      # and in the long format one row per populated scope, so nrow(res) counts
+      # neither in studies. Report both, and do not claim a method was
+      # "selected" when main_es = FALSE selects nothing.
       n_cmp <- length(unique(res$row_id))
       route_view <- isFALSE(main_es)
       message("\n-- metaConvert summary --")
-      if (route_view) {
+      if (route_view || n_cmp != info$n_total) {
+        unit <- if (route_view) "estimation routes" else "crude/adjusted rows"
         message("Measure: ", .measure_label(measure), "  |  ", n_cmp,
-                " comparisons  |  ", info$n_total, " estimation routes")
+                " comparisons  |  ", info$n_total, " ", unit)
       } else {
         message("Measure: ", .measure_label(measure), "  |  ", info$n_total, " studies")
       }
@@ -731,9 +755,9 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
       }
       if (info$n_flags > 0) message(info$n_flags, " quality flag(s) raised")
       if (length(info$missing_rows) > 0 && length(info$missing_rows) <= 10) {
-        message("Missing ES in rows: ", paste(info$missing_rows, collapse = ", "))
+        message("Missing ES in input rows: ", paste(info$missing_rows, collapse = ", "))
       } else if (length(info$missing_rows) > 10) {
-        message(length(info$missing_rows), " rows with missing ES")
+        message(length(info$missing_rows), " input rows with missing ES")
       }
     }
   }
@@ -753,7 +777,8 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
 #' Summary method for objects of class \dQuote{metaConvert}.
 #'
 #' @return
-#' Implicitly calls the \code{\link{summary.metaConvert}} function.
+#' \code{x}, invisibly. Called for its side effect: the summary produced by
+#' \code{\link{summary.metaConvert}} is printed.
 #'
 #' @export
 #'

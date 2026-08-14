@@ -29,7 +29,10 @@
 
 # Conversion parameters that admit more than one formula, with their complete
 # option sets. Parameters with a single tolerated value (e.g. table_2x2_to_cor)
-# are omitted, since there is no alternative to evaluate.
+# are omitted, since there is no alternative to evaluate. Options documented
+# under two names are listed once only: pre_post_to_smd = "cooper" is rewritten
+# to "morris_drm" before any computation (internal_multiple_formulas.R), so
+# listing both would return the same estimate twice.
 .formula_parameters <- function() {
   list(
     or_to_rr        = c("metaumbrella_cases", "metaumbrella_exp", "transpose",
@@ -38,7 +41,7 @@
     or_to_cor       = c("pearson", "digby", "bonett", "lipsey_cooper"),
     cor_to_smd      = c("viechtbauer", "cooper", "mathur"),
     smd_to_cor      = c("viechtbauer", "lipsey_cooper"),
-    pre_post_to_smd = c("bonett", "morris_dz", "morris_drm", "morris_dav", "cooper"),
+    pre_post_to_smd = c("bonett", "morris_dz", "morris_drm", "morris_dav"),
     smd_denom       = c("pooled", "glass", "glass_robust"),
     smd_var         = c("borenstein", "hedges_olkin"),
     prop_to_es      = c("raw", "logit", "freeman_tukey"),
@@ -82,13 +85,60 @@
   intersect(k, names(.formula_parameters()))
 }
 
+# Columns appended by .check_data() to hold the results of an estimation. The
+# "raw_data" attribute is the checked frame, so it already carries them; feeding
+# it back to convert_df() would append a second copy under the same names and
+# the estimation would abort on the duplicated names. They are therefore removed
+# before every re-evaluation. All of them are empty in "raw_data", so nothing
+# supplied by the user is lost.
+.formula_result_columns <- function() {
+  base <- c(
+    "all_info", "measure", "info_measure", "n_estimations", "es_selected", "info_used",
+    "es", "se", "es_ci_lo", "es_ci_up",
+    "min_info", "min_es_value", "min_es_se", "min_es_ci_lo", "min_es_ci_up",
+    "max_info", "max_es_value", "max_es_se", "max_es_ci_lo", "max_es_ci_up",
+    "diff_min_max", "overlap_min_max", "dispersion_es"
+  )
+  c("adjusted_input", base, paste0(base, "_crude"), paste0(base, "_adjusted"))
+}
+
+# Maps a value recorded by convert_df() onto the option set of a conversion
+# parameter. Several options are documented under two names ("control" is
+# Glass's delta, "viechtbauer" the Hedges & Olkin variance); unname() is required
+# because the lookup returns a named element, which no longer compares equal to
+# the plain option name.
+.resolve_formula_alias <- function(value, opts) {
+  alias <- c(control = "glass", control_robust = "glass_robust",
+             viechtbauer = "hedges_olkin", cooper = "morris_drm")
+  value <- as.character(value)
+  hit <- !is.na(value) & !value %in% opts & value %in% names(alias)
+  value[hit] <- unname(alias[value[hit]])
+  value[!is.na(value) & !value %in% opts] <- NA_character_
+  value
+}
+
+# The formula applied by the original convert_df() call, one value per
+# comparison. convert_df() reads a per-row column named after the parameter in
+# preference to its scalar argument (main_convert_df.R), so the applied formula
+# is a property of the row, not of the call.
+.resolve_formula <- function(parameter, cargs, raw_data, opts) {
+  scalar <- .resolve_formula_alias(as.character(cargs[[parameter]])[1], opts)
+  out <- rep(scalar, nrow(raw_data))
+  if (parameter %in% colnames(raw_data)) {
+    col <- .resolve_formula_alias(raw_data[[parameter]], opts)
+    out[!is.na(col)] <- col[!is.na(col)]
+  }
+  out
+}
+
 # Re-evaluates convert_df() with a single conversion parameter modified. A
 # per-row column of the same name takes precedence over the scalar argument
 # within convert_df(), so that column must be modified as well; otherwise the
 # user-specified value would be disregarded.
 .run_with_parameter <- function(raw_data, cargs, parameter, value, measure, exp,
                                 es_selected, hierarchy) {
-  dat <- raw_data
+  dat <- raw_data[, setdiff(colnames(raw_data), .formula_result_columns()),
+                  drop = FALSE]
   if (parameter %in% colnames(dat)) dat[[parameter]] <- value
   args <- cargs[intersect(names(cargs), names(formals(convert_df)))]
   args[[parameter]] <- value
@@ -122,7 +172,7 @@
 #' \code{es_formulas()} evaluates the uncertainty of the
 #' \emph{analytical conversion} applied to those statistics. For example, it
 #' assesses the five methodological approaches available for converting an odds
-#' ratio into a risk ratio (\code{or_to_rr}), or the five pre-post
+#' ratio into a risk ratio (\code{or_to_rr}), or the four pre-post
 #' standardisation methods (\code{pre_post_to_smd}). Because alternative formulas
 #' encode different statistical assumptions rather than algebraic equivalencies,
 #' discrepancies among them constitute methodological uncertainty rather than
@@ -148,22 +198,29 @@
 #'  \code{or_to_cor} \tab pearson, digby, bonett, lipsey_cooper\cr
 #'  \code{cor_to_smd} \tab viechtbauer, cooper, mathur\cr
 #'  \code{smd_to_cor} \tab viechtbauer, lipsey_cooper\cr
-#'  \code{pre_post_to_smd} \tab bonett, cooper, morris_dz, morris_drm, morris_dav\cr
-#'  \code{smd_denom} \tab pooled, glass, glass_robust\cr
-#'  \code{smd_var} \tab borenstein, hedges_olkin\cr
+#'  \code{pre_post_to_smd} \tab bonett, morris_dz, morris_drm (alias cooper), morris_dav\cr
+#'  \code{smd_denom} \tab pooled, glass (alias control), glass_robust (alias control_robust)\cr
+#'  \code{smd_var} \tab borenstein, hedges_olkin (alias viechtbauer)\cr
 #'  \code{prop_to_es} \tab raw, logit, freeman_tukey\cr
 #'  \code{alpha_to_es} \tab bonett, raw\cr
 #'  \code{icc_to_es} \tab bonett, raw\cr
 #' }
+#' Options documented under two names are evaluated once, under the name listed
+#' above.
 #'
 #' Each alternative estimate is obtained by re-evaluating \code{\link{convert_df}}
-#' with a single conversion parameter modified.
+#' with a single conversion parameter modified. When the original call supplied a
+#' conversion parameter as a column of the dataset rather than as a single value,
+#' the \code{deviation} of each comparison is measured against the formula that
+#' comparison itself received.
 #'
 #' For each comparison, \code{\link{convert_df}} returns one effect size, derived
 #' from one type of input data -- the type selected by the hierarchy and reported
 #' in the \code{info_used} column. A conversion parameter can therefore change the
-#' result only if that particular type of input data is converted through it, and
-#' parameters leaving every estimate unchanged are not reported. For example,
+#' result only if that particular type of input data is converted through it. A
+#' comparison is reported only if the parameter reached it: at least one formula
+#' must have produced an estimate, and the formulas must differ in the effect
+#' size or in its standard error. For example,
 #' \code{pre_post_to_smd} governs the conversion of pre-post data: if a comparison
 #' also reports endpoint means and standard deviations, and if the hierarchy selects
 #' \code{means_sd}, then no pre-post conversion is performed and
@@ -171,13 +228,29 @@
 #' request the pre-post method explicitly through the \code{es_selected} and
 #' \code{hierarchy} arguments of \code{\link{convert_df}}.
 #'
+#' Some options leave the effect size untouched and alter only its standard error,
+#' and hence the weight the comparison receives in a meta-analysis:
+#' \code{smd_var} selects the sampling-variance formula, and \code{glass} and
+#' \code{glass_robust} share a standardizer but not a variance. These comparisons
+#' are reported with a \code{deviation} of zero, and the range of standard errors
+#' is given by the \code{se_min} and \code{se_max} columns of the
+#' \code{"summary"} attribute.
+#'
 #' Parameters whose options alter the analysis scale rather than the formula
 #' applied on a fixed scale (\code{alpha_to_es}, \code{icc_to_es},
-#' \code{prop_to_es}) are reported with \code{deviation} and \code{spread} set to
-#' \code{NA}. For these parameters, \code{"bonett"} returns a transformed
-#' quantity, such as \eqn{\ln(1 - \alpha)}, whereas \code{"raw"} returns the
-#' coefficient itself, so direct mathematical comparison between the two is
-#' invalid.
+#' \code{prop_to_es}) are reported with \code{deviation} set to \code{NA}, as are
+#' the \code{es_min}, \code{es_max} and \code{spread} columns of the
+#' \code{"summary"} attribute. For these parameters, \code{"bonett"} returns a
+#' transformed quantity, such as \eqn{\ln(1 - \alpha)}, whereas \code{"raw"}
+#' returns the coefficient itself, so direct mathematical comparison between the
+#' two is invalid.
+#'
+#' For the ratio measures reported on their natural scale (\code{or}, \code{rr},
+#' \code{irr}, \code{hr}), \code{deviation} and the \code{spread} column of the
+#' \code{"summary"} attribute are differences of ratios, not of their logarithms.
+#' They are comparable across the formulas of one comparison, but not across
+#' comparisons of different magnitude: a given ratio of two risk ratios yields a
+#' larger difference the larger the risk ratios are.
 #'
 #' \strong{Warning regarding meta-analytic pooling.} The rows returned by this
 #' function must never be pooled in a meta-analysis. They are structurally
@@ -192,14 +265,24 @@
 #'  \code{study_id} \tab study identifier, when available.\cr
 #'  \code{parameter} \tab the conversion parameter being varied.\cr
 #'  \code{formula} \tab the formula applied on this row.\cr
-#'  \code{is_active} \tab a logical value indicating whether this formula was applied in the original \code{convert_df()} call.\cr
+#'  \code{is_active} \tab a logical value indicating whether this formula was the one applied to this comparison in the original \code{convert_df()} call.\cr
 #'  \code{info_used} \tab type of source statistics from which the estimate was derived.\cr
 #'  \code{es}, \code{se}, \code{es_ci_lo}, \code{es_ci_up} \tab the effect size, its standard error and its 95% confidence interval under this formula.\cr
-#'  \code{deviation} \tab the difference between \code{es} and the effect size obtained under the formula applied in the original call.\cr
+#'  \code{deviation} \tab the difference between \code{es} and the effect size obtained under the formula applied to this comparison in the original call.\cr
 #'  \code{scale_change} \tab a logical value indicating whether the options of this parameter lie on different analysis scales.\cr
 #' }
-#' The range of estimates spanned by each (comparison, parameter) combination is
-#' attached as the \code{"summary"} attribute.
+#' One row per (comparison, parameter) combination is attached as the
+#' \code{"summary"} attribute, ordered by decreasing \code{spread}:
+#' \tabular{ll}{
+#'  \code{row_id}, \code{study_id}, \code{parameter} \tab as above.\cr
+#'  \code{n_formulas} \tab number of formulas evaluated.\cr
+#'  \code{n_estimated} \tab number of these formulas that produced an estimate. The remaining ones require input data the comparison does not report.\cr
+#'  \code{active} \tab the formula applied to this comparison in the original call.\cr
+#'  \code{active_estimated} \tab a logical value indicating whether that formula produced an estimate.\cr
+#'  \code{es_min}, \code{es_max}, \code{spread} \tab the smallest and largest effect size, and their difference.\cr
+#'  \code{se_min}, \code{se_max}, \code{se_spread} \tab the smallest and largest standard error, and their difference.\cr
+#'  \code{scale_change} \tab as above.\cr
+#' }
 #'
 #' @seealso
 #' \code{\link{convert_df}} for the estimation of effect sizes\cr
@@ -212,8 +295,10 @@
 #' @examples
 #' \donttest{
 #' ### sensitivity of the risk ratio to the odds ratio conversion formula
+#' ### the case and control margins are required by two of the five formulas
 #' dat <- data.frame(or = 2.5, or_ci_lo = 1.6, or_ci_up = 3.9,
-#'                   n_exp = 100, n_nexp = 100, baseline_risk = 0.2)
+#'                   n_exp = 100, n_nexp = 100,
+#'                   n_cases = 60, n_controls = 140, baseline_risk = 0.2)
 #' es_formulas(convert_df(dat, measure = "rr", verbose = FALSE))
 #' }
 es_formulas <- function(object, parameters = NULL, digits = 3, verbose = TRUE) {
@@ -257,65 +342,89 @@ es_formulas <- function(object, parameters = NULL, digits = 3, verbose = TRUE) {
   } else rep(NA_character_, nrow(raw_data))
 
   blocks <- list()
+  failed <- character(0)
   for (pm in parameters) {
     opts <- all_parameters[[pm]]
-    active <- as.character(cargs[[pm]])[1]
-    # map the recorded value onto the option set (aliases: control -> glass)
-    if (!active %in% opts) {
-      alias <- c(control = "glass", control_robust = "glass_robust",
-                 viechtbauer = "hedges_olkin")
-      if (!is.na(alias[active]) && alias[active] %in% opts) active <- alias[active]
-    }
+    # The formula applied by the original call, resolved separately for every
+    # comparison: convert_df() reads a per-row column of the same name in
+    # preference to the scalar argument, so a dataset may apply a different
+    # formula to each row.
+    active <- .resolve_formula(pm, cargs, raw_data, opts)
     runs <- list()
     for (op in opts) {
       r <- .run_with_parameter(raw_data, cargs, pm, op, measure, exp,
                                es_selected, hierarchy)
       if (!is.null(r)) runs[[op]] <- r
     }
-    if (length(runs) < 2) next
-    ref <- if (active %in% names(runs)) runs[[active]] else runs[[1]]
-    ref_es <- suppressWarnings(as.numeric(as.character(ref$es)))
+    if (length(runs) < 2) {
+      failed <- c(failed, pm)
+      next
+    }
+    # per comparison, the estimate obtained under the formula that comparison
+    # actually received: the reference against which `deviation` is measured
+    ref_es <- rep(NA_real_, nrow(raw_data))
+    for (op in names(runs)) {
+      r <- runs[[op]]
+      p <- match(r$row_id, raw_data$row_id)
+      sel <- !is.na(p) & !is.na(active[p]) & active[p] == op
+      if (!any(sel)) next
+      ref_es[p[sel]] <- suppressWarnings(as.numeric(as.character(r$es)))[sel]
+    }
 
     param_rows <- do.call(rbind, lapply(names(runs), function(op) {
       r <- runs[[op]]
+      p <- match(r$row_id, raw_data$row_id)
       es_v <- suppressWarnings(as.numeric(as.character(r$es)))
       data.frame(
         row_id   = r$row_id,
-        study_id = study_id[match(r$row_id, raw_data$row_id)],
+        study_id = study_id[p],
         parameter = pm,
         formula  = op,
-        is_active = identical(op, active),
+        is_active = !is.na(active[p]) & active[p] == op,
         info_used = as.character(r$info_used),
         es  = round(es_v, digits),
         se  = round(suppressWarnings(as.numeric(as.character(r$se))), digits),
         es_ci_lo = round(suppressWarnings(as.numeric(as.character(r$es_ci_lo))), digits),
         es_ci_up = round(suppressWarnings(as.numeric(as.character(r$es_ci_up))), digits),
         deviation = if (pm %in% .scale_changing_parameters()) NA_real_ else
-          round(es_v - ref_es[match(r$row_id, ref$row_id)], digits),
+          round(es_v - ref_es[p], digits),
         scale_change = pm %in% .scale_changing_parameters(),
         stringsAsFactors = FALSE
       )
     }))
-    # Parameters that leave every estimate unchanged are excluded: an identical
-    # column across all formulas carries no information. Scale-changing
-    # parameters are always retained, since their options are not directly
-    # comparable and a numerical test of equivalence does not apply to them.
-    # A comparison that no formula could estimate yields an all-NA block, for
-    # which range() would return c(Inf, -Inf) with a warning; that case is
-    # therefore handled separately.
-    spread <- tapply(param_rows$es, param_rows$row_id, function(v) {
+    # A comparison is reported only if the parameter reached it: at least one
+    # formula must have produced an estimate, and the formulas must not all
+    # return the same value. Identical values prove that the parameter played no
+    # part in the estimation, whatever the analysis scale of its options, so
+    # scale-changing parameters are filtered on the same rule. The comparison is
+    # also retained when only the standard error differs, as `smd_var` and
+    # `glass` versus `glass_robust` leave the point estimate untouched and alter
+    # the weight the comparison receives in a meta-analysis.
+    tol <- 10^(-digits)
+    rng <- function(v) {
       v <- v[is.finite(v)]
-      if (length(v) == 0) return(0)
+      if (length(v) == 0) return(NA_real_)
       diff(range(v))
-    })
-    spread[!is.finite(spread)] <- 0
-    if (!pm %in% .scale_changing_parameters() &&
-        all(spread <= 10^(-digits), na.rm = TRUE)) next
-    keep <- if (pm %in% .scale_changing_parameters()) names(spread) else
-      names(spread)[spread > 10^(-digits)]
-    blocks[[pm]] <- param_rows[as.character(param_rows$row_id) %in% keep, , drop = FALSE]
+    }
+    by_row     <- as.character(param_rows$row_id)
+    es_spread  <- vapply(split(param_rows$es, by_row), rng, numeric(1))
+    se_spread  <- vapply(split(param_rows$se, by_row), rng, numeric(1))
+    estimable  <- vapply(split(param_rows$es, by_row),
+                         function(v) any(is.finite(v)), logical(1))
+    changed <- (!is.na(es_spread) & es_spread > tol) |
+               (!is.na(se_spread) & se_spread > tol)
+    keep <- names(es_spread)[estimable & changed]
+    if (length(keep) == 0) next
+    blocks[[pm]] <- param_rows[by_row %in% keep, , drop = FALSE]
   }
 
+  # A parameter whose re-evaluations aborted has not been examined; reporting it
+  # as having changed nothing would be an unwarranted all-clear.
+  if (length(failed) > 0) {
+    warning("The alternative formulas of the following conversion parameter(s) ",
+            "could not be evaluated, and their influence is therefore unknown: ",
+            paste(failed, collapse = ", "), ".", call. = FALSE)
+  }
   if (length(blocks) == 0) {
     if (verbose) {
       message("No conversion formula altered any effect size in this dataset.")
@@ -379,20 +488,30 @@ es_formulas <- function(object, parameters = NULL, digits = 3, verbose = TRUE) {
   parts <- split(seq_len(nrow(out)), key)
   res <- do.call(rbind, lapply(parts, function(idx) {
     v <- out$es[idx]
-    act <- out$formula[idx][out$is_active[idx]]
+    s <- out$se[idx]
+    act <- unique(out$formula[idx][out$is_active[idx]])
     sc <- isTRUE(out$scale_change[idx][1])
     finite_v <- v[is.finite(v)]
+    finite_s <- s[is.finite(s)]
     data.frame(
       row_id  = out$row_id[idx][1],
       study_id = out$study_id[idx][1],
       parameter = out$parameter[idx][1],
       n_formulas = length(idx),
+      # formulas that produced an estimate: es_min, es_max and spread are
+      # computed over these alone, so n_formulas alone overstates the range
+      n_estimated = length(finite_v),
       active  = if (length(act) == 1) act else NA_character_,
+      active_estimated = length(act) == 1 &&
+        any(is.finite(v[out$is_active[idx]])),
       # NA for scale-changing parameters: a minimum, maximum or range computed
       # across different analysis scales would not be interpretable.
       es_min  = if (sc || !length(finite_v)) NA_real_ else round(min(finite_v), digits),
       es_max  = if (sc || !length(finite_v)) NA_real_ else round(max(finite_v), digits),
       spread  = if (sc || !length(finite_v)) NA_real_ else round(diff(range(finite_v)), digits),
+      se_min  = if (sc || !length(finite_s)) NA_real_ else round(min(finite_s), digits),
+      se_max  = if (sc || !length(finite_s)) NA_real_ else round(max(finite_s), digits),
+      se_spread = if (sc || !length(finite_s)) NA_real_ else round(diff(range(finite_s)), digits),
       scale_change = sc,
       stringsAsFactors = FALSE
     )
@@ -439,20 +558,47 @@ print.metaConvert_formulas <- function(x, ...) {
   if (is.null(smry) || nrow(smry) == 0) return(NULL)
   parts <- split(seq_len(nrow(smry)), smry$row_id)
   vapply(parts, function(idx) {
-    bits <- vapply(idx, function(i) {
-      if (isTRUE(smry$scale_change[i]) || is.na(smry$spread[i])) {
-        paste0(smry$parameter[i], " offers ", smry$n_formulas[i],
-               " options lying on different analysis scales (applied: '",
-               smry$active[i], "')")
+    # the formula this comparison actually received; when it produced no
+    # estimate the reported range comes entirely from the alternatives
+    applied <- vapply(idx, function(i) {
+      if (is.na(smry$active[i])) return("")
+      paste0(" (applied: '", smry$active[i],
+             if (isTRUE(smry$active_estimated[i])) "'" else "', which yields no estimate here",
+             ")")
+    }, character(1))
+    # how many of the formulas produced an estimate
+    over <- vapply(idx, function(i) {
+      if (smry$n_estimated[i] < smry$n_formulas[i]) {
+        paste0(smry$n_estimated[i], " of ", smry$n_formulas[i], " formulas")
       } else {
-        paste0(smry$parameter[i], " ranges from ", smry$es_min[i], " to ",
-               smry$es_max[i], " across ", smry$n_formulas[i],
-               " formulas (applied: '", smry$active[i], "')")
+        paste0(smry$n_formulas[i], " formulas")
       }
     }, character(1))
+    es_change <- rep(FALSE, length(idx))
+    bits <- vapply(seq_along(idx), function(k) {
+      i <- idx[k]
+      if (isTRUE(smry$scale_change[i]) || is.na(smry$spread[i])) {
+        paste0(smry$parameter[i], " offers ", smry$n_formulas[i],
+               " options lying on different analysis scales", applied[k])
+      } else if (smry$spread[i] > 0) {
+        es_change[k] <<- TRUE
+        paste0(smry$parameter[i], " ranges from ", smry$es_min[i], " to ",
+               smry$es_max[i], " across ", over[k], applied[k])
+      } else {
+        # the point estimate is common to every formula and only its precision
+        # differs, as with smd_var or glass versus glass_robust
+        paste0(smry$parameter[i], " leaves the estimate unchanged but its ",
+               "standard error ranges from ", smry$se_min[i], " to ",
+               smry$se_max[i], " across ", over[k], applied[k])
+      }
+    }, character(1))
+    lead <- if (any(es_change) || any(smry$scale_change[idx])) {
+      "The estimate depends on the choice of conversion formula: "
+    } else {
+      "The precision of the estimate depends on the choice of conversion formula: "
+    }
     # contains no "; ": .flag_es_quality() splits merged messages on that string
-    paste0("[FORMULA] The estimate depends on the choice of conversion formula: ",
-           paste(bits, collapse = " / "),
+    paste0("[FORMULA] ", lead, paste(bits, collapse = " / "),
            " - a methodological choice of the analyst, not a data inconsistency")
   }, character(1))
 }

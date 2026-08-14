@@ -4,7 +4,7 @@
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_d a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -18,7 +18,7 @@
 #'
 #' **To estimate the Hedges' g and its standard error**, the following formulas are used (Hedges, 1981):
 #' \deqn{df = n\_exp + n\_nexp - 2}
-#' \deqn{J = exp(\log_{gamma}(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - \log_{gamma}(\frac{df - 1}{2}))}
+#' \deqn{J = exp(lgamma(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - lgamma(\frac{df - 1}{2}))}
 #' \deqn{hedges\_g = cohen\_d * J}
 #' \deqn{hedges\_g\_se = \sqrt{cohen\_d\_se^2 * J^2}}
 #' \deqn{hedges\_g\_ci\_lo = hedges\_g - hedges\_g\_se * qt(.975, df = n\_exp+n\_nexp-2)}
@@ -72,7 +72,7 @@
 #' \deqn{R\_ci\_lo = R - qt(.975, n\_exp+n\_nexp- 2) * R\_se}
 #' \deqn{R\_ci\_up = R + qt(.975, n\_exp+n\_nexp- 2) * R\_se}
 #' \deqn{Z = atanh(R)}
-#' \deqn{Z\_var = \frac{cohen\_d\_se^2}{cohen\_d^2 + (1 / p*(1-p))}}
+#' \deqn{Z\_var = \frac{cohen\_d\_se^2}{cohen\_d^2 + 1 / (p * (1 - p))}}
 #' \deqn{Z\_se = \sqrt{Z\_var}}
 #' \deqn{Z\_ci\_lo = Z - qnorm(.975) * Z\_se}
 #' \deqn{Z\_ci\_up = Z + qnorm(.975) * Z\_se}
@@ -121,13 +121,19 @@ es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 
 #' Convert an adjusted Cohen's d value to several effect size measures
 #'
-#' @param cohen_d_adj Adjusted Cohen's d (i.e., standardized mean difference) value.
+#' @param cohen_d_adj Adjusted Cohen's d, standardized on the **marginal** (unadjusted)
+#'   within-group SD -- the scale used throughout the \code{es_from_ancova_*} family, so
+#'   that adjusted and unadjusted studies remain poolable. If your source standardized on
+#'   the residual (covariate-adjusted) SD, as software reporting an ANCOVA effect size
+#'   typically does, multiply it by \code{sqrt(1 - cov_outcome_r^2)} first, or use
+#'   \code{\link{es_from_ancova_md_sd}()} instead.
 #' @param n_cov_ancova number of covariates
-#' @param cov_outcome_r covariate-outcome correlation (in case of multiple covariates, the multiple correlation)
+#' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
+#'   covariate(s) (multiple correlation when the model includes several covariates).
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_d a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -138,8 +144,15 @@ es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' \deqn{d\_se = \sqrt{\frac{n\_exp+n\_nexp}{n\_exp*n\_nexp} * (1 - cov\_outcome\_r^2) + \frac{cohen\_d\_adj^2}{2*(n\_exp+n\_nexp)}}}
 #'
 #' **To estimate other effect size measures**, calculations of the
-#'  \code{\link{es_from_cohen_d}()} function are used (with the exception of the degree of freedom
-#'  that is estimated as \code{df = n_exp + n_nexp - 2 - n_cov_ancova}).
+#'  \code{\link{es_from_cohen_d}()} function are used, with two exceptions. The error
+#'  degrees of freedom become \code{df = n_exp + n_nexp - 2 - n_cov_ancova}, which set
+#'  Hedges' small-sample correction and every t-based confidence interval. And the
+#'  correlation variances inherit the \eqn{(1 - cov\_outcome\_r^2)} shrink above, so
+#'  \code{r_se} and \code{z_se} reflect the precision the covariate adjustment actually
+#'  bought. The correlation POINT estimates are unchanged by \code{n_cov_ancova}: the
+#'  supplied \code{cohen_d_adj} is on the marginal SD scale, so it maps to the marginal
+#'  correlation a two-group study would report, via the point-biserial identity at
+#'  \code{n_exp + n_nexp - 2}.
 #'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
@@ -185,7 +198,7 @@ es_from_cohen_d_adj <- function(cohen_d_adj, n_cov_ancova, cov_outcome_r, n_exp,
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{hedges_g} value into a coefficient correlation (see details).
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param reverse_g a logical value indicating whether the direction of the \code{hedges_g} value should be flipped.
 #'
 #' @details
@@ -199,7 +212,7 @@ es_from_cohen_d_adj <- function(cohen_d_adj, n_cov_ancova, cov_outcome_r, n_exp,
 #' \deqn{hedges\_g\_ci\_up = hedges\_g + hedges\_g\_se * qt(.975, df = n\_exp+n\_nexp-2)}
 #'
 #' **To estimate the Cohen's d value**, the following formula is used (Hedges, 1981):
-#' \deqn{J = exp(\log_{gamma}(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - \log_{gamma}(\frac{df - 1}{2}))}
+#' \deqn{J = exp(lgamma(\frac{df}{2}) - 0.5 * \log(\frac{df}{2}) - lgamma(\frac{df - 1}{2}))}
 #' \deqn{cohen\_d = \frac{hedges\_g}{J}}
 #' \deqn{cohen\_d\_se = \sqrt{(\frac{n\_exp+n\_nexp}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2*(n\_exp+n\_nexp)})}}
 #'

@@ -61,13 +61,18 @@ es_from_plot_ancova_means(
 
 \item{plot_ancova_mean_ci_up_nexp}{upper bound of an error bar depicting the 95\% CI of the ancova_mean of the non-experimental/non-exposed group (extracted from a plot).}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_plot_ancova_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -90,7 +95,7 @@ Converts the means and bounds of an error bar (generally extracted from a plot) 
 \details{
 This function uses the bounds of an error bar of a mean obtained from a plot into a standard deviation.
 Then, a mean difference (MD), Cohen's d (D), and Hedges' g (G) are estimated.
-Odds ratio (OR), risk ratio (RR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
+Odds ratio (OR) and correlation coefficients (R/Z) are converted from the Cohen's d value.
 
 \strong{To convert the bound of an error bar into a standard deviation,}
 this function always prioritizes information from the \code{plot_ancova_mean_sd_*} arguments,
@@ -101,26 +106,20 @@ then those from the \code{plot_ancova_mean_ci_*} arguments.
 \deqn{ancova\_mean\_sd\_lo\_exp = plot\_ancova\_mean\_exp - plot\_ancova\_mean\_sd\_lo\_exp}
 \deqn{ancova\_mean\_sd\_up\_exp = plot\_ancova\_mean\_sd\_up\_exp - plot\_ancova\_mean\_exp}
 \deqn{ancova\_mean\_sd\_exp = \frac{ancova\_mean\_sd\_lo\_exp + ancova\_mean\_sd\_up\_exp}{2}}
-}
+\deqn{ancova\_mean\_sd\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_sd\_lo\_nexp}
+\deqn{ancova\_mean\_sd\_up\_nexp = plot\_ancova\_mean\_sd\_up\_nexp - plot\_ancova\_mean\_nexp}
+\deqn{ancova\_mean\_sd\_nexp = \frac{ancova\_mean\_sd\_lo\_nexp + ancova\_mean\_sd\_up\_nexp}{2}}
 
-\deqn{mean\_sd\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_sd\_lo\_nexp}
-\deqn{mean\_sd\_up\_nexp = plot\_ancova\_mean\_sd\_up\_nexp - plot\_ancova\_mean\_nexp}
-\deqn{mean\_sd\_nexp = \frac{mean\_sd\_lo\_nexp + mean\_sd\_up\_nexp}{2}}
-
-Then, calculations of the \code{\link{es_from_ancova_means_sd}} are used.
-\enumerate{
+Calculations of the \code{\link{es_from_ancova_means_sd}} are then applied.
 \item If the bounds of the standard errors are provided, the following formulas are used:
 \deqn{ancova\_mean\_se\_lo\_exp = plot\_ancova\_mean\_exp - plot\_ancova\_mean\_se\_lo\_exp}
 \deqn{ancova\_mean\_se\_up\_exp = plot\_ancova\_mean\_se\_up\_exp - plot\_ancova\_mean\_exp}
 \deqn{ancova\_mean\_se\_exp = \frac{ancova\_mean\_se\_lo\_exp + ancova\_mean\_se\_up\_exp}{2}}
-}
+\deqn{ancova\_mean\_se\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_se\_lo\_nexp}
+\deqn{ancova\_mean\_se\_up\_nexp = plot\_ancova\_mean\_se\_up\_nexp - plot\_ancova\_mean\_nexp}
+\deqn{ancova\_mean\_se\_nexp = \frac{ancova\_mean\_se\_lo\_nexp + ancova\_mean\_se\_up\_nexp}{2}}
 
-\deqn{mean\_se\_lo\_nexp = plot\_ancova\_mean\_nexp - plot\_ancova\_mean\_se\_lo\_nexp}
-\deqn{mean\_se\_up\_nexp = plot\_ancova\_mean\_se\_up\_nexp - plot\_ancova\_mean\_nexp}
-\deqn{mean\_se\_nexp = \frac{mean\_se\_lo\_nexp + mean\_se\_up\_nexp}{2}}
-
-Then, calculations of the \code{\link{es_from_ancova_means_se}} are used.
-\enumerate{
+Calculations of the \code{\link{es_from_ancova_means_se}} are then applied.
 \item If the bounds of the 95\% confidence intervals are provided, the calculations
 of the \code{\link{es_from_ancova_means_ci}()} are used.
 }

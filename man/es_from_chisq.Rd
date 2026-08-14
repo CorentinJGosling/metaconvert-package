@@ -47,7 +47,7 @@ Convert a chi-square value to several effect size measures
 }
 \details{
 This function converts a chi-square value (with one degree of freedom)
-into a phi coefficient (Lipsey et al. 2001):
+into a phi coefficient (Lipsey and Wilson, 2001):
 \deqn{phi = \sqrt{\frac{chisq}{n\_sample}}}
 and then converts it to other effect size measures exactly as in
 \code{\link{es_from_phi}()} (including the correlation-based R/Z/D/G fallback with

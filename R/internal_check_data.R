@@ -115,7 +115,7 @@
     "user_ci_lo_adj",
     "user_ci_up_adj",
     "cohen_d_adj",
-    "etasq_adj",
+    "etasq_adj", "reverse_etasq_adj",
     # ANCOVA
     "reverse_ancova_means", "ancova_mean_sd_pooled", "cov_outcome_r", "n_cov_ancova",
     "ancova_mean_exp", "ancova_mean_nexp",

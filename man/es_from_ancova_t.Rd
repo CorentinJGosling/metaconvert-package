@@ -18,7 +18,12 @@ es_from_ancova_t(
 \arguments{
 \item{ancova_t}{a t-statistic from an ANCOVA (binary predictor)}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
@@ -28,7 +33,7 @@ es_from_ancova_t(
 
 \item{smd_to_cor}{formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_t}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -54,64 +59,19 @@ Hedges' g (G) from the t-value of an ANCOVA (binary predictor).
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
 \strong{To estimate a Cohen's d} the formula used is (table 12.3 in Cooper):
-\deqn{cohen\_d =  ancova\_t* \sqrt{\frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp}}\sqrt{1 - cov\_out\_cor^2}}
+\deqn{cohen\_d =  ancova\_t* \sqrt{\frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp}}\sqrt{1 - cov\_outcome\_r^2}}
 
 \strong{To estimate other effect size measures},
 Calculations of the \code{\link{es_from_cohen_d_adj}()} are applied.
 }
 \note{
-The reported ANCOVA t already embeds the exact standard error
-\eqn{s_{res}\sqrt{1/n_{exp} + 1/n_{nexp} + D}} with the covariate-imbalance
-("leverage") term \eqn{D = (\bar{x}_{exp} - \bar{x}_{nexp})^2 / SS_x}
-(Lai & Kelley, 2012, eq. 5). The back-transformation used here rebuilds the
-variance from Cooper's eq. 12.26, which sets \eqn{D = 0}: it assumes a covariate
-balanced across groups and treats \code{cov_outcome_r} as known. \eqn{D} cannot
-be recovered from summary statistics, since it needs the covariate group means
-and the within-group sum of squares.
+A test statistic says nothing about how far apart the two groups were on the
+covariate, so this route assumes they were balanced. When they were not, the effect
+size and its standard error are both attenuated.
 
-\strong{Unlike the adjusted-means routes, the point estimate is therefore NOT
-unbiased under covariate imbalance.} Because \code{d} is recovered by inverting
-that same \eqn{D = 0} expression, both \code{d} and its standard error are
-attenuated by the identical factor
-\eqn{1/\sqrt{1 + D/(1/n_{exp} + 1/n_{nexp})}}, which for equal arms is
-\eqn{1/\sqrt{1 + \delta_x^2/4}} where \eqn{\delta_x} is the standardised
-covariate imbalance: about 3\% at \eqn{\delta_x = 0.5} and 11\% at
-\eqn{\delta_x = 1}, and negligible in randomised designs.
-
-Because the two shrink together, the implied test statistic, the p-value and
-whether the confidence interval excludes zero are all unaffected. What is
-affected is the \emph{magnitude}, which is understated and does not average out
-on pooling (fixed-effect pooled bias about -11\% at \eqn{\delta_x = 1}). Prefer
-\code{\link{es_from_ancova_means_sd}()} or \code{\link{es_from_ancova_md_sd}()}
-when the study reports adjusted means, or an adjusted mean difference together
-with the residual SD.
-
-The standard error is a separate matter, and switching route does \emph{not}
-fix it: because Cooper's eq. 12.26 omits \eqn{D} on \emph{every} ANCOVA route,
-all of them understate the exact ANCOVA sampling variance by the same factor
-(about 26\% too much inverse-variance weight at \eqn{\delta_x = 1}, on the
-adjusted-means routes as much as here). Relative to one another the routes
-differ by under 1.5\% in weight, so the point-estimate attenuation above passes
-through to the pooled estimate essentially undamped.
-
-The size of the attenuation depends on how much covariate leverage the supplied
-input carries, which splits the affected routes into two tiers. Routes derived
-from the \emph{combined} mean-difference standard error --- \code{ancova_t},
-\code{ancova_f}, \code{ancova_t_pval}, \code{etasq_adj}, \code{ancova_md_se},
-\code{ancova_md_ci}, \code{ancova_md_pval} --- carry the full between-arm
-\eqn{D} and take the factor above. \code{\link{es_from_ancova_means_se}()} sees
-only each arm's own leverage \eqn{(\bar{x}_j - \bar{x})^2 / SS_x} and is
-therefore attenuated \emph{less}: at \eqn{\delta_x = 1} with n = 60/60 the
-measured ratios are 0.942 and 0.893 respectively. Both invert with
-\eqn{SD = SE\sqrt{n}} (i.e. leverage = 0), so each is deflated by exactly the
-leverage its input contained; for equal arms that gives
-\eqn{1/\sqrt{1 + \delta_x^2/8}}, exactly half the combined-SE routes'
-\eqn{D} contribution. At exact covariate balance every ANCOVA route agrees to
-~4e-16.
-
-Note this is the standard aggregate-data conversion, shared with other
-implementations of Cooper's table 12.3; only the unbiasedness of the point
-estimate is at issue.
+\code{\link{es_from_ancova_means_sd}()} and \code{\link{es_from_ancova_md_sd}()} are
+unaffected -- prefer them when adjusted means, or an adjusted mean difference with
+the residual standard deviation, are reported. See Lai and Kelley (2012).
 }
 \examples{
 es_from_ancova_t(ancova_t = 2, cov_outcome_r = 0.2, n_cov_ancova = 3, n_exp = 20, n_nexp = 20)

@@ -6,8 +6,8 @@
 \usage{
 convert_df(
   x,
-  measure = c("d", "g", "md", "logor", "logrr", "logirr", "nnt", "rd", "r", "z", "rp",
-    "zp", "logvr", "logcvr"),
+  measure = c("d", "g", "md", "dw", "gw", "mdw", "logor", "logrr", "logirr", "loghr",
+    "nnt", "rd", "r", "z", "rp", "zp", "logvr", "logcvr", "prop", "alpha", "icc"),
   main_es = TRUE,
   es_selected = c("auto", "hierarchy", "minimum", "maximum"),
   selection_auto = c("crude", "paired", "adjusted"),
@@ -43,9 +43,9 @@ convert_df(
 
 \item{main_es}{a logical variable indicating whether a main effect size should be selected when overlapping data are present. See details.}
 
-\item{es_selected}{the method used to select the main effect size when several information allows to estimate an effect size for the same association/comparison. Must be either "minimum" (the smallest effect size will be selected), "maximum" (the largest effect size will be selected) or "hierarchy" (the effect size computed from the information specified highest in the hierarchy will be selected). See details.}
+\item{es_selected}{the method used to select the main effect size when several information allows to estimate an effect size for the same association/comparison. Must be either "auto" (the default; the effect size computed from the information specified highest in the built-in hierarchy described below will be selected), "hierarchy" (same, using the hierarchy passed to the \code{hierarchy} argument), "minimum" (the smallest effect size will be selected) or "maximum" (the largest effect size will be selected). See details.}
 
-\item{selection_auto}{a character string giving details on the best "auto" hierarchy to use (only useful when \code{hierarchy="auto"} and \code{measure= "d", "g" or "md"}). See details.}
+\item{selection_auto}{a character string giving details on the best "auto" hierarchy to use (only useful when \code{es_selected="auto"} and \code{measure= "d", "g" or "md"}). See details.}
 
 \item{split_adjusted}{a logical value indicating whether crude and adjusted effect sizes should be presented separately. See details.}
 
@@ -67,7 +67,7 @@ convert_df(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation.}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{smd_denom}{standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance. Only the endpoint means family (es_from_means_sd/se/ci) honours this argument: rows whose effect size comes from any other method (t/F, cohen_d/hedges_g, eta-squared, point-biserial r, medians/ranges, plots, ANCOVA, raw mean differences) always use the pooled-SD standardizer, and a message lists the scoping when a non-pooled value is requested ("glass_robust" additionally has a single variance form, so smd_var is ignored for it).}
 
@@ -120,7 +120,7 @@ using the summary function (see \code{\link{summary.metaConvert}}).
 Automatically compute effect sizes from a well formatted dataset
 }
 \details{
-This function automatically computes or converts between 14 effect sizes
+This function automatically computes or converts between 21 effect sizes
 measures from any relevant type of input data stored in the
 dataset you pass to this function.
 \subsection{Input validation}{
@@ -138,9 +138,13 @@ Possible effect size measures are:
 \item Cohen's d ("d")
 \item Hedges' g ("g")
 \item mean difference ("md")
+\item within-group Cohen's d ("dw")
+\item within-group Hedges' g ("gw")
+\item within-group mean difference ("mdw")
 \item (log) odds ratio ("or" and "logor")
 \item (log) risk ratio ("rr" and "logrr")
 \item (log) incidence rate ratio ("irr" and "logirr")
+\item (log) hazard ratio ("hr" and "loghr")
 \item correlation coefficient ("r")
 \item transformed r-to-z correlation coefficient ("z")
 \item partial correlation coefficient ("rp")
@@ -149,7 +153,14 @@ Possible effect size measures are:
 \item log coefficient of variation ("logcvr")
 \item number needed to treat ("nnt")
 \item risk difference ("rd")
+\item proportion ("prop")
+\item Cronbach's alpha ("alpha")
+\item intraclass correlation coefficient ("icc")
 }
+
+The hazard ratio is estimated from a user-reported effect size only
+(\code{user_es_crude}/\code{user_es_adj}), since its computation requires
+individual time-to-event data that a wide-format dataset cannot store.
 }
 
 \subsection{Computation of a main effect size}{
@@ -289,7 +300,7 @@ If you select an automatic hierarchy, here are the types of input data that will
 \item ANOVA/Student's t-test/point biserial correlation
 \item Linear regression estimates
 \item Mean difference values
-11 Quartiles/median/maximum values
+\item Quartiles/median/maximum values
 \item Post-test means extracted from a plot
 \item Pre-test+post-test means or mean change
 \item Paired ANOVA/t-test

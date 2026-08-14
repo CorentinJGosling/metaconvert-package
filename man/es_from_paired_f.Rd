@@ -55,8 +55,7 @@ Convert two paired ANOVA f value of two independent groups into several effect s
 This function converts the paired F-test obtained from two independent groups value into a Cohen's d (D) and Hedges' g (G) (table 12.2 in Cooper).
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
-\strong{To estimate the Cohen's d,} the following formulas are used (Cooper et al., 2019):
-This function converts a Student's t-test value into a Cohen's d (table 12.2 in Cooper).
+\strong{To estimate the Cohen's d,} the paired F values are first converted into paired t-test values:
 \deqn{paired\_t\_exp = \sqrt{paired\_f\_exp}}
 \deqn{paired\_t\_nexp = \sqrt{paired\_f\_nexp}}
 

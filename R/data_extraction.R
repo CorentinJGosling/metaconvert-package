@@ -371,7 +371,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
     "ancova_md_se", "ancova_md_ci_lo", "ancova_md_ci_up",
     "ancova_md_pval",
     "cohen_d_adj",
-    "etasq_adj")
+    "etasq_adj", "reverse_etasq_adj")
 
   inf_ancova_stat =  c("whether the direction of the effect size generated from the ANCOVA t-test should be flipped - logical",
     "a t-statistic from an ANCOVA - numeric",
@@ -392,7 +392,8 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
     "p-value of the adjusted mean difference - numeric",
 
     "value of an adjusted Cohen's d - numeric",
-    "value of an adjusted eta-square - numeric")
+    "value of an adjusted eta-square - numeric",
+    "whether the direction of the effect size generated from the adjusted eta-square should be flipped - logical")
 
 
     # 2x2 table
@@ -726,16 +727,16 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
     dat
   } else if (extension != ".xlsx") {
     if (verbose) {
-      message(cat(paste0("Sheet created at location:\n\n", getwd(), "/",
+      message(paste0("Sheet created at location:\n\n", getwd(), "/",
                        name, extension,
-                       "\n\n Good luck with your research!")))
+                       "\n\n Good luck with your research!"))
     }
     rio::export(dat, paste0(name, extension))
   } else {
     if (verbose) {
-      message(cat(paste0("Sheet created at location:\n\n", getwd(), "/",
+      message(paste0("Sheet created at location:\n\n", getwd(), "/",
                        name, extension,
-                       "\n\n Good luck with your research!")))
+                       "\n\n Good luck with your research!"))
     }
     rio::export(dat, paste0(name, extension), overwrite = TRUE)
   }
@@ -743,7 +744,10 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
 #' Overview of effect size measures generated from each type of input data
 #'
 #' @param name Name of the file created
-#' @param measure Target effect size measure (one of the 14 available in metaConvert). Default is "all".
+#' @param measure Target effect size measure. One of "all", "d", "g", "md", "or", "rr",
+#'   "nnt", "r", "z", "irr", "logvr" or "logcvr". Default is "all". The risk difference and
+#'   the psychometric measures (rd, alpha, icc, prop, hr) are not covered by this table;
+#'   use \code{\link{data_extraction_sheet}()} for those.
 #' @param extension Extension of the file created. Most common are ".xlsx", ".csv" or ".txt". It is also possible to generate an R dataframe object by using the "data.frame" extension.
 #' @param type_of_measure One of "natural+converted" or "natural" (see details).
 #' @param verbose logical variable indicating whether some information should be printed (e.g., the location where the sheet is created when using ".xlsx", ".csv" or ".txt" extensions)
@@ -765,7 +769,8 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
 #' ## Extension
 #' You can export a file in various formats outside R
 #' (by indicating, for example, ".txt", ".xlsx", or ".csv") in the \code{extension} argument.
-#' You can also visualise this dataset directly in R by setting \code{extension = "R"}.
+#' You can also visualise this dataset directly in R by setting
+#' \code{extension = "data.frame"}.
 #'
 #' This table is designed to be used in combination with tables showing the combination of input data
 #' leading to estimate each of the effect size measures (https://metaconvert.org/input.html)
@@ -791,6 +796,19 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
   type_of_measure = type_of_measure[1]
   extension = extension[1]
   measure = measure[1]
+
+  # The switch() blocks below have no default, so an unmatched value silently produced a
+  # NULL 'dat' and the subsequent order() failed with "argument 1 is not a vector". The
+  # measures this table does not cover are rejected here, by name, instead.
+  supported_measures = c("all", "d", "g", "md", "or", "rr", "nnt",
+                         "r", "z", "Z", "logvr", "logcvr", "irr")
+  if (!measure %in% supported_measures) {
+    stop("see_input_data(): unsupported 'measure' value \"", measure, "\". Supported ",
+         "values are ", paste0("\"", setdiff(supported_measures, "Z"), "\"", collapse = ", "),
+         ". The risk difference and the psychometric measures (\"rd\", \"alpha\", \"icc\", ",
+         "\"prop\", \"hr\") are not covered by this table; use data_extraction_sheet() ",
+         "for those.", call. = FALSE)
+  }
 
   hier_list = convert_df(df.haza[1, ], measure = "d", verbose=FALSE)
   hier = as.character(sapply(hier_list, function(x) unique(x[, "info_used"])))
@@ -1002,7 +1020,7 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
   dat[dat$hierarch_name == "anova_f_pval",
       2:7] <- c("p-value from a one-way ANOVA",
                 "Section 11. https://metaconvert.org/input.html",
-                "es_from_anova_f_pval()",
+                "es_from_anova_pval()",
                 "D+G", "OR+R+Z",
                 "Non-adjusted")
   dat[dat$hierarch_name == "etasq",
@@ -1071,14 +1089,14 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
   dat[dat$hierarch_name == "means_plot",
       2:7] <- c("Means and bounds of standard deviations, standard errors, and/or 95% CIs of two independent groups extracted from a plot",
                 "Section 21. https://metaconvert.org/input.html",
-                "es_from_means_plot()",
+                "es_from_plot_means()",
                 "D+G+MD", "OR+R+Z",
                 "Non-adjusted")
 
   dat[dat$hierarch_name == "ancova_means_plot",
       2:7] <- c("Adjusted means and bounds of standard deviations, standard errors, and/or 95% CIs of two independent groups extracted from a plot",
                 "Section 22. https://metaconvert.org/input.html",
-                "es_from_ancova_means_plot()",
+                "es_from_plot_ancova_means()",
                 "D+G+MD", "OR+R+Z",
                 "Adjusted")
 
@@ -1104,7 +1122,7 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
   dat[dat$hierarch_name == "ancova_means_sd_pooled",
       2:7] <- c("Adjusted means (from an ANCOVA) and crude pooled standard deviation of two independent groups",
                 "Section 19. https://metaconvert.org/input.html",
-                "es_from_ancova_means_sd_pooled()",
+                "es_from_ancova_means_sd_pooled_crude()",
                 "D+G+MD", "OR+R+Z",
                 "Adjusted")
   dat[dat$hierarch_name == "ancova_means_sd_pooled_adj",
@@ -1252,19 +1270,19 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
   dat[dat$hierarch_name == "variability_means_sd",
       2:7] <- c("Standard devations (and means) of two independent groups",
                 "Section 6. https://metaconvert.org/input.html",
-                "es_from_variability_means_sd()",
+                "es_variab_from_means_sd()",
                 "VR+CVR", "N/A",
                 "Non-adjusted")
   dat[dat$hierarch_name == "variability_means_ci",
       2:7] <- c("95% CIs around means (and means) of two independent groups",
                 "Section 6. https://metaconvert.org/input.html",
-                "es_from_variability_means_ci()",
+                "es_variab_from_means_ci()",
                 "VR+CVR", "N/A",
                 "Non-adjusted")
   dat[dat$hierarch_name == "variability_means_se",
       2:7] <- c("Standard errors (and means) of two independent groups",
                 "Section 6. https://metaconvert.org/input.html",
-                "es_from_variability_means_se()",
+                "es_variab_from_means_se()",
                 "VR+CVR", "N/A",
                 "Non-adjusted")
 
@@ -1277,6 +1295,7 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
                  "rr" = subset(dat, grepl("RR", paste0(dat[, 6], dat[, 5]), fixed = TRUE)),
                  "nnt" = subset(dat, grepl("NNT", paste0(dat[, 6], dat[, 5]), fixed = TRUE)),
                  "r" = subset(dat, grepl("R+Z", paste0(dat[, 6], dat[, 5]), fixed = TRUE)),
+                 "z" = ,
                  "Z" = subset(dat, grepl("R+Z", paste0(dat[, 6], dat[, 5]), fixed = TRUE)),
                  "irr" = subset(dat, grepl("IRR", paste0(dat[, 6], dat[, 5]), fixed = TRUE)),
                  "logvr" = subset(dat, grepl("VR", paste0(dat[, 6], dat[, 5]), fixed = TRUE)),
@@ -1292,6 +1311,7 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
                  "rr" = subset(dat, grepl("RR", paste0(dat[, 5]), fixed = TRUE)),
                  "nnt" = subset(dat, grepl("NNT", paste0(dat[, 5]), fixed = TRUE)),
                  "r" = subset(dat, grepl("R+Z", paste0(dat[, 5]), fixed = TRUE)),
+                 "z" = ,
                  "Z" = subset(dat, grepl("R+Z", paste0(dat[, 5]), fixed = TRUE)),
                  "irr" = subset(dat, grepl("IRR", paste0(dat[, 5]), fixed = TRUE)),
                  "logvr" = subset(dat, grepl("VR", paste0(dat[, 5]), fixed = TRUE)),
@@ -1311,16 +1331,16 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
   } else if (extension != ".xlsx") {
     rio::export(dat, paste0(name, extension))
     if (verbose) {
-      message(cat(paste0("Sheet created at location:\n\n", getwd(), "/",
+      message(paste0("Sheet created at location:\n\n", getwd(), "/",
                          name, extension,
-                         "\n\n Good luck with your research!")))
+                         "\n\n Good luck with your research!"))
     }
   } else {
     rio::export(dat, paste0(name, extension), overwrite = TRUE)
     if (verbose) {
-      message(cat(paste0("Sheet created at location:\n\n", getwd(), "/",
+      message(paste0("Sheet created at location:\n\n", getwd(), "/",
                          name, extension,
-                         "\n\n Good luck with your research!")))
+                         "\n\n Good luck with your research!"))
     }
   }
 }

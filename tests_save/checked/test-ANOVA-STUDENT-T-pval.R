@@ -656,10 +656,24 @@ test_that("5. etasq", {
   expect_equal(unique(es.mcv_or$info_used_crude), "etasq")
   expect_equal(unique(es.mcv_r$info_used_crude), "etasq")
   expect_equal(unique(es.mcv_z$info_used_crude), "etasq")
-  expect_equal(es.mcv_d$es_crude, comp_res_d, tolerance = 1e-10)
-  expect_equal(es.mcv_or$es_crude, comp_res_or, tolerance = 1e-10)
-  expect_equal(es.mcv_r$es_crude, comp_res_r, tolerance = 1e-10)
-  expect_equal(es.mcv_z$es_crude, atanh(comp_res_r), tolerance = 1e-10)
+  # NEWS.md 2.0.1: es_from_etasq() now inverts eta^2 = F / (F + N - 2) exactly rather
+  # than using the large-sample, equal-n limit 2*sqrt(eta/(1-eta)) that esc still uses.
+  # The two differ by exactly sqrt((N-2)/N) at equal arm sizes (1.7% at n = 30/30) and
+  # by up to 39% at 10/90. The exact form is the one that reproduces Cohen's d computed
+  # from the raw data, and it agrees with es_from_anova_f() and es_from_pt_bis_r().
+  # This test therefore now pins the DELIBERATE divergence from esc.
+  N <- 60L
+  df_err <- N - 2L
+  exact_d <- sqrt(dat$etasq / (1 - dat$etasq) * df_err * (1 / 30 + 1 / 30))
+  expect_equal(exact_d, comp_res_d * sqrt(df_err / N), tolerance = 1e-10)
+
+  expect_equal(es.mcv_d$es_crude, exact_d, tolerance = 1e-10)
+  expect_equal(es.mcv_or$es_crude, exact_d * pi / sqrt(3), tolerance = 1e-10)
+  # r / z on the lipsey_cooper scale, derived from the same exact d
+  a_lc <- (30 + 30)^2 / (30 * 30)
+  exact_r <- exact_d / sqrt(exact_d^2 + a_lc)
+  expect_equal(es.mcv_r$es_crude, exact_r, tolerance = 1e-10)
+  expect_equal(es.mcv_z$es_crude, atanh(exact_r), tolerance = 1e-10)
 })
 
 test_that("REVERSE - etasq", {
@@ -724,7 +738,11 @@ test_that("REVERSE - etasq adjusted", {
   dat <- subset(dat, !is.na(etasq_adj) & !is.na(n_exp) & !is.na(n_nexp))
   dat$cov_outcome_r <- 0.3
   dat$n_cov_ancova <- 0.3
+  # 2.0.1: the ADJUSTED eta-squared route is flipped by its own reverse_etasq_adj
+  # column, not by reverse_etasq (which now governs only the crude route). A dataset
+  # that relied on reverse_etasq flipping both must set both -- see NEWS 2.0.1.
   dat$reverse_etasq <- FALSE
+  dat$reverse_etasq_adj <- FALSE
   es.mcv_eta_d <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "etasq_adj", measure = "d"), digits = 11)
   es.mcv_eta_g <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "etasq_adj", measure = "g"), digits = 11)
   es.mcv_eta_or <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "etasq_adj", measure = "logor"), digits = 11)
@@ -738,6 +756,7 @@ test_that("REVERSE - etasq adjusted", {
                                        smd_to_cor = "lipsey_cooper",  measure = "z"), digits = 11)
 
   dat$reverse_etasq <- TRUE
+  dat$reverse_etasq_adj <- TRUE
   es.mcv_eta_d_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "etasq_adj", measure = "d"), digits = 11)
   es.mcv_eta_g_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "etasq_adj", measure = "g"), digits = 11)
   es.mcv_eta_or_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "etasq_adj", measure = "logor"), digits = 11)

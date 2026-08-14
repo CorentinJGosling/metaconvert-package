@@ -6,8 +6,8 @@
 #' @param split_adjusted a logical value indicating whether crude and adjusted effect sizes should be presented separately. See details.
 #' @param format_adjusted presentation format of the adjusted effect sizes. See details.
 #' @param hierarchy a character string indicating the hierarchy in the information to be prioritized for the effect size calculations. See details.
-#' @param selection_auto a character string giving details on the best "auto" hierarchy to use (only useful when \code{hierarchy="auto"} and \code{measure= "d", "g" or "md"}). See details.
-#' @param es_selected the method used to select the main effect size when several information allows to estimate an effect size for the same association/comparison. Must be either "minimum" (the smallest effect size will be selected), "maximum" (the largest effect size will be selected) or "hierarchy" (the effect size computed from the information specified highest in the hierarchy will be selected). See details.
+#' @param selection_auto a character string giving details on the best "auto" hierarchy to use (only useful when \code{es_selected="auto"} and \code{measure= "d", "g" or "md"}). See details.
+#' @param es_selected the method used to select the main effect size when several information allows to estimate an effect size for the same association/comparison. Must be either "auto" (the default; the effect size computed from the information specified highest in the built-in hierarchy described below will be selected), "hierarchy" (same, using the hierarchy passed to the \code{hierarchy} argument), "minimum" (the smallest effect size will be selected) or "maximum" (the largest effect size will be selected). See details.
 #' @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contingency table. For now only 'tetrachoric' is available.
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio.
@@ -29,7 +29,7 @@
 #'   }
 #' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68% too small (95% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance. Only the endpoint means family (es_from_means_sd/se/ci) honours this argument: rows whose effect size comes from any other method (t/F, cohen_d/hedges_g, eta-squared, point-biserial r, medians/ranges, plots, ANCOVA, raw mean differences) always use the pooled-SD standardizer, and a message lists the scoping when a non-pooled value is requested ("glass_robust" additionally has a single variance form, so smd_var is ignored for it).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
 #' @param prop_to_es method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).
@@ -43,7 +43,7 @@
 #' @param flag_options a named list of thresholds used by the quality flags (see \code{\link{summary.metaConvert}} for the list of options and defaults).
 #'
 #' @details
-#' This function automatically computes or converts between 14 effect sizes
+#' This function automatically computes or converts between 21 effect sizes
 #' measures from any relevant type of input data stored in the
 #' dataset you pass to this function.
 #'
@@ -58,17 +58,28 @@
 #' 1. Cohen's d ("d")
 #' 2. Hedges' g ("g")
 #' 3. mean difference ("md")
-#' 4. (log) odds ratio ("or" and "logor")
-#' 5. (log) risk ratio ("rr" and "logrr")
-#' 6. (log) incidence rate ratio ("irr" and "logirr")
-#' 7. correlation coefficient ("r")
-#' 8. transformed r-to-z correlation coefficient ("z")
-#' 9. partial correlation coefficient ("rp")
-#' 10. Fisher's z of partial correlation ("zp")
-#' 11. log variability ratio ("logvr")
-#' 12. log coefficient of variation ("logcvr")
-#' 13. number needed to treat ("nnt")
-#' 14. risk difference ("rd")
+#' 4. within-group Cohen's d ("dw")
+#' 5. within-group Hedges' g ("gw")
+#' 6. within-group mean difference ("mdw")
+#' 7. (log) odds ratio ("or" and "logor")
+#' 8. (log) risk ratio ("rr" and "logrr")
+#' 9. (log) incidence rate ratio ("irr" and "logirr")
+#' 10. (log) hazard ratio ("hr" and "loghr")
+#' 11. correlation coefficient ("r")
+#' 12. transformed r-to-z correlation coefficient ("z")
+#' 13. partial correlation coefficient ("rp")
+#' 14. Fisher's z of partial correlation ("zp")
+#' 15. log variability ratio ("logvr")
+#' 16. log coefficient of variation ("logcvr")
+#' 17. number needed to treat ("nnt")
+#' 18. risk difference ("rd")
+#' 19. proportion ("prop")
+#' 20. Cronbach's alpha ("alpha")
+#' 21. intraclass correlation coefficient ("icc")
+#'
+#' The hazard ratio is estimated from a user-reported effect size only
+#' (\code{user_es_crude}/\code{user_es_adj}), since its computation requires
+#' individual time-to-event data that a wide-format dataset cannot store.
 #'
 #' ## Computation of a main effect size
 #' If you enter multiple types of input data
@@ -178,7 +189,7 @@
 #' 8. ANOVA/Student's t-test/point biserial correlation
 #' 9. Linear regression estimates
 #' 10. Mean difference values
-#' 11 Quartiles/median/maximum values
+#' 11. Quartiles/median/maximum values
 #' 12. Post-test means extracted from a plot
 #' 13. Pre-test+post-test means or mean change
 #' 14. Paired ANOVA/t-test
@@ -263,8 +274,10 @@
 #'   format_adjusted = "long"
 #' )
 #' summary(res)
-convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr",
-                                      "nnt", "rd", "r", "z", "rp", "zp", "logvr", "logcvr"),
+convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
+                                      "logor", "logrr", "logirr", "loghr",
+                                      "nnt", "rd", "r", "z", "rp", "zp",
+                                      "logvr", "logcvr", "prop", "alpha", "icc"),
                        main_es = TRUE,
                        es_selected = c("auto", "hierarchy", "minimum", "maximum"),
                        selection_auto = c("crude", "paired", "adjusted"),
@@ -493,7 +506,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
   } else if (!format_adjusted %in% c("wide", "long")) {
     stop(paste0("'", format_adjusted, "' not in tolerated values for the 'format_adjusted' argument. Should be either 'long' or 'wide'."))
   } else if (!es_selected %in% c("auto", "minimum", "maximum", "hierarchy")) {
-    stop(paste0("'", es_selected, "' not in tolerated values for the 'es_selected' argument. Possible inputs are: 'minimum', 'maximum', 'hierarchy'"))
+    stop(paste0("'", es_selected, "' not in tolerated values for the 'es_selected' argument. Possible inputs are: 'auto', 'hierarchy', 'minimum', 'maximum'"))
   } else if (!main_es %in% c(TRUE, FALSE)) {
     stop(paste0("'", main_es, "' not in tolerated values for the 'main_es' argument. Should be a logical value (TRUE/FALSE)"))
   }
@@ -928,9 +941,13 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
     etasq = etasq, n_exp = n_exp, n_nexp = n_nexp,
     smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_etasq = reverse_etasq
   ))
+  # etasq_adj gets its own reverse column, like the other adjusted routes
+  # (reverse_ancova_means / reverse_ancova_md). It is independent of reverse_etasq and,
+  # like every other reverse_* column, defaults to FALSE when absent or NA.
   es_etasq_adj <- with(x, es_from_etasq_adj(
     etasq_adj = etasq_adj, n_exp = n_exp, n_nexp = n_nexp, n_cov_ancova = n_cov_ancova,
-    cov_outcome_r = cov_outcome_r, smd_var = smd_var, smd_to_cor = smd_to_cor, reverse_etasq = reverse_etasq
+    cov_outcome_r = cov_outcome_r, smd_var = smd_var, smd_to_cor = smd_to_cor,
+    reverse_etasq = reverse_etasq_adj
   ))
 
   # MD   ----------------------------------------------
@@ -1336,16 +1353,32 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
                                   es_ancova_t_pval = es_ancova_t_pval,
                                   es_ancova_f_pval = es_ancova_f_pval,
                                   es_etasq_adj = es_etasq_adj)
+  # Ordered by attenuation tier, as md_adjusted_list_L20a/b is. The first three routes
+  # are handed a standardizer directly -- per-arm residual SDs, a marginal pooled SD, or
+  # an adjusted pooled SD -- so their point estimate is unaffected by covariate
+  # imbalance. es_ancova_means_se / _ci must instead recover the standardizer from a
+  # reported SE or CI, which sets the Lai & Kelley leverage term D to zero and attenuates
+  # d and its SE together. es_ancova_means_sd_pooled_adj was previously ranked last,
+  # below both attenuating routes, so summary() preferred the attenuated estimate when
+  # both were available.
   means_adjusted_list_L19 = list(es_ancova_means_sd = es_ancova_means_sd,
                              es_ancova_means_sd_pooled = es_ancova_means_sd_pooled,
+                             es_ancova_means_sd_pooled_adj = es_ancova_means_sd_pooled_adj,
                              es_ancova_means_se = es_ancova_means_se,
-                             es_ancova_means_ci = es_ancova_means_ci,
-                             es_ancova_means_sd_pooled_adj = es_ancova_means_sd_pooled_adj)
+                             es_ancova_means_ci = es_ancova_means_ci)
 
-  md_adjusted_list_L20 = list(es_ancova_md_sd = es_ancova_md_sd,
-                              es_ancova_md_se = es_ancova_md_se,
-                              es_ancova_md_ci = es_ancova_md_ci,
-                              es_ancova_md_pval = es_ancova_md_pval)
+  # The adjusted MD routes split into two attenuation tiers under covariate imbalance
+  # (Lai & Kelley 2012; see the @note blocks of the es_from_ancova_* functions).
+  # es_ancova_md_sd receives the adjusted MD together with the residual SD, so its
+  # point estimate is unaffected by imbalance. The other three must invert a reported
+  # SE / CI / p-value, which was built with the leverage term D = (xbar1-xbar2)^2/SS_x
+  # that the wide format cannot carry, so they attenuate d (and its SE) by
+  # 1/sqrt(1 + D/(1/n_exp + 1/n_nexp)) -- the same tier as the ANCOVA test statistics.
+  # They are therefore ranked separately: L20a above ancova_adjusted_list_L18, L20b below.
+  md_adjusted_list_L20a = list(es_ancova_md_sd = es_ancova_md_sd)
+  md_adjusted_list_L20b = list(es_ancova_md_se = es_ancova_md_se,
+                               es_ancova_md_ci = es_ancova_md_ci,
+                               es_ancova_md_pval = es_ancova_md_pval)
 
 
   plot_raw_L21 = list(es_plot_means_raw)
@@ -1378,8 +1411,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "logor", "logrr", "logirr"
 
   SMD_paired = c(means_paired_list_L15, anova_paired_list_L16, md_paired_list_L14)
 
-  SMD_adjusted = c(es_cohen_d_adj_L17, means_adjusted_list_L19, ancova_adjusted_list_L18,
-                   md_adjusted_list_L20,
+  SMD_adjusted = c(es_cohen_d_adj_L17, means_adjusted_list_L19, md_adjusted_list_L20a,
+                   ancova_adjusted_list_L18, md_adjusted_list_L20b,
                    plot_adjusted_L22)
 
   OR = c(or_list_L2)

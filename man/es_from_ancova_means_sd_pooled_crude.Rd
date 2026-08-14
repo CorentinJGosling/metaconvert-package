@@ -24,7 +24,12 @@ es_from_ancova_means_sd_pooled_crude(
 
 \item{mean_sd_pooled}{crude pooled standard deviation.}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
@@ -34,7 +39,7 @@ es_from_ancova_means_sd_pooled_crude(
 
 \item{smd_to_cor}{formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -60,10 +65,10 @@ from the adjusted means and crude pooled standard deviation of two independent g
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
 \strong{To estimate the Cohen's d}:
-\deqn{d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp\_adj}{mean\_sd\_pooled}}
+\deqn{d =  \frac{ancova\_mean\_exp - ancova\_mean\_nexp}{mean\_sd\_pooled}}
 
 \strong{To estimate the mean difference}:
-\deqn{md =  ancova\_mean\_exp - ancova\_mean\_nexp\_adj}
+\deqn{md =  ancova\_mean\_exp - ancova\_mean\_nexp}
 \deqn{md\_se =  \sqrt{\frac{n\_exp + n\_nexp}{n\_exp * n\_nexp} * (1 - cov\_outcome\_r^2) * mean\_sd\_pooled^2}}
 
 Then, calculations of the \code{\link{es_from_ancova_means_sd}()} and \code{\link{es_from_cohen_d_adj}()} are applied.

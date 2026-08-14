@@ -267,7 +267,14 @@ show_table(summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
 
 <br>
 
-Note that studies using different ICC models (agreement vs. consistency) can coexist in the same analysis. Both types share the same leading-order SE formula: it is exact for consistency ICC(3,1), but for agreement ICC(2,1) it is a one-way approximation that assumes negligible between-rater variance -- when raters differ systematically, the reported SE is anti-conservative, and `summary()` marks agreement-type rows with an informational flag (see `?es_from_icc`). When pooling, `icc_type` can be examined as a **moderator** variable.
+Note that studies using different ICC models (agreement vs. consistency) can coexist in the same analysis. Both types share the same leading-order SE formula: it is exact for consistency ICC(3,1), but for agreement ICC(2,1) it is a one-way approximation that assumes negligible between-rater variance -- when raters differ systematically, the reported SE is anti-conservative, and `summary()` marks agreement-type rows with an informational flag (see `?es_from_icc`):
+
+```{r}
+summary_icc[nzchar(summary_icc$flags), c("author", "icc_type")]
+unique(summary_icc$flags[nzchar(summary_icc$flags)])
+```
+
+When pooling, `icc_type` can be examined as a **moderator** variable.
 
 ## Meta-analysis
 
@@ -517,7 +524,7 @@ show_table(comp,
 
 The corrected correlations are systematically larger in magnitude, reflecting the removal of attenuation due to measurement error.
 
-**Note on bounds**: Because sampling error exists in both the observed correlation and the reliability estimates, `r_corrected` can occasionally exceed 1.0 in absolute value. When this happens, `es_disattenuate()` internally caps the corrected correlation at $\pm$0.9999 before computing Fisher's z, so the meta-analytic pipeline will not produce `NaN` values.
+**Note on bounds**: Because sampling error exists in both the observed correlation and the reliability estimates, `r_corrected` can occasionally exceed 1.0 in absolute value. When this happens, `es_disattenuate()` returns the corrected correlation as computed (it is not capped), emits a warning, and sets the corrected-r confidence interval and all Fisher's z outputs (`z_corrected`, `z_corrected_se`, and the z confidence bounds) to `NA`: beyond $|r_c| > 0.999$ a bounded $\text{atanh}$ would return the same clamp artefact whatever the input. Such rows are omitted by `metafor::rma()`, so the reliability inputs should be checked before pooling.
 
 However, a corrected correlation exceeding 1.0 is a **red flag** that warrants investigation. Common causes include: (1) the reliability coefficient was estimated from a different population than the study sample; (2) the reliability was based on a very small sample and is itself imprecise; or (3) range restriction artefacts interact with the correction. We recommend running a **sensitivity analysis** excluding studies where $|r_c| > 1$ and comparing results. If multiple studies produce impossible values, an artifact-distribution method (Hunter & Schmidt, 2004; see the `psychmeta` package) may be more appropriate than individual study-level correction, as it uses the *distribution* of reliability estimates rather than point values.
 
@@ -544,14 +551,14 @@ cat(sprintf("(b) Pooled disattenuated r = %.3f [%.3f, %.3f]\n",
 
 ## Using pooled reliability when study-specific data are unavailable
 
-When study-specific reliability data are unavailable, the pooled reliability estimates from the internal consistency (Section 2) and test-retest (Section 3) meta-analyses can be used:
+When study-specific reliability data are unavailable, the pooled reliability estimates from the *Internal consistency* and *Test-retest reliability* meta-analyses above can be used:
 
 ```{r, eval=FALSE}
 # Use pooled alpha and ICC from earlier sections as proxies
 es_disattenuate(
   r = 0.65,
   r_se = 0.08,
-  reliability_x = pooled_alpha,  # from Section 2
+  reliability_x = pooled_alpha,  # from the Internal consistency section
   reliability_y = 0.85,          # from external published data
   n_sample = 150
 )
@@ -673,7 +680,7 @@ sensitivity <- data.frame(
 sensitivity
 ```
 
-As the pre-post correlation increases, change-score reliability decreases, and the disattenuation correction becomes larger. This highlights why reporting pre-post correlations in primary studies is essential.
+As the pre-post correlation increases, change-score reliability decreases, and the disattenuation correction becomes larger. At $r_{\text{pre-post}} = 0.80$ the change-score reliability falls to 0.25 and the corrected correlation exceeds 1, which is why `es_disattenuate()` warns and sets the Fisher's z outputs of that row to `NA` (see the note on bounds above). This highlights why reporting pre-post correlations in primary studies is essential.
 
 
 # Floor and ceiling effects
@@ -682,7 +689,7 @@ Floor and ceiling effects can be assessed by meta-analysing the **proportion** o
 
 - **`"raw"`** (default): raw proportion, SE = $\sqrt{p(1-p)/n}$. CIs bounded to [0, 1].
 - **`"logit"`**: logit transform $\log(p/(1-p))$, SE = $\sqrt{1/(np(1-p))}$
-- **`"freeman_tukey"`** (recommended): Freeman-Tukey double arcsine. Handles zero proportions naturally and stabilises variance.
+- **`"freeman_tukey"`**: Freeman-Tukey double arcsine. Handles zero proportions naturally and stabilises the variance.
 
 ## Effect size computation and pooling
 
@@ -690,7 +697,7 @@ Floor and ceiling effects can be assessed by meta-analysing the **proportion** o
 # Subset floor/ceiling studies
 dat_prop <- df.psychom[df.psychom$outcome == "floor_ceiling", ]
 
-# Freeman-Tukey transformation (recommended)
+# Freeman-Tukey transformation
 res_prop <- convert_df(dat_prop, measure = "prop", prop_to_es = "freeman_tukey",
                        verbose = FALSE, split_adjusted = FALSE)
 summary_prop <- summary(res_prop)
@@ -712,7 +719,7 @@ pooled_prop <- sin(ma_prop$beta[1])^2
 cat(sprintf("Pooled proportion (approx.) = %.3f\n", pooled_prop))
 ```
 
-**Note on the Freeman-Tukey back-transformation**: The `sin(x)^2` formula is an approximation. Recent methodological work (Schwarzer et al., 2019, *Research Synthesis Methods*) has shown that the Freeman-Tukey double arcsine back-transformation can distort pooled results when sample sizes are heterogeneous across studies. For proportions near 0 or 1 (as is typical for floor/ceiling effects), a generalised linear mixed model (GLMM) with logit link --- available via `metafor::rma.glmm()` --- may be preferable as it avoids the transformation entirely and directly models the binomial counts.
+**Note on the Freeman-Tukey back-transformation**: Of the three transformations, the double arcsine handles boundary proportions best within `metaConvert`, but the back-transformation of the pooled estimate is only approximate. The `sin(x)^2` formula used above ignores the sample sizes, and Schwarzer et al. (2019, *Research Synthesis Methods*) have shown that the Freeman-Tukey back-transformation can distort pooled results when sample sizes are heterogeneous across studies. For proportions near 0 or 1 (as is typical for floor/ceiling effects), a generalised linear mixed model (GLMM) with logit link --- available via `metafor::rma.glmm()` --- may be preferable as it avoids the transformation entirely and directly models the binomial counts.
 
 
 # Beyond metaConvert
@@ -725,7 +732,7 @@ Several COSMIN measurement properties require specialised methods not covered by
 
 **Cross-cultural validity and measurement invariance** is primarily a descriptive synthesis (tabulating configural, metric, scalar invariance levels). When DIF statistics (log-odds ratios) are available, they can be pooled using metaConvert's existing OR pipeline via `convert_df(measure = "or")`.
 
-**Interpretability (MIC)** can be partially handled: if you have MIC estimates and their SEs, enter them as user-provided effect sizes via `user_es_measure_crude`, `user_es_crude`, and `user_se_crude` columns, then use `convert_df()` to organise them alongside other effect sizes.
+**Interpretability (MIC)** can be partially handled: if you have MIC estimates and their SEs, enter them as user-provided effect sizes via the `user_es_original_measure_crude`, `user_es_crude`, and `user_se_crude` columns, then use `convert_df()` to organise them alongside other effect sizes.
 
 **Feasibility and acceptability** are synthesised narratively, without quantitative pooling.
 

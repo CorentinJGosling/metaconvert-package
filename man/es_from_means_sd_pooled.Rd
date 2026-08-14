@@ -28,7 +28,7 @@ es_from_means_sd_pooled(
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -55,12 +55,12 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 
 \strong{To estimate a mean difference}  (formulas 12.1-12.6 in Cooper):
 \deqn{md = mean\_exp - mean\_nexp}
-\deqn{md\_se = \sqrt{\frac{n_exp+n_nexp}{n_exp*n_nexp} * mean_sd_pooled^2}}
+\deqn{md\_se = \sqrt{\frac{n\_exp+n\_nexp}{n\_exp*n\_nexp} * mean\_sd\_pooled^2}}
 \deqn{md\_ci\_lo = md - md\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 \deqn{md\_ci\_up = md + md\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 
 \strong{To estimate a Cohen's d} the following formulas are used (formulas 12.10-12.18 in Cooper):
-\deqn{cohen\_d =  \frac{mean\_exp - mean\_nexp}{means\_sd\_pooled}}
+\deqn{cohen\_d =  \frac{mean\_exp - mean\_nexp}{mean\_sd\_pooled}}
 \deqn{cohen\_d\_se = \sqrt{\frac{(n\_exp+n\_nexp)}{n\_exp*n\_nexp} + \frac{cohen\_d^2}{2(n\_exp+n\_nexp)}}}
 \deqn{cohen\_d\_ci\_lo = cohen\_d - cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}
 \deqn{cohen\_d\_ci\_up = cohen\_d + cohen\_d\_se * qt(.975, df = n\_exp + n\_nexp - 2)}

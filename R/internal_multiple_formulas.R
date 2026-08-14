@@ -47,15 +47,15 @@
 #
 # mapply() only simplifies to a numeric matrix when EVERY call returns the same
 # type. The conversion helpers (.or_to_rr, .rr_to_or, ...) mostly return a 1x4
-# cbind() matrix, but a failure branch may return a data.frame of NAs instead --
-# and one such row is enough to turn the whole result into a LIST-matrix. The
+# cbind() matrix, but .or_to_rr()'s 'dipietrantonj' branch returns a data.frame,
+# on the successful reconstruction as much as on the no-real-solution one, and a
+# single such row is enough to turn the whole result into a LIST-matrix. The
 # column then extracts as a list, and assigning it into a numeric vector
 # silently recycles values across rows: with or_to_rr supplied as a per-row
-# column, a trailing 'dipietrantonj' row that has no real 2x2 reconstruction
-# made every other row inherit the FIRST row's standard error, leaving each SE
-# inconsistent with its own confidence interval. Zero-length elements are mapped
-# to NA rather than dropped, so the result can never be short (and hence can
-# never be recycled).
+# column, one 'dipietrantonj' row made every other row inherit the FIRST row's
+# standard error, leaving each SE inconsistent with its own confidence interval.
+# Zero-length elements are mapped to NA rather than dropped, so the result can
+# never be short (and hence can never be recycled).
 .mapply_col <- function(m, j) {
   vapply(seq_len(nrow(m)), function(i) {
     v <- m[i, j]
@@ -228,11 +228,13 @@
       }
 
       if (length(estim) < numb || length(numb) != 1L) {
-        # cbind(), NOT data.frame(): every other branch of this function returns a
-        # 1x4 matrix, and mapply() only simplifies to a numeric matrix when all
-        # calls agree on type. A single data.frame among them turned the result
-        # into a list-matrix, whose columns then recycled across rows in the
-        # caller (see .mapply_col()).
+        # cbind(), to match the other or_to_rr branches. It does NOT remove the
+        # list-matrix: this branch's own terminal return below is a data.frame on
+        # the successful reconstruction too, and mapply() only simplifies to a
+        # numeric matrix when all calls agree on type. So any 'dipietrantonj' row
+        # mixed with another method still yields a list-matrix, whose columns
+        # recycle across rows when read positionally. What makes that safe is
+        # .mapply_col() in the caller.
         return(cbind(logrr = NA_real_, logrr_se = NA_real_,
                      logrr_ci_lo = NA_real_, logrr_ci_up = NA_real_))
       }
@@ -668,7 +670,43 @@
   }
 }
 
+# Session-scoped record of which one-time notices have already been emitted, so an
+# installation problem is reported once rather than once per row.
+.mcv_notices <- new.env(parent = emptyenv())
+
+# Wrapped rather than called inline so the missing-package branch is reachable in tests.
+.has_mvtnorm <- function() requireNamespace("mvtnorm", quietly = TRUE)
+
+# message(), not warning(): the tetrachoric call sites wrap this route in
+# suppressWarnings() because a genuine numerical failure is expected on some tables and
+# must not spam the console. That suppression would swallow a warning raised here, so the
+# installation notice is signalled as a message, which survives it.
+.notify_once <- function(key, ...) {
+  if (isTRUE(get0(key, envir = .mcv_notices, ifnotfound = FALSE))) {
+    return(invisible(NULL))
+  }
+  assign(key, TRUE, envir = .mcv_notices)
+  message(...)
+  invisible(NULL)
+}
+
 .tet_r <- function(n_cases_exp, n_controls_exp, n_cases_nexp, n_controls_nexp) {
+  # metafor::escalc(measure = "RTET") solves the tetrachoric correlation by numerical ML
+  # over a bivariate normal CDF, which needs 'mvtnorm'. mvtnorm is a Suggests of metafor,
+  # NOT an Imports, so installing metafor does not bring it in and a perfectly ordinary
+  # installation can lack it. Without this guard escalc() raised an error, the tryCatch
+  # below swallowed it, and every 2x2-derived correlation and Fisher's z came back NA
+  # with nothing said -- indistinguishable from data that genuinely cannot support them.
+  if (!.has_mvtnorm()) {
+    .notify_once(
+      "mvtnorm_missing",
+      "The tetrachoric correlation estimated from a 2x2 table requires the 'mvtnorm' ",
+      "package, which is not installed. The correlation and Fisher's z derived from a ",
+      "2x2 table (and from phi, chi-squared and proportions, which are routed through ",
+      "it) are therefore returned as NA. Run install.packages(\"mvtnorm\") to enable ",
+      "them. All other effect size measures are unaffected.")
+    return(cbind(NA, NA, NA, NA, NA, NA, NA, NA))
+  }
   tryCatch(
     expr = {
       tet <- metafor::escalc(
@@ -753,8 +791,37 @@
 
 ################# SMD to R/Z ###################
 .smd_to_cor <- function(d, vd, n_exp, n_nexp, smd_to_cor, n_cov_ancova) {
+  # ---------------------------------------------------------------------------
+  # Precision carried by the supplied d, relative to the crude two-group design.
+  #
+  # Both branches below convert d -> r through a deterministic map, so Var(r) must
+  # inherit Var(d). The viechtbauer branch, however, uses Soper's (1914) large-sample
+  # closed form for the biserial correlation, which is a function of n, p and r ONLY.
+  # That closed form is not an independent estimator: to leading order it IS the delta
+  # propagation of the CRUDE d variance (they agree to ~0.3% at n = 400, and exactly up
+  # to (n-1)/(n-2) at r = 0). So using it verbatim silently throws away whatever
+  # precision the d actually has -- the Cooper eq. 12.26 (1 - R^2) shrink on an ANCOVA
+  # row, the 2(1 - r_pre_post) factor on a pre-post row, the control-group df on a
+  # Glass row, or a user-reported standard error. Rescaling by vd / vd_crude restores
+  # it while leaving the crude case BIT-IDENTICAL (the ratio is exactly 1, since
+  # vd_crude below is the same expression .es_from_d() uses), so agreement with
+  # metafor's measure = "RBIS" is preserved for the rows it applies to.
+  vd_crude <- (n_exp + n_nexp) / (n_exp * n_nexp) + d^2 / (2 * (n_exp + n_nexp))
+  prec_ratio <- ifelse(!is.na(vd) & is.finite(vd) & !is.na(vd_crude) & vd_crude > 0,
+                       vd / vd_crude, 1)
+
   if (smd_to_cor == "viechtbauer") {
-    df <- n_exp + n_nexp - 2 - n_cov_ancova
+    # h encodes the finite-sample point-biserial identity r_pb = t / sqrt(t^2 + df),
+    # which holds for the MARGINAL two-group design at df = n_exp + n_nexp - 2. The d
+    # arriving here is always on the marginal (unadjusted) SD scale -- that is the
+    # whole point of Cooper's eq. 12.23/12.24 convention, which keeps ANCOVA studies
+    # poolable with unadjusted ones. Subtracting n_cov_ancova used to shrink h and
+    # inflate r into a quantity that is NEITHER the marginal r_pb NOR the partial one
+    # (the partial would additionally require h * (1 - cov_outcome_r^2)), and made the
+    # reported correlation depend on how many covariates the source study happened to
+    # adjust for. n_cov_ancova now enters only the confidence-interval degrees of
+    # freedom, where it belongs.
+    df <- n_exp + n_nexp - 2
     h <- df / n_exp + df / n_nexp
     p <- n_exp / (n_exp + n_nexp)
     q <- n_nexp / (n_exp + n_nexp)
@@ -775,6 +842,13 @@
     z_viechtbauer <- (a_viechtbauer / 2) * log((1 + a_viechtbauer * r_trunc) /
                                                (1 - a_viechtbauer * r_trunc))
     vz_viechtbauer <- 1 / (n_exp + n_nexp - 1)
+
+    # Carry the actual precision of d through to r and z (see the note at the top of
+    # this function). Both are scaled by the SAME factor, so the variance-stabilising
+    # relation between them -- z is built so that (dz/dr)^2 * vr = 1/(n-1) under the
+    # standard design -- is preserved exactly, whatever the design.
+    vr_viechtbauer <- vr_viechtbauer * prec_ratio
+    vz_viechtbauer <- vz_viechtbauer * prec_ratio
     # ========= 95% CI ===== #
 
 
@@ -803,8 +877,11 @@
     # with its own r variance; metaConvert intentionally uses the consistent value, so
     # the lipsey_cooper z-SE differs from esc for large |d| (they agree as d -> 0).
     vz_lipsey <- vd / (d^2 + 1 / (p * (1 - p)))
-    r_lo_lipsey <- r_lipsey - qt(.975, df = n_exp + n_nexp - 2) * sqrt(vr_lipsey)
-    r_up_lipsey <- r_lipsey + qt(.975, df = n_exp + n_nexp - 2) * sqrt(vr_lipsey)
+    # Same error degrees of freedom as the d/g interval built for this row in
+    # .es_from_d() (n_cov_ancova is 0 on every crude route, so this is a no-op there).
+    df_ci_lipsey <- n_exp + n_nexp - 2 - n_cov_ancova
+    r_lo_lipsey <- r_lipsey - qt(.975, df = df_ci_lipsey) * sqrt(vr_lipsey)
+    r_up_lipsey <- r_lipsey + qt(.975, df = df_ci_lipsey) * sqrt(vr_lipsey)
     z_lo_lipsey <- z_lipsey - qnorm(.975) * sqrt(vz_lipsey)
     z_up_lipsey <- z_lipsey + qnorm(.975) * sqrt(vz_lipsey)
 
@@ -1407,10 +1484,12 @@
 # per-row column) and each group is computed in one shot, then reassembled in the
 # original order.
 #
-# Agreement with the per-row path: the "viechtbauer" branch is bit-identical (0
-# mismatches in 200,000 rows, since conv.delta is itself vectorised). The closed-form
-# "cooper" and "mathur" branches agree to within 1-2 ULP (max |rel| 4.3e-16, ~0.02% of
-# rows) because R evaluates length-1 and length-n arithmetic on different code paths.
+# Agreement with the per-row path: all three branches agree to within 1-2 ULP. The
+# "viechtbauer" d is bit-identical on every row, but its SE differs by 1 ULP on ~0.02%
+# of rows (44 / 200,000, max |rel| 2.2e-16), because conv.delta's numerical derivative
+# is evaluated at slightly different precision in a vector call. The closed-form
+# "cooper" and "mathur" branches likewise differ by 1-2 ULP (max |rel| 4.3e-16, ~0.02%
+# of rows) because R evaluates length-1 and length-n arithmetic on different code paths.
 #
 # NB all arguments must be per-row vectors of the same length; unlike mapply this
 # does NOT recycle a scalar. Every call site passes rep(x, length.out = n).

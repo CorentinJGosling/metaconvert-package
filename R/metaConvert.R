@@ -1,13 +1,13 @@
 #' metaConvert: An R Package Dedicated to Automated Effect Size Calculations
 #'
-#' The \pkg{metaConvert} package automatically estimates 14 effect size measures from a well-formatted dataframe.
+#' The \pkg{metaConvert} package automatically estimates 21 effect size measures from a well-formatted dataframe.
 #' Various other functions can help, for example, removing dependency between several effect sizes,
 #' or identifying differences between two dataframes.
 #' This package is mainly designed to assist in conducting a systematic review with a meta-analysis, but it can be
 #' useful to any researcher interested in estimating an effect size.
 #'
 #' # Overview of the package
-#' To visualize all the types of input data that can be used to estimate the 14 effect size measures available
+#' To visualize all the types of input data that can be used to estimate the 21 effect size measures available
 #' in metaConvert, you can use the \code{\link{see_input_data}()} function.
 #'
 #' # Estimate effect sizes
@@ -32,8 +32,8 @@
 #' # Well-formatted dataset
 #' One of the specificities of the \pkg{metaConvert} package is that its core function (\code{\link{convert_df}})
 #' does not have arguments to specify the names of the variables contained in the dataset.
-#' While this allow using a convenient automatic process in the calculations, this requires that the datasets
-#' passed to this function respect a very precise formatting (which we will refer to as \code{well-formatted dataset}).
+#' While this allows a convenient automatic process in the calculations, it requires that the datasets
+#' passed to this function follow a very precise format (which we will refer to as a \code{well-formatted dataset}).
 #'
 #' Rather than a long description of all column names, we built several tools
 #' that help you find required information.
@@ -42,26 +42,36 @@
 #' as well as a description of the information it should contain.
 #' 2. You can use the \code{\link{see_input_data}()} function that generates
 #' a list of all available types of input data as well as their estimated/converted
-#' effect size measures. This function also points out to the corresponding helper tables
-#' available in https://metaconvert.org
+#' effect size measures. This function also points to the corresponding helper tables
+#' available at https://metaconvert.org
 #'
 #'
 #' # Effect size measures available
 #'
-#' Eleven effect size measures are accepted:
+#' Twenty-one effect size measures are accepted:
 #'
 #' \itemize{
 #'  \item \bold{"d"}: standardized mean difference (i.e., Cohen's d)
 #'  \item \bold{"g"}: Hedges' g
 #'  \item \bold{"md"}: mean difference
+#'  \item \bold{"dw"}: within-group standardized mean difference
+#'  \item \bold{"gw"}: within-group Hedges' g
+#'  \item \bold{"mdw"}: within-group mean difference
 #'  \item \bold{"r"}: Correlation coefficient
 #'  \item \bold{"z"}: Fisher's r-to-z correlation
+#'  \item \bold{"rp"}: partial correlation coefficient
+#'  \item \bold{"zp"}: Fisher's r-to-z transformation of the partial correlation coefficient
 #'  \item \bold{"or"} or \bold{"logor"}: odds ratio  or its logarithm
 #'  \item \bold{"rr"} or \bold{"logrr"}: risk ratio or its logarithm
 #'  \item \bold{"irr"} or \bold{"logirr"}: incidence rate ratio or its logarithm
+#'  \item \bold{"hr"} or \bold{"loghr"}: hazard ratio or its logarithm (accepted only as user input)
+#'  \item \bold{"rd"}: risk difference
 #'  \item \bold{"nnt"}: number needed to treat
 #'  \item \bold{"logcvr"}: log coefficient of variation
 #'  \item \bold{"logvr"}: log variability ratio
+#'  \item \bold{"prop"}: single-group proportion
+#'  \item \bold{"alpha"}: Cronbach's alpha
+#'  \item \bold{"icc"}: intraclass correlation coefficient
 #' }
 #'
 #' # Output
@@ -78,6 +88,14 @@
 #'  \code{md_ci_lo} \tab lower bound of the 95% CI of the mean difference.\cr
 #'  \tab \cr
 #'  \code{md_ci_up} \tab upper bound of the 95% CI of the mean difference.\cr
+#'  \tab \cr
+#'  \code{mdw} \tab value of the within-group mean difference.\cr
+#'  \tab \cr
+#'  \code{mdw_se} \tab standard error of the within-group mean difference.\cr
+#'  \tab \cr
+#'  \code{mdw_ci_lo} \tab lower bound of the 95% CI of the within-group mean difference.\cr
+#'  \tab \cr
+#'  \code{mdw_ci_up} \tab upper bound of the 95% CI of the within-group mean difference.\cr
 #'  \tab \cr
 #'  \code{d} \tab value of the Cohen's d.\cr
 #'  \tab \cr
@@ -111,6 +129,22 @@
 #'  \tab \cr
 #'  \code{z_ci_up} \tab upper bound of the 95% CI of the r-to-z transformed correlation coefficient.\cr
 #'  \tab \cr
+#'  \code{rp} \tab value of the partial correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{rp_se} \tab standard error of the partial correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{rp_ci_lo} \tab lower bound of the 95% CI of the partial correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{rp_ci_up} \tab upper bound of the 95% CI of the partial correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{zp} \tab value of the r-to-z transformed partial correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{zp_se} \tab standard error of the r-to-z transformed partial correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{zp_ci_lo} \tab lower bound of the 95% CI of the r-to-z transformed partial correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{zp_ci_up} \tab upper bound of the 95% CI of the r-to-z transformed partial correlation coefficient.\cr
+#'  \tab \cr
 #'  \code{logor} \tab value of the log odds ratio.\cr
 #'  \tab \cr
 #'  \code{logor_se} \tab standard error of the log odds ratio.\cr
@@ -135,6 +169,14 @@
 #'  \tab \cr
 #'  \code{logirr_ci_up} \tab upper bound of the 95% CI of the log incidence rate ratio.\cr
 #'  \tab \cr
+#'  \code{loghr} \tab value of the log hazard ratio.\cr
+#'  \tab \cr
+#'  \code{loghr_se} \tab standard error of the log hazard ratio.\cr
+#'  \tab \cr
+#'  \code{loghr_ci_lo} \tab lower bound of the 95% CI of the log hazard ratio.\cr
+#'  \tab \cr
+#'  \code{loghr_ci_up} \tab upper bound of the 95% CI of the log hazard ratio.\cr
+#'  \tab \cr
 #'  \code{logvr} \tab value of the log variability ratio.\cr
 #'  \tab \cr
 #'  \code{logvr_se} \tab standard error of the log variability ratio.\cr
@@ -151,7 +193,45 @@
 #'  \tab \cr
 #'  \code{logcvr_ci_up} \tab upper bound of the 95% CI of the log coefficient of variation.\cr
 #'  \tab \cr
+#'  \code{rd} \tab value of the risk difference.\cr
+#'  \tab \cr
+#'  \code{rd_se} \tab standard error of the risk difference.\cr
+#'  \tab \cr
+#'  \code{rd_ci_lo} \tab lower bound of the 95% CI of the risk difference.\cr
+#'  \tab \cr
+#'  \code{rd_ci_up} \tab upper bound of the 95% CI of the risk difference.\cr
+#'  \tab \cr
 #'  \code{nnt} \tab number needed to treat.\cr
+#'  \tab \cr
+#'  \code{nnt_se} \tab standard error of the number needed to treat.\cr
+#'  \tab \cr
+#'  \code{nnt_ci_lo} \tab lower bound of the 95% CI of the number needed to treat.\cr
+#'  \tab \cr
+#'  \code{nnt_ci_up} \tab upper bound of the 95% CI of the number needed to treat.\cr
+#'  \tab \cr
+#'  \code{prop} \tab value of the single-group proportion, on the scale set by the \code{prop_to_es} argument.\cr
+#'  \tab \cr
+#'  \code{prop_se} \tab standard error of the single-group proportion.\cr
+#'  \tab \cr
+#'  \code{prop_ci_lo} \tab lower bound of the 95% CI of the single-group proportion.\cr
+#'  \tab \cr
+#'  \code{prop_ci_up} \tab upper bound of the 95% CI of the single-group proportion.\cr
+#'  \tab \cr
+#'  \code{alpha} \tab value of the Cronbach's alpha, on the scale set by the \code{alpha_to_es} argument.\cr
+#'  \tab \cr
+#'  \code{alpha_se} \tab standard error of the Cronbach's alpha.\cr
+#'  \tab \cr
+#'  \code{alpha_ci_lo} \tab lower bound of the 95% CI of the Cronbach's alpha.\cr
+#'  \tab \cr
+#'  \code{alpha_ci_up} \tab upper bound of the 95% CI of the Cronbach's alpha.\cr
+#'  \tab \cr
+#'  \code{icc} \tab value of the intraclass correlation coefficient, on the scale set by the \code{icc_to_es} argument.\cr
+#'  \tab \cr
+#'  \code{icc_se} \tab standard error of the intraclass correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{icc_ci_lo} \tab lower bound of the 95% CI of the intraclass correlation coefficient.\cr
+#'  \tab \cr
+#'  \code{icc_ci_up} \tab upper bound of the 95% CI of the intraclass correlation coefficient.\cr
 #'  \tab \cr
 #' }
 #'

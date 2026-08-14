@@ -31,13 +31,18 @@ es_from_ancova_means_se(
 
 \item{ancova_mean_se_nexp}{adjusted standard error of participants in the non-experimental/non-exposed group.}
 
-\item{cov_outcome_r}{correlation between the outcome and covariate(s) (multiple correlation when multiple covariates are included in the ANCOVA model).}
+\item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
+covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+total-sample correlation, nor the square root of the whole model R-squared (which also
+absorbs the group effect): both bias the effect size AND its standard error by the
+same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}
 
 \item{smd_to_cor}{formula used to convert the adjusted \code{cohen_d} value into a coefficient correlation (see details).}
 
-\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples.}
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 
 \item{reverse_ancova_means}{a logical value indicating whether the direction of the generated effect sizes should be flipped.}
 }
@@ -68,15 +73,11 @@ and then relies on the calculations of the \code{\link{es_from_ancova_means_sd}}
 Calculations of the \code{\link{es_from_ancova_means_sd}()} are then applied.
 }
 \note{
-Unlike \code{\link{es_from_ancova_means_sd}()}, which receives the residual SD
-directly, this route recovers each arm's standardizer as \code{SE * sqrt(n)}, i.e.
-with that arm's covariate leverage set to zero, so \strong{the point estimate is not
-unbiased under covariate imbalance}. The attenuation is smaller than on the routes
-built from the combined mean-difference standard error, because only each arm's own
-leverage \eqn{(\bar{x}_j - \bar{x})^2 / SS_x} is involved: for equal arms the factor
-is \eqn{1/\sqrt{1 + \delta_x^2/8}} (measured 0.942 at \eqn{\delta_x = 1}, n = 60/60,
-against 0.893 for \code{\link{es_from_ancova_t}()}). Negligible when randomised. See
-\code{\link{es_from_ancova_t}()} for the full statement.
+This route has to assume the two groups were balanced on the covariate; when they were
+not, the effect size and its standard error are both attenuated, though less than on
+the routes built from a test statistic. Prefer
+\code{\link{es_from_ancova_means_sd}()} when the adjusted standard deviations are
+reported.
 }
 \examples{
 es_from_ancova_means_se(

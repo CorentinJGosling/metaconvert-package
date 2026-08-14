@@ -2,7 +2,7 @@
 % Please edit documentation in R/es_variability_from_dispersion.R
 \name{es_variab_from_means_ci}
 \alias{es_variab_from_means_ci}
-\title{Title}
+\title{Convert means and/or 95\% CIs of two independent groups into two effect measures (VR/CVR)}
 \usage{
 es_variab_from_means_ci(
   mean_exp,
@@ -43,13 +43,13 @@ This function estimates VR and CVR
 \tab \cr
 \code{converted effect size measure} \tab No conversion performed\cr
 \tab \cr
-\code{required input data} \tab See 'Section 23. User's input (crude)'\cr
+\code{required input data} \tab See 'Section 6. Variability indices'\cr
 \tab https://metaconvert.org/input.html\cr
 \tab \cr
 }
 }
 \description{
-Title
+Convert means and/or 95\% CIs of two independent groups into two effect measures (VR/CVR)
 }
 \details{
 This function converts the bounds of the 95\% CI of the means of two independent groups into standard errors.
