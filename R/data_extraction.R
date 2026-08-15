@@ -54,7 +54,15 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
   type_of_measure = type_of_measure[1]
   extension = extension[1]
   measure = measure[1]
-  cols_req = c("study_id", "author", "year", "predictor", "outcome", "all_info_expected")
+  # NB the sixth name is "info_expected", NOT "all_info_expected". This line used to
+  # emit "all_info_expected", a string that appeared nowhere else in the
+  # package: .check_data() (R/internal_check_data.R:47) and summary() (
+  # R/functions_summary.R:598) both read "info_expected". A user who filled the sheet
+  # exactly as generated therefore had the value silently discarded -- .check_data()
+  # manufactured info_expected all-NA and functions_summary.R dropped it, so the
+  # documented column (man/summary.metaConvert.Rd) never populated for anyone using
+  # the generated sheet. Pinned by tests/testthat/test-extraction-sheet-column-names.R.
+  cols_req = c("study_id", "author", "year", "predictor", "outcome", "info_expected")
   inf_req = c("unique ID for each study - numeric/character",
               "first author name - numeric/character",
               "year of publication - numeric/character",

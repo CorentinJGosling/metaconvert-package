@@ -1,3 +1,51 @@
+# metaConvert (development version)
+
+## Bug fixes (silent checks that never fired)
+
+Both bugs below share one mechanism: a hardcoded list of column names containing
+names that are not columns. Because every consumer filters with
+`intersect(., colnames(x))` or `%in% colnames(x)`, a wrong name is dropped with no
+error and no warning — the check simply never runs. A package-wide sweep of the ten
+files carrying such lists found exactly these two; the remaining suspects
+(`.positive_columns()`'s `logirr_se`, `.ci_triplets()`'s `logirr`/`loghr` triplets)
+name output-only quantities with no input analogue and break nothing.
+
+- **`data_extraction_sheet()` emitted `all_info_expected` where the pipeline reads
+  `info_expected`.** The string appeared at exactly one line in the package and was
+  read by nothing. A user who filled in the sheet exactly as generated had that
+  value silently discarded: `.check_data()` manufactured `info_expected` as all-NA
+  and `summary()` dropped it, so the documented `info_expected` output column never
+  populated for anyone using the generated sheet. **If you keep extraction files
+  created with an earlier version, rename that column to `info_expected`** — the old
+  name is not accepted, and as before it will be ignored without a message.
+
+- **Flag V6 (`default r_pre_post used`) never fired on paired-*t* / paired-*F*
+  rows.** The eligibility test used its own column list in which 7 of 11 names did
+  not exist (`mean_post_exp`, `mean_post_nexp`, three `*_single_group` names, and
+  unsuffixed `paired_t` / `paired_f`). Pre/post and mean-change rows were unaffected
+  — the list's four real names still caught them — but rows whose pre/post
+  information is a paired test statistic raised no V6 flag, did not appear in
+  `attr(res, "r_defaulted")`, and did not receive the `(r-sensitive: ...)`
+  annotations on A6/E2/E2b in `summary()`. These are the rows where the assumption
+  bites hardest: paired-*t*/*F* routes standardise by the change SD, so the assumed
+  `r_pre_post` scales the **point estimate**, not merely the standard error.
+  Affected results are unchanged in value; what was missing is the warning that they
+  depend on an imputed correlation. The verbose note used a separate, correct-but-
+  incomplete list (it omitted `mean_pre_se_*`, `mean_pre_ci_*` and
+  `mean_change_ci_*`); both call sites now share one list.
+
+## Internal
+
+- New internal helpers `.r_consuming_columns()` / `.rows_with_r_consuming_data()`
+  give `convert_df()` a single source of truth for "does this row feed a route that
+  consumes `r_pre_post`?".
+- New regression guards: `tests/testthat/test-extraction-sheet-column-names.R`
+  asserts every name `data_extraction_sheet()` emits, for every `measure`, is a name
+  `.check_data()` recognises; `tests/testthat/test-V6-r-defaulted-columns.R` covers
+  12 r-consuming data shapes plus negative controls. Both assert the column lists
+  contain no phantom names, which is the check that would have caught either bug.
+
+
 # metaConvert 2.0.1
 
 ## Results change: re-run analyses produced with 2.0.0

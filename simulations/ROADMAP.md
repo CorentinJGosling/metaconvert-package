@@ -14,7 +14,13 @@ Status legend: ☐ not started · ◐ in progress · ☑ done
 
 ## Phase 0 — Safety net (blocking)
 
-### 0.1 ☐ `simulations/` is untracked
+### 0.1 ☑ `simulations/` is untracked — DONE (commit `ef38361`, branch `audit-remediation`)
+
+> Landed with two additions found during execution: the root `.gitignore`'s bare
+> `archive/` and `app` patterns match at **any depth**, so both
+> `simulations/archive/` and the whole of `simulations/app/` needed explicit
+> re-inclusion or they would have been silently dropped. 90 files, 17 MB tracked;
+> `papers/`, `students/` and `data/raw/` excluded. Not pushed.
 
 **Symptom.** `.gitignore:30` contains `simulations`; `git ls-files simulations`
 returns 0 files. The entire Monte Carlo programme — nine studies, the harness,
@@ -78,7 +84,53 @@ the new behaviour (NA + warning, or the documented pick). Mirror it for
 
 ---
 
-### 1.2 ☐ V6's column list is 64% phantom, so the r-flag misses the rows that matter most
+### 1.2 ☑ V6's column list is 64% phantom — DONE (commit `6904aa0`)
+
+> Landed. Precise impact, narrower than first stated: the 4 surviving real names
+> (`mean_pre_*`, `mean_change_*`) still caught pre/post and mean-change rows, so the
+> live regression class is rows whose pre/post datum is a **paired test statistic**
+> (`paired_t_*`, `paired_f_*`, p-value variants) — still the worst class, since the
+> assumed r scales the point estimate there. Both call sites now share
+> `.r_consuming_columns()` (30 names, 0 phantom); the verbose list was itself
+> incomplete (missing `mean_pre_se_*`, `mean_pre_ci_*`, `mean_change_ci_*`).
+> 39 new assertions; full suite 1478 pass / 0 fail.
+
+### 1.5 ☐ NEW — `data_extraction_sheet()` hands users a column name nothing reads
+
+Found by the phantom-column sweep run for 1.2 (15 agents over the 10 files that
+carry hardcoded column lists). **Exactly one further instance of the bug class
+exists**, and it is user-facing.
+
+**Symptom.** [data_extraction.R:57](../R/data_extraction.R#L57) puts
+`all_info_expected` in `cols_req`, spliced into the header of **every** measure
+branch of the extraction sheet. That string appears at that one line and nowhere
+else in `R/`. Every consumer reads `info_expected`
+([internal_check_data.R:47](../R/internal_check_data.R#L47), `:195`, `:333`, `:341`;
+[functions_summary.R:598](../R/functions_summary.R#L598), `:635`;
+[metaConvert.R:249](../R/metaConvert.R#L249)).
+
+**Verified empirically.** A user filling the sheet exactly as generated
+(`all_info_expected = "means_sd"`) gets `info_expected` **absent from the summary
+output entirely** — `.check_data()` manufactures it all-NA and `functions_summary.R`
+drops it. The documented QC feature (`man/summary.metaConvert.Rd:71`) has never
+worked for anyone who used the generated sheet.
+
+**Strategy — decision needed.** Emit `info_expected` from the sheet **and** have
+`.check_data()` accept `all_info_expected` as a deprecated alias (renaming it with a
+one-time message), so extraction files already saved in the wrong name start working
+rather than silently continuing to fail.
+
+**Test unit.** `tests/testthat/test-extraction-sheet-column-names.R` — assert every
+name `data_extraction_sheet()` emits, for every `measure`, is a name `.check_data()`
+recognises; assert the round trip populates `info_expected`; assert the legacy alias
+is accepted. This generalises the bug class into a permanent guard.
+
+**Cleared by the same sweep (no action):** `.positive_columns()`'s `logirr_se` and
+`.ci_triplets()`'s `logirr`/`loghr` triplets name output-only quantities — IRR and HR
+have no raw-data input columns — so they are dead weight behind an existing
+`%in% colnames(x)` guard, not a coverage hole. `internal_guidance.R`'s ~80-method
+map, `internal_check_data.R`, `functions_summary.R`, `internal_generate_df.R`,
+`main_aggregate_df.R` and `main_compare_df.R` are clean.
 
 **Symptom.** [main_convert_df.R:478-483](../R/main_convert_df.R#L478-L483) lists 11
 columns; **7 do not exist**: `mean_post_exp`, `mean_post_nexp`,
