@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D — Figure plate — metaConvert simulations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* The figure is the object; everything else annotates it. No left rail: the
+   controls sit in one line under the masthead so the plate gets the full width,
+   the way a supplement page is laid out. */
+body{font-family:var(--sans);font-size:14.5px;line-height:1.55;background:var(--paper);}
+.sheet{max-width:1320px;margin:0 auto;background:var(--white);
+  border-left:1px solid var(--rule);border-right:1px solid var(--rule);min-height:100vh;}
+
+.mast{
+  display:flex;align-items:baseline;gap:12px;padding:15px 46px 13px;
+  border-bottom:1px solid var(--ink);
+}
+.mast .wm{font-family:var(--serif);font-size:16.5px;font-weight:600;}
+.mast .wm em{font-style:normal;color:var(--soft);font-weight:400;}
+.mast nav{margin-left:auto;display:flex;gap:19px;font-size:12.5px;}
+.mast nav a{color:var(--soft);text-decoration:none;}
+.mast nav a[aria-current]{color:var(--ink);border-bottom:1.5px solid var(--rose);padding-bottom:2px;}
+
+.bar{
+  display:flex;flex-wrap:wrap;gap:4px 24px;align-items:baseline;
+  padding:10px 46px 11px;border-bottom:1px solid var(--rule);font-size:12.5px;
+}
+.bar .p{display:flex;align-items:baseline;gap:7px;}
+.bar .p>span{color:var(--soft);}
+.bar select{
+  font-family:var(--sans);font-size:12.5px;color:var(--ink);background:transparent;
+  border:0;border-bottom:1px solid var(--rule);padding:2px 15px 2px 0;cursor:pointer;
+  -webkit-appearance:none;appearance:none;border-radius:0;
+  background-image:linear-gradient(45deg,transparent 50%,var(--soft) 50%),
+                   linear-gradient(135deg,var(--soft) 50%,transparent 50%);
+  background-position:calc(100% - 7px) calc(50% + 1px),calc(100% - 3px) calc(50% + 1px);
+  background-size:4px 4px,4px 4px;background-repeat:no-repeat;
+}
+.bar select:hover{border-bottom-color:var(--rose);}
+.bar .p.fixed>span{color:var(--amber);}
+
+.head{padding:26px 46px 0;}
+.head .kicker{font-size:12.5px;color:var(--soft);margin:0 0 5px;max-width:none;}
+.head .kicker b{font-family:var(--mono);font-weight:400;color:var(--ink2);}
+h1{font-family:var(--serif);font-size:30px;font-weight:600;letter-spacing:-.018em;
+  margin:0 0 9px;line-height:1.14;}
+.head p{font-family:var(--serif);font-size:16.5px;line-height:1.5;color:var(--soft);
+  margin:0;max-width:70ch;}
+
+/* the plate: figure across the full measure, annotations beneath in columns */
+.plate{padding:24px 46px 0;}
+.plate figure{
+  border-top:1px solid var(--ink);border-bottom:1px solid var(--rule);
+  padding:20px 0 16px;margin:24px 0 0;
+}
+.plate figcaption{
+  font-family:var(--serif);font-size:14px;color:var(--ink);line-height:1.5;
+  margin-top:16px;max-width:88ch;
+}
+.plate figcaption b{font-weight:600;}
+
+.cols{
+  display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
+  gap:0 46px;padding:26px 46px 0;align-items:start;
+}
+h2{font-family:var(--serif);font-size:15px;font-weight:600;margin:0 0 11px;}
+h2.sp{margin-top:30px;}
+
+table.bt tbody td.l{font-size:13px;}
+table.bt caption{caption-side:bottom;text-align:left;font-size:12.5px;color:var(--soft);
+  padding:9px 0 0;line-height:1.5;}
+
+.rem{margin:0 0 14px;font-size:13.5px;line-height:1.6;color:var(--soft);}
+.rem b{color:var(--ink);font-weight:600;}
+.rem .m{font-family:var(--mono);font-size:12.5px;color:var(--ink2);}
+.rem.mark{padding-left:14px;border-left:2px solid var(--amber);color:var(--amber);}
+.rem.mark b{color:#5a430b;}
+.rem.mark .m{color:#5a430b;}
+
+.routes{border-top:1px solid var(--rule);padding-top:14px;margin-top:6px;}
+.routes h3{font-size:12.5px;font-weight:600;color:var(--ink);margin:0 0 8px;}
+.routes label{display:flex;align-items:center;gap:8px;font-family:var(--mono);
+  font-size:12.5px;color:var(--ink2);padding:3px 0;cursor:pointer;}
+.routes input{accent-color:var(--rose);margin:0;}
+
+.foot{
+  margin:44px 46px 0;padding:12px 0 34px;border-top:1px solid var(--rule);
+  font-size:11.5px;color:var(--faint);line-height:1.65;
+}
+.foot b{color:var(--soft);font-weight:500;}
+.foot .mono{font-family:var(--mono);}
+
+@media (max-width:1000px){
+  .cols{grid-template-columns:1fr;gap:0;}
+  .cols>div:last-child{margin-top:26px;}
+}
+@media (max-width:700px){
+  .mast,.bar,.head,.plate,.cols,.foot{padding-left:20px;padding-right:20px;}
+  .foot{margin-left:20px;margin-right:20px;}
+  h1{font-size:24px;}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="mast">
+    <span class="wm">metaConvert <em>· simulation programme</em></span>
+    <nav>
+      <a href="#" aria-current="page">Figure</a>
+      <a href="#">Table</a>
+      <a href="#">Rows</a>
+      <a href="index.html">Directions</a>
+    </nav>
+  </header>
+
+  <div class="bar">
+    <span class="p"><span>Study</span>
+      <select><option>05 — Risk ratio to odds ratio</option><option>04 — Odds ratio to risk ratio</option></select></span>
+    <span class="p"><span>Compared with</span>
+      <select><option>population parameter</option><option>same-sample statistic</option></select></span>
+    <span class="p"><span>Measure</span>
+      <select><option>root mean squared error</option><option>bias</option><option>interval coverage</option></select></span>
+    <span class="p"><span>Axis</span><select><option>rr</option><option>n</option></select></span>
+    <span class="p"><span>Panels</span><select><option>n</option><option>br</option></select></span>
+    <span class="p fixed"><span>br fixed at</span>
+      <select><option>0.01</option><option>0.05</option><option>0.15</option><option>0.30</option><option>0.50</option></select></span>
+    <span class="p fixed"><span>br_guess fixed at</span>
+      <select><option>0.01</option><option>0.05</option><option>0.15</option><option>0.30</option><option>0.50</option></select></span>
+  </div>
+
+  <div class="head">
+    <p class="kicker">Study 05 · package argument <b>rr_to_or</b> · 15 conditions ·
+      1,000 replications each</p>
+    <h1>Risk ratio to odds ratio</h1>
+    <p>Converting a reported risk ratio to an odds ratio requires a baseline risk the
+    source study usually does not give. This study varies the true baseline risk and
+    the value assumed in its place, and asks what the substitution costs.</p>
+  </div>
+
+  <div class="plate">
+    <figure>
+      <img src="figure-05-rmse.svg" alt="Root mean squared error against risk ratio in
+        three panels for n = 50, 100 and 300. vanderweele_rr_squared sits well above the
+        other four routes at every risk ratio and sample size; the remaining four run
+        close together, dipietrantonj lowest.">
+      <figcaption><b>Root mean squared error against the true risk ratio</b>, by
+      sample size, comparing the five conversion routes at a true and assumed
+      baseline risk of 0.01. Colours are the routes in the table below; no separate
+      legend is drawn. Panels share a vertical scale, which starts at zero.</figcaption>
+    </figure>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Performance by route</h2>
+      <table class="bt">
+        <thead>
+          <tr>
+            <th class="l">Route</th>
+            <th>Mean<br>RMSE</th><th>Worst</th><th>Mean<br>|bias|</th>
+            <th>Empirical<br>SE</th><th>SE<br>ratio</th><th>Coverage</th><th>Interval<br>width</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="l"><span class="sw" style="background:var(--m1)"></span>dipietrantonj</td>
+            <td>0.903</td><td>1.299</td><td>0.363</td><td>0.759</td><td>1.77</td><td>0.992</td><td>5.01</td></tr>
+          <tr><td class="l"><span class="sw" style="background:var(--m4)"></span>transpose</td>
+            <td>0.971</td><td>1.336</td><td>0.365</td><td>0.829</td><td>2.13</td><td>0.999</td><td>6.43</td></tr>
+          <tr><td class="l"><span class="sw" style="background:var(--m2)"></span>grant</td>
+            <td>0.981</td><td>1.338</td><td>0.365</td><td>0.841</td><td>2.27</td><td>0.999</td><td>6.90</td></tr>
+          <tr><td class="l"><span class="sw" style="background:var(--m3)"></span>metaumbrella</td>
+            <td>0.988</td><td>1.340</td><td>0.360</td><td>0.852</td><td>1.86</td><td>0.998</td><td>5.91</td></tr>
+          <tr><td class="l"><span class="sw" style="background:var(--m5)"></span>vanderweele_rr_squared</td>
+            <td>1.753</td><td>2.186</td><td>0.292</td><td>1.696</td><td>2.07</td><td>1.000</td><td>12.87</td></tr>
+        </tbody>
+        <caption>Averaged over the 15 conditions shown, ordered by mean RMSE.
+        <b>Worst</b> is the least favourable single condition, not the average. Bias,
+        standard errors and width are on the log odds-ratio scale.</caption>
+      </table>
+
+      <h2 class="sp">What the numbers say</h2>
+      <p class="rem">Mean RMSE is smallest for <span class="m">dipietrantonj</span>
+      (0.903) and largest for <span class="m">vanderweele_rr_squared</span> (1.753).
+      The other three fall between them, within 0.017 of one another. These
+      aggregates record no Monte Carlo standard error for RMSE, so that middle
+      ordering cannot be separated from simulation noise.</p>
+
+      <p class="rem">RMSE and bias disagree.
+      <span class="m">vanderweele_rr_squared</span> has the smallest mean absolute
+      bias of the five (0.292) and the largest RMSE, because its
+      replication-to-replication variability is about twice everyone
+      else&rsquo;s. Closer on average, much less dependable on any one study.</p>
+
+      <p class="rem mark">Coverage between 0.992 and 1.000 is <b>over-coverage, not
+      calibration</b>. The SE ratio is 1.77 to 2.27 for every route and mean interval
+      width runs 5.01 to 12.87 on the log odds-ratio scale. The programme records an
+      over-wide standard error across both binary-outcome studies — including
+      <span class="m">transpose</span>, which only copies the log odds-ratio standard
+      error through — names the continuity correction as one candidate, and has not
+      chased it. The correction rates opposite are consistent with that candidate but
+      do not establish it.</p>
+    </div>
+
+    <div>
+      <h2>About this selection</h2>
+
+      <p class="rem mark"><b>The misspecification is switched off.</b> The assumed
+      baseline risk equals the true one
+      (<span class="m">br_guess = br = 0.01</span>), so nothing in this view is
+      misspecified — and the substitution cost this study exists to measure is not
+      being exercised. Change <span class="m">br_guess</span> above to see it.</p>
+
+      <p class="rem mark"><b>This is the sparsest corner.</b>
+      <span class="m">br = 0.01</span> is the smallest baseline risk in the grid. At
+      <span class="m">n = 50</span> the whole 2×2 table holds 0.31 to 0.75 expected
+      cases, so under the generating model the Haldane–Anscombe correction applies to
+      91%–99% of replications there, and to 26%–76% at <span class="m">n = 300</span>.
+      Much of what is compared here is the behaviour of that correction.</p>
+
+      <p class="rem">No replication was non-estimable here. Across the whole of study
+      05, <span class="m">grant</span> returns no estimate in up to 62% of a cell,
+      in the region where <span class="m">rr × br_guess ≥ 1</span>. That region is
+      not reachable from the current selection.</p>
+
+      <h2 class="sp">Choosing a measure</h2>
+      <p class="rem">Bias describes the point estimate; RMSE adds the
+      estimator&rsquo;s variability; the SE ratio asks whether the reported standard
+      error matches the real one; coverage is the only measure that degrades under
+      either a wrong estimate or a wrong standard error. No one of them is
+      sufficient, so the table prints them together and the selected measure only
+      sets the order.</p>
+      <p class="rem">Against a same-sample target, coverage and the SE ratio are not
+      interpretable — a nominal 95% interval is not built to cover a quantity
+      recomputed on each replication&rsquo;s own data — and are reported as
+      unavailable rather than printed.</p>
+
+      <div class="routes">
+        <h3>Routes shown</h3>
+        <label><input type="checkbox" checked><span class="sw" style="background:var(--m1)"></span>dipietrantonj</label>
+        <label><input type="checkbox" checked><span class="sw" style="background:var(--m2)"></span>grant</label>
+        <label><input type="checkbox" checked><span class="sw" style="background:var(--m3)"></span>metaumbrella</label>
+        <label><input type="checkbox" checked><span class="sw" style="background:var(--m4)"></span>transpose</label>
+        <label><input type="checkbox" checked><span class="sw" style="background:var(--m5)"></span>vanderweele_rr_squared</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Source</b> <span class="mono">05_rr_to_or_nrep1000.csv</span>, aggregated
+    2026&#8209;07&#8209;31 &nbsp;·&nbsp; <b>Measures</b> after Morris, White &amp;
+    Crowther (2019) &nbsp;·&nbsp; <b>Produced by</b>
+    <span class="mono">run_study()</span>, which calls metaConvert directly; no
+    formula is reimplemented for the simulation.
+  </div>
+
+</div>
+</body>
+</html>

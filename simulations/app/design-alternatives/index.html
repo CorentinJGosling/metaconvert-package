@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Design directions — metaConvert simulations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+body{font-family:var(--sans);font-size:15px;line-height:1.6;background:var(--white);}
+.sheet{max-width:960px;margin:0 auto;padding:0 44px 90px;}
+
+.mast{display:flex;align-items:baseline;gap:12px;padding:16px 0 12px;
+  border-bottom:1px solid var(--ink);}
+.mast .wm{font-family:var(--serif);font-size:16.5px;font-weight:600;}
+.mast .wm em{font-style:normal;color:var(--soft);font-weight:400;}
+
+h1{font-family:var(--serif);font-size:30px;font-weight:600;letter-spacing:-.018em;
+  margin:30px 0 12px;line-height:1.15;}
+.lede{font-family:var(--serif);font-size:17px;line-height:1.55;color:var(--soft);
+  margin:0 0 26px;max-width:70ch;}
+h2{font-family:var(--serif);font-size:16px;font-weight:600;margin:34px 0 10px;}
+p{margin:0 0 12px;max-width:74ch;}
+p b{font-weight:600;color:var(--ink);}
+.m{font-family:var(--mono);font-size:13px;color:var(--ink2);}
+
+ul{margin:0 0 14px;padding-left:19px;max-width:74ch;}
+li{margin-bottom:7px;color:var(--soft);}
+li b{color:var(--ink);font-weight:600;}
+
+.dirs{border-top:1px solid var(--ink);margin:20px 0 0;}
+.dir{
+  display:grid;grid-template-columns:26px minmax(0,1fr) 128px;gap:0 20px;
+  padding:20px 0;border-bottom:1px solid var(--rule);align-items:start;
+}
+.dir .k{font-family:var(--mono);font-size:19px;color:var(--rose-d);line-height:1.1;}
+.dir h3{font-family:var(--serif);font-size:18px;font-weight:600;margin:0 0 5px;
+  line-height:1.2;}
+.dir h3 a{color:var(--ink);text-decoration:none;}
+.dir h3 a:hover{color:var(--rose-d);}
+.dir .sub{font-size:13px;color:var(--soft);margin:0 0 9px;}
+.dir p{font-size:13.5px;color:var(--soft);margin:0 0 8px;max-width:60ch;}
+.dir p:last-child{margin-bottom:0;}
+.dir .go{
+  font-size:12.5px;text-align:right;color:var(--rose-d);text-decoration:none;
+  padding-top:5px;white-space:nowrap;
+}
+.dir .go:hover{text-decoration:underline;}
+.dir .tag{
+  display:block;text-align:right;font-size:11.5px;color:var(--faint);margin-top:6px;
+  line-height:1.45;
+}
+
+/* the last direction already draws a rule, so .rules must not draw a second one
+   below it with a gap between the two */
+.dir:last-of-type{border-bottom:0;}
+.rules{border-top:1px solid var(--rule);margin-top:6px;padding-top:26px;}
+table.bt{margin-top:6px;}
+table.bt td.l,table.bt th.l{white-space:normal;}
+table.bt tbody td{font-family:var(--sans);text-align:left;padding:8px 0 8px 20px;
+  white-space:normal;color:var(--soft);font-size:13.5px;vertical-align:top;}
+table.bt tbody td.l{color:var(--ink);width:34%;}
+
+.foot{margin-top:44px;padding-top:12px;border-top:1px solid var(--rule);
+  font-size:12px;color:var(--faint);line-height:1.6;}
+.foot b{color:var(--soft);font-weight:500;}
+
+@media (max-width:720px){
+  .sheet{padding:0 20px 60px;}
+  .dir{grid-template-columns:22px minmax(0,1fr);}
+  .dir .go,.dir .tag{grid-column:2;text-align:left;}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="mast">
+    <span class="wm">metaConvert <em>· simulation programme</em></span>
+  </header>
+
+  <h1>Four directions for the results viewer</h1>
+  <p class="lede">Static mockups, not the running app. Each shows the same view of
+  the same study &mdash; study 05, root mean squared error against the risk ratio
+  &mdash; so the four can be compared on layout and register rather than on content.</p>
+
+  <h2>Every number here is real</h2>
+  <p>All figures are computed from
+  <span class="m">data/aggregated/05_rr_to_or_nrep1000.csv</span> for the view the
+  app opens by default: target = population parameter, <span class="m">br</span> =
+  0.01, <span class="m">br_guess</span> = 0.01, <span class="m">p_exp</span> = 0.50,
+  15 conditions, 1,000 replications each. The figure is rendered from that same
+  slice by <span class="m">make-figure.R</span>. Nothing was invented to fill a
+  layout, so the copy can be checked.</p>
+
+  <h2>What changed, beyond the styling</h2>
+  <p>Reviewing the numbers to write these mockups turned up two things the current
+  design does not say, and all four directions now say them:</p>
+  <ul>
+    <li><b>The default view switches the study off.</b> The held-constant defaults
+    put <span class="m">br_guess</span> equal to <span class="m">br</span>, so the
+    assumed baseline risk is exactly correct and no misspecification is being
+    exercised &mdash; which is the entire subject of study 05. It also lands on
+    <span class="m">br</span> = 0.01, the smallest value in the grid, where the whole
+    2&times;2 table holds under one expected case at <span class="m">n</span> = 50 and
+    the continuity correction applies to almost every replication.</li>
+    <li><b>Coverage near 1.00 is not good news.</b> Every route reports a standard
+    error close to twice the empirical one, so the intervals are too wide rather
+    than well calibrated. Presenting coverage as a headline number without the SE
+    ratio beside it inverts the finding &mdash; an argument for putting all measures
+    in one table rather than promoting one of them into a card.</li>
+  </ul>
+
+  <div class="dirs">
+
+    <div class="dir">
+      <div class="k">A</div>
+      <div>
+        <h3><a href="A-report.html">Statistical report</a></h3>
+        <p class="sub">Left selection rail · one-line findings · booktabs table · figure</p>
+        <p>Serif headings and a booktabs table, but no prose block: each finding and
+        each caveat is a single line, and the reasoning behind it sits on a hover
+        circle. Measure definitions hang off the column headers, where they are
+        needed.</p>
+        <p>Everything fits one screen. The trimmed version of this page is about half
+        the height of the first draft and carries the same information.</p>
+      </div>
+      <div>
+        <a class="go" href="A-report.html">Open &rarr;</a>
+        <span class="tag">chosen<br>direction</span>
+      </div>
+    </div>
+
+    <div class="dir">
+      <div class="k">B</div>
+      <div>
+        <h3><a href="B-margin.html">Margin notes</a></h3>
+        <p class="sub">Controls in one strip · document left · caveats in the margin</p>
+        <p>Every caveat that the current design buries in a grey paragraph moves to a
+        right-hand margin column, where the reader can take it or leave it. Sentences
+        carry a small reference mark to the note that qualifies them.</p>
+        <p>Solves a real problem &mdash; this app is mostly caveats &mdash; and reads
+        as the most scholarly. Needs width; the margin folds under the text below
+        1080px.</p>
+      </div>
+      <div>
+        <a class="go" href="B-margin.html">Open &rarr;</a>
+        <span class="tag">best for<br>the caveats</span>
+      </div>
+    </div>
+
+    <div class="dir">
+      <div class="k">C</div>
+      <div>
+        <h3><a href="C-listing.html">Results listing</a></h3>
+        <p class="sub">Monospace throughout · run-in section rules · gutter marks</p>
+        <p>Set the way statistical output should be set: one grid, tabular figures,
+        rules where a printed listing would rule, no ornament. Controls read as an
+        editable command line. Warnings are a marker in the gutter rather than a
+        coloured panel.</p>
+        <p>The furthest from a commercial dashboard, and the most opinionated. It
+        assumes the reader is comfortable with a software listing.</p>
+      </div>
+      <div>
+        <a class="go" href="C-listing.html">Open &rarr;</a>
+        <span class="tag">most austere</span>
+      </div>
+    </div>
+
+    <div class="dir">
+      <div class="k">D</div>
+      <div>
+        <h3><a href="D-plate.html">Figure plate</a></h3>
+        <p class="sub">No side rail · full-width figure · annotations in two columns</p>
+        <p>The figure is the object and everything else annotates it. Controls sit in
+        one line under the masthead, so the plate gets the full measure; the table and
+        the notes sit beneath it in two columns.</p>
+        <p>Best if the figure is what people come for. The fixed-at controls are
+        marked in the bar, because in this study they change what the numbers mean.</p>
+      </div>
+      <div>
+        <a class="go" href="D-plate.html">Open &rarr;</a>
+        <span class="tag">figure first</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="rules">
+    <h2>What all four refuse to do</h2>
+    <p>The current design reads as a product dashboard because of a specific set of
+    devices. None of the four uses any of them.</p>
+
+    <table class="bt">
+      <thead><tr><th class="l">Dropped</th><th class="l">Instead</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="l">Hero metric cards &mdash; one big number per box</td>
+          <td>Numbers live in a table, or in a sentence that says what they are the
+          mean of. A single promoted number cannot carry its own scope.</td>
+        </tr>
+        <tr>
+          <td class="l">Uppercase letterspaced micro-labels</td>
+          <td>Sentence-case labels, or ordinary table headers. Small caps are a
+          typographic device, not a way to make a label look important.</td>
+        </tr>
+        <tr>
+          <td class="l">Rounded cards, drop shadows, panels on a tinted page</td>
+          <td>Hairline rules and white space. Three rules make a table; a box adds
+          nothing a rule does not.</td>
+        </tr>
+        <tr>
+          <td class="l">Pill badges for status &mdash; <span class="m">RESOLVABLE</span></td>
+          <td>A sentence saying what can and cannot be concluded, and why. A badge
+          compresses a statistical caveat into a word.</td>
+        </tr>
+        <tr>
+          <td class="l">Competitive language &mdash; <span class="m">leads on this measure</span></td>
+          <td>Ordering, stated as ordering: <i>smallest mean RMSE</i>, with the
+          measure and the set it is averaged over named.</td>
+        </tr>
+        <tr>
+          <td class="l">Paragraphs of explanation on the page</td>
+          <td>One line per finding, with the reasoning on a hover circle, and measure
+          definitions on the column headers. The page carries conclusions; the reader
+          asks for the derivation.</td>
+        </tr>
+        <tr>
+          <td class="l">Accent colour as decoration</td>
+          <td>Colour encodes data. The five method colours mean one route each; rose
+          marks only the current selection.</td>
+        </tr>
+        <tr>
+          <td class="l">Boxed grey facet strips and a separate plot legend</td>
+          <td>Panel labels set as captions; the table is the legend, so the mapping
+          from colour to route is written once.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="foot">
+    <b>Files</b> tokens.css (shared palette and table rules) · A&ndash;D .html ·
+    make-figure.R · figure-05-rmse.svg<br>
+    <b>To regenerate the figure</b> run <span class="m">Rscript
+    app/design-alternatives/make-figure.R</span> from <span class="m">simulations/</span>.
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,13 @@
+name: simulations
+title: simulations
+username: ebiact
+account: ebiact
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10982595
+bundleId: 8294592
+url: https://ebiact.shinyapps.io/simulations/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: bazar/app2.R

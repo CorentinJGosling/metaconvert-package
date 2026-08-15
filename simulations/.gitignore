@@ -1,0 +1,36 @@
+# =============================================================================
+# What is excluded from version control inside simulations/
+#
+# The folder itself IS versioned (the root .gitignore no longer lists it). It is
+# kept out of the built package by ^simulations$ in .Rbuildignore, which is a
+# separate mechanism and is unaffected.
+# =============================================================================
+
+# Per-replication output: ~315 MB and fully regenerable. Every (study, condition)
+# derives a deterministic L'Ecuyer-CMRG stream from SIM_BASE_SEED in R/00_config.R,
+# so any condition re-runs bit-for-bit. The aggregated CSVs -- the shipped result --
+# are NOT ignored.
+data/raw/
+
+# Published papers. Excluded to avoid redistributing copyrighted PDFs from a
+# repository that may become public. Kept on disk; cite them, do not commit them.
+papers/
+
+# RA-facing onboarding and task sheets. Excluded by request.
+students/
+
+# Re-include the legacy archive. The root .gitignore has a global `archive/` rule
+# aimed at the repository-root archive/, which catches this one collaterally.
+# simulations/archive/ is the documented record of the pre-rebuild defects and is
+# cited by line number in README.md and SOURCE-VERIFICATION.md, so it is versioned.
+!archive/
+
+# Re-include the results viewer. The root .gitignore's bare `app` rule (aimed at the
+# repository-root app/) matches a directory named `app` at ANY depth, so it would
+# otherwise silently drop the whole Shiny programme -- app.R, www/ and the
+# design-alternatives/ mockups -- from version control.
+!app/
+
+# NB app/rsconnect/shinyapps.io/ebiact/simulations.dcf is therefore versioned too.
+# It holds no credentials (account name, app id, public URL only) and is what lets
+# rsconnect::deployApp() redeploy to the existing app instead of creating a new one.

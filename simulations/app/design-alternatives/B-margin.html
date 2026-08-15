@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>B — Margin notes — metaConvert simulations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+body{font-family:var(--serif);font-size:16px;line-height:1.62;background:var(--white);}
+
+/* ---- masthead ------------------------------------------------------------ */
+.mast{
+  display:flex;align-items:baseline;gap:14px;max-width:1160px;margin:0 auto;
+  padding:16px 44px 12px;border-bottom:1px solid var(--rule);
+}
+.mast .wm{font-size:16px;font-weight:600;letter-spacing:-.01em;}
+.mast .wm em{font-style:italic;color:var(--soft);font-weight:400;}
+.mast nav{margin-left:auto;display:flex;gap:20px;font-family:var(--sans);font-size:12.5px;}
+.mast nav a{color:var(--soft);text-decoration:none;}
+.mast nav a[aria-current]{color:var(--ink);border-bottom:1.5px solid var(--rose);padding-bottom:2px;}
+
+/* ---- controls: a single quiet strip, not a rail -------------------------- */
+.strip{
+  max-width:1160px;margin:0 auto;padding:11px 44px;border-bottom:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;gap:6px 26px;align-items:baseline;
+  font-family:var(--sans);font-size:12.5px;
+}
+.strip .set{display:flex;align-items:baseline;gap:7px;}
+.strip .set>span{color:var(--soft);}
+.strip select{
+  font-family:var(--sans);font-size:12.5px;color:var(--ink);background:transparent;
+  border:0;border-bottom:1px solid var(--rule);padding:2px 16px 2px 0;
+  border-radius:0;cursor:pointer;
+  -webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--soft) 50%),
+                   linear-gradient(135deg,var(--soft) 50%,transparent 50%);
+  background-position:calc(100% - 7px) calc(50% + 1px),calc(100% - 3px) calc(50% + 1px);
+  background-size:4px 4px,4px 4px;background-repeat:no-repeat;
+}
+.strip select:hover{border-bottom-color:var(--rose);}
+
+/* ---- the two-column document: text/figure left, notes in the margin ------ */
+/* The page is sized so the text column lands near 65 characters on its own,
+   rather than capping paragraphs inside a much wider column -- which left a
+   400px trough of white between the prose and the margin. */
+.page{
+  max-width:1160px;margin:0 auto;padding:30px 44px 80px;
+  display:grid;grid-template-columns:minmax(0,1fr) 292px;gap:0 42px;align-items:start;
+}
+.body{min-width:0;}
+.margin{
+  font-family:var(--sans);font-size:12.5px;line-height:1.55;color:var(--soft);
+  padding-top:5px;
+}
+
+h1{font-size:31px;font-weight:600;letter-spacing:-.015em;margin:0 0 6px;line-height:1.15;}
+.arg{font-family:var(--mono);font-size:13px;color:var(--soft);margin:0 0 16px;}
+.abstract{
+  font-size:17.5px;line-height:1.55;color:var(--ink2);margin:0 0 22px;
+  padding-bottom:20px;border-bottom:1px solid var(--rule);
+}
+h2{font-size:15px;font-weight:600;margin:30px 0 9px;letter-spacing:.005em;}
+p{margin:0 0 13px;}
+.mono-in{font-family:var(--mono);font-size:14px;}
+
+/* margin notes: the caveats that used to be grey blobs in the main column */
+.note{margin:0 0 22px;padding-left:13px;border-left:1px solid var(--rule);}
+.note.flag{border-left-color:var(--amber);}
+.note h3{
+  font-size:12.5px;font-weight:600;color:var(--ink);margin:0 0 5px;
+  font-family:var(--sans);
+}
+.note.flag h3{color:var(--amber);}
+.note p{margin:0 0 8px;max-width:none;font-size:12.5px;}
+.note p:last-child{margin-bottom:0;}
+.note b{color:var(--ink);font-weight:600;}
+.note .mono{font-family:var(--mono);font-size:11.5px;}
+
+/* a reference mark tying a sentence to its margin note */
+.ref{
+  font-family:var(--sans);font-size:10px;vertical-align:super;line-height:0;
+  color:var(--rose-d);text-decoration:none;padding:0 1px;
+}
+
+table.bt{font-family:var(--sans);}
+table.bt caption{caption-side:top;text-align:left;font-size:13.5px;color:var(--ink);
+  padding:0 0 9px;}
+table.bt caption b{font-weight:600;}
+table.bt tbody td.l{font-size:13px;}
+figure{margin:8px 0 0;}
+figcaption{font-size:13.5px;color:var(--ink);margin-top:12px;max-width:70ch;line-height:1.5;}
+figcaption b{font-weight:600;}
+
+.routes{margin:0 0 22px;}
+.routes h3{font-size:12.5px;font-weight:600;color:var(--ink);margin:0 0 7px;font-family:var(--sans);}
+.routes label{display:flex;align-items:center;gap:8px;font-family:var(--mono);
+  font-size:12px;color:var(--ink2);padding:2.5px 0;cursor:pointer;}
+.routes input{accent-color:var(--rose);margin:0;}
+
+.foot{
+  grid-column:1 / -1;margin-top:46px;padding-top:12px;border-top:1px solid var(--rule);
+  font-family:var(--sans);font-size:11.5px;color:var(--faint);line-height:1.6;
+}
+.foot b{color:var(--soft);font-weight:500;}
+.foot .mono{font-family:var(--mono);}
+
+@media (max-width:1080px){
+  .page{grid-template-columns:1fr;gap:0;}
+  .margin{border-top:1px solid var(--rule);margin-top:30px;padding-top:22px;}
+}
+@media (max-width:700px){
+  .mast,.strip,.page{padding-left:20px;padding-right:20px;}
+  h1{font-size:25px;}
+}
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <span class="wm">metaConvert <em>simulation programme</em></span>
+  <nav>
+    <a href="#" aria-current="page">Study 05</a>
+    <a href="#">All studies</a>
+    <a href="index.html">Directions</a>
+  </nav>
+</header>
+
+<div class="strip">
+  <span class="set"><span>Study</span>
+    <select><option>05 — Risk ratio to odds ratio</option><option>04 — Odds ratio to risk ratio</option></select></span>
+  <span class="set"><span>Compared with</span>
+    <select><option>population parameter</option><option>same-sample statistic</option></select></span>
+  <span class="set"><span>Measure</span>
+    <select><option>root mean squared error</option><option>bias</option><option>interval coverage</option></select></span>
+  <span class="set"><span>Axis</span>
+    <select><option>rr</option><option>n</option><option>br</option></select></span>
+  <span class="set"><span>Panels</span>
+    <select><option>n</option><option>br</option><option>none</option></select></span>
+  <span class="set"><span>br</span><select><option>0.01</option><option>0.05</option><option>0.15</option></select></span>
+  <span class="set"><span>br_guess</span><select><option>0.01</option><option>0.05</option><option>0.15</option></select></span>
+</div>
+
+<div class="page">
+
+  <main class="body">
+    <h1>Risk ratio to odds ratio</h1>
+    <p class="arg">study 05 · argument rr_to_or · 15 conditions · 1,000 replications each</p>
+
+    <p class="abstract">Converting a reported risk ratio to an odds ratio requires a
+    baseline risk the source study usually does not give. This study varies the true
+    baseline risk and the value assumed in its place, and asks what the substitution
+    costs.</p>
+
+    <h2>What the current view shows</h2>
+
+    <p>Mean root mean squared error is smallest for
+    <span class="mono-in">dipietrantonj</span> (0.903) and largest for
+    <span class="mono-in">vanderweele_rr_squared</span> (1.753). The remaining three
+    routes fall between them, within 0.017 of one another &mdash; a gap this view
+    cannot test.<a class="ref" href="#n-mcse">1</a></p>
+
+    <p>The ordering by RMSE and the ordering by bias disagree.
+    <span class="mono-in">vanderweele_rr_squared</span> has the smallest mean
+    absolute bias of the five (0.292) alongside the largest RMSE, because its
+    replication-to-replication variability is roughly twice that of the others
+    (empirical SE 1.696 against 0.759 to 0.852). Closer on average, much less
+    dependable on any one study.</p>
+
+    <p>Every route reports a model standard error near twice the empirical one and
+    covers the population parameter 99.2% to 100% of the time against a nominal
+    95%.<a class="ref" href="#n-cover">2</a> These intervals are too wide rather
+    than well calibrated.</p>
+
+    <figure>
+      <img src="figure-05-rmse.svg" alt="Root mean squared error against risk ratio
+        in three panels for n = 50, 100 and 300. vanderweele_rr_squared sits well above
+        the other four at every risk ratio and sample size; the remaining four run close
+        together with dipietrantonj lowest.">
+      <figcaption><b>Figure 1.</b> Root mean squared error against the true risk
+      ratio, by sample size. Colours are the routes listed below; the table is the
+      legend. Panels share a vertical scale.</figcaption>
+    </figure>
+
+    <h2 style="margin-top:34px">Performance by route</h2>
+    <table class="bt">
+      <caption>Averaged over the 15 conditions shown, ordered by mean RMSE.
+      <b>Worst</b> is the least favourable single condition, not the average.</caption>
+      <thead>
+        <tr>
+          <th class="l">Route</th>
+          <th>Mean RMSE</th><th>Worst</th><th>Mean |bias|</th>
+          <th>Empirical SE</th><th>SE ratio</th><th>Coverage</th><th>Width</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="l"><span class="sw" style="background:var(--m1)"></span>dipietrantonj</td>
+          <td>0.903</td><td>1.299</td><td>0.363</td><td>0.759</td><td>1.77</td><td>0.992</td><td>5.01</td></tr>
+        <tr><td class="l"><span class="sw" style="background:var(--m4)"></span>transpose</td>
+          <td>0.971</td><td>1.336</td><td>0.365</td><td>0.829</td><td>2.13</td><td>0.999</td><td>6.43</td></tr>
+        <tr><td class="l"><span class="sw" style="background:var(--m2)"></span>grant</td>
+          <td>0.981</td><td>1.338</td><td>0.365</td><td>0.841</td><td>2.27</td><td>0.999</td><td>6.90</td></tr>
+        <tr><td class="l"><span class="sw" style="background:var(--m3)"></span>metaumbrella</td>
+          <td>0.988</td><td>1.340</td><td>0.360</td><td>0.852</td><td>1.86</td><td>0.998</td><td>5.91</td></tr>
+        <tr><td class="l"><span class="sw" style="background:var(--m5)"></span>vanderweele_rr_squared</td>
+          <td>1.753</td><td>2.186</td><td>0.292</td><td>1.696</td><td>2.07</td><td>1.000</td><td>12.87</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <aside class="margin">
+
+    <div class="note flag" id="n-slice">
+      <h3>This slice holds the misspecification at zero</h3>
+      <p>The assumed baseline risk equals the true one
+      (<span class="mono">br_guess = br = 0.01</span>), so nothing in the current
+      view is misspecified &mdash; the effect this study exists to measure is
+      switched off.</p>
+      <p><span class="mono">0.01</span> is also the smallest baseline risk in the
+      grid. At <span class="mono">n = 50</span> the whole 2&times;2 table holds
+      between 0.31 and 0.75 expected cases, so under the generating model the
+      Haldane&ndash;Anscombe correction applies to 91%&ndash;99% of replications
+      there, and to 26%&ndash;76% at <span class="mono">n = 300</span>. Much of what
+      is compared here is the behaviour of that correction.</p>
+      <p>Both follow from the default selection, not from the data.</p>
+    </div>
+
+    <div class="note" id="n-mcse">
+      <h3>1 · No Monte Carlo error for RMSE</h3>
+      <p>These aggregates record a Monte Carlo standard error for bias, empirical
+      SE, the SE ratio and coverage, but not for RMSE. Differences between the three
+      middle routes therefore cannot be separated from simulation noise on this
+      measure. Switch to <b>bias</b> or <b>coverage</b> to get an error bar and a
+      resolution band.</p>
+    </div>
+
+    <div class="note" id="n-cover">
+      <h3>2 · Over-coverage is not calibration</h3>
+      <p>SE ratio runs 1.77 to 2.27 here and mean interval width from 5.01 to 12.87
+      on the log odds-ratio scale. Coverage near 1.00 reflects intervals about twice
+      as wide as they should be.</p>
+      <p>The programme records an over-wide standard error across both
+      binary-outcome studies, including <span class="mono">transpose</span>, which
+      only copies the log odds-ratio standard error through. It names the continuity
+      correction as one candidate and has not chased it. The correction rates above
+      are consistent with that candidate but do not establish it.</p>
+    </div>
+
+    <div class="note">
+      <h3>Outside this view</h3>
+      <p>No replication was non-estimable in this slice. Across the whole of study
+      05, <span class="mono">grant</span> fails to return an estimate in up to 62%
+      of a cell, where <span class="mono">rr × br_guess ≥ 1</span>. That region is
+      not reachable from the current selection.</p>
+    </div>
+
+    <div class="routes">
+      <h3>Routes shown</h3>
+      <label><input type="checkbox" checked><span class="sw" style="background:var(--m1)"></span>dipietrantonj</label>
+      <label><input type="checkbox" checked><span class="sw" style="background:var(--m2)"></span>grant</label>
+      <label><input type="checkbox" checked><span class="sw" style="background:var(--m3)"></span>metaumbrella</label>
+      <label><input type="checkbox" checked><span class="sw" style="background:var(--m4)"></span>transpose</label>
+      <label><input type="checkbox" checked><span class="sw" style="background:var(--m5)"></span>vanderweele_rr_squared</label>
+    </div>
+
+    <div class="note">
+      <h3>Reading the measures</h3>
+      <p>Bias describes the point estimate. RMSE adds the estimator&rsquo;s
+      variability. The SE ratio asks whether the reported standard error matches the
+      real one. Coverage is the only measure that degrades under either a wrong
+      estimate or a wrong standard error, which is why the table prints all of them
+      and the selected measure only sets the order.</p>
+    </div>
+  </aside>
+
+  <div class="foot">
+    <b>Source</b> <span class="mono">05_rr_to_or_nrep1000.csv</span>, aggregated
+    2026&#8209;07&#8209;31 &nbsp;·&nbsp;
+    <b>Measures</b> after Morris, White &amp; Crowther (2019) &nbsp;·&nbsp;
+    <b>Produced by</b> <span class="mono">run_study()</span>, which calls
+    metaConvert directly; no formula is reimplemented for the simulation.
+  </div>
+
+</div>
+</body>
+</html>

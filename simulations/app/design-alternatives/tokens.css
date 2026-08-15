@@ -1,0 +1,86 @@
+/* =============================================================================
+   Shared tokens for the four design alternatives.
+   Palette is metaconvert.org: rose accent, indigo for data, warm neutrals.
+   No green anywhere in the brand.
+
+   The rule these mockups follow, and the previous design broke: COLOUR ENCODES
+   DATA. Rose is not a decorative accent stripe; it marks the current selection
+   and nothing else. The five method colours are the only other colours, and they
+   mean one method each.
+   ========================================================================== */
+
+:root{
+  --paper:#f7f7f3;
+  --white:#ffffff;
+  --ink:#211f38;
+  --ink2:#2c2a47;
+  --soft:#5d5c6e;      /* darkened from #6b6a7d: 7.0:1 on white, was 5.3:1 */
+  --faint:#83828f;     /* 4.6:1 on white -- the floor for anything readable */
+  --rule:#dededa;
+  --rule-hair:#ebebe5;
+  --rose:#d66268;
+  --rose-d:#a23c42;
+  --amber:#7a5c10;
+  --red:#8f2727;
+
+  /* method colours: one per conversion route, ordered so neighbours differ in
+     hue (methods are listed alphabetically) */
+  --m1:#d66268;  /* dipietrantonj          */
+  --m2:#2c2a47;  /* grant                  */
+  --m3:#8a6712;  /* metaumbrella           */
+  --m4:#6b4370;  /* transpose              */
+  --m5:#4a6fa5;  /* vanderweele_rr_squared */
+
+  --serif:"Source Serif 4","Source Serif Pro",Charter,"Bitstream Charter",
+          "Iowan Old Style",Georgia,serif;
+  --sans:"Work Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"Cascadia Code","Cascadia Mono",ui-monospace,SFMono-Regular,
+         Consolas,Menlo,monospace;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0;background:var(--white);color:var(--ink);}
+
+/* Numerals are tabular everywhere. A column of figures that does not align is
+   the fastest way to make a results table look untrustworthy. */
+.num,table td,table th,.mono{
+  font-variant-numeric:tabular-nums lining-nums;
+  font-feature-settings:"tnum" 1,"lnum" 1;
+}
+.mono{font-family:var(--mono);}
+
+/* --- booktabs: three rules, no verticals, no zebra ------------------------- */
+table.bt{border-collapse:collapse;width:100%;font-size:13px;}
+table.bt thead th{
+  font-weight:600;color:var(--soft);text-align:right;
+  padding:0 0 7px 16px;white-space:nowrap;font-size:12px;
+  border-bottom:1px solid var(--ink);
+}
+table.bt thead tr:first-child th{border-top:1.6px solid var(--ink);padding-top:8px;}
+table.bt th.l,table.bt td.l{text-align:left;padding-left:0;}
+table.bt tbody td{
+  font-family:var(--mono);text-align:right;padding:6px 0 6px 16px;
+  color:var(--ink2);white-space:nowrap;
+}
+table.bt tbody tr:last-child td{border-bottom:1.6px solid var(--ink);}
+table.bt tbody td.l{font-family:var(--sans);color:var(--ink);}
+
+/* the method swatch doubles as the figure legend, so no legend is drawn twice */
+/* inline-block, NOT a flex child: setting display:flex on the <td> that holds
+   it makes the cell a flex container, and a flex container drops the
+   border-bottom that closes the table. The swatch aligns on its own. */
+.sw{display:inline-block;width:9px;height:9px;margin-right:8px;
+    vertical-align:middle;position:relative;top:-1px;}
+
+figure{margin:0;}
+figure img{display:block;width:100%;height:auto;}
+
+a{color:var(--rose-d);}
+a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{
+  outline:2px solid var(--rose);outline-offset:2px;
+}
+
+@media (prefers-reduced-motion:no-preference){
+  a,button,select{transition:color .15s ease,border-color .15s ease,background-color .15s ease;}
+}

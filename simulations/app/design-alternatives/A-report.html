@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A — Statistical report — metaConvert simulations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+body{font-family:var(--sans);font-size:14.5px;line-height:1.5;}
+
+/* ---- masthead: a rule and a name. No brand bar, no shadow. --------------- */
+.mast{
+  display:flex;align-items:baseline;gap:12px;
+  padding:13px 40px 11px;border-bottom:1px solid var(--ink);
+}
+.mast .wm{font-family:var(--serif);font-size:16.5px;font-weight:600;letter-spacing:-.01em;}
+.mast .wm em{font-style:normal;color:var(--soft);font-weight:400;}
+.mast nav{margin-left:auto;display:flex;gap:20px;font-size:13px;}
+.mast nav a{color:var(--soft);text-decoration:none;}
+.mast nav a:hover{color:var(--ink);}
+.mast nav a[aria-current]{color:var(--ink);border-bottom:1.5px solid var(--rose);padding-bottom:2px;}
+
+.wrap{display:grid;grid-template-columns:274px minmax(0,1fr);gap:0;align-items:start;}
+
+/* ---- selection rail ------------------------------------------------------ */
+.rail{
+  padding:20px 24px 60px 40px;border-right:1px solid var(--rule);
+  position:sticky;top:0;align-self:start;
+}
+.rail h2{
+  font-family:var(--serif);font-size:13.5px;font-weight:600;margin:0 0 12px;
+  padding-bottom:6px;border-bottom:1px solid var(--ink);
+}
+.f{margin:0 0 12px;}
+.f label{display:block;font-size:12px;color:var(--soft);margin-bottom:3px;}
+.f select{
+  width:100%;font-family:var(--sans);font-size:13px;color:var(--ink);
+  padding:5px 6px;border:1px solid var(--rule);border-radius:2px;background:var(--white);
+}
+.f select:focus{border-color:var(--rose);}
+.grp{margin:18px 0 12px;}
+.grp>span{display:block;font-size:12px;color:var(--soft);margin-bottom:5px;}
+.meth{display:flex;align-items:center;gap:8px;font-family:var(--mono);
+  font-size:12.5px;padding:2px 0;color:var(--ink2);}
+.meth input{accent-color:var(--rose);margin:0;}
+.meth .sw{margin-right:0;top:0;}
+
+/* ---- the document -------------------------------------------------------- */
+.doc{padding:22px 44px 60px;max-width:1120px;}
+.eyebrow{font-size:12.5px;color:var(--soft);margin:0 0 3px;}
+.eyebrow b{font-family:var(--mono);font-weight:400;color:var(--ink2);}
+h1{
+  font-family:var(--serif);font-size:27px;font-weight:600;letter-spacing:-.015em;
+  margin:0 0 14px;line-height:1.15;display:flex;align-items:baseline;
+}
+h1 .info{vertical-align:baseline;margin-left:9px;}
+
+/* what is held fixed is part of what the numbers mean, so it stays visible */
+.design{
+  border-top:1px solid var(--ink);border-bottom:1px solid var(--rule);
+  display:grid;grid-template-columns:repeat(4,auto);gap:0 34px;justify-content:start;
+  padding:8px 0 9px;margin:0 0 14px;font-size:13px;
+}
+.design div span{display:block;color:var(--soft);font-size:11.5px;margin-bottom:1px;}
+.design div b{font-family:var(--mono);font-weight:400;color:var(--ink);font-size:13px;}
+
+/* findings and caveats: one line each, detail on hover */
+.lines{margin:0 0 22px;}
+.line{
+  display:flex;align-items:baseline;gap:9px;font-size:13.5px;
+  padding:3px 0;color:var(--ink2);
+}
+.line>i{
+  font-style:normal;font-family:var(--mono);font-size:12px;flex:none;
+  width:10px;text-align:center;color:var(--faint);
+}
+.line.warn>i{color:var(--amber);font-weight:700;}
+.line.warn{color:var(--amber);}
+.line.warn b{color:#5a430b;}
+.line b{color:var(--ink);font-weight:600;}
+.line .m{font-family:var(--mono);font-size:12.5px;color:var(--ink2);}
+.line.warn .m{color:#6d520e;}
+
+/* The hover-help rules sit AFTER .line so they win the cascade. .line.warn b and
+   .info .tip b have identical specificity (0,2,1), so source order decides -- with
+   this block first, bold text inside a tooltip raised from a warn line rendered in
+   dark amber on the dark panel and was effectively invisible. */
+/* ---- hover help ----------------------------------------------------------
+   Every long paragraph this page used to carry is now behind one of these. The
+   page states the finding; the circle carries the reasoning, for the reader who
+   wants it. */
+.info{
+  display:inline-block;width:13px;height:13px;border-radius:50%;
+  border:1px solid var(--rule);color:var(--faint);
+  font:600 9px/11.5px var(--sans);text-align:center;
+  cursor:help;position:relative;vertical-align:1px;margin-left:5px;
+  -webkit-user-select:none;user-select:none;flex:none;
+}
+.info::before{content:"i";}
+.info:hover,.info:focus-visible{border-color:var(--rose);color:var(--rose-d);outline:none;}
+.info .tip{
+  position:absolute;left:-9px;top:21px;width:270px;z-index:20;
+  background:var(--ink);color:#efeef2;
+  font:400 12px/1.55 var(--sans);text-align:left;letter-spacing:0;
+  /* the tip often sits inside a nowrap table header, which it must not inherit */
+  white-space:normal;text-transform:none;
+  padding:9px 11px;border-radius:3px;
+  opacity:0;visibility:hidden;pointer-events:none;
+  box-shadow:0 3px 12px rgba(33,31,56,.2);
+}
+.info .tip b{color:#fff;font-weight:600;}
+.info .tip .m{font-family:var(--mono);font-size:11.5px;color:#d8d5e0;}
+.info:hover .tip,.info:focus-visible .tip{opacity:1;visibility:visible;}
+/* right-hand columns: anchor the tip to the right so it cannot leave the page */
+.info.r .tip{left:auto;right:-9px;}
+
+
+h2{
+  font-family:var(--serif);font-size:14.5px;font-weight:600;margin:0 0 8px;
+  display:flex;align-items:baseline;
+}
+h2 .n{color:var(--soft);font-weight:400;margin-right:7px;}
+.sp{margin-top:26px;}
+
+table.bt thead th{padding-bottom:6px;}
+table.bt tbody td{padding:5px 0 5px 16px;}
+table.bt td.rank{color:var(--faint);padding-left:0;text-align:left;width:22px;}
+table.bt thead th .info{margin-left:4px;}
+
+figure{margin:4px 0 0;}
+figcaption{font-size:12.5px;color:var(--soft);margin-top:10px;max-width:82ch;line-height:1.5;}
+
+.foot{
+  margin-top:30px;padding-top:10px;border-top:1px solid var(--rule);
+  font-size:11.5px;color:var(--faint);
+}
+.foot b{color:var(--soft);font-weight:500;}
+.foot .mono{font-family:var(--mono);}
+
+@media (max-width:900px){
+  .wrap{grid-template-columns:1fr;}
+  .rail{position:static;border-right:0;border-bottom:1px solid var(--rule);padding:18px 22px;}
+  .doc{padding:20px 22px 50px;}
+  .design{grid-template-columns:repeat(2,auto);gap:9px 28px;}
+  .info .tip{width:230px;}
+}
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <span class="wm">metaConvert <em>· simulation programme</em></span>
+  <nav>
+    <a href="#" aria-current="page">Results</a>
+    <a href="#">Rows</a>
+    <a href="index.html">Directions</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <aside class="rail">
+    <h2>Selection</h2>
+
+    <div class="f">
+      <label for="study">Study</label>
+      <select id="study">
+        <option>05 — Risk ratio to odds ratio</option>
+        <option>04 — Odds ratio to risk ratio</option>
+        <option>06 — Odds ratio standard error imputation</option>
+      </select>
+    </div>
+
+    <div class="f">
+      <label for="target">Compared with</label>
+      <select id="target">
+        <option>Population parameter</option>
+        <option>Same-sample statistic</option>
+      </select>
+    </div>
+
+    <div class="f">
+      <label for="measure">Measure</label>
+      <select id="measure">
+        <option>Root mean squared error</option>
+        <option>Bias</option>
+        <option>Interval coverage</option>
+        <option>SE ratio (model / empirical)</option>
+      </select>
+    </div>
+
+    <div class="f">
+      <label for="xaxis">Horizontal axis</label>
+      <select id="xaxis"><option>rr</option><option>n</option><option>br</option></select>
+    </div>
+    <div class="f">
+      <label for="split">Panels</label>
+      <select id="split"><option>n</option><option>br</option><option>none</option></select>
+    </div>
+
+    <div class="grp">
+      <span>Fixed at</span>
+      <div class="f"><label for="br">br</label>
+        <select id="br"><option>0.01</option><option>0.05</option><option>0.15</option><option>0.30</option><option>0.50</option></select></div>
+      <div class="f"><label for="brg">br_guess</label>
+        <select id="brg"><option>0.01</option><option>0.05</option><option>0.15</option><option>0.30</option><option>0.50</option></select></div>
+      <div class="f"><label for="pexp">p_exp</label><select id="pexp"><option>0.50</option></select></div>
+    </div>
+
+    <div class="grp">
+      <span>Routes</span>
+      <label class="meth"><input type="checkbox" checked><span class="sw" style="background:var(--m1)"></span>dipietrantonj</label>
+      <label class="meth"><input type="checkbox" checked><span class="sw" style="background:var(--m2)"></span>grant</label>
+      <label class="meth"><input type="checkbox" checked><span class="sw" style="background:var(--m3)"></span>metaumbrella</label>
+      <label class="meth"><input type="checkbox" checked><span class="sw" style="background:var(--m4)"></span>transpose</label>
+      <label class="meth"><input type="checkbox" checked><span class="sw" style="background:var(--m5)"></span>vanderweele_rr_squared</label>
+    </div>
+  </aside>
+
+  <main class="doc">
+
+    <p class="eyebrow">Study 05 · package argument <b>rr_to_or</b></p>
+    <h1>Risk ratio to odds ratio<span class="info" tabindex="0"
+      aria-label="Converting a reported risk ratio to an odds ratio requires a baseline
+      risk the source study usually does not give. This study varies the true baseline
+      risk and the value assumed in its place, and asks what the substitution costs."
+      ><span class="tip">Converting a reported risk ratio to an odds ratio requires a
+      baseline risk the source study usually does not give. This study varies the true
+      baseline risk and the value assumed in its place, and asks what the substitution
+      costs.</span></span></h1>
+
+    <div class="design">
+      <div><span>Compared with</span><b>population parameter</b></div>
+      <div><span>Conditions</span><b>15 = 5 rr × 3 n</b></div>
+      <div><span>Replications</span><b>1,000 each</b></div>
+      <div><span>Fixed</span><b>br 0.01 · br_guess 0.01 · p_exp 0.50</b></div>
+    </div>
+
+    <div class="lines">
+      <p class="line warn"><i>!</i><span><b>br_guess = br</b> — no misspecification in
+        this view<span class="info" tabindex="0"
+        aria-label="The assumed baseline risk is exactly correct here, so the substitution
+        cost this study exists to measure is not being exercised. Change br_guess to see it."
+        ><span class="tip">The assumed baseline risk is exactly correct here, so the
+        substitution cost this study exists to measure is not being exercised. Change
+        <span class="m">br_guess</span> to see it.</span></span></span></p>
+
+      <p class="line warn"><i>!</i><span><b>br = 0.01</b> — sparsest cell in the grid<span
+        class="info" tabindex="0"
+        aria-label="Smallest baseline risk in the grid. At n = 50 the whole 2x2 table holds
+        0.31 to 0.75 expected cases, so under the generating model the Haldane-Anscombe
+        correction applies to 91 to 99 percent of replications, and 26 to 76 percent at
+        n = 300. Much of what is compared here is the behaviour of that correction."
+        ><span class="tip">Smallest baseline risk in the grid. At
+        <span class="m">n = 50</span> the whole 2×2 table holds 0.31–0.75 expected cases,
+        so the Haldane–Anscombe correction applies to <b>91–99%</b> of replications
+        (26–76% at <span class="m">n = 300</span>). Much of what is compared here is the
+        behaviour of that correction.</span></span></span></p>
+
+      <p class="line"><i>·</i><span>Smallest mean RMSE <span class="m">dipietrantonj</span>
+        <b>0.903</b>, largest <span class="m">vanderweele_rr_squared</span> <b>1.753</b><span
+        class="info" tabindex="0"
+        aria-label="The other three routes fall within 0.017 of one another. These aggregates
+        carry no Monte Carlo standard error for RMSE, so that middle ordering cannot be
+        separated from simulation noise. Switch to bias or coverage for an error bar."
+        ><span class="tip">The other three routes fall within <b>0.017</b> of one another.
+        These aggregates carry no Monte Carlo SE for RMSE, so that ordering cannot be
+        separated from simulation noise — switch to <b>bias</b> or <b>coverage</b> for an
+        error bar.</span></span></span></p>
+
+      <p class="line"><i>·</i><span>RMSE and bias disagree<span class="info" tabindex="0"
+        aria-label="vanderweele_rr_squared has the smallest mean absolute bias of the five,
+        0.292, together with the largest RMSE, because its empirical standard error is about
+        twice that of the others: 1.696 against 0.759 to 0.852. Closer on average, much less
+        dependable on any one study."
+        ><span class="tip"><span class="m">vanderweele_rr_squared</span> has the smallest
+        mean |bias| (<b>0.292</b>) and the largest RMSE, because its empirical SE is about
+        twice the others (1.696 against 0.759–0.852). Closer on average, much less
+        dependable on any one study.</span></span></span></p>
+
+      <p class="line warn"><i>!</i><span>Coverage <b>0.992–1.000</b> is over-coverage, not
+        calibration<span class="info" tabindex="0"
+        aria-label="SE ratio is 1.77 to 2.27 for every route and mean interval width runs
+        5.0 to 12.9 on the log odds-ratio scale, so the intervals are about twice as wide as
+        they should be. The programme records this across both binary-outcome studies, names
+        the continuity correction as one candidate, and has not chased it."
+        ><span class="tip">SE ratio <b>1.77–2.27</b> for every route, mean interval width
+        5.0–12.9 on the log-OR scale: intervals roughly twice as wide as they should be. The
+        programme records this across both binary-outcome studies, names the continuity
+        correction as one candidate, and has not chased it.</span></span></span></p>
+    </div>
+
+    <h2><span class="n">Table 1</span> Performance by route<span class="info" tabindex="0"
+      aria-label="Averaged over the 15 conditions currently shown, ordered by mean RMSE.
+      Bias, standard errors and interval width are on the log odds-ratio scale."
+      ><span class="tip">Averaged over the <b>15 conditions shown</b>, ordered by mean RMSE.
+      Bias, standard errors and width are on the log odds-ratio scale.</span></span></h2>
+
+    <table class="bt">
+      <thead>
+        <tr>
+          <th class="l" style="padding-left:0"></th>
+          <th class="l">Route</th>
+          <th>Mean<br>RMSE</th>
+          <th>Worst<span class="info" tabindex="0"
+            aria-label="The least favourable single condition, not the average. This is what
+            a review should plan for."
+            ><span class="tip">The least favourable single condition, not the average —
+            what a review should plan for.</span></span></th>
+          <th>Mean<br>bias</th>
+          <th>Mean<br>|bias|</th>
+          <th>Empirical<br>SE<span class="info" tabindex="0"
+            aria-label="Spread of the estimate across replications: how much the answer moves
+            from one study to the next."
+            ><span class="tip">Spread of the estimate across replications — how much the
+            answer moves from one study to the next.</span></span></th>
+          <th>SE<br>ratio<span class="info r" tabindex="0"
+            aria-label="Model standard error divided by the empirical one. 1 is correct;
+            above 1 means the reported interval is too wide, below 1 too narrow."
+            ><span class="tip">Model SE &divide; empirical SE. <b>1</b> is correct; above 1
+            the reported interval is too wide, below 1 too narrow.</span></span></th>
+          <th>Coverage<span class="info r" tabindex="0"
+            aria-label="Share of replications whose 95 percent interval contains the
+            population parameter. Nominal is 0.95. It is the only measure that degrades under
+            either a wrong estimate or a wrong standard error."
+            ><span class="tip">Share of replications whose 95% interval contains the
+            population parameter; nominal <b>0.95</b>. The only measure that degrades under
+            either a wrong estimate or a wrong SE.</span></span></th>
+          <th>Worst<br>coverage</th>
+          <th>Interval<br>width</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rank">1</td>
+          <td class="l"><span class="sw" style="background:var(--m1)"></span>dipietrantonj</td>
+          <td>0.903</td><td>1.299</td><td>0.170</td><td>0.363</td><td>0.759</td>
+          <td>1.77</td><td>0.992</td><td>0.962</td><td>5.01</td>
+        </tr>
+        <tr>
+          <td class="rank">2</td>
+          <td class="l"><span class="sw" style="background:var(--m4)"></span>transpose</td>
+          <td>0.971</td><td>1.336</td><td>0.248</td><td>0.365</td><td>0.829</td>
+          <td>2.13</td><td>0.999</td><td>0.995</td><td>6.43</td>
+        </tr>
+        <tr>
+          <td class="rank">3</td>
+          <td class="l"><span class="sw" style="background:var(--m2)"></span>grant</td>
+          <td>0.981</td><td>1.338</td><td>0.252</td><td>0.365</td><td>0.841</td>
+          <td>2.27</td><td>0.999</td><td>0.995</td><td>6.90</td>
+        </tr>
+        <tr>
+          <td class="rank">4</td>
+          <td class="l"><span class="sw" style="background:var(--m3)"></span>metaumbrella</td>
+          <td>0.988</td><td>1.340</td><td>0.247</td><td>0.360</td><td>0.852</td>
+          <td>1.86</td><td>0.998</td><td>0.981</td><td>5.91</td>
+        </tr>
+        <tr>
+          <td class="rank">5</td>
+          <td class="l"><span class="sw" style="background:var(--m5)"></span>vanderweele_rr_squared</td>
+          <td>1.753</td><td>2.186</td><td>0.158</td><td>0.292</td><td>1.696</td>
+          <td>2.07</td><td>1.000</td><td>0.999</td><td>12.87</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 class="sp"><span class="n">Figure 1</span> RMSE against the risk ratio, by
+      sample size<span class="info" tabindex="0"
+      aria-label="Colours are the routes in Table 1, so no separate legend is drawn. Panels
+      share a vertical scale, which starts at zero. Non-estimable replications are zero
+      everywhere in this slice; across the whole of study 05 they reach 0.62 for grant, in
+      the region where rr times br_guess is at least 1, which is not reachable from here."
+      ><span class="tip">Colours are the routes in Table 1, so no separate legend is drawn.
+      Panels share a vertical scale, starting at zero.<br><br>Non-estimable replications are
+      0 everywhere here; across all of study 05 they reach <b>0.62</b> for
+      <span class="m">grant</span>, where <span class="m">rr × br_guess ≥ 1</span> — not
+      reachable from this selection.</span></span></h2>
+
+    <figure>
+      <img src="figure-05-rmse.svg" alt="Root mean squared error against risk ratio,
+        in three panels for n = 50, 100 and 300. vanderweele_rr_squared sits above the
+        other four routes at every risk ratio and every sample size; the remaining
+        four are close together, with dipietrantonj lowest.">
+    </figure>
+
+    <div class="foot">
+      <b>Source</b> <span class="mono">05_rr_to_or_nrep1000.csv</span>, aggregated
+      2026&#8209;07&#8209;31 &nbsp;·&nbsp; <b>Measures</b> after Morris, White &amp;
+      Crowther (2019) &nbsp;·&nbsp; <b>Produced by</b>
+      <span class="mono">run_study()</span>, calling metaConvert directly
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

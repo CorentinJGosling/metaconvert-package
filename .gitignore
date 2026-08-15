@@ -27,9 +27,13 @@ IMPORTANT_FILES
 manual_synthesis
 data-raw
 app
-simulations
 web/
 papers/
+# NB simulations/ is deliberately NOT ignored here: it holds the Monte Carlo
+# validation programme and must be versioned. It is excluded from the built
+# package by ^simulations$ in .Rbuildignore instead. See simulations/.gitignore
+# for what is excluded within it (315 MB of regenerable raw output, the PDFs,
+# and the RA task sheets).
 
 # Tests and Artifacts
 # NB tests_save/ is deliberately NOT ignored here: it holds the archived
