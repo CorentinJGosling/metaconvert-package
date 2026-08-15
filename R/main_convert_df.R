@@ -347,43 +347,33 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   # Warn once, and only for rows that actually feed an r-consuming (pre/post, mean-
   # change, paired) route -- datasets with no such data never reach the formulas.
   if (verbose) {
-    .r_consuming_cols <- c(
-      "mean_pre_exp", "mean_pre_nexp", "mean_pre_sd_exp", "mean_pre_sd_nexp",
-      "mean_change_exp", "mean_change_nexp",
-      "mean_change_sd_exp", "mean_change_sd_nexp",
-      "mean_change_se_exp", "mean_change_se_nexp",
-      "mean_change_pval_exp", "mean_change_pval_nexp",
-      "paired_t_exp", "paired_t_nexp", "paired_f_exp", "paired_f_nexp",
-      "paired_t_pval_exp", "paired_t_pval_nexp",
-      "paired_f_pval_exp", "paired_f_pval_nexp"
-    )
-    .r_consuming_cols <- intersect(.r_consuming_cols, colnames(x))
-    if (length(.r_consuming_cols) > 0) {
-      .rows_with_pp <- rowSums(!is.na(x[, .r_consuming_cols, drop = FALSE])) > 0
-      .n_imputed <- sum((.r_defaulted_exp | .r_defaulted_nexp) & .rows_with_pp)
-      if (.n_imputed > 0) {
-        # Change-SD standardizers make the point estimate itself depend on r; the
-        # mean-change and paired-t/F routes are always standardized by the change SD
-        # (coerced to cooper), so their point estimates depend on r regardless of the
-        # requested method.
-        .r_scales_point <- pre_post_to_smd %in% c("morris_dz", "morris_drm", "cooper")
-        .impact <- if (.r_scales_point) {
-          paste0("Under the '", pre_post_to_smd, "' standardizer the assumed\n",
-                 "  correlation scales the POINT estimate, not only the SE.")
-        } else {
-          paste0("Under the '", pre_post_to_smd, "' standardizer the point estimate is\n",
-                 "  r-free and only the SE/CI depend on the assumed correlation; note that\n",
-                 "  mean-change and paired-t/F rows are standardized by the change SD, whose\n",
-                 "  POINT estimate does depend on r.")
-        }
-        message(
-          "Note: r_pre_post was not reported for ", .n_imputed, " row(s) with pre/post, ",
-          "mean-change or paired data;\n  the default r_pre_post = ", r_pre_post,
-          " was assumed. ", .impact,
-          "\n  Supply r_pre_post_exp/r_pre_post_nexp when available, or run a ",
-          "sensitivity analysis\n  over plausible values."
-        )
+    # Single source of truth for "does this row feed an r-consuming route?", shared
+    # with flag V6 below. Evaluated here against the input as the user supplied it;
+    # V6 re-evaluates it after validation, which may have NA'd an invalid value.
+    .rows_with_pp <- .rows_with_r_consuming_data(x)
+    .n_imputed <- sum((.r_defaulted_exp | .r_defaulted_nexp) & .rows_with_pp)
+    if (.n_imputed > 0) {
+      # Change-SD standardizers make the point estimate itself depend on r; the
+      # mean-change and paired-t/F routes are always standardized by the change SD
+      # (coerced to cooper), so their point estimates depend on r regardless of the
+      # requested method.
+      .r_scales_point <- pre_post_to_smd %in% c("morris_dz", "morris_drm", "cooper")
+      .impact <- if (.r_scales_point) {
+        paste0("Under the '", pre_post_to_smd, "' standardizer the assumed\n",
+               "  correlation scales the POINT estimate, not only the SE.")
+      } else {
+        paste0("Under the '", pre_post_to_smd, "' standardizer the point estimate is\n",
+               "  r-free and only the SE/CI depend on the assumed correlation; note that\n",
+               "  mean-change and paired-t/F rows are standardized by the change SD, whose\n",
+               "  POINT estimate does depend on r.")
       }
+      message(
+        "Note: r_pre_post was not reported for ", .n_imputed, " row(s) with pre/post, ",
+        "mean-change or paired data;\n  the default r_pre_post = ", r_pre_post,
+        " was assumed. ", .impact,
+        "\n  Supply r_pre_post_exp/r_pre_post_nexp when available, or run a ",
+        "sensitivity analysis\n  over plausible values."
+      )
     }
   }
 
@@ -474,19 +464,13 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                                       correct_inputs = correct_inputs)
   x <- validation$data
 
-  # V6: Flag rows where r_pre_post used the default value AND pre-post data is present
-  .pre_post_cols <- c(
-    "mean_pre_exp", "mean_post_exp", "mean_pre_nexp", "mean_post_nexp",
-    "mean_change_exp", "mean_change_nexp",
-    "mean_pre_single_group", "mean_post_single_group",
-    "mean_change_single_group", "paired_t", "paired_f"
-  )
-  .pre_post_cols <- intersect(.pre_post_cols, colnames(x))
-  .has_pre_post <- if (length(.pre_post_cols) > 0) {
-    rowSums(!is.na(x[, .pre_post_cols, drop = FALSE])) > 0
-  } else {
-    rep(FALSE, nrow(x))
-  }
+  # V6: Flag rows where r_pre_post used the default value AND pre-post data is present.
+  # Reuses .rows_with_pp, computed once above from .r_consuming_columns(). This block
+  # previously carried its own hardcoded list in which 7 of 11 names were not columns
+  # at all, so intersect() dropped them and paired-t/F rows -- the ones where the
+  # assumed r scales the POINT estimate -- never raised V6, never set the r_defaulted
+  # attribute, and never received the (r-sensitive: ...) annotations in summary().
+  .has_pre_post <- .rows_with_r_consuming_data(x)
   .r_defaulted <- (.r_defaulted_exp | .r_defaulted_nexp) & .has_pre_post
   for (i in which(.r_defaulted)) {
     msg <- sprintf("[INFO] Default r_pre_post = %s used (not provided by user)", r_pre_post[1])

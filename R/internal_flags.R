@@ -170,6 +170,86 @@
 }
 
 
+#' Input columns whose presence means a row feeds an r_pre_post-consuming route
+#'
+#' A row is "r-consuming" when it carries pre/post, mean-change or paired data, i.e.
+#' when it reaches one of the 19 exported routes that take \code{r_pre_post_exp} /
+#' \code{r_pre_post_nexp}. Those routes impute \code{r_pre_post} when the user leaves
+#' it blank, which is a substantive assumption: under the change-SD standardizers
+#' (\code{morris_dz}, \code{cooper}/\code{morris_drm}) the assumed correlation scales
+#' the POINT estimate, not merely the SE.
+#'
+#' This is the single source of truth for that test. It is consumed twice in
+#' \code{convert_df()} -- by the \code{verbose} note and by flag V6 (which also sets
+#' the \code{r_defaulted} attribute that drives the \code{(r-sensitive: ...)}
+#' annotations on A6/E2/E2b in \code{summary()}). Those two call sites previously
+#' carried separate hardcoded lists which had drifted: the V6 copy named seven columns
+#' that do not exist (\code{mean_post_exp}, \code{mean_post_nexp}, three
+#' \code{*_single_group} names, and unsuffixed \code{paired_t}/\code{paired_f}), so
+#' paired-t/F rows -- the rows where the assumed r moves the point estimate -- were
+#' filtered out by \code{intersect(., colnames(x))} and silently never flagged.
+#'
+#' NOTE ON SINGLE-GROUP ROUTES: there are no \code{*_single_group} columns. The
+#' single-group entry points reuse the \code{_exp} columns (see the
+#' \code{es_from_*_single_group} calls in \code{convert_df()}), so they are already
+#' covered here.
+#'
+#' NOTE ON ENDPOINT COLUMNS: \code{mean_exp}/\code{mean_sd_exp} are deliberately
+#' EXCLUDED. They are populated on ordinary two-group rows that never touch an
+#' r-consuming route, so keying on them would make the note and V6 fire on data with
+#' no pre/post component at all. Baseline (\code{mean_pre_*}), change
+#' (\code{mean_change_*}) and paired (\code{paired_*}) columns are the discriminating
+#' signal.
+#'
+#' @return character vector of column names
+#' @noRd
+.r_consuming_columns <- function() {
+  c(
+    # Baseline arm statistics -- es_from_means_{sd,se,ci}_pre_post and their
+    # single-group twins
+    "mean_pre_exp", "mean_pre_nexp",
+    "mean_pre_sd_exp", "mean_pre_sd_nexp",
+    "mean_pre_se_exp", "mean_pre_se_nexp",
+    "mean_pre_ci_lo_exp", "mean_pre_ci_up_exp",
+    "mean_pre_ci_lo_nexp", "mean_pre_ci_up_nexp",
+    # Change scores -- es_from_mean_change_{sd,se,ci,pval} and single-group twins
+    "mean_change_exp", "mean_change_nexp",
+    "mean_change_sd_exp", "mean_change_sd_nexp",
+    "mean_change_se_exp", "mean_change_se_nexp",
+    "mean_change_ci_lo_exp", "mean_change_ci_up_exp",
+    "mean_change_ci_lo_nexp", "mean_change_ci_up_nexp",
+    "mean_change_pval_exp", "mean_change_pval_nexp",
+    # Paired test statistics -- es_from_paired_{t,f}, their p-value variants and
+    # es_from_paired_t_single_group
+    "paired_t_exp", "paired_t_nexp",
+    "paired_t_pval_exp", "paired_t_pval_nexp",
+    "paired_f_exp", "paired_f_nexp",
+    "paired_f_pval_exp", "paired_f_pval_nexp"
+  )
+}
+
+
+#' Which rows carry data that feeds an r_pre_post-consuming route
+#'
+#' Thin wrapper over \code{\link{.r_consuming_columns}} so that the two call sites in
+#' \code{convert_df()} share one implementation as well as one column list. It must be
+#' called separately at each site rather than computed once and reused: \code{x} is
+#' reassigned by \code{.validate_input_data()} between them, and under
+#' \code{correct_inputs = TRUE} that step may set an invalid pre/post value to NA. A row
+#' whose only pre/post datum was just invalidated no longer feeds an r-consuming route,
+#' so V6 must see the post-validation data while the verbose note sees the input as the
+#' user supplied it.
+#'
+#' @param x a data.frame of input columns
+#' @return logical vector, one element per row of \code{x}
+#' @noRd
+.rows_with_r_consuming_data <- function(x) {
+  cols <- intersect(.r_consuming_columns(), colnames(x))
+  if (length(cols) == 0) return(rep(FALSE, nrow(x)))
+  rowSums(!is.na(x[, cols, drop = FALSE])) > 0
+}
+
+
 #' Columns that must be non-negative in the input data
 #' @return character vector of column names
 #' @noRd
