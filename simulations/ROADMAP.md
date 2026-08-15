@@ -42,7 +42,21 @@ un-ignoring it in git cannot leak it into the package.
 
 ## Phase 1 — Package bugs (code changes)
 
-### 1.1 ☑ `or_to_rr = "metaumbrella_exp"` picks the wrong 2×2 branch — DONE
+### 1.1 ☑ `or_to_rr = "metaumbrella_exp"` picks the wrong 2×2 branch — DONE (commits `935767a` + `b675c09`)
+
+> **Verified:** `tests/testthat` 2228 pass / 0 fail; `tests_save/checked` 7191 pass /
+> 0 fail (exactly the pre-existing baseline).
+>
+> ⚠️ **Process note — a regression shipped in `935767a` and was caught only by the
+> archived suite.** The `es_from_or` suppression dropped the route even when the user
+> had explicitly named `"or"` in `hierarchy`, breaking 19 assertions across
+> `test-ES-NNT.R` and `test-ES-OR.R` while `tests/testthat` stayed green. Fixed in
+> `b675c09` by suppressing only when `"or"` is not a token of the user's hierarchy.
+> **Run `tests_save/checked/` BEFORE declaring an item done, not after** — the main
+> suite does not cover the cross-package agreement cases.
+>
+> General rule this established: "don't compute a dominated estimate" and "don't remove
+> what the user explicitly asked for" conflict, and the second wins.
 
 > **Reframed during execution: don't tie-break, SOLVE.** With a second margin all four
 > margins are known, so the OR determines the table by a quadratic and the reported
