@@ -34,6 +34,24 @@ name output-only quantities with no input analogue and break nothing.
   incomplete list (it omitted `mean_pre_se_*`, `mean_pre_ci_*` and
   `mean_change_ci_*`); both call sites now share one list.
 
+## Documentation
+
+- **`es_from_ancova_means_sd_pooled_crude()`'s `@param cov_outcome_r` stated the exact
+  opposite of what the function does.** It carried the wording shared by the rest of the
+  `es_from_ancova_*` family — that a mis-specified `cov_outcome_r` "bias\[es\] the effect
+  size AND its standard error by the same factor, so the p-value is unchanged and no
+  quality flag can detect the error". That is true of the 14 routes which receive a
+  **residual** SD, where the value rescales the standardizer and enters the variance, and
+  the two effects cancel. It is false here: this route receives an already-**marginal**
+  SD, so `cov_outcome_r` enters the sampling variance alone. The effect size is exactly
+  unchanged, the standard error shrinks, and the p-value moves — supplying 0.9 where the
+  truth is 0 multiplies `d_se` by 0.48 and the *t* statistic by 2.07, roughly quadrupling
+  the study's inverse-variance weight. The documentation told users a maximally visible
+  error was invisible, on the one route where the consequence is worst. Corrected, with
+  the same warning added to `es_from_cohen_d_adj()`, the only other route with this
+  structure. Note that flag V22 fires when `cov_outcome_r` is *missing*, not when it is
+  *wrong*, so it does not cover this case.
+
 ## Internal
 
 - New internal helpers `.r_consuming_columns()` / `.rows_with_r_consuming_data()`

@@ -391,8 +391,24 @@ es_from_ancova_means_sd_pooled_adj <- function(ancova_mean_exp, ancova_mean_nexp
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
 #'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
-#'   same factor, so the p-value is unchanged and no quality flag can detect the error.
+#'   absorbs the group effect).
+#'
+#'   **This route behaves differently from the rest of the \code{es_from_ancova_*} family,
+#'   and the difference matters.** Here you supply an already-**marginal** SD
+#'   (\code{mean_sd_pooled}), so \code{cov_outcome_r} is not used to rescale it: the value
+#'   enters the sampling variance ONLY, through the \eqn{(1 - R^2)} factor of Cooper's
+#'   eq. 12.26. A mis-specified \code{cov_outcome_r} therefore leaves the effect size
+#'   **exactly unchanged** and shrinks its standard error. Nothing cancels, so -- unlike
+#'   the residual-SD routes, where the estimate and the SE move by the same factor and the
+#'   p-value is unaffected -- here the p-value DOES move and the error IS visible.
+#'   Supplying 0.9 where the truth is 0 multiplies \code{d_se} by 0.48 and the t statistic
+#'   by 2.07: a roughly 4-fold inflation of the study's inverse-variance weight. Simulation
+#'   over a covariate-correlation grid gives coverage 0.633 and an SE ratio of 0.457 at
+#'   that misspecification, against 0.95 / 0.99 when the value is correct.
+#'
+#'   \code{\link{es_from_cohen_d_adj}()} is the only other route with this structure.
+#'   Note that quality flag V22 fires when \code{cov_outcome_r} is *missing*, not when it
+#'   is *wrong*, so it does not cover this case.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.

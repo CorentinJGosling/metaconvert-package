@@ -130,6 +130,18 @@ es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #' @param n_cov_ancova number of covariates
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the model includes several covariates).
+#'
+#'   Because \code{cohen_d_adj} is already standardized on the **marginal** SD (see
+#'   above), \code{cov_outcome_r} is not used to rescale anything here: it enters the
+#'   sampling variance ONLY, through the \eqn{(1 - R^2)} factor of Cooper's eq. 12.26.
+#'   A mis-specified value therefore leaves the effect size **exactly unchanged** and
+#'   shrinks its standard error, so the p-value moves and the error is visible --
+#'   the opposite of the residual-SD \code{es_from_ancova_*} routes, where the estimate
+#'   and the SE move by the same factor and cancel. Supplying 0.9 where the truth is 0
+#'   multiplies \code{d_se} by 0.48 and the t statistic by 2.07, roughly quadrupling the
+#'   study's inverse-variance weight. \code{\link{es_from_ancova_means_sd_pooled_crude}()}
+#'   is the only other route with this structure. Quality flag V22 fires when
+#'   \code{cov_outcome_r} is *missing*, not when it is *wrong*, so it does not cover this.
 #' @param n_exp number of participants in the experimental/exposed group.
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).

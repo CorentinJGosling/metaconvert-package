@@ -247,6 +247,15 @@ depending on the function - some of the following columns:
 }
 }
 
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://metaconvert.org/}
+  \item \url{https://github.com/CorentinJGosling/metaconvert-package}
+  \item Report bugs at \url{https://github.com/CorentinJGosling/metaconvert-package/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Corentin J. Gosling \email{corentin.gosling@parisnanterre.fr}
 
