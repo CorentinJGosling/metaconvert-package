@@ -557,10 +557,38 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #'
 #' @md
 #'
+#' @note
+#' **The imputed standard error is systematically too wide, and increasingly so in
+#' larger studies.** With no reported uncertainty to work from, this function
+#' enumerates every 2x2 table compatible with the odds ratio and the case/control
+#' margins and averages the log-OR *variance*. Variance is convex in the cell counts
+#' and diverges as any cell approaches zero, so the average is pulled upward by
+#' near-degenerate tables that carry the same weight as plausible ones.
+#'
+#' Measured against the standard error the realised table would have given, over
+#' simulated studies crossing exposure prevalence, baseline risk, odds ratio and
+#' sample size, the median ratio of imputed to true SE is about **1.4**, and it is not
+#' a constant offset: because the flat enumeration weight puts \eqn{1/(n\_cases - 1)}
+#' on the table with one case in the exposed arm, whose \eqn{1/a} term is 1, the
+#' inflation **grows with study size** -- roughly 1.2x in the smallest studies to 2.0x
+#' in the largest, at fixed exposure prevalence.
+#'
+#' Two consequences worth knowing. An SE 1.4x too wide gives that study about half its
+#' correct inverse-variance weight; and because the inflation is size-dependent rather
+#' than uniform, it also distorts weights *between* imputed studies, which shifts the
+#' pooled point estimate rather than merely widening its interval.
+#'
+#' The remedy is to supply the uncertainty rather than have it imputed: prefer
+#' \code{\link{es_from_or_se}()}, \code{\link{es_from_or_ci}()} or
+#' \code{\link{es_from_or_pval}()} whenever the source reports a standard error, a
+#' confidence interval or a p-value. \code{\link{convert_df}()} does this
+#' automatically -- when a row reports an SE or a CI, this route is skipped entirely
+#' rather than contributing a dominated second estimate.
+#'
 #' @examples
 #' es_or_guess <- es_from_or(or = 0.5, n_cases = 210, n_controls = 220)
 #' es_or <- es_from_or_se(or = 0.5, logor_se = 0.4, n_cases = 210, n_controls = 220)
-#' es_or_guess$logor_se # standard error simulated from the margins
+#' es_or_guess$logor_se # standard error simulated from the margins (~1.4x too wide)
 #' es_or$logor_se # standard error as reported by the source study
 es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
                        small_margin_prop, baseline_risk,

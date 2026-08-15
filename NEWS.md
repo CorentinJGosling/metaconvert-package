@@ -1,5 +1,60 @@
 # metaConvert (development version)
 
+## Results change: OR to RR conversions via `metaumbrella_exp` / `metaumbrella_cases`
+
+**Re-run any analysis that used `or_to_rr = "metaumbrella_exp"` or
+`or_to_rr = "metaumbrella_cases"`.** Both reconstruct the 2×2 table behind a reported
+odds ratio by enumerating candidate tables and keeping the one whose reconstructed
+variance best matches the reported one. That search had two failure modes:
+
+- **An exact tie.** The 180° rotation `(a,b,c,d) → (d,c,b,a)` preserves the odds ratio
+  *and* `1/a+1/b+1/c+1/d` exactly, and is admissible with the same arm sizes precisely
+  when `n_exp == n_nexp` (`metaumbrella_exp`) or `n_cases == n_controls`
+  (`metaumbrella_cases`). The two candidates were indistinguishable on the matching
+  criterion, so the winner was decided by enumeration order — measured **25–32%
+  correct** at rare event rates, and the wrong branch returns `RR = OR / RR_true`.
+- **A corrupted target.** On the `es_from_or()` route the variance being matched is
+  itself imputed and runs ~1.4× wide, so the search missed the true table even where no
+  tie existed: with a realistically rounded odds ratio, mean |log RR| error was
+  0.10–0.19 *even at unequal arms*.
+
+Both are now removed by **solving** rather than searching. When a second margin is
+available — `n_cases`/`n_controls` for the `_exp` variant, `n_exp`/`n_nexp` for the
+`_cases` variant, or a reported `baseline_risk` — all four margins are known, the odds
+ratio determines the table by a quadratic, and the reported variance is not used at
+all. Branch recovery is exact (1.000 at every event rate from 0.03 to 0.97); mean
+|log RR| error falls from 0.2295 to 0.0002. These inputs already reached `.or_to_rr()`
+and were simply discarded before being forwarded to the reconstruction helpers.
+
+**No prior is applied when no second margin exists.** Such rows are genuinely
+non-identified and keep exactly today's behaviour, bit-for-bit. Every candidate
+tie-break rule was tested and rejected: "assume events are the minority" is 3.65× worse
+than the status quo on common outcomes, wrong on 74% of those rows, and produced +44%
+pooled-RR bias end-to-end — and because it is a bet on labelling, recoding an outcome
+from "response" to "non-response" flips its answer on identical data.
+
+## Improvements
+
+- **`convert_df()` no longer produces a dominated duplicate effect size for odds ratios
+  that report their own uncertainty.** `es_from_or()` is the OR-alone route: with no
+  reported uncertainty it imputes `var(logOR)` from the case/control margins. On a row
+  that *also* reports a standard error or a confidence interval, it was still run,
+  yielding a second estimate with the same point value and a standard error ~1.6× larger.
+  The hierarchy already selected the correct one, so **no selected effect size changes**
+  — but the dominated row inflated `n_estimations`, was eligible for selection under
+  `es_selected = "minimum"` / `"maximum"`, and entered the Category-E cross-method
+  dispersion and CI-overlap checks as a spurious second "method". It is now skipped for
+  those rows. A reported p-value does *not* suppress it, since the hierarchy ranks the
+  marginal reconstruction above the p-value route.
+
+- `es_from_or()` gains an `@note` quantifying its imputed standard error: median ~1.4×
+  the truth, and — because the flat enumeration weight puts `1/(n_cases − 1)` on the
+  table with a single exposed case — the inflation **grows with study size**, roughly
+  1.2× in the smallest studies to 2.0× in the largest. That is size-dependent rather
+  than uniform, so it distorts weights *between* imputed studies and shifts the pooled
+  point estimate rather than merely widening its interval. The estimator itself is
+  unchanged; prefer supplying an SE, CI or p-value.
+
 ## Bug fixes (silent checks that never fired)
 
 Both bugs below share one mechanism: a hardcoded list of column names containing

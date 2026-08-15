@@ -32,6 +32,19 @@
 
 #' Estimate n value from OR and the number of cases and controls
 #'
+#' @section DEAD CODE -- DO NOT EDIT THIS COPY:
+#' This definition is **shadowed and never runs**. An identically-named function is
+#' defined in \code{R/internal_multiple_formulas.R}; DESCRIPTION has no \code{Collate}
+#' field, so files are sourced alphabetically and
+#' \code{internal_multiple_formulas.R} ("i") overwrites \code{estimate_n_from_es.R}
+#' ("e"). Verified: the live function's formals include \code{n_cases}/\code{baseline_risk},
+#' which only the other copy declares.
+#'
+#' The live copy solves the table exactly from the OR when a second margin pair is
+#' available (see \code{.solve_2x2_from_or}); this stale copy still does the
+#' variance-matching enumeration alone. Patching it has no effect. It is kept only
+#' because deleting shared-name code deserves its own reviewed change.
+#'
 #' @param or OR
 #' @param var variance
 #' @param n_cases number of cases
@@ -98,6 +111,12 @@
 }
 
 #' Estimate the n, using the variance, the number of exposed and non-exposed subjects
+#'
+#' @section DEAD CODE -- DO NOT EDIT THIS COPY:
+#' Shadowed and never runs; the live definition is in
+#' \code{R/internal_multiple_formulas.R}. See the note on
+#' \code{.estimate_n_from_or_and_n_cases} above for why (alphabetical collation, no
+#' \code{Collate} field in DESCRIPTION) and how it was verified.
 #'
 #' @param or OR
 #' @param var variance

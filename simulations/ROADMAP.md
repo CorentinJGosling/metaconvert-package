@@ -42,7 +42,46 @@ un-ignoring it in git cannot leak it into the package.
 
 ## Phase 1 — Package bugs (code changes)
 
-### 1.1 ☐ `or_to_rr = "metaumbrella_exp"` picks the wrong 2×2 branch
+### 1.1 ☑ `or_to_rr = "metaumbrella_exp"` picks the wrong 2×2 branch — DONE
+
+> **Reframed during execution: don't tie-break, SOLVE.** With a second margin all four
+> margins are known, so the OR determines the table by a quadratic and the reported
+> variance is not used at all. Branch recovery 1.000 at every event rate 0.03–0.97;
+> mean |logRR| error 0.2295 → 0.0002. Both variants fixed; `_cases` had the exact
+> mirror defect (34.7% wrong when `n_cases == n_controls`).
+>
+> Two things this overturned in my own earlier report: (a) **unequal arms were never
+> safe** — the 0.2% failure rate held only for a bit-exact variance; with a rounded OR
+> the current rule's MAE is 0.10–0.19 there too; (b) **problems A and B were coupled** —
+> `es_from_or()` fed the enumeration an imputed variance ~1.4× wide, so the search
+> missed the table before any tie arose. Solving ignores the variance and removes both.
+>
+> **No prior shipped.** The adversarial pass killed the minority-event rule: 3.65× worse
+> on common outcomes, +44% pooled-RR bias end-to-end, and a bet on outcome labelling.
+> Rows with no second margin keep today's behaviour bit-for-bit (verified).
+>
+> ⚠️ **Consequence for the simulation programme:** studies 04 and 05 pass `n_cases`/
+> `n_controls` to `es_from_or_se()`, so both metaumbrella routes now solve exactly —
+> measured bias **0.00000** on study 04's shape, against the shipped README's 0.431
+> mean |bias| / 0.496 coverage. **`data/aggregated/04_*` and `05_*` are now stale** and
+> must be regenerated (folded into item 3.5). The "conditional on `p_exp = 0.5`" caveat
+> (item 4.2) still applies to any *pre-fix* number quoted in the write-up.
+
+### 1.6 ☐ NEW — delete the shadowed duplicate reconstruction helpers
+
+`R/estimate_n_from_es.R:41` and `:121` define `.estimate_n_from_or_and_n_cases` and
+`.estimate_n_from_or_and_n_exp` a second time. DESCRIPTION has no `Collate` field, so
+alphabetical sourcing lets `internal_multiple_formulas.R` ("i") overwrite
+`estimate_n_from_es.R` ("e") — verified by formals. The stale copies now carry a
+prominent `DEAD CODE -- DO NOT EDIT THIS COPY` block, but they should be deleted.
+Deferred because removing shared-name code deserves its own reviewed change, and
+because the same file also holds `.estimate_n_from_irr` and `.estimate_n_from_rr`,
+which are **not** duplicated and **are** live — so the file itself must stay.
+
+**Test unit.** Extend `test-or-to-rr-identifiability.R` with an assertion that each
+helper is defined exactly once across `R/`.
+
+### 1.1-old (superseded, kept for the record)
 
 **Symptom.** Coverage 0.497 in study 04 — the worst of any shipped option.
 
@@ -95,7 +134,13 @@ the new behaviour (NA + warning, or the documented pick). Mirror it for
 > incomplete (missing `mean_pre_se_*`, `mean_pre_ci_*`, `mean_change_ci_*`).
 > 39 new assertions; full suite 1478 pass / 0 fail.
 
-### 1.5 ☐ NEW — `data_extraction_sheet()` hands users a column name nothing reads
+### 1.5 ☑ NEW — `data_extraction_sheet()` hands users a column name nothing reads — DONE (commit `e951cfc`)
+
+> Landed as the correct name only, no deprecated alias (owner's call): files already
+> saved under `all_info_expected` keep being ignored exactly as today, so no existing
+> result changes. Flagged in NEWS.md so users can rename. 121 assertions; guard
+> confirmed to have teeth (1 orphan pre-fix, 0 post-fix). The two `app/` copies are
+> stale — `app.R` calls `metaConvert::` from the installed package and inherits the fix.
 
 Found by the phantom-column sweep run for 1.2 (15 agents over the 10 files that
 carry hardcoded column lists). **Exactly one further instance of the bug class
@@ -219,7 +264,15 @@ SE, and assert the in-domain case is unchanged (regression guard).
 
 ## Phase 2 — Package documentation defects
 
-### 2.1 ☐ ANCOVA `@param cov_outcome_r` states the opposite of what the route does
+### 2.1 ☑ ANCOVA `@param cov_outcome_r` states the opposite of what the route does — DONE (commit `554c2b3`)
+
+> Split confirmed empirically across all 16 routes taking `cov_outcome_r` (r = 0 vs 0.9,
+> n = 60/60): **14** give d ratio 0.4359 / SE ratio 0.4359 / **t ratio 1.0000** (wording
+> correct), **2** give d ratio 1.0000 / SE ratio 0.4823 / **t ratio 2.0733** (wording
+> inverted). Of the 15 copies of the shared wording, exactly **one** sat on a marginal-SD
+> route (`es_from_ancova_means_sd_pooled_crude`); `es_from_cohen_d_adj` has separate text
+> that was silent rather than wrong and gained the same warning. 40 assertions pinning
+> behaviour, not prose. Full suite 1639 pass / 0 fail.
 
 **Symptom.** [es_from_ANCOVA_means.R:390-395](../R/es_from_ANCOVA_means.R#L390-L395)
 tells users a mis-specified `cov_outcome_r` biases the ES and the SE "by the same

@@ -536,8 +536,29 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
 
 
   # OR ----------------------------------------------
+  # es_from_or() is the OR-ALONE route: it has no reported uncertainty to work from, so
+  # it IMPUTES var(logOR) by enumerating every 2x2 compatible with the case/control
+  # margins and averaging (.se_from_or, R/internal_multiple_formulas.R:399). That
+  # average runs ~1.4x wide, and its inflation grows with study size.
+  #
+  # On a row that also reports an SE or a CI, this route is therefore a strictly
+  # DOMINATED duplicate of es_from_or_se()/es_from_or_ci(): identical point estimate,
+  # worse variance. Left in, it inflates n_estimations, becomes eligible for selection
+  # under es_selected = "minimum"/"maximum", and enters the Category-E cross-method
+  # dispersion and CI-overlap checks as a spurious second "method". Suppress it there.
+  #
+  # p-values are deliberately NOT included: the hierarchy ranks es_odds_ratio ABOVE
+  # es_odds_ratio_pval (see or_list_L2 below), so on a pval-only row the marginal
+  # reconstruction is the better source and must still run.
+  .or_uncertainty_reported <- with(x,
+    !is.na(logor_se) |
+      (!is.na(or_ci_lo) & !is.na(or_ci_up)) |
+      (!is.na(logor_ci_lo) & !is.na(logor_ci_up))
+  )
   es_odds_ratio <- with(x, es_from_or(
-    or = or, logor = logor, baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
+    or = ifelse(.or_uncertainty_reported, NA, or),
+    logor = ifelse(.or_uncertainty_reported, NA, logor),
+    baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     n_cases = n_cases, n_controls = n_controls, n_sample = n_sample, small_margin_prop = small_margin_prop,
     or_to_rr = or_to_rr, or_to_cor = or_to_cor, reverse_or = reverse_or
   ))
