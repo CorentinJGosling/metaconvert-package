@@ -61,6 +61,32 @@ test_that("a half-specified CI does not suppress the imputation", {
   expect_true(.imputation_ran(.or_row(or_ci_up = 3.60)))
 })
 
+test_that("an EXPLICITLY requested 'or' route is never suppressed", {
+  # Regression: the first version of this suppression dropped es_from_or() whenever an
+  # SE was present, including when the user had named "or" in `hierarchy`. That left
+  # the row with no estimate at all -- the route the user asked for had been silently
+  # removed. Caught by tests_save/checked/test-ES-NNT.R and test-ES-OR.R, which run
+  # convert_df(..., es_selected = "hierarchy", hierarchy = "or") on data that also
+  # carries logor_se / or_ci / or_pval.
+  d <- .or_row(logor_se = 0.30, baseline_risk = 0.3)
+  res <- suppressMessages(convert_df(d, measure = "logor", verbose = FALSE,
+                                     es_selected = "hierarchy", hierarchy = "or"))
+  z <- res[["es_odds_ratio"]]
+  expect_true(any(!is.na(z$logor_se)),
+              info = "hierarchy = 'or' explicitly requests this route; it must run.")
+  out <- suppressMessages(summary(res))
+  expect_equal(as.character(out$info_used_crude[1]), "or")
+})
+
+test_that("naming or_se / or_ci in the hierarchy does NOT count as requesting 'or'", {
+  # Token match, not substring: "or_se" must not re-enable the dominated route.
+  d <- .or_row(logor_se = 0.30)
+  res <- suppressMessages(convert_df(d, measure = "logor", verbose = FALSE,
+                                     es_selected = "hierarchy", hierarchy = "or_se > or_ci"))
+  z <- res[["es_odds_ratio"]]
+  expect_true(all(is.na(z$logor_se)))
+})
+
 test_that("the surviving estimate carries the REPORTED standard error", {
   # Default split_adjusted = TRUE / format = "wide" suffixes the output columns.
   d <- .or_row(logor_se = 0.30)

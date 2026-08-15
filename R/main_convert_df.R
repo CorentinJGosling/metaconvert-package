@@ -550,11 +550,22 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   # p-values are deliberately NOT included: the hierarchy ranks es_odds_ratio ABOVE
   # es_odds_ratio_pval (see or_list_L2 below), so on a pval-only row the marginal
   # reconstruction is the better source and must still run.
-  .or_uncertainty_reported <- with(x,
-    !is.na(logor_se) |
-      (!is.na(or_ci_lo) & !is.na(or_ci_up)) |
-      (!is.na(logor_ci_lo) & !is.na(logor_ci_up))
-  )
+  #
+  # AND the suppression must never remove a route the USER explicitly asked for. With
+  # es_selected = "hierarchy" and "or" named in `hierarchy`, the marginal reconstruction
+  # is the requested estimator, not a redundant duplicate -- silently dropping it would
+  # leave the row with no estimate at all. Token-matched on the split hierarchy so that
+  # "or_se"/"or_ci" do not count as a request for "or".
+  .or_route_requested <- "or" %in% trimws(strsplit(hierarchy, ">", fixed = TRUE)[[1]])
+  .or_uncertainty_reported <- if (.or_route_requested) {
+    rep(FALSE, nrow(x))
+  } else {
+    with(x,
+      !is.na(logor_se) |
+        (!is.na(or_ci_lo) & !is.na(or_ci_up)) |
+        (!is.na(logor_ci_lo) & !is.na(logor_ci_up))
+    )
+  }
   es_odds_ratio <- with(x, es_from_or(
     or = ifelse(.or_uncertainty_reported, NA, or),
     logor = ifelse(.or_uncertainty_reported, NA, logor),
