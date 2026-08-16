@@ -713,7 +713,31 @@ count is unaffected.
 
 ---
 
-### 3.4 ☐ `run_everything()` aborts on `run_99`
+### 3.4 ☑ `run_everything()` aborts on `run_99` — DONE
+
+> **Reproduced before fixing**: the registry `ls(pattern = "^run_[0-9]{2}$")` returns
+> `run_01 … run_09, run_99`; `run_99`'s formals were empty, and
+> `do.call("run_99", list(nrep = 1000, cores = 1))` raised *"arguments inutilisés
+> (nrep = 1000, cores = 1)"*.
+>
+> **Fixed by giving `run_99` the ignored signature, not by excluding it from the
+> pattern.** Excluding it would create a second class of runner that a future `run_98`
+> would have to know about; the ignored signature keeps **one** contract — every
+> registered runner accepts `(nrep, cores)` — which is now asserted. `run_99` already
+> calls `load_metaconvert()` itself, so it is safe in sequence.
+>
+> **The real cost was never lost results** (it sorts last): it is that a full run always
+> ended in an error, which teaches whoever runs it that the error at the end is normal.
+>
+> `simulations/tests/test-runner-registry.R` (50 assertions) checks every registry
+> member's arity via `match.call()` — arity only, never executing the studies — plus
+> that `run_99`'s new arguments are **inert** (absent from its body, so a later edit
+> cannot quietly make them load-bearing), that `run_all.R` still uses the pattern this
+> file tests, and that `run_99` survives the exact `do.call()` end to end, since it is
+> deterministic and fast enough to actually run.
+>
+> **Guard confirmed to have teeth**: with the fix reverted, 123 pass / **5 fail**; with
+> it, **128 pass / 0 fail / 0 error / 0 skip**. No package file touched.
 
 **Symptom.** `run_99` takes no arguments; `run_everything()` calls every
 `run_[0-9]{2}` with `nrep`/`cores`. It sorts last, so nothing is lost — but the

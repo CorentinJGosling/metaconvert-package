@@ -248,7 +248,23 @@ prepost_equivalence <- function(n1 = 50, n2 = 50, r = 0.6,
 }
 
 ## =============================================================================
-run_99 <- function() {
+#' Run the deterministic route-equivalence check
+#'
+#' @param nrep,cores accepted and IGNORED. This is not a Monte Carlo study: it
+#'   evaluates each route once on one constructed dataset and compares the answers,
+#'   so there is nothing to replicate and nothing to parallelise.
+#'
+#'   The arguments exist because run_everything() enumerates every `run_[0-9]{2}`
+#'   in the global environment and calls each with do.call(r, list(nrep=, cores=)).
+#'   "99" matches that pattern, so without these formals the call raised "unused
+#'   arguments (nrep = ..., cores = ...)" and every full run ended in an error --
+#'   after the studies had finished, so nothing was lost, which is precisely what
+#'   made it easy to keep ignoring. Taking the arguments and dropping them keeps
+#'   ONE contract for the registry ("every runner accepts (nrep, cores)"), which
+#'   simulations/tests/test-runner-registry.R asserts; excluding 99 from the
+#'   pattern instead would create a second class of runner that a future run_98
+#'   would have to know about.
+run_99 <- function(nrep = NULL, cores = NULL) {
   load_metaconvert()
   cat("\n#########################################################\n")
   cat("## ROUTE EQUIVALENCE -- deterministic wiring check\n")
