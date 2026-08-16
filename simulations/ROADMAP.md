@@ -10,6 +10,14 @@ invariant or a file under `simulations/tests/`, since that tree has no suite yet
 
 Status legend: ☐ not started · ◐ in progress · ☑ done
 
+**Verification rule (learned the hard way, twice).** Before declaring any item done:
+run `tests_save/checked/` as well as `tests/testthat/` — the main suite does not cover
+the cross-package agreement cases and missed a 19-assertion regression in 1.1. And
+check testthat's **`error`** column, not just `failed`: an erroring `test_that` block
+reports `failed = 0` while silently skipping every assertion after the error. In 1.3
+that hid a whole block of 24. Compare the assertion TOTAL against the previous run;
+a count that falls with no failures means assertions stopped executing.
+
 ---
 
 ## Phase 0 — Safety net (blocking)
@@ -218,7 +226,7 @@ each; assert a row with no pre/post data does **not** fire.
 
 ---
 
-### 1.3 ☐ `table_2x2_to_cor` is inert in `convert_df()` and silently accepts anything
+### 1.3 ☑ `table_2x2_to_cor` is inert in `convert_df()` and silently accepts anything — DONE (commit `2b6f141`)
 
 **Symptom.** `convert_df(d, measure = "r", table_2x2_to_cor = "banana")` runs
 without error and returns byte-identical output. The argument is commented out at
