@@ -89,6 +89,25 @@ un-ignoring it in git cannot leak it into the package.
 > must be regenerated (folded into item 3.5). The "conditional on `p_exp = 0.5`" caveat
 > (item 4.2) still applies to any *pre-fix* number quoted in the write-up.
 
+### 1.4 ☑ `rr_to_or = "grant"` returns a finite estimate with a NaN standard error — DONE
+
+> Grant's transform needs `RR × baseline_risk < 1` for the point estimate **and both CI
+> limits**; the upper limit is the largest of the three, so it fails first, and every
+> `log()` was inside `suppressWarnings()`. A row could return `logor = 1.099` beside
+> `logor_se = NaN` and a half-open interval. Now NA throughout, with a warning naming
+> the offending value and pointing at `metaumbrella`/`transpose`. In-domain output is
+> bit-identical; swept 400 random draws for a mixed finite/NA quartet — **0 found**.
+>
+> **The mirror is safe and was deliberately left alone**, checked rather than assumed:
+> `or_to_rr = "grant"` computes `or / (1 − BR + BR·or)`, whose denominator is positive
+> for every `or > 0`, `BR ∈ (0,1)`. Verified over a 30-point grid and pinned by a test,
+> so a later "fix for symmetry" cannot add a guard that can never fire.
+>
+> ⚠️ **Consequence for study 05:** 13 of its 360 `grant` cells reported a point estimate
+> for 534–997 replications while ≥99% of their standard errors were non-finite. Those
+> rows now go NA, so `nonest_rate` reports the failure instead of the cell looking
+> half-populated. Folds into the item 3.5 regeneration alongside 04/05.
+
 ### 1.6 ☐ NEW — delete the shadowed duplicate reconstruction helpers
 
 `R/estimate_n_from_es.R:41` and `:121` define `.estimate_n_from_or_and_n_cases` and

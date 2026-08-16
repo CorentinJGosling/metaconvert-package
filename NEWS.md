@@ -51,6 +51,31 @@ dichotomised-bivariate-normal family also has three, so the latent-normal model 
 saturated and admits no goodness-of-fit test. If your variables are genuinely
 dichotomous rather than dichotomised, use a binary measure (`logor`, `rr`, `rd`).
 
+## `rr_to_or = "grant"` no longer returns an effect size it cannot give a variance for
+
+Grant's conversion, `OR = RR(1 − BR) / (1 − RR·BR)`, is defined only while
+`RR × baseline_risk < 1`. metaConvert applies it to three values — the point estimate
+and both confidence limits — and derives the standard error from the transformed
+interval width. The **upper limit is the largest of the three, so it leaves the domain
+first**, and every `log()` was wrapped in `suppressWarnings()`.
+
+The result was a silent, asymmetric failure. `es_from_rr_ci(rr = 1.5, rr_ci_lo = 0.9,
+rr_ci_up = 2.5, baseline_risk = 0.5, rr_to_or = "grant")` returned a perfectly
+plausible `logor = 1.099` (OR = 3.0) beside `logor_se = NaN` and a half-open interval.
+A finite estimate with no usable variance is worse than none: it looks poolable, and in
+an inverse-variance meta-analysis a missing SE quietly drops the study rather than
+reporting that it could not be converted.
+
+Such rows now return the odds ratio, its standard error and both limits **all as NA**,
+with a warning naming the offending value and the condition, and pointing at
+`rr_to_or = "metaumbrella"` or `"transpose"`, which have no domain restriction.
+In-domain conversions are bit-identical to before.
+
+The mirror direction is deliberately untouched: `or_to_rr = "grant"` computes
+`or / (1 − BR + BR·or)`, whose denominator is positive for every `or > 0` and
+`BR ∈ (0, 1)`, so it has no domain boundary to cross. That asymmetry is now pinned by
+a test, so a later "fix for symmetry" cannot add a guard that can never fire.
+
 ## New quality flag
 
 - **V35** (`[INFO]`, cross-row): fires when a correlation pool's 2×2 event rates span a

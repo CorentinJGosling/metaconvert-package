@@ -589,10 +589,59 @@
                       n_cases, n_controls, n_exp, n_nexp,
                       baseline_risk, rr_to_or) {
   if (rr_to_or == "grant") {
-    logor_grant <- suppressWarnings(log(rr * (1 - baseline_risk) / (1 - rr * baseline_risk)))
-    logor_ci_lo_grant <- suppressWarnings(log(rr_ci_lo * (1 - baseline_risk) / (1 - rr_ci_lo * baseline_risk)))
-    logor_ci_up_grant <- suppressWarnings(log(rr_ci_up * (1 - baseline_risk) / (1 - rr_ci_up * baseline_risk)))
+    # Grant's transform maps a risk ratio to an odds ratio as
+    #   OR = RR (1 - BR) / (1 - RR * BR)
+    # which is only defined while RR * BR < 1. It is applied to THREE values -- the
+    # point estimate and both interval bounds -- and the upper bound is the largest of
+    # them, so it leaves the domain first. The failure was therefore asymmetric and
+    # silent: a row could return a perfectly plausible log OR beside a NaN standard
+    # error and a half-open interval, with every log() wrapped in suppressWarnings().
+    # A finite estimate with no usable variance is worse than no estimate at all,
+    # because it looks poolable and is not.
+    #
+    # The caller (es_from_stand_RR.R:153) only routes rows here when rr, baseline_risk
+    # and both CI bounds are non-NA, so a non-finite result is always a domain
+    # violation and never a missing input. Return the whole quartet as NA and say why.
+    #
+    # NB the mirror direction is safe and is deliberately left alone: .or_to_rr()'s
+    # grant branch computes or / (1 - BR + BR*or), whose denominator is positive for
+    # every or > 0 and BR in (0, 1), so it has no domain boundary to cross.
+    .grant_or <- function(x) {
+      suppressWarnings(log(x * (1 - baseline_risk) / (1 - x * baseline_risk)))
+    }
+    logor_grant <- .grant_or(rr)
+    logor_ci_lo_grant <- .grant_or(rr_ci_lo)
+    logor_ci_up_grant <- .grant_or(rr_ci_up)
     logor_se <- (logor_ci_up_grant - logor_ci_lo_grant) / (2 * qnorm(.975))
+
+    if (!all(is.finite(c(logor_grant, logor_se,
+                         logor_ci_lo_grant, logor_ci_up_grant)))) {
+      .offending <- c(rr = rr, rr_ci_lo = rr_ci_lo, rr_ci_up = rr_ci_up)
+      .offending <- .offending[!is.finite(.grant_or(.offending))]
+      warning("rr_to_or = 'grant': the transform is undefined because ",
+              if (length(.offending)) {
+                paste0(paste(sprintf("%s = %s", names(.offending),
+                                     format(.offending)), collapse = " and "),
+                       " times baseline_risk = ", format(baseline_risk),
+                       " is not below 1")
+              } else {
+                paste0("baseline_risk = ", format(baseline_risk),
+                       " does not admit a finite odds ratio for this interval")
+              },
+              ". Grant's conversion requires RR * baseline_risk < 1 for the point ",
+              "estimate AND both confidence limits; the upper limit is the largest ",
+              "of the three and so fails first. The odds ratio, its standard error ",
+              "and both limits are returned as NA rather than a finite estimate with ",
+              "a missing variance. Use rr_to_or = 'metaumbrella' or 'transpose', ",
+              "which have no such restriction, or supply a smaller baseline_risk if ",
+              "the one given is not the non-exposed event rate.",
+              call. = FALSE)
+      logor_grant <- NA_real_
+      logor_se <- NA_real_
+      logor_ci_lo_grant <- NA_real_
+      logor_ci_up_grant <- NA_real_
+    }
+
     res <- cbind(
       logor = logor_grant,
       logor_se = logor_se,
