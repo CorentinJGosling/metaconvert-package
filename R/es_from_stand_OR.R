@@ -228,6 +228,10 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(or))
   }
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -604,6 +608,10 @@ es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(or))
   }
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -714,6 +722,10 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(or))
   }
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -833,6 +845,10 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(or))
   }
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -955,6 +971,10 @@ es_from_logreg_t <- function(or, logor, rr, logrr, logreg_t,
   if (missing(rr)) rr <- rep(NA_real_, len)
   if (missing(logrr)) logrr <- rep(NA_real_, len)
   if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, len)
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(small_margin_prop)) small_margin_prop <- rep(NA_real_, len)
   if (missing(n_exp)) n_exp <- rep(NA_real_, len)
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, len)

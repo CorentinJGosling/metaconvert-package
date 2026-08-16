@@ -415,6 +415,10 @@ es_from_user_crude <- function(user_es_original_measure_crude,
   if (missing(n_cases)) n_cases <- rep(NA_real_, len)
   if (missing(n_controls)) n_controls <- rep(NA_real_, len)
   if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, len)
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(small_margin_prop)) small_margin_prop <- rep(NA_real_, len)
 
   # es/se from ci bounds
@@ -683,6 +687,10 @@ es_from_user_adj <- function(user_es_original_measure_adj,
   if (missing(n_cases)) n_cases <- rep(NA_real_, len)
   if (missing(n_controls)) n_controls <- rep(NA_real_, len)
   if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, len)
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(small_margin_prop)) small_margin_prop <- rep(NA_real_, len)
 
   es_val <- ifelse(is.na(user_es_adj) & !is.na(user_es_original_measure_adj) &

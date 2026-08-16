@@ -82,6 +82,10 @@ es_from_rd_se <- function(rd, rd_se,
   # R/internal_guards.R.
   rd_se <- .positive_or_na(rd_se)
   if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, length(rd))
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(n_exp)) n_exp <- rep(NA_real_, length(rd))
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, length(rd))
   if (missing(n_cases)) n_cases <- rep(NA_real_, length(rd))
@@ -215,6 +219,10 @@ es_from_rd_ci <- function(rd, rd_ci_lo, rd_ci_up,
   if (missing(rd_ci_lo)) rd_ci_lo <- rep(NA_real_, length(rd))
   if (missing(rd_ci_up)) rd_ci_up <- rep(NA_real_, length(rd))
   if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, length(rd))
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(n_exp)) n_exp <- rep(NA_real_, length(rd))
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, length(rd))
   if (missing(n_cases)) n_cases <- rep(NA_real_, length(rd))
@@ -291,6 +299,10 @@ es_from_rd_pval <- function(rd, rd_pval,
   if (missing(rd)) rd <- rep(NA_real_, length(rd_pval))
   if (missing(rd_pval)) rd_pval <- rep(NA_real_, length(rd))
   if (missing(baseline_risk)) baseline_risk <- rep(NA_real_, length(rd))
+  # Divided by, not merely reported: outside [0, 1) the grant conversions stay finite
+  # and positive while returning a negative standard error and a transposed interval.
+  # See R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(n_exp)) n_exp <- rep(NA_real_, length(rd))
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, length(rd))
   if (missing(n_cases)) n_cases <- rep(NA_real_, length(rd))

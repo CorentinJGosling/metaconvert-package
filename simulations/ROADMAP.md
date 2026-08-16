@@ -108,6 +108,50 @@ un-ignoring it in git cannot leak it into the package.
 > rows now go NA, so `nonest_rate` reports the failure instead of the cell looking
 > half-populated. Folds into the item 3.5 regeneration alongside 04/05.
 
+### 1.7 ☑ NEW — `baseline_risk` unguarded on the exported routes — DONE
+
+Found by the literature verification (below). `baseline_risk` outside `[0, 1)` made
+both `(1 - BR)` and `(1 - RR*BR)` change sign together, so the grant conversions stayed
+finite and positive while returning a **negative SE and a transposed CI**, silently, in
+both directions. A finiteness test cannot catch it — which is why the 1.4 guard, which
+tests `all(is.finite(...))`, did not. New `.baseline_risk_or_na()` in
+`internal_guards.R`, applied at all 13 entry points. Also: RD/NNT now NA when the
+implied exposed risk `rr*br > 1` (was emitting `rd = -0.900`, `nnt = -1.111` from a
+non-existent risk pair, with B6 silent since `|rd| < 1`); stale `stop()` advertising
+`grant_2x2`/`grant_CI` corrected; `.or_to_rr` given the terminal `else` it lacked.
+78 assertions.
+
+### 1.8 ☐ NEW — `metaumbrella_exp`'s documented gate does not require what it needs
+
+The 1.1 solve fixes the reconstruction **only when a second margin is supplied**. The
+documented minimal input ([es_from_stand_OR.R:47](../R/es_from_stand_OR.R#L47)) is
+`or + logor_se + n_exp + n_nexp`, which does not include one. Measured on that input at
+**equal arm sizes** — 1:1 randomisation, the modal RCT design — **69.2%** of 400 tables
+come back wrong by >0.01 in log RR (quantiles 0.181 / 0.652 / 1.258 / 1.855 / 2.575 at
+the 50/75/90/95/99th, max 3.019). Worked case: true table 1/49/25/25, true RR **0.040**,
+returned **0.510** — a 12.8-fold error, silently and unflagged. Supplying either
+`n_cases` or `baseline_risk` recovers it exactly. `metaumbrella_cases` is 35.2% wrong at
+balanced case margins.
+
+**Strategy — decision needed.** Either tighten the gate so the method only fires when it
+can be identified (a second margin or `baseline_risk`), or let it fire and warn loudly
+when the arms are equal and nothing disambiguates. The first changes which rows produce
+an RR; the second keeps them but marks them.
+
+**Test unit.** Extend `test-or-to-rr-identifiability.R` with the equal-arms /
+minimal-input case, asserting whichever contract is chosen.
+
+### 1.9 ☐ NEW — study 04's `vanderweele_sqrt_or` measures a straw man
+
+`simulations/studies/04_or_to_rr.R:79-86` builds `logrr <- log(or)/2`,
+`se <- logor_se/2` and a plain symmetric interval. VanderWeele (2020) p.748 explicitly
+rules that out — *"it cannot be applied directly to the confidence interval of the odds
+ratio to obtain 95% coverage over repeated samples of the true risk ratio"* — and
+prescribes dividing/multiplying the bounds by 1.25 for a conservative interval. So the
+candidate's **coverage** results describe an operation the paper forbids, not the method
+it proposes. The point-estimate results are unaffected. Fix the candidate and
+regenerate 04 (folds into 3.5), or drop the coverage column for that arm.
+
 ### 1.6 ☐ NEW — delete the shadowed duplicate reconstruction helpers
 
 `R/estimate_n_from_es.R:41` and `:121` define `.estimate_n_from_or_and_n_cases` and

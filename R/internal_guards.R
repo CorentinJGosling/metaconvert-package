@@ -48,6 +48,34 @@
   ifelse(!is.na(x) & x <= 0, NA_real_, x)
 }
 
+# A baseline risk is the proportion of cases in the NON-EXPOSED group, so it must lie
+# in [0, 1). Anything else is neutralised to NA. NA in, NA out.
+#
+# WHY THE UPPER BOUND IS EXCLUSIVE, unlike the [0, 1] range check flag V11 applies to
+# the same column: the value is not merely reported, it is DIVIDED BY. Grant's
+# conversions are OR = RR(1 - BR)/(1 - RR*BR) and RR = OR/(1 - BR + BR*OR), and at
+# BR = 1 the first has a zero numerator factor and the second collapses to OR/OR = 1 --
+# measured, es_from_or_se(or = 2, logor_se = 0.2, baseline_risk = 1, or_to_rr = "grant")
+# returns logrr = 0 with logrr_se = 0 EXACTLY, i.e. an infinite inverse-variance weight.
+# BR = 0 is kept: it is the rare-disease limit where both conversions become the
+# identity (logrr = logor, SE preserved), which is correct rather than degenerate.
+#
+# WHY THIS IS A GUARD AND NOT LEFT TO THE FLAG. convert_df() range-checks the column
+# (V11, internal_flags.R) but all 13 exported routes taking baseline_risk are callable
+# directly and bypass it entirely, and correct_inputs = FALSE deliberately preserves a
+# bad value so the user can inspect it. Unguarded, a baseline_risk of 1.5 or 20 makes
+# BOTH (1 - BR) and (1 - RR*BR) negative, so their ratio stays positive and finite: the
+# route then returns a plausible-looking effect size with a NEGATIVE standard error and
+# a transposed confidence interval, silently. Measured before this guard:
+#   es_from_rr_se(rr = 2, logrr_se = 0.2, baseline_risk = 20,  "grant") -> se = -0.00527
+#   es_from_or_se(or = 2, logor_se = 0.2, baseline_risk = 1.5, "grant") -> se = -0.04177
+# both with lo > up. That is exactly the failure class this file exists to close, and
+# a finiteness test cannot catch it because every value involved is finite.
+.baseline_risk_or_na <- function(x) {
+  if (is.null(x) || length(x) == 0) return(x)
+  ifelse(!is.na(x) & (!is.finite(x) | x < 0 | x >= 1), NA_real_, x)
+}
+
 # Full width of an interval, robust to transposed bounds.
 .ci_width <- function(ci_lo, ci_up) abs(ci_up - ci_lo)
 

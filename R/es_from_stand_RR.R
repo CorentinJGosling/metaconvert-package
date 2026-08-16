@@ -100,6 +100,11 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(rr))
   }
+  # Divided by, not merely reported: outside [0, 1) both (1 - BR) and (1 - RR*BR)
+  # change sign together, so the grant conversion stays finite and POSITIVE while
+  # returning a negative standard error and a transposed interval. See
+  # R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(n_exp)) {
     n_exp <- rep(NA_real_, length(rr))
   }
@@ -182,11 +187,22 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
   }
 
   # Risk difference from RR + baseline_risk
-  rd <- baseline_risk * (1 - rr)
+  # The risk difference is baseline_risk - (rr * baseline_risk), so it presumes the
+  # implied EXPOSED risk rr * baseline_risk is itself a probability. When it exceeds 1
+  # the pair of risks does not exist and the RD and NNT describe nothing: at rr = 2 with
+  # baseline_risk = 0.9 the implied exposed risk is 1.8, and the route returned
+  # rd = -0.900 and nnt = -1.111 while correctly returning the odds ratio as NA. Neither
+  # value trips a flag -- B6 tests |rd| > 1, and |-0.9| is inside the bound -- so the
+  # impossible pair reached the output silently.
+  #
+  # NB the OR path already declines here (Grant's transform needs rr * baseline_risk < 1
+  # and returns NA outside it), so this closes the one route that did not.
+  .risk_pair_ok <- is.na(rr) | is.na(baseline_risk) | (rr * baseline_risk <= 1)
+  rd <- ifelse(.risk_pair_ok, baseline_risk * (1 - rr), NA_real_)
 
   es$rd <- ifelse(reverse_rr, -rd, rd)
   # delta method
-  rd_se <- baseline_risk * rr * logrr_se
+  rd_se <- ifelse(.risk_pair_ok, baseline_risk * rr * logrr_se, NA_real_)
   es$rd_se <- rd_se
   es$rd_ci_lo <- es$rd - qnorm(.975) * rd_se
   es$rd_ci_up <- es$rd + qnorm(.975) * rd_se
@@ -267,6 +283,11 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(rr))
   }
+  # Divided by, not merely reported: outside [0, 1) both (1 - BR) and (1 - RR*BR)
+  # change sign together, so the grant conversion stays finite and POSITIVE while
+  # returning a negative standard error and a transposed interval. See
+  # R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(n_exp)) {
     n_exp <- rep(NA_real_, length(rr))
   }
@@ -367,6 +388,11 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
   if (missing(baseline_risk)) {
     baseline_risk <- rep(NA_real_, length(rr))
   }
+  # Divided by, not merely reported: outside [0, 1) both (1 - BR) and (1 - RR*BR)
+  # change sign together, so the grant conversion stays finite and POSITIVE while
+  # returning a negative standard error and a transposed interval. See
+  # R/internal_guards.R.
+  baseline_risk <- .baseline_risk_or_na(baseline_risk)
   if (missing(n_exp)) {
     n_exp <- rep(NA_real_, length(rr))
   }

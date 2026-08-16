@@ -51,6 +51,42 @@ dichotomised-bivariate-normal family also has three, so the latent-normal model 
 saturated and admits no goodness-of-fit test. If your variables are genuinely
 dichotomous rather than dichotomised, use a binary measure (`logor`, `rr`, `rd`).
 
+## `baseline_risk` is now guarded, not just flagged
+
+`baseline_risk` is the proportion of cases in the non-exposed group, so it belongs to
+`[0, 1)`. It is **divided by**, not merely reported: Grant's conversions are
+`OR = RR(1−BR)/(1−RR·BR)` and `RR = OR/(1−BR+BR·OR)`, and outside that range `(1−BR)`
+and `(1−RR·BR)` change sign *together*, so the ratio stays finite and positive. The
+route therefore returned a plausible-looking effect size with a **negative standard
+error** and a **transposed confidence interval**, silently, in both directions:
+
+```
+es_from_rr_se(rr = 2, logrr_se = 0.2, baseline_risk = 20,  "grant") -> se = -0.00527
+es_from_or_se(or = 2, logor_se = 0.2, baseline_risk = 1.5, "grant") -> se = -0.04177
+```
+
+A finiteness test cannot catch this, because every value involved is finite. All 13
+exported routes taking `baseline_risk` now neutralise an out-of-range value to NA via a
+new guard in `R/internal_guards.R`. `convert_df()` already range-checked the column
+(flag V11), but those routes are callable directly and bypass it, and
+`correct_inputs = FALSE` deliberately preserves a bad value.
+
+The upper bound is **exclusive**, unlike V11's `[0, 1]`: at `BR = 1` the OR→RR branch
+returned `logrr = 0` with `logrr_se = 0` exactly — an infinite inverse-variance weight.
+`BR = 0` is kept, being the rare-disease limit where both conversions become the
+identity.
+
+**Risk difference and NNT from a risk ratio** are now NA when the implied exposed risk
+`rr × baseline_risk` exceeds 1. At `rr = 2`, `baseline_risk = 0.9` the implied exposed
+risk is 1.8 — no such pair of risks exists — yet the route returned `rd = −0.900` and
+`nnt = −1.111` while correctly returning the odds ratio as NA. Neither tripped a flag,
+since B6 tests `|rd| > 1` and `|−0.9|` is inside the bound.
+
+Two dispatch messages also corrected: `.rr_to_or`'s terminal error advertised
+`'grant_2x2'` and `'grant_CI'`, neither of which is accepted anywhere, while omitting
+`'grant'` and `'dipietrantonj'`, which are; and `.or_to_rr` had no terminal `else`, so an
+unrecognised method returned NULL silently instead of being rejected.
+
 ## `rr_to_or = "grant"` no longer returns an effect size it cannot give a variance for
 
 Grant's conversion, `OR = RR(1 − BR) / (1 − RR·BR)`, is defined only while

@@ -270,12 +270,16 @@
       logrr_ci_lo = as.numeric(calc_dipie$logrr_ci_lo),
       logrr_ci_up = as.numeric(calc_dipie$logrr_ci_up)
     )
-    res$logrr = res$logrr
-    res$logrr_se = res$logrr_se
-    res$logrr_ci_lo = res$logrr_ci_lo
-    res$logrr_ci_up = res$logrr_ci_up
-
     return(res)
+  } else {
+    # Terminal else, mirroring .rr_to_or's. Without it an unrecognised method fell off
+    # the end of the if-chain and the function returned NULL silently, so the caller saw
+    # a missing conversion rather than a rejected argument. The front-door check at
+    # R/es_from_stand_OR.R:206-210 makes this unreachable through the exported routes,
+    # which is why it went unnoticed; it is the last line of defence for a direct call.
+    stop(paste0("'", or_to_rr, "' not in tolerated values for the 'or_to_rr' argument. ",
+                "Possible inputs are: 'metaumbrella_cases', 'metaumbrella_exp', ",
+                "'transpose', 'grant' or 'dipietrantonj'."), call. = FALSE)
   }
 }
 ################### OR to 2x2 ##################
@@ -734,7 +738,12 @@
 
     return(res)
   } else {
-    stop(paste0("'", rr_to_or, "' not in tolerated values for the 'rr_to_or' argument. Possible inputs are: 'metaumbrella', 'transpose', 'grant_2x2', 'grant_CI'"))
+    # The previous message advertised 'grant_2x2' and 'grant_CI'. Neither is accepted
+    # anywhere -- the branch above is plain 'grant' -- so it named two values that could
+    # not be selected while omitting two that could ('grant', 'dipietrantonj').
+    stop(paste0("'", rr_to_or, "' not in tolerated values for the 'rr_to_or' argument. ",
+                "Possible inputs are: 'metaumbrella', 'transpose', 'grant' or ",
+                "'dipietrantonj'."), call. = FALSE)
   }
 }
 
