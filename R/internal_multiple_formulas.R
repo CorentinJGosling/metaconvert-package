@@ -133,6 +133,16 @@
       n_exp = n_exp, n_nexp = n_nexp
     )
 
+    # Non-identifiability gate (see .rotation_tied). Only when the exact solve did
+    # NOT fire: a solved table is identified whatever the margins look like.
+    if (!isTRUE(attr(contingency_meta_cases, "solved")) &&
+        .rotation_tied(n_cases, n_controls)) {
+      warning(.msg_nonidentified_2x2("metaumbrella_cases", "n_cases", "n_controls",
+                                     n_cases, "'n_exp' or 'n_nexp'"), call. = FALSE)
+      return(cbind(logrr = NA_real_, logrr_se = NA_real_,
+                   logrr_ci_lo = NA_real_, logrr_ci_up = NA_real_))
+    }
+
     calc_meta_cases <- es_from_2x2(
       n_cases_exp = contingency_meta_cases$n_cases_exp,
       n_controls_exp = contingency_meta_cases$n_controls_exp,
@@ -156,6 +166,18 @@
       or = or, var = logor_se^2, n_exp = n_exp, n_nexp = n_nexp,
       n_cases = n_cases, n_controls = n_controls, baseline_risk = baseline_risk
     )
+
+    # Non-identifiability gate (see .rotation_tied). Only when the exact solve did
+    # NOT fire: a solved table is identified whatever the margins look like.
+    if (!isTRUE(attr(contingency_meta_exp, "solved")) &&
+        .rotation_tied(n_exp, n_nexp)) {
+      warning(.msg_nonidentified_2x2("metaumbrella_exp", "n_exp", "n_nexp",
+                                     n_exp, "'n_cases', 'n_controls' or 'baseline_risk'"),
+              call. = FALSE)
+      return(cbind(logrr = NA_real_, logrr_se = NA_real_,
+                   logrr_ci_lo = NA_real_, logrr_ci_up = NA_real_))
+    }
+
     calc_meta_exp <- es_from_2x2(
       n_cases_exp = contingency_meta_exp$n_cases_exp,
       n_controls_exp = contingency_meta_exp$n_controls_exp,
@@ -396,6 +418,61 @@
 }
 
 
+#' Is the 2x2 reconstruction tied by the 180-degree rotation?
+#'
+#' The rotation \eqn{(a,b,c,d) \to (d,c,b,a)} preserves the odds ratio and
+#' \eqn{1/a+1/b+1/c+1/d} exactly, and swaps the two supplied margins. It is therefore
+#' admissible with the SAME reported inputs precisely when those two margins are equal --
+#' \code{n_exp == n_nexp} for the \code{_exp} parameterisation, \code{n_cases ==
+#' n_controls} for \code{_cases}. In that configuration the enumerating search faces an
+#' exact tie broken only by enumeration order, so its answer is arbitrary.
+#'
+#' Measured on the \code{_exp} parameterisation, 782 usable draws at
+#' \code{n_exp == n_nexp == 50} with no second margin: the returned table is the true
+#' one 37.0% of the time and its rotation 66.6% (4.4% of true tables are their own
+#' rotation, so those two overlap; 0.8% land on neither). Genuinely wrong: 62.3%.
+#'
+#' The cliff is sharp rather than gradual -- one participant of imbalance makes the
+#' rotation inadmissible -- which is why the gate tests exact equality and nothing
+#' looser. Hit rate by \code{|n_exp - n_nexp|}: 0.384 (0) -> 0.995 (1) -> 0.987 (2)
+#' -> 0.995 (5) -> 0.982 (10). The \code{_cases} mirror behaves the same way at
+#' \code{|n_cases - n_controls|}: 0.745 (0) -> 0.995 (1) -> 0.995 (2) -> 0.993 (5)
+#' -> 0.993 (10). The two tied-cell rates are not comparable to each other (they come
+#' from different draw distributions, and the published 0.352 for \code{_cases} from a
+#' third); what reproduces across all of them is the size of the drop at zero.
+#'
+#' @param m1,m2 the two margins the caller supplied
+#' @return TRUE when the reconstruction is non-identified by this mechanism
+#' @noRd
+.rotation_tied <- function(m1, m2) {
+  if (length(m1) != 1L || length(m2) != 1L) return(FALSE)
+  if (is.na(m1) || is.na(m2)) return(FALSE)
+  if (!is.finite(m1) || !is.finite(m2)) return(FALSE)
+  m1 == m2
+}
+
+#' Warning text for a non-identified metaumbrella reconstruction
+#'
+#' Kept in one place because the two branches differ only in which margin pair ties
+#' and which columns would break the tie. No hit-rate percentage is quoted: the two
+#' parameterisations were measured at different rates and both figures are properties
+#' of a draw distribution, not of the method. What is true of every measurement, and
+#' is what the message says, is that the tie is EXACT -- so the search has nothing to
+#' decide on.
+#'
+#' @noRd
+.msg_nonidentified_2x2 <- function(method, m1_name, m2_name, m_value, fix) {
+  paste0(
+    "or_to_rr = '", method, "': the 2x2 reconstruction is not identified when ",
+    m1_name, " == ", m2_name, " (here both are ", m_value, "). Rotating the table ",
+    "180 degrees leaves the odds ratio and its standard error unchanged but gives a ",
+    "different risk ratio, so the two candidate tables are exactly tied and the answer ",
+    "would be settled by enumeration order rather than by the data. The risk ratio is ",
+    "returned as NA. Supply ", fix, " to identify the table exactly, or use another ",
+    "'or_to_rr' method."
+  )
+}
+
 .estimate_n_from_or_and_n_cases <- function(or, var, n_cases, n_controls,
                                             n_exp = NA, n_nexp = NA,
                                             baseline_risk = NA) {
@@ -408,10 +485,14 @@
     hit <- .solve_2x2_from_or(or, n_exp,
                               if (!is.na(n_nexp)) n_nexp else n_cases + n_controls - n_exp,
                               n_cases)
-    if (!is.null(hit)) return(hit)
+    # "solved" marks an exactly identified table. The caller cannot otherwise tell a
+    # solve from a search, and the two have completely different reliability when the
+    # margins are tied -- see .rotation_tied and the gate in .or_to_rr().
+    if (!is.null(hit)) return(structure(hit, solved = TRUE))
   }
 
   res <- data.frame(n_cases_exp = NA, n_cases_nexp = NA, n_controls_exp = NA, n_controls_nexp = NA)
+  attr(res, "solved") <- FALSE
 
   if (!is.na(or) & !is.na(var) & !is.na(n_cases) & !is.na(n_controls)) {
     # Create all possibilites of n
@@ -494,14 +575,15 @@
   }
   if (!is.na(n_cases_use)) {
     hit <- .solve_2x2_from_or(or, n_exp, n_nexp, n_cases_use)
-    if (!is.null(hit)) return(hit)
+    # "solved" marks an exactly identified table -- see .estimate_n_from_or_and_n_cases.
+    if (!is.null(hit)) return(structure(hit, solved = TRUE))
   }
 
   # ---- Rung 2: a reported baseline risk identifies the table just as well.
   if (!is.na(baseline_risk)) {
     hit <- .solve_2x2_from_or(or, n_exp, n_nexp,
                               .n_cases_from_baseline_risk(or, n_exp, n_nexp, baseline_risk))
-    if (!is.null(hit)) return(hit)
+    if (!is.null(hit)) return(structure(hit, solved = TRUE))
   }
 
   # ---- Otherwise: fall through to the enumeration below, UNCHANGED. No prior is
@@ -511,7 +593,12 @@
   # and produced +44% pooled-RR bias end-to-end on a common-outcome review. Recoding an
   # outcome from "response" to "non-response" flips its answer on identical data, so
   # there is no principled default. Output here is bit-identical to pre-cascade.
+  #
+  # What DID change (item 1.8): the caller now refuses to publish a risk ratio built
+  # on this path when the two supplied margins are equal, because there the search is
+  # not merely imprecise but exactly tied. See .rotation_tied.
   res <- data.frame(n_cases_exp = NA, n_cases_nexp = NA, n_controls_exp = NA, n_controls_nexp = NA)
+  attr(res, "solved") <- FALSE
 
   if (!is.na(or) & !is.na(var) & !is.na(n_exp) & !is.na(n_nexp)) {
     # first: uncorrected values with 0

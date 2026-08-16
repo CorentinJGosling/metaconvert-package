@@ -225,3 +225,410 @@ test_that("es_from_or_se() end-to-end: metaumbrella_exp recovers the right RR", 
                        or_to_rr = "metaumbrella_exp")
   expect_equal(exp(got$logrr), true_rr, tolerance = 0.02)
 })
+
+# =============================================================================
+# Roadmap item 1.8 -- the gate on the non-identified cell.
+#
+# Item 1.1 (above) SOLVES the reconstruction whenever a margin from the other pair
+# is available. It does nothing for the documented minimal input -- or + logor_se +
+# n_exp + n_nexp -- which contains no such margin. At EQUAL margins that input is
+# genuinely non-identified: the 180-degree rotation reproduces the odds ratio and its
+# standard error exactly while implying a different risk ratio, so the enumeration is
+# tied and its winner is an artifact of loop order.
+#
+# Measured on the _exp parameterisation, 782 usable draws at n_exp == n_nexp == 50
+# with no second margin: the true table comes back 37.0% of the time, its rotation
+# 66.6% (4.4% of tables are their own rotation), genuinely wrong 62.3%. The cliff is
+# sharp, not gradual -- one participant of imbalance makes the rotation inadmissible:
+#
+#   |n_exp - n_nexp|    0       1       2       5      10
+#   hit rate         0.384   0.995   0.987   0.995   0.982     (exact SE)
+#                    0.379   0.955   0.967   0.950   0.951     (OR rounded to 2dp)
+#   _cases mirror    0.745   0.995   0.995   0.993   0.993
+#
+# So the gate tests EXACT equality and nothing looser, and fires only when the exact
+# solve did not. Rows it fires on return NA for the RR quartet with a warning naming
+# the column that would break the tie; every other row is untouched.
+#
+# Only the RR outputs are withheld: OR, D, G, R, Z, RD and NNT never touch the
+# reconstruction.
+# =============================================================================
+
+.tied <- function(...) metaConvert:::.rotation_tied(...)
+
+# Count warnings without stopping at the first (mapply raises one per gated row).
+.catch_warnings <- function(expr) {
+  w <- character(0)
+  val <- withCallingHandlers(expr,
+    warning = function(cnd) { w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning") })
+  list(value = val, warnings = w)
+}
+
+# A concrete non-identified case, used throughout: true table 1/49/25/25.
+# true OR = 0.0204, true RR = 0.040. Ungated, the enumeration returns the rotation
+# 25/49/25/1, whose RR is 25 -- a 625-fold error.
+.case <- list(a = 1, b = 49, c = 25, d = 25, n = 50)
+.case_or <- with(.case, .tab_or(a, b, c, d))
+.case_se <- with(.case, sqrt(.tab_var(a, b, c, d)))
+.case_rr <- with(.case, (a / n) / (c / n))
+
+# --- the "solved" marker ---------------------------------------------------
+
+test_that("the helpers report whether they SOLVED or searched", {
+  or <- .case_or; v <- .case_se^2
+
+  # Rung 1, via n_cases / via n_controls
+  expect_true(attr(.est_exp(or, v, 50, 50, n_cases = 26), "solved"))
+  expect_true(attr(.est_exp(or, v, 50, 50, n_controls = 74), "solved"))
+  # Rung 2, via baseline_risk
+  expect_true(attr(.est_exp(or, v, 50, 50, baseline_risk = 25 / 50), "solved"))
+  # Fall-through to the enumeration
+  expect_false(attr(.est_exp(or, v, 50, 50), "solved"))
+  expect_false(attr(.est_exp(or, v, 50, 50, n_cases = NA, baseline_risk = NA), "solved"))
+
+  # The mirror helper, whose Rung 1 takes n_exp
+  a <- 19; b <- 131; c <- 75; d <- 75
+  or2 <- .tab_or(a, b, c, d); v2 <- .tab_var(a, b, c, d)
+  expect_true(attr(.est_cases(or2, v2, a + c, b + d, n_exp = a + b, n_nexp = c + d), "solved"))
+  expect_false(attr(.est_cases(or2, v2, a + c, b + d), "solved"))
+})
+
+test_that("the marker survives the enumeration branch's column assignments", {
+  # The enumeration writes each cell into `res` with $<- AFTER the attribute is set.
+  # If that dropped the attribute the marker would read NULL, and !isTRUE(NULL) is
+  # TRUE, so the gate would still fire -- but for the wrong reason, and a solved row
+  # would be indistinguishable from a searched one. Pin FALSE, not missing.
+  got <- .est_exp(.case_or, .case_se^2, 50, 50)
+  expect_identical(attr(got, "solved"), FALSE)
+  expect_false(is.null(attr(got, "solved")))
+  expect_false(anyNA(unlist(got)))          # the enumeration did return a table
+})
+
+test_that("a second margin that does NOT describe this table falls through as unsolved", {
+  # .solve_2x2_from_or() declines a case margin >= N (a multi-arm trial reporting a
+  # margin over arms not in n_exp + n_nexp). Keying the gate on what the helper
+  # actually did, rather than on "was a second margin supplied", catches this.
+  got <- .est_exp(.case_or, .case_se^2, 50, 50, n_cases = 500)
+  expect_false(attr(got, "solved"))
+})
+
+# --- .rotation_tied() ------------------------------------------------------
+
+test_that(".rotation_tied() is exact equality and nothing looser", {
+  expect_true(.tied(50, 50))
+  expect_true(.tied(50L, 50))
+  expect_false(.tied(50, 51))
+  expect_false(.tied(50, 49))
+  expect_false(.tied(500, 501))       # a 0.2% imbalance is still not a tie
+  expect_false(.tied(NA, 50))
+  expect_false(.tied(50, NA))
+  expect_false(.tied(NA, NA))
+  expect_false(.tied(NaN, NaN))
+  expect_false(.tied(Inf, Inf))
+  expect_false(.tied(numeric(0), 50))
+  expect_false(.tied(c(50, 50), c(50, 50)))   # never silently vectorises
+})
+
+# --- the gate, metaumbrella_exp -------------------------------------------
+
+test_that("equal arms + minimal input: the RR quartet is NA and a warning names the fix", {
+  res <- .catch_warnings(
+    es_from_or_se(or = .case_or, logor_se = .case_se, n_exp = 50, n_nexp = 50,
+                  or_to_rr = "metaumbrella_exp"))
+
+  expect_true(is.na(res$value$logrr))
+  expect_true(is.na(res$value$logrr_se))
+  expect_true(is.na(res$value$logrr_ci_lo))
+  expect_true(is.na(res$value$logrr_ci_up))
+
+  expect_length(res$warnings, 1)
+  expect_match(res$warnings[1], "metaumbrella_exp", fixed = TRUE)
+  expect_match(res$warnings[1], "not identified when n_exp == n_nexp", fixed = TRUE)
+  expect_match(res$warnings[1], "here both are 50", fixed = TRUE)
+  expect_match(res$warnings[1], "n_cases", fixed = TRUE)
+  expect_match(res$warnings[1], "baseline_risk", fixed = TRUE)
+  # No hit-rate percentage is quoted: the two parameterisations measured differently.
+  expect_false(grepl("%", res$warnings[1], fixed = TRUE))
+})
+
+test_that("the withheld value is the one that used to be wrong", {
+  # Pin what the gate prevents, so a future "restore the old behaviour" change has to
+  # confront the number. The enumeration returns the rotated table -- cells
+  # (n_cases_exp, n_cases_nexp, n_controls_exp, n_controls_nexp) = (25, 49, 25, 1),
+  # i.e. the true 1/49/25/25 turned 180 degrees.
+  got <- .est_exp(.case_or, .case_se^2, 50, 50)
+  expect_equal(c(got$n_cases_exp, got$n_cases_nexp,
+                 got$n_controls_exp, got$n_controls_nexp), c(25, 49, 25, 1))
+  wrong_rr <- (got$n_cases_exp / 50) / (got$n_cases_nexp / 50)
+  expect_equal(wrong_rr, 25 / 49)             # 0.510, against a true RR of 0.04
+  expect_equal(wrong_rr / .case_rr, 12.755, tolerance = 1e-3)   # 12.8-fold, unflagged
+  # Both tables reproduce the reported inputs exactly -- which is the whole problem.
+  expect_equal(.tab_or(got$n_cases_exp, got$n_controls_exp,
+                       got$n_cases_nexp, got$n_controls_nexp), .case_or)
+  expect_equal(.tab_var(got$n_cases_exp, got$n_controls_exp,
+                        got$n_cases_nexp, got$n_controls_nexp), .case_se^2,
+               tolerance = 1e-12)
+})
+
+test_that("only the RR columns are withheld", {
+  res <- suppressWarnings(
+    es_from_or_se(or = .case_or, logor_se = .case_se, n_exp = 50, n_nexp = 50,
+                  or_to_rr = "metaumbrella_exp"))
+  # These come from the log OR directly and never touch the reconstruction.
+  for (col in c("logor", "logor_se", "logor_ci_lo", "logor_ci_up",
+                "d", "d_se", "g", "g_se", "r", "r_se", "z", "z_se")) {
+    expect_false(is.na(res[[col]]), info = paste(col, "must survive the RR gate"))
+  }
+  expect_equal(res$logor, log(.case_or))
+  expect_equal(res$logor_se, .case_se)
+})
+
+test_that("RD and NNT survive the gate (measured on the _cases mirror)", {
+  # For metaumbrella_exp a supplied baseline_risk identifies the table, so the gate
+  # cannot fire alongside an RD. The _cases parameterisation does not consume
+  # baseline_risk (Rung 2 is deliberately not wired there -- it is 0.9965, not exact),
+  # so this is the configuration where a gated RR coexists with a computed RD/NNT.
+  res <- suppressWarnings(
+    es_from_or_se(or = 2, logor_se = 0.3, n_cases = 60, n_controls = 60,
+                  baseline_risk = 0.2, or_to_rr = "metaumbrella_cases"))
+  expect_true(is.na(res$logrr))
+  expect_false(is.na(res$rd))
+  expect_false(is.na(res$nnt))
+  expect_false(is.na(res$rd_se))
+  # and the RD is the OR-based one, untouched by the reconstruction
+  treatment_risk <- (2 * 0.2) / (1 - 0.2 + 2 * 0.2)
+  expect_equal(res$rd, 0.2 - treatment_risk)
+})
+
+test_that("each recovery path returns the TRUE risk ratio, silently", {
+  for (extra in list(list(n_cases = 26), list(n_controls = 74),
+                     list(baseline_risk = 25 / 50),
+                     list(n_cases = 26, n_controls = 74))) {
+    res <- .catch_warnings(do.call(es_from_or_se, c(
+      list(or = .case_or, logor_se = .case_se, n_exp = 50, n_nexp = 50,
+           or_to_rr = "metaumbrella_exp"), extra)))
+    expect_equal(exp(res$value$logrr), .case_rr, tolerance = 1e-8,
+                 info = paste("recovery via", paste(names(extra), collapse = "+")))
+    expect_length(res$warnings, 0)
+  }
+})
+
+test_that("unequal arms are untouched and silent", {
+  # One participant of imbalance is enough: the rotation is inadmissible, so the
+  # search is not tied and today's behaviour stands.
+  res <- .catch_warnings(
+    es_from_or_se(or = .case_or, logor_se = .case_se, n_exp = 50, n_nexp = 51,
+                  or_to_rr = "metaumbrella_exp"))
+  expect_false(is.na(res$value$logrr))
+  expect_length(res$warnings, 0)
+})
+
+test_that("solved rows at EQUAL arms are not gated", {
+  # The gate keys on "was it solved", not on "are the margins equal". A row with equal
+  # arms AND a case margin is fully identified and must produce a value.
+  set.seed(1808)
+  k <- 0
+  for (i in 1:40) {
+    n <- sample(30:200, 1)
+    a <- rbinom(1, n, runif(1, .05, .60)); c <- rbinom(1, n, runif(1, .05, .60))
+    b <- n - a; d <- n - c
+    if (min(a, b, c, d) < 2) next
+    k <- k + 1
+    res <- .catch_warnings(
+      es_from_or_se(or = .tab_or(a, b, c, d), logor_se = sqrt(.tab_var(a, b, c, d)),
+                    n_exp = n, n_nexp = n, n_cases = a + c, n_controls = b + d,
+                    or_to_rr = "metaumbrella_exp"))
+    expect_false(is.na(res$value$logrr))
+    expect_length(res$warnings, 0)
+    expect_equal(exp(res$value$logrr), (a / n) / (c / n), tolerance = 1e-8)
+  }
+  expect_gt(k, 20)
+})
+
+# --- the gate, metaumbrella_cases (the mirror) -----------------------------
+
+test_that("the mirror gates at n_cases == n_controls and names n_exp", {
+  res <- .catch_warnings(
+    es_from_or_se(or = 2, logor_se = 0.3, n_cases = 60, n_controls = 60,
+                  or_to_rr = "metaumbrella_cases"))
+  expect_true(all(is.na(c(res$value$logrr, res$value$logrr_se,
+                          res$value$logrr_ci_lo, res$value$logrr_ci_up))))
+  expect_length(res$warnings, 1)
+  expect_match(res$warnings[1], "metaumbrella_cases", fixed = TRUE)
+  expect_match(res$warnings[1], "not identified when n_cases == n_controls", fixed = TRUE)
+  expect_match(res$warnings[1], "n_exp", fixed = TRUE)
+  # baseline_risk is NOT offered as a fix here: Rung 2 is wired for _exp only.
+  expect_false(grepl("baseline_risk", res$warnings[1], fixed = TRUE))
+})
+
+test_that("the mirror recovers from n_exp and leaves unbalanced case margins alone", {
+  a <- 19; b <- 131; c <- 75; d <- 75          # n_cases 94, n_controls 206
+  or <- .tab_or(a, b, c, d); se <- sqrt(.tab_var(a, b, c, d))
+
+  # unbalanced case margins: not tied, no gate
+  res1 <- .catch_warnings(
+    es_from_or_se(or = or, logor_se = se, n_cases = a + c, n_controls = b + d,
+                  or_to_rr = "metaumbrella_cases"))
+  expect_false(is.na(res1$value$logrr))
+  expect_length(res1$warnings, 0)
+
+  # balanced case margins + n_exp: solved, no gate, exact
+  a2 <- 40; b2 <- 60; c2 <- 60; d2 <- 40       # n_cases = n_controls = 100
+  res2 <- .catch_warnings(
+    es_from_or_se(or = .tab_or(a2, b2, c2, d2), logor_se = sqrt(.tab_var(a2, b2, c2, d2)),
+                  n_cases = a2 + c2, n_controls = b2 + d2,
+                  n_exp = a2 + b2, n_nexp = c2 + d2, or_to_rr = "metaumbrella_cases"))
+  expect_false(is.na(res2$value$logrr))
+  expect_length(res2$warnings, 0)
+  expect_equal(exp(res2$value$logrr), (a2 / (a2 + b2)) / (c2 / (c2 + d2)), tolerance = 1e-8)
+})
+
+# --- vectorised behaviour --------------------------------------------------
+
+test_that("in a mixed vector the NA lands on the gated row only", {
+  res <- .catch_warnings(
+    es_from_or_se(or = rep(.case_or, 4), logor_se = rep(.case_se, 4),
+                  n_exp = c(50, 50, 50, 50), n_nexp = c(50, 51, 50, 50),
+                  n_cases = c(NA, NA, 26, NA), n_controls = c(NA, NA, 74, NA),
+                  or_to_rr = "metaumbrella_exp"))
+  v <- res$value
+  expect_true(is.na(v$logrr[1]))            # gated
+  expect_false(is.na(v$logrr[2]))           # unequal arms
+  expect_false(is.na(v$logrr[3]))           # solved
+  expect_true(is.na(v$logrr[4]))            # gated
+  expect_equal(exp(v$logrr[3]), .case_rr, tolerance = 1e-8)
+  expect_length(res$warnings, 2)
+  # the whole quartet moves together, row by row
+  expect_true(all(is.na(c(v$logrr_se[1], v$logrr_ci_lo[1], v$logrr_ci_up[1]))))
+  expect_true(all(is.na(c(v$logrr_se[4], v$logrr_ci_lo[4], v$logrr_ci_up[4]))))
+  expect_false(anyNA(c(v$logrr_se[2], v$logrr_ci_lo[2], v$logrr_ci_up[2])))
+})
+
+test_that("reverse_or on a gated row cannot resurrect a value", {
+  res <- suppressWarnings(
+    es_from_or_se(or = .case_or, logor_se = .case_se, n_exp = 50, n_nexp = 50,
+                  reverse_or = TRUE, or_to_rr = "metaumbrella_exp"))
+  expect_true(all(is.na(c(res$logrr, res$logrr_se, res$logrr_ci_lo, res$logrr_ci_up))))
+  expect_equal(res$logor, -log(.case_or))   # the OR still reverses normally
+})
+
+# --- other entry points ----------------------------------------------------
+
+test_that("the gate reaches es_from_or_ci() and es_from_or_pval()", {
+  ci_lo <- exp(log(.case_or) - qnorm(.975) * .case_se)
+  ci_up <- exp(log(.case_or) + qnorm(.975) * .case_se)
+
+  r1 <- .catch_warnings(es_from_or_ci(or = .case_or, or_ci_lo = ci_lo, or_ci_up = ci_up,
+                                      n_exp = 50, n_nexp = 50,
+                                      or_to_rr = "metaumbrella_exp"))
+  expect_true(is.na(r1$value$logrr))
+  expect_gte(length(r1$warnings), 1)
+
+  pv <- 2 * pnorm(abs(log(.case_or)) / .case_se, lower.tail = FALSE)
+  r2 <- .catch_warnings(es_from_or_pval(or = .case_or, or_pval = pv,
+                                        n_exp = 50, n_nexp = 50,
+                                        or_to_rr = "metaumbrella_exp"))
+  expect_true(is.na(r2$value$logrr))
+  expect_gte(length(r2$warnings), 1)
+})
+
+test_that("es_from_or() is unaffected: its own inputs always identify the table", {
+  # es_from_or() requires n_cases + n_controls, so with n_exp/n_nexp present the
+  # solve fires (Rung 1) and the gate cannot. This also pins that the item-1.1 solve
+  # still bypasses the imputed .se_from_or() variance.
+  res <- .catch_warnings(es_from_or(or = .case_or, n_cases = 26, n_controls = 74,
+                                    n_exp = 50, n_nexp = 50,
+                                    or_to_rr = "metaumbrella_exp"))
+  expect_false(is.na(res$value$logrr))
+  expect_equal(exp(res$value$logrr), .case_rr, tolerance = 1e-8)
+  expect_length(res$warnings, 0)
+})
+
+test_that("the other or_to_rr methods are untouched at equal margins", {
+  for (m in c("transpose", "grant", "dipietrantonj")) {
+    res <- .catch_warnings(
+      es_from_or_se(or = .case_or, logor_se = .case_se, n_exp = 50, n_nexp = 50,
+                    baseline_risk = 0.5, or_to_rr = m))
+    expect_false(any(grepl("not identified when", res$warnings, fixed = TRUE)),
+                 info = paste(m, "must not be gated"))
+  }
+})
+
+# --- convert_df() ----------------------------------------------------------
+
+test_that("convert_df() propagates the gate to the summary output", {
+  df <- data.frame(or = rep(.case_or, 2), logor_se = rep(.case_se, 2),
+                   n_exp = c(50, 50), n_nexp = c(50, 51))
+  res <- suppressWarnings(summary(suppressWarnings(
+    convert_df(df, measure = "rr", or_to_rr = "metaumbrella_exp"))))
+  # The estimate is es_crude (on the log scale for measure = "rr"); the `rr` column in
+  # the summary is the echoed INPUT column, all-NA here, and checking it would pass
+  # for the wrong reason.
+  expect_true("es_crude" %in% names(res))
+  expect_true(is.na(res$es_crude[1]))       # equal arms -> withheld
+  expect_false(is.na(res$es_crude[2]))      # unequal arms -> unchanged
+  expect_true(is.na(res$info_used_crude[1]))
+  expect_equal(res$info_used_crude[2], "or_se")
+})
+
+test_that("convert_df() at the default or_to_rr gates on balanced case margins", {
+  # The package default is metaumbrella_cases, so the tied configuration there is
+  # n_cases == n_controls.
+  df <- data.frame(or = c(2, 2), logor_se = c(0.3, 0.3),
+                   n_cases = c(60, 60), n_controls = c(60, 90))
+  res <- suppressWarnings(summary(suppressWarnings(convert_df(df, measure = "rr"))))
+  expect_true(is.na(res$es_crude[1]))
+  expect_false(is.na(res$es_crude[2]))
+})
+
+# --- properties over a sweep ----------------------------------------------
+
+test_that("the gate is deterministic: every tied row is withheld, none other is", {
+  set.seed(1809)
+  tied_na <- tied_n <- untied_na <- untied_n <- 0L
+  tied_warn <- untied_warn <- 0L
+  for (i in 1:120) {
+    n <- sample(30:250, 1)
+    a <- rbinom(1, n, runif(1, .03, .60)); c <- rbinom(1, n, runif(1, .03, .60))
+    b <- n - a; d <- n - c
+    if (min(a, b, c, d) < 2) next
+    or <- .tab_or(a, b, c, d); se <- sqrt(.tab_var(a, b, c, d))
+
+    r_tied <- .catch_warnings(
+      es_from_or_se(or = or, logor_se = se, n_exp = n, n_nexp = n,
+                    or_to_rr = "metaumbrella_exp"))
+    tied_n <- tied_n + 1L
+    tied_na <- tied_na + is.na(r_tied$value$logrr)
+    tied_warn <- tied_warn + (length(r_tied$warnings) == 1L)
+
+    # same table, one extra participant in the control arm -> no longer tied
+    r_untied <- .catch_warnings(
+      es_from_or_se(or = or, logor_se = se, n_exp = n, n_nexp = n + 1,
+                    or_to_rr = "metaumbrella_exp"))
+    untied_n <- untied_n + 1L
+    untied_na <- untied_na + is.na(r_untied$value$logrr)
+    untied_warn <- untied_warn + length(r_untied$warnings)
+  }
+  expect_gt(tied_n, 50)
+  expect_equal(tied_na, tied_n)          # every tied row withheld
+  expect_equal(tied_warn, tied_n)        # exactly one warning each
+  expect_equal(untied_na, 0)             # no untied row withheld
+  expect_equal(untied_warn, 0)           # and none warned
+})
+
+test_that("no row ever returns a finite RR beside a non-finite SE", {
+  set.seed(1810)
+  for (i in 1:80) {
+    n1 <- sample(20:200, 1); n2 <- sample(20:200, 1)
+    a <- sample(1:(n1 - 1), 1); c <- sample(1:(n2 - 1), 1); b <- n1 - a; d <- n2 - c
+    for (m in c("metaumbrella_exp", "metaumbrella_cases")) {
+      res <- suppressWarnings(
+        es_from_or_se(or = .tab_or(a, b, c, d), logor_se = sqrt(.tab_var(a, b, c, d)),
+                      n_exp = n1, n_nexp = n2, n_cases = NA, n_controls = NA,
+                      or_to_rr = m))
+      quartet <- c(res$logrr, res$logrr_se, res$logrr_ci_lo, res$logrr_ci_up)
+      expect_true(all(is.finite(quartet)) || all(is.na(quartet)),
+                  info = paste(m, "quartet must be all-finite or all-NA"))
+    }
+  }
+})

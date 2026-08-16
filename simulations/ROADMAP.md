@@ -121,7 +121,61 @@ non-existent risk pair, with B6 silent since `|rd| < 1`); stale `stop()` adverti
 `grant_2x2`/`grant_CI` corrected; `.or_to_rr` given the terminal `else` it lacked.
 78 assertions.
 
-### 1.8 ☐ NEW — `metaumbrella_exp`'s documented gate does not require what it needs
+### 1.8 ☑ NEW — `metaumbrella_exp`'s documented gate does not require what it needs — DONE
+
+> **Decision taken: gate only in the tied cell** — a second margin is required when
+> `n_exp == n_nexp` (mirror: `n_cases == n_controls`), not universally. This **reverses
+> the earlier "pick a branch, don't return NA"** call, and the reversal is deliberate:
+> that call was made when the alternative was a *rule that guesses*; here the alternative
+> is a number that is wrong about two times in three.
+>
+> **The cliff is sharp, which is what makes the narrow gate defensible.** Measured hit
+> rate by `|n_exp - n_nexp|`: **0.384** (0) → 0.995 (1) → 0.987 (2) → 0.995 (5) → 0.982
+> (10); with the OR rounded to 2 dp, 0.379 → 0.955 → 0.967 → 0.950 → 0.951. The `_cases`
+> mirror by `|n_cases - n_controls|`: **0.745** (0) → 0.995 → 0.995 → 0.993 → 0.993. One
+> participant of imbalance makes the rotation inadmissible, so exact equality is the
+> whole failure set. **The three tied-cell rates are not comparable to each other**
+> (0.384 / 0.745 / the 0.324 first reported all come from different draw distributions);
+> what reproduces is the size of the drop at zero.
+>
+> **Mechanism confirmed rather than assumed** (782 draws at 50/50, no second margin):
+> the helper returns the true table 37.0%, its **rotation 66.6%**, neither 0.8%. So the
+> failure is the rotation tie, not general imprecision. Both recovery paths are exact:
+> `+ n_cases` → 1.000, `+ baseline_risk` → 1.000.
+>
+> **The gate keys on whether the solve fired, not on whether a margin was supplied.**
+> The helpers now mark their result `solved = TRUE/FALSE`. That catches the case a
+> re-derived condition would miss: a margin that cannot describe this table (a multi-arm
+> case margin, or a root rounding onto an empty cell) falls through to the search and is
+> just as tied.
+>
+> **Left in `internal_flags.R` deliberately.** D2's SE-outlier check calls the same helper
+> but uses only the reconstructed *variance*. The rotation permutes the four cells, so
+> `var(logOR)` is invariant — measured equal to within 2.2e-16 over 5000 tables, and the
+> first measurement's 0.703 "bit-identical" rate was summation-order rounding, not a real
+> gap. Gating there would push good rows onto a cruder fallback for nothing. **Noted, not
+> changed:** `var(logRR)` is *not* rotation-invariant (measured 0/2000 equal), so the
+> `measure = "logrr"` arm of that same check is mildly exposed — a pre-existing
+> flag-normalisation question, out of scope here.
+>
+> **Blast radius: zero existing rows.** No shipped dataset (`df.haza`, `df.short`,
+> `df.psychom`, `df.compare1/2`) carries an `or`/`logor` input column at all. Across the
+> whole of `tests_save/checked` the gate fired **0 times** (traced), so the archived suite
+> never covered this configuration — the new tests are its only coverage. `tests/testthat`
+> 2817 pass / 0 fail / 0 error / 0 skip (2427 baseline + 390 new);
+> `tests_save/checked` 7193 / 0 / 0 / 0, exactly the baseline.
+>
+> ⚠️ **Process note.** The first blast-radius run reported `PASS 5608` against a 7193
+> baseline with 0 failures — the roadmap's own "count that falls with no failures"
+> signature. Cause: I had wrapped `test_dir()` in `suppressWarnings(suppressMessages(...))`
+> to keep the trace output readable. Re-run without the wrapper: 7193, and the trace
+> count unaffected. **Do not wrap the suite to tidy its output.**
+>
+> Also fixed en route: the roxygen `\%` escape. Written as `\%` in a roxygen comment it
+> reaches the Rd as `\\%` — a literal backslash followed by an Rd comment, which silently
+> truncates the rest of the line. The convention in this package is a **bare** `%`.
+
+### 1.8-old (the original write-up, kept for the record)
 
 The 1.1 solve fixes the reconstruction **only when a second margin is supplied**. The
 documented minimal input ([es_from_stand_OR.R:47](../R/es_from_stand_OR.R#L47)) is

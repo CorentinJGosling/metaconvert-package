@@ -93,6 +93,7 @@ The following formulas are used (br = baseline_risk):
 
 \strong{B.} Second, the formulas implemented in the metaumbrella package can be used
 (\code{or_to_rr = "metaumbrella_cases"} or \code{or_to_rr = "metaumbrella_exp"}).
+Both reconstruct the 2x2 table the OR came from, then read the RR off it.
 This argument requires (or + logor_se + n_cases + n_controls) or (or + logor_se + n_exp + n_nexp)
 to generate a RR.
 More precisely, when the OR value and its standard error, plus either
@@ -104,6 +105,33 @@ in the exposed and non-exposed groups compatible with the actual value of the OR
 Then, the functions select the contingency table whose standard error coincides best with
 the standard error reported.
 The RR value and its standard are obtained from this estimated contingency table.
+
+\strong{Two refinements to that search.}
+
+\emph{(i) When a margin from the other pair is also available, the table is solved rather
+than searched.} All four margins together determine the table exactly: the odds ratio
+fixes it through a quadratic, and the reported standard error is not consulted at all.
+So supplying \code{n_cases} (or \code{n_controls}, or \code{baseline_risk}) alongside
+\code{n_exp}/\code{n_nexp} -- or \code{n_exp}/\code{n_nexp} alongside
+\code{n_cases}/\code{n_controls} -- makes the reconstruction exact instead of
+approximate, and is worth doing whenever the source reports it.
+
+\emph{(ii) When the two supplied margins are EQUAL, that second margin is required, not
+merely helpful.} Rotating a 2x2 table 180 degrees leaves the odds ratio and its
+standard error unchanged while swapping the two margins, so at
+\code{n_exp == n_nexp} (respectively \code{n_cases == n_controls}) the rotated table
+is equally compatible with everything reported -- yet it implies a different risk
+ratio. The search is then exactly tied, and the winner is decided by enumeration
+order rather than by the data. In that configuration, and only there, these two
+methods now return \code{NA} for the RR with a warning naming the column that would
+break the tie. All other rows are unaffected: with unequal margins the reconstruction
+recovers the true table for 98-99\% of tables from an exactly reported standard error,
+and for 95-97\% when the odds ratio is rounded to two decimals. Note that equal arm sizes are
+the modal RCT design, so \code{or_to_rr = "metaumbrella_exp"} on 1:1 randomised
+trials is precisely the case that needs the extra column.
+
+Only the RR outputs are withheld. The OR, D, G, R, Z, RD and NNT outputs of these
+functions do not use the reconstruction and are returned as usual.
 
 \strong{C.} Third, it is possible to transpose the OR to a RR (\code{or_to_rr = "transpose"}).
 This argument requires (or + logor_se) to generate a RR.

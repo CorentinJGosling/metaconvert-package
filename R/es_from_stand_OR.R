@@ -44,6 +44,7 @@
 #'
 #' **B.** Second, the formulas implemented in the metaumbrella package can be used
 #' (\code{or_to_rr = "metaumbrella_cases"} or \code{or_to_rr = "metaumbrella_exp"}).
+#' Both reconstruct the 2x2 table the OR came from, then read the RR off it.
 #' This argument requires (or + logor_se + n_cases + n_controls) or (or + logor_se + n_exp + n_nexp)
 #' to generate a RR.
 #' More precisely, when the OR value and its standard error, plus either
@@ -55,6 +56,33 @@
 #' Then, the functions select the contingency table whose standard error coincides best with
 #' the standard error reported.
 #' The RR value and its standard are obtained from this estimated contingency table.
+#'
+#' **Two refinements to that search.**
+#'
+#' *(i) When a margin from the other pair is also available, the table is solved rather
+#' than searched.* All four margins together determine the table exactly: the odds ratio
+#' fixes it through a quadratic, and the reported standard error is not consulted at all.
+#' So supplying \code{n_cases} (or \code{n_controls}, or \code{baseline_risk}) alongside
+#' \code{n_exp}/\code{n_nexp} -- or \code{n_exp}/\code{n_nexp} alongside
+#' \code{n_cases}/\code{n_controls} -- makes the reconstruction exact instead of
+#' approximate, and is worth doing whenever the source reports it.
+#'
+#' *(ii) When the two supplied margins are EQUAL, that second margin is required, not
+#' merely helpful.* Rotating a 2x2 table 180 degrees leaves the odds ratio and its
+#' standard error unchanged while swapping the two margins, so at
+#' \code{n_exp == n_nexp} (respectively \code{n_cases == n_controls}) the rotated table
+#' is equally compatible with everything reported -- yet it implies a different risk
+#' ratio. The search is then exactly tied, and the winner is decided by enumeration
+#' order rather than by the data. In that configuration, and only there, these two
+#' methods now return \code{NA} for the RR with a warning naming the column that would
+#' break the tie. All other rows are unaffected: with unequal margins the reconstruction
+#' recovers the true table for 98-99% of tables from an exactly reported standard error,
+#' and for 95-97% when the odds ratio is rounded to two decimals. Note that equal arm sizes are
+#' the modal RCT design, so \code{or_to_rr = "metaumbrella_exp"} on 1:1 randomised
+#' trials is precisely the case that needs the extra column.
+#'
+#' Only the RR outputs are withheld. The OR, D, G, R, Z, RD and NNT outputs of these
+#' functions do not use the reconstruction and are returned as usual.
 #'
 #' **C.** Third, it is possible to transpose the OR to a RR (\code{or_to_rr = "transpose"}).
 #' This argument requires (or + logor_se) to generate a RR.
@@ -664,10 +692,10 @@ es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
 #' @param logor_ci_up upper bound of the 95% CI around the log odds ratio value
 #' @param n_cases number of cases/events
 #' @param n_controls number of controls/no-event
-#' @param n_exp number of participants in the exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)
-#' @param n_nexp number of participants in the non-exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)
+#' @param n_exp number of participants in the exposed group (required for the \code{or_to_rr = "grant"} and \code{or_to_rr = "metaumbrella_exp"} arguments; also identifies the \code{or_to_rr = "metaumbrella_cases"} reconstruction when \code{n_cases == n_controls})
+#' @param n_nexp number of participants in the non-exposed group (required for the \code{or_to_rr = "grant"} and \code{or_to_rr = "metaumbrella_exp"} arguments; also identifies the \code{or_to_rr = "metaumbrella_cases"} reconstruction when \code{n_cases == n_controls})
 #' @param n_sample total number of participants in the sample
-#' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{or_to_rr = "grant"} argument).
+#' @param baseline_risk proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument; also identifies the \code{or_to_rr = "metaumbrella_exp"} reconstruction, which is otherwise non-identified when \code{n_exp == n_nexp}).
 #' @param small_margin_prop smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).
@@ -789,10 +817,10 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
 #' @param or_pval p-value of the (log) odds ratio
 #' @param n_cases number of cases/events
 #' @param n_controls number of controls/no-event
-#' @param n_exp number of participants in the exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)
-#' @param n_nexp number of participants in the non-exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)
+#' @param n_exp number of participants in the exposed group (required for the \code{or_to_rr = "grant"} and \code{or_to_rr = "metaumbrella_exp"} arguments; also identifies the \code{or_to_rr = "metaumbrella_cases"} reconstruction when \code{n_cases == n_controls})
+#' @param n_nexp number of participants in the non-exposed group (required for the \code{or_to_rr = "grant"} and \code{or_to_rr = "metaumbrella_exp"} arguments; also identifies the \code{or_to_rr = "metaumbrella_cases"} reconstruction when \code{n_cases == n_controls})
 #' @param n_sample total number of participants in the sample
-#' @param baseline_risk proportion of cases in the non-exposed group (only required for the \code{or_to_rr = "grant"} argument).
+#' @param baseline_risk proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument; also identifies the \code{or_to_rr = "metaumbrella_exp"} reconstruction, which is otherwise non-identified when \code{n_exp == n_nexp}).
 #' @param small_margin_prop smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or_pval a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient (see details).

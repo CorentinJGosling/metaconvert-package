@@ -157,12 +157,55 @@ all. Branch recovery is exact (1.000 at every event rate from 0.03 to 0.97); mea
 |log RR| error falls from 0.2295 to 0.0002. These inputs already reached `.or_to_rr()`
 and were simply discarded before being forwarded to the reconstruction helpers.
 
-**No prior is applied when no second margin exists.** Such rows are genuinely
-non-identified and keep exactly today's behaviour, bit-for-bit. Every candidate
-tie-break rule was tested and rejected: "assume events are the minority" is 3.65× worse
-than the status quo on common outcomes, wrong on 74% of those rows, and produced +44%
-pooled-RR bias end-to-end — and because it is a bet on labelling, recoding an outcome
-from "response" to "non-response" flips its answer on identical data.
+**No prior is applied when no second margin exists.** Every candidate tie-break rule was
+tested and rejected: "assume events are the minority" is 3.65× worse than the status quo
+on common outcomes, wrong on 74% of those rows, and produced +44% pooled-RR bias
+end-to-end — and because it is a bet on labelling, recoding an outcome from "response"
+to "non-response" flips its answer on identical data. Rows with **unequal** margins and
+no second margin therefore keep exactly today's behaviour, bit-for-bit. Rows with
+**equal** margins are now withheld instead — see the next entry.
+
+## Results change: the two `metaumbrella` conversions now decline the case they cannot identify
+
+The solve above fixes the reconstruction whenever a margin from the other pair is
+available. It does nothing for the **documented minimal input** — `or + logor_se +
+n_exp + n_nexp` — which contains no such margin. At **equal** margins that input is not
+merely imprecise, it is non-identified: rotating the 2×2 table 180° reproduces the
+reported odds ratio and its standard error *exactly* while implying a different risk
+ratio, so the enumeration is tied and its winner is an artifact of loop order.
+
+Measured on `metaumbrella_exp`, 782 usable draws at `n_exp == n_nexp == 50` with no
+second margin: the true table comes back **37.0%** of the time, its rotation 66.6%,
+genuinely wrong **62.3%**. Worked case — true table 1/49/25/25, true RR **0.040**,
+returned **0.510**: a 12.8-fold error, silently and unflagged.
+
+The cliff is sharp, not gradual. One participant of imbalance makes the rotation
+inadmissible:
+
+| \|n_exp − n_nexp\| | 0 | 1 | 2 | 5 | 10 |
+|---|---|---|---|---|---|
+| hit rate, exact SE | **0.384** | 0.995 | 0.987 | 0.995 | 0.982 |
+| hit rate, OR rounded to 2 dp | **0.379** | 0.955 | 0.967 | 0.950 | 0.951 |
+| `_cases` mirror, by \|n_cases − n_controls\| | **0.745** | 0.995 | 0.995 | 0.993 | 0.993 |
+
+So **in that configuration, and only there**, these two methods now return `NA` for the
+risk ratio with a warning naming the column that would fix it. The gate keys on whether
+the reconstruction was actually *solved*, not on whether a second margin was supplied —
+so a margin that cannot describe this table (a multi-arm trial's case margin, say) is
+caught too.
+
+- **`metaumbrella_exp`**: supply `n_cases`, `n_controls` **or** `baseline_risk`.
+- **`metaumbrella_cases`**: supply `n_exp` or `n_nexp`. (`baseline_risk` is not offered
+  here: on that parameterisation it is 0.9965-identifying rather than exact, because
+  `c/(c+d) == b/(a+b)` admits `b + c == n_cases` as a second solution.)
+
+**Only the RR outputs are withheld.** The OR, D, G, R, Z, RD and NNT outputs of the same
+call never touch the reconstruction and are returned as usual.
+
+Note that **1:1 randomisation is the modal RCT design**, so `metaumbrella_exp` on
+two-arm trials is precisely the case that needs the extra column. The documentation
+previously stated the requirement as `or + logor_se + n_exp + n_nexp`; it now states
+what the method actually needs.
 
 ## Improvements
 

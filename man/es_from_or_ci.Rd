@@ -37,13 +37,13 @@ es_from_or_ci(
 
 \item{logor_ci_up}{upper bound of the 95\% CI around the log odds ratio value}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group (only required for the \code{or_to_rr = "grant"} argument).}
+\item{baseline_risk}{proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument; also identifies the \code{or_to_rr = "metaumbrella_exp"} reconstruction, which is otherwise non-identified when \code{n_exp == n_nexp}).}
 
 \item{small_margin_prop}{smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])}
 
-\item{n_exp}{number of participants in the exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)}
+\item{n_exp}{number of participants in the exposed group (required for the \code{or_to_rr = "grant"} and \code{or_to_rr = "metaumbrella_exp"} arguments; also identifies the \code{or_to_rr = "metaumbrella_cases"} reconstruction when \code{n_cases == n_controls})}
 
-\item{n_nexp}{number of participants in the non-exposed group (only required for the \code{or_to_rr = "grant"}, and \code{or_to_rr = "metaumbrella_exp"} arguments)}
+\item{n_nexp}{number of participants in the non-exposed group (required for the \code{or_to_rr = "grant"} and \code{or_to_rr = "metaumbrella_exp"} arguments; also identifies the \code{or_to_rr = "metaumbrella_cases"} reconstruction when \code{n_cases == n_controls})}
 
 \item{n_cases}{number of cases/events}
 
