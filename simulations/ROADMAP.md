@@ -152,7 +152,7 @@ candidate's **coverage** results describe an operation the paper forbids, not th
 it proposes. The point-estimate results are unaffected. Fix the candidate and
 regenerate 04 (folds into 3.5), or drop the coverage column for that arm.
 
-### 1.6 ☐ NEW — delete the shadowed duplicate reconstruction helpers
+### 1.6 ☑ NEW — delete the shadowed duplicate reconstruction helpers — DONE (commit `e1b7f59`)
 
 `R/estimate_n_from_es.R:41` and `:121` define `.estimate_n_from_or_and_n_cases` and
 `.estimate_n_from_or_and_n_exp` a second time. DESCRIPTION has no `Collate` field, so
