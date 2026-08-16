@@ -195,7 +195,59 @@ an RR; the second keeps them but marks them.
 **Test unit.** Extend `test-or-to-rr-identifiability.R` with the equal-arms /
 minimal-input case, asserting whichever contract is chosen.
 
-### 1.9 ☐ NEW — study 04's `vanderweele_sqrt_or` measures a straw man
+### 1.9 ☑ NEW — study 04's `vanderweele_sqrt_or` measures a straw man — DONE
+
+> **Decision taken: fix the CI, keep the arm.** Verified against the PDF rather than
+> from memory (`pdftools::pdf_text`, p.747–749), and the check changed what I would
+> otherwise have written:
+>
+> - **The point estimate was never the straw man.** Corollary 1 (p.747) proves √OR *is*
+>   the optimal bias-ratio minimax conversion whenever the outcome probabilities lie in
+>   an interval symmetric about 0.5. Only the interval was wrong.
+> - **1.25 is not a constant of the method.** It is `1/sqrt(1 - 4v^2)` for probabilities
+>   in `[0.5-v, 0.5+v]` (p.748 + Appendix), which is *exactly* 1.25 at the paper's
+>   `[0.2, 0.8]`. Implemented as `vw_bias_ratio(w, u)` so the provenance is at the call
+>   site, not a magic number.
+> - **The paper's own worked example is now a test.** p.749: OR 2.3 (1.5–3.4) → RR 1.5,
+>   conservative CI (1.0–2.3). Reproduced to the published decimal.
+>
+> **Measured effect of the fix** (n = 150/arm, 20 000 reps, coverage of the true log RR):
+>
+> | region | naive (forbidden) CI | fixed CI | mean width |
+> |---|---|---|---|
+> | inside `[0.2, 0.8]` (guarantee applies) | 0.907 | **0.999** | 0.49 → 0.93 |
+> | outside the band (premise fails) | 0.739 | 0.904 | 1.00 → 1.45 |
+>
+> Every in-band cell lands ≥ 0.996, matching the paper's "at least 95%, in general
+> conservative". The shipped aggregate has this arm at **0.931 in-band / 0.850 outside /
+> 0.870 overall**, so 3.5's regeneration should move in-band to ~1.00. The width roughly
+> doubles — that is the price of the conservative interval and belongs in the write-up.
+>
+> ⚠️ **Scope limit the fix does NOT remove, and the README must respect.** The guarantee
+> holds only where **both** outcome probabilities are in `[0.2, 0.8]`. In this grid
+> `p0 = br`, `p1 = rr*br`, so the guaranteed region is just `br = 0.30` × `rr ∈
+> {0.75, 1, 2}` and `br = 0.50` × `rr ∈ {0.5, 0.75, 1}` — **6 of 18 (br, rr) combinations,
+> 90 of 360 rows**. Every `br ≤ 0.15` cell fails outright. Both columns are in the
+> aggregate, so the split is recoverable post-hoc with no code change; the coverage column
+> for this arm must be read in two regions, exactly like item 4.1's dense-region
+> restriction. Outside the band even the widened interval under-covers badly (0.557 at
+> `br = 0.30, rr = 0.25`) because the *point estimate* is biased there (log RR bias 0.54–0.61),
+> which no interval rule can repair.
+>
+> **`logrr_se` deliberately left as the delta-method SE** (`SE(logOR)/2`). The paper gives
+> no variance, so the interval is not `es ± z·se` — safe because `performance()` takes
+> coverage/width from the CI columns and `se_ratio` from the SE column independently
+> ([03_performance.R:88-101](R/03_performance.R#L88-L101)), verified rather than assumed. A
+> test pins the inconsistency so a later "tidy-up" that rebuilds the CI from the SE fails.
+>
+> **New third suite: `simulations/tests/`** (owner's call), with `run_tests.R` and
+> `test-study-04-vanderweele-ci.R` — 38 assertions, all passing. The package's two suites
+> do **not** execute it; run `Rscript tests/run_tests.R` from `simulations/` after touching
+> anything there. Phase 3 items 3.1/3.3/3.4 already name files in this directory.
+>
+> **Aggregates for 04 are now stale for a second reason** (the first being 1.1). Folds into 3.5.
+
+### 1.9-old (the original write-up, kept for the record)
 
 `simulations/studies/04_or_to_rr.R:79-86` builds `logrr <- log(or)/2`,
 `se <- logor_se/2` and a plain symmetric interval. VanderWeele (2020) p.748 explicitly

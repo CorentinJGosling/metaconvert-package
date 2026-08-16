@@ -32,6 +32,11 @@
 ##                symmetric about 0.5. Requires no baseline risk, which is
 ##                exactly the situation this study is about, so omitting it
 ##                would be indefensible.
+##                ITS INTERVAL IS NOT SYMMETRIC AND NOT DERIVED FROM ITS SE --
+##                the paper forbids transforming the OR interval directly and
+##                prescribes dividing/multiplying the transformed limits by the
+##                bias ratio instead. See vanderweele_sqrt_or() below, and note
+##                that its >= 95% guarantee covers only part of this grid.
 ##   metafor_conv metafor::conv.2x2() reconstructs the 2x2 from the OR and the
 ##                margins -- the CRAN-standard alternative to metaumbrella's
 ##                bespoke grid search. metaConvert already depends on metafor.
@@ -76,13 +81,69 @@ gen_2x2_rr <- function(cond, nrep) {
 }
 
 ## ---- candidate estimators (not in metaConvert) ------------------------------
-vanderweele_sqrt_or <- function(or, logor_se) {
-  ## RR ~= sqrt(OR); delta method on the log scale gives SE(log RR) = SE(log OR)/2
+
+## The bias-ratio bound behind VanderWeele's conservative interval. For outcome
+## probabilities in [0.5 - v, 0.5 + v] the maximum bias ratio of the square-root
+## conversion is 1/sqrt(1 - 4v^2) (2020, p.748 and Appendix). At the paper's
+## worked band [w, u] = [0.2, 0.8] -- so v = 0.3 -- that is exactly 1.25. Written
+## as the formula rather than the constant so the number's provenance, and its
+## dependence on the assumed band, are visible at the call site.
+vw_bias_ratio <- function(w = 0.2, u = 0.8) {
+  stopifnot(length(w) == 1L, length(u) == 1L, w > 0, u < 1, w < u,
+            isTRUE(all.equal(w + u, 1)))   # the bound is derived for a band symmetric about 0.5
+  v <- (u - w) / 2
+  1 / sqrt(1 - 4 * v^2)
+}
+
+## VanderWeele (2020) Biometrics 76(3):746-752.
+##
+## POINT ESTIMATE: sqrt(OR). Corollary 1 (p.747) proves this is the optimal
+## bias-ratio minimax conversion whenever the outcome probabilities lie in an
+## interval symmetric about 0.5, so the estimate itself needs no defending.
+##
+## INTERVAL: NOT a symmetric interval around the estimate. The paper rules that
+## out in terms (p.748): "because the square-root transformation ... is an
+## approximation, it cannot be applied directly to the confidence interval of the
+## odds ratio to obtain 95% coverage over repeated samples of the true risk
+## ratio." What it prescribes instead, same page, is to take the square root of
+## each OR confidence limit and then widen: "if the square-root transformation of
+## the lower limit of the odds ratio confidence interval is divided by 1.25 and
+## the square-root transformation of the upper limit ... is multiplied by 1.25,
+## then this resulting transformed confidence interval will have at least 95%
+## coverage of the true risk ratio provided the outcome probabilities do indeed
+## fall between w = 20% and u = 80% ... The coverage of the transformed interval
+## will in general be conservative."
+##
+## Until 2026-08 this function built the forbidden symmetric interval, so the
+## coverage column for this arm measured an operation the source paper rejects
+## rather than the method it proposes. The point-estimate columns were unaffected.
+##
+## THE INTERVAL IS DELIBERATELY NOT `logrr +/- qnorm(.975) * logrr_se`. The paper
+## gives no variance for the conversion, so `logrr_se` remains the delta-method SE
+## of the point estimate (SE(log OR)/2) and is reported for what it is. That is
+## safe here because performance() takes coverage and ci_width from the ci_lo/ci_up
+## columns and se_ratio from the se column, independently (R/03_performance.R:88-101)
+## -- but do NOT try to reconstruct one from the other.
+##
+## SCOPE, WHICH THE FIX DOES NOT REMOVE: the >= 95% guarantee holds only where
+## BOTH outcome probabilities fall in [w, u]. In this study's grid p0 = br and
+## p1 = rr * br, so the guaranteed region is only
+##     br = 0.30 with rr in {0.75, 1, 2}      (p1 = 0.225 / 0.30 / 0.60)
+##     br = 0.50 with rr in {0.5, 0.75, 1}    (p1 = 0.25 / 0.375 / 0.50)
+## Every br <= 0.15 cell fails the premise outright (p0 < 0.2). Both br and rr are
+## columns of the aggregate, so this split is recoverable post-hoc with no code
+## change -- and the coverage column for this arm must be read in the two regions
+## separately, exactly as item 4.1's dense-region restriction is.
+vanderweele_sqrt_or <- function(or, logor_se, w = 0.2, u = 0.8) {
   logrr <- log(or) / 2
-  se    <- logor_se / 2
+  se    <- logor_se / 2                      # delta method, for the ESTIMATE only
+
+  ## sqrt() of each OR limit is the same thing as +/- z * se/2 on the log scale;
+  ## the widening by the bias ratio is what the paper adds and this arm lacked.
+  widen <- log(vw_bias_ratio(w, u))
   data.frame(logrr = logrr, logrr_se = se,
-             logrr_ci_lo = logrr - stats::qnorm(.975) * se,
-             logrr_ci_up = logrr + stats::qnorm(.975) * se)
+             logrr_ci_lo = logrr - stats::qnorm(.975) * se - widen,
+             logrr_ci_up = logrr + stats::qnorm(.975) * se + widen)
 }
 
 ## conv.2x2's margins are n1i = the ROW (exposure) margin and n2i = the COLUMN
