@@ -595,7 +595,48 @@ return different z for the same data and that whatever provenance marker we add
 
 ## Phase 3 — Simulation code bugs
 
-### 3.1 ☐ Study 05's `vanderweele_rr_squared` computes 2·log(OR), not 2·log(RR)
+### 3.1 ☑ Study 05's `vanderweele_rr_squared` computes 2·log(OR), not 2·log(RR) — DONE
+
+> **Bug confirmed by running it, not by reading it.** At the point the candidate reads
+> `theta_sample`, `all.equal(theta_sample, log(or))` is TRUE and `all.equal(theta_sample,
+> log(rr))` is FALSE. The signature bias reproduces exactly: at (br = 0.30, rr = 2,
+> n = 300, 20 000 reps) mean bias **1.2601** against mean |log OR| **1.2601** — the same
+> number twice, because bias = 2·logOR − logOR = logOR. Corrected, that cell's bias is
+> 0.1346.
+>
+> **Fix.** The sample log RR now has its own column, `logrr_sample`, set in
+> `gen_2x2_or()` *before* the target overwrite and never reused; the candidate reads it.
+> A `stopifnot()` beside the overwrite pins both scales. **Deliberately NOT asserted:
+> that the two columns differ** — a replication with `a/n_exp == c/n_nexp` gives
+> log OR = log RR = 0 legitimately, so that check could abort a valid run at small `nrep`.
+>
+> **Scope extension (owner's call): the mirrored CI, item 1.9's counterpart.** The
+> candidate also built the symmetric interval 1.9 just removed from study 04. It now uses
+> the transformed RR limits widened by the bias-ratio bound. **The factor is derived, not
+> cited** — VanderWeele writes only the OR→RR direction — **but it is exact**, and the
+> derivation is one line: `RR²/OR = p₁(1−p₁)/(p₀(1−p₀))`, so over `[0.5−v, 0.5+v]` the
+> bound is `1/(1−4v²)`, exactly the **square** of the OR→RR factor `1/sqrt(1−4v²)`.
+> At [0.2, 0.8] that is **1.25² = 1.5625**. Verified numerically over a 0.0005 grid:
+> measured max 1.562499, attained at p₀ = 0.8, p₁ = 0.5; bands [0.1,0.9] / [0.3,0.7] /
+> [0.4,0.6] all match `1/(1−4v²)` to 6 dp. Measured coverage of the true log OR, in-band
+> cells: **naive 0.874–0.958 → widened 0.994–1.000**, width roughly doubling.
+>
+> **Student task marked, not rewritten.** `students/tasks/task-05-rr-to-or.md` had an
+> explanation invented for the artifact ("built for outcomes happening about half the
+> time — the true baseline risk here is 0.15"). That is not the cause, and the paragraph
+> plus the `vanderweele_rr_squared` table row now carry a dated correction saying so.
+> The full rewrite waits for 3.5, since the numbers themselves change on regeneration.
+> ⚠️ `students/` is **gitignored**, so that edit is on disk only and is not in any commit.
+>
+> **Verified:** `simulations/tests` 78 pass / 0 fail / 0 error / 0 skip (38 from 1.9 + 40
+> new). No package file touched, so the two package suites stand from the 1.8 commit.
+>
+> ⚠️ **Process note.** The first run of the new end-to-end test **errored** (`could not
+> find function "es_from_rr_se"` — the runner sources the study files but had not loaded
+> the package), which is precisely the "erroring block reports failed = 0 while
+> abandoning its remaining assertions" trap in this file's header. `run_tests.R` now
+> calls `load_metaconvert()` and exposes `METACONVERT_AVAILABLE` so such tests **skip**
+> rather than error if it is unavailable.
 
 **Symptom.** `gen_2x2_or()` overwrites `theta_sample` with `log(or)` at
 [05_rr_to_or.R:36](studies/05_rr_to_or.R#L36); `estimate_rr_to_or()` then reads it

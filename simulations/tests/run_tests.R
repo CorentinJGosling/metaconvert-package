@@ -28,6 +28,19 @@ for (f in sort(list.files(file.path(.sim_root, "R"), pattern = "[.]R$", full.nam
 for (f in sort(list.files(file.path(.sim_root, "studies"), pattern = "[.]R$", full.names = TRUE)))
   source(f)
 
+## Some tests exercise an estimate_*() function end to end, and those call the
+## package's es_from_*() routes. Load metaConvert from source, exactly as
+## run_study() does. Non-fatal: without it, the tests that need it skip (via
+## METACONVERT_AVAILABLE) rather than erroring -- an erroring test_that() block
+## reports failed = 0 while silently abandoning every assertion after the error.
+METACONVERT_AVAILABLE <- tryCatch({ load_metaconvert(); TRUE },
+                                  error = function(e) {
+                                    message("metaConvert could not be loaded: ",
+                                            conditionMessage(e),
+                                            "\n  -> tests needing it will SKIP")
+                                    FALSE
+                                  })
+
 has_testthat <- requireNamespace("testthat", quietly = TRUE)
 
 test_files <- sort(list.files(file.path(.sim_root, "tests"),
