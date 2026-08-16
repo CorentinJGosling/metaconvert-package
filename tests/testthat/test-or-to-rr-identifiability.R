@@ -195,6 +195,26 @@ test_that("no minority-event prior has been introduced", {
                             "(d,c,b,a) here. The enumeration order must be untouched."))
 })
 
+test_that("each reconstruction helper is defined exactly once across R/", {
+  # R/estimate_n_from_es.R used to hold a SECOND definition of both OR helpers. With no
+  # Collate field in DESCRIPTION, files are sourced alphabetically, so
+  # internal_multiple_formulas.R ("i") overwrote estimate_n_from_es.R ("e") and the
+  # copies there were dead -- but editable, and by the end they had drifted from the
+  # live versions. They are deleted; this stops a duplicate reappearing unnoticed.
+  root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = FALSE)
+  r_files <- list.files(file.path(root, "R"), pattern = "[.]R$", full.names = TRUE)
+  skip_if(length(r_files) == 0, "not a source checkout")
+
+  for (fn in c(".estimate_n_from_or_and_n_cases", ".estimate_n_from_or_and_n_exp",
+               ".estimate_n_from_irr", ".estimate_n_from_rr", ".solve_2x2_from_or")) {
+    n <- sum(vapply(r_files, function(f) {
+      sum(grepl(paste0("^", gsub("\\.", "\\\\.", fn), "\\s*<-\\s*function"),
+                readLines(f, warn = FALSE)))
+    }, integer(1)))
+    expect_equal(n, 1L, info = paste0(fn, " is defined ", n, " time(s) across R/"))
+  }
+})
+
 test_that("es_from_or_se() end-to-end: metaumbrella_exp recovers the right RR", {
   # The user-facing consequence: same OR and SE, equal arms, with and without the
   # case margin. Solving must land on the true RR.

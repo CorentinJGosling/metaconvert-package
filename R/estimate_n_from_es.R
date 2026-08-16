@@ -30,155 +30,17 @@
   return(data.frame(n_cases_exp, time_exp, n_cases_nexp, time_nexp))
 }
 
-#' Estimate n value from OR and the number of cases and controls
-#'
-#' @section DEAD CODE -- DO NOT EDIT THIS COPY:
-#' This definition is **shadowed and never runs**. An identically-named function is
-#' defined in \code{R/internal_multiple_formulas.R}; DESCRIPTION has no \code{Collate}
-#' field, so files are sourced alphabetically and
-#' \code{internal_multiple_formulas.R} ("i") overwrites \code{estimate_n_from_es.R}
-#' ("e"). Verified: the live function's formals include \code{n_cases}/\code{baseline_risk},
-#' which only the other copy declares.
-#'
-#' The live copy solves the table exactly from the OR when a second margin pair is
-#' available (see \code{.solve_2x2_from_or}); this stale copy still does the
-#' variance-matching enumeration alone. Patching it has no effect. It is kept only
-#' because deleting shared-name code deserves its own reviewed change.
-#'
-#' @param or OR
-#' @param var variance
-#' @param n_cases number of cases
-#' @param n_controls number of controls
-#'
-#' @noRd
-.estimate_n_from_or_and_n_cases <- function(or, var, n_cases, n_controls) {
-  # Create all possibilites of n
-  n_cases_nexp_sim1 <- 0:n_cases
-  n_controls_nexp_sim1 <- round(n_controls * (1 - (n_cases - n_cases_nexp_sim1) / (n_cases + (or - 1) * n_cases_nexp_sim1)))
-  n_cases_exp_sim1 <- n_cases - n_cases_nexp_sim1
-  n_controls_exp_sim1 <- n_controls - n_controls_nexp_sim1
-  # sim1: possiblities with strictly positive n
-  idx_non_zero <- which(
-    n_cases_nexp_sim1 > 0 &
-      n_controls_nexp_sim1 > 0 &
-      n_cases_exp_sim1 > 0 &
-      n_controls_exp_sim1 > 0
-  )
-  n_cases_nexp_sim1 <- n_cases_nexp_sim1[idx_non_zero]
-  n_controls_nexp_sim1 <- n_controls_nexp_sim1[idx_non_zero]
-  n_cases_exp_sim1 <- n_cases_exp_sim1[idx_non_zero]
-  n_controls_exp_sim1 <- n_controls_exp_sim1[idx_non_zero]
+# NB two further helpers -- .estimate_n_from_or_and_n_cases() and
+# .estimate_n_from_or_and_n_exp() -- were defined here as well until they were
+# removed. They were SHADOWED DEAD CODE: identically-named definitions live in
+# R/internal_multiple_formulas.R, and because DESCRIPTION has no Collate field the
+# files are sourced alphabetically, so internal_multiple_formulas.R ("i") overwrote
+# this file ("e"). Patching the copies here had no effect, and by the end they had
+# drifted: the live versions solve the 2x2 exactly from a second margin, while these
+# still only searched by matching the reported variance. Edit the live copies.
+#
+# The two helpers below are NOT duplicated and ARE live -- do not remove this file.
 
-  # sim2: possiblities with positive n and at least one zero (Add 0.5 to the possiblities with any 0)
-  n_cases_nexp_sim2 <- 0:n_cases
-  n_controls_nexp_sim2 <- round((n_controls + 0.5) - (n_controls + 1) * (n_cases - n_cases_nexp_sim2 + 0.5) / ((n_cases_nexp_sim2 + 0.5) * or + n_cases - n_cases_nexp_sim2 + 0.5))
-  n_cases_exp_sim2 <- n_cases - n_cases_nexp_sim2
-  n_controls_exp_sim2 <- n_controls - n_controls_nexp_sim2
-  # (n_cases_exp_sim2 + 0.5) / (n_cases_nexp_sim2 + 0.5) / (n_controls_exp_sim2 + 0.5) * (n_controls_nexp_sim2 + 0.5)
-  # select the ones with some 0 but non-negative
-  idx_some_zero <- which(
-    (n_cases_nexp_sim2 == 0 | n_controls_nexp_sim2 == 0 | n_cases_exp_sim2 == 0 | n_controls_exp_sim2 == 0) &
-      (n_cases_nexp_sim2 >= 0 & n_controls_nexp_sim2 >= 0 & n_cases_exp_sim2 >= 0 & n_controls_exp_sim2 >= 0)
-  )
-  n_cases_nexp_sim2 <- n_cases_nexp_sim2[idx_some_zero]
-  n_controls_nexp_sim2 <- n_controls_nexp_sim2[idx_some_zero]
-  n_cases_exp_sim2 <- n_cases_exp_sim2[idx_some_zero]
-  n_controls_exp_sim2 <- n_controls_exp_sim2[idx_some_zero]
-
-  # join both previous vectors
-  n_cases_nexp_sim <- append(n_cases_nexp_sim1, n_cases_nexp_sim2)
-  n_controls_nexp_sim <- append(n_controls_nexp_sim1, n_controls_nexp_sim2)
-  n_cases_exp_sim <- append(n_cases_exp_sim1, n_cases_exp_sim2)
-  n_controls_exp_sim <- append(n_controls_exp_sim1, n_controls_exp_sim2)
-
-  some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
-
-  var_sim <- ifelse(some_zero,
-    1 / ((n_cases + 1) - (n_cases_nexp_sim + 0.5)) + 1 / ((n_controls + 1) - (n_controls_nexp_sim + 0.5)) + 1 / (n_cases_nexp_sim + 0.5) + 1 / (n_controls_nexp_sim + 0.5),
-    1 / (n_cases - n_cases_nexp_sim) + 1 / (n_controls - n_controls_nexp_sim) + 1 / n_cases_nexp_sim + 1 / n_controls_nexp_sim
-  )
-
-  # var_sim2 = 1 / ((n_cases+1) - (n_cases_nexp_sim+0.5)) + 1 / ((n_controls+1) - (n_controls_nexp_sim+0.5)) + 1 / (n_cases_nexp_sim+0.5) + 1 / (n_controls_nexp_sim+0.5)
-
-  best <- order((var_sim - var)^2)[1]
-  n_cases_nexp <- n_cases_nexp_sim[best]
-  n_controls_nexp <- n_controls_nexp_sim[best]
-
-  n_cases_exp <- n_cases - n_cases_nexp
-  n_controls_exp <- n_controls - n_controls_nexp
-
-  return(data.frame(n_cases_exp, n_cases_nexp, n_controls_exp, n_controls_nexp))
-}
-
-#' Estimate the n, using the variance, the number of exposed and non-exposed subjects
-#'
-#' @section DEAD CODE -- DO NOT EDIT THIS COPY:
-#' Shadowed and never runs; the live definition is in
-#' \code{R/internal_multiple_formulas.R}. See the note on
-#' \code{.estimate_n_from_or_and_n_cases} above for why (alphabetical collation, no
-#' \code{Collate} field in DESCRIPTION) and how it was verified.
-#'
-#' @param or OR
-#' @param var variance
-#' @param n_exp number of exposed participants
-#' @param n_nexp number of non exposed participants
-#'
-#' @noRd
-.estimate_n_from_or_and_n_exp <- function(or, var, n_exp, n_nexp) {
-  # first: uncorrected values with 0
-  n_controls_exp_sim1 <- 0:n_exp
-  n_controls_nexp_sim1 <- round(n_nexp / (1 + (n_exp - n_controls_exp_sim1) / (or * n_controls_exp_sim1)))
-  n_cases_exp_sim1 <- n_exp - n_controls_exp_sim1
-  n_cases_nexp_sim1 <- n_nexp - n_controls_nexp_sim1
-  # we take the ones without 0 and non-negative
-  idx_non_zero <- which(n_cases_nexp_sim1 > 0 & n_controls_nexp_sim1 > 0 & n_cases_exp_sim1 > 0 & n_controls_exp_sim1 > 0) # Posem ">" i no "!=" per treure els negatius!
-  n_cases_nexp_sim1 <- n_cases_nexp_sim1[idx_non_zero]
-  n_controls_nexp_sim1 <- n_controls_nexp_sim1[idx_non_zero]
-  n_cases_exp_sim1 <- n_cases_exp_sim1[idx_non_zero]
-  n_controls_exp_sim1 <- n_controls_exp_sim1[idx_non_zero]
-
-  # correcting by 0.5
-  n_controls_exp_sim2 <- 0:n_exp
-  n_controls_nexp_sim2 <- round((n_nexp + 0.5) - ((n_nexp + 1) * (n_exp - n_controls_exp_sim2 + 0.5)) / ((n_controls_exp_sim2 + 0.5) * or + n_exp - n_controls_exp_sim2 + 0.5))
-  n_cases_exp_sim2 <- n_exp - n_controls_exp_sim2
-  n_cases_nexp_sim2 <- n_nexp - n_controls_nexp_sim2
-
-  # SELECT THE ONES THAT HAS SOME 0 BUT NO NEGATIVE ONES
-  idx_some_zero <- which(
-    (n_cases_nexp_sim2 == 0 | n_controls_nexp_sim2 == 0 | n_cases_exp_sim2 == 0 | n_controls_exp_sim2 == 0) &
-      (n_cases_nexp_sim2 >= 0 & n_controls_nexp_sim2 >= 0 & n_cases_exp_sim2 >= 0 & n_controls_exp_sim2 >= 0)
-  )
-  n_cases_nexp_sim2 <- n_cases_nexp_sim2[idx_some_zero]
-  n_controls_nexp_sim2 <- n_controls_nexp_sim2[idx_some_zero]
-  n_cases_exp_sim2 <- n_cases_exp_sim2[idx_some_zero]
-  n_controls_exp_sim2 <- n_controls_exp_sim2[idx_some_zero]
-
-  n_controls_exp_sim <- append(n_controls_exp_sim1, n_controls_exp_sim2)
-  n_controls_nexp_sim <- append(n_controls_nexp_sim1, n_controls_nexp_sim2)
-  n_cases_exp_sim <- append(n_cases_exp_sim1, n_cases_exp_sim2)
-  n_cases_nexp_sim <- append(n_cases_nexp_sim1, n_cases_nexp_sim2)
-
-
-  some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
-  var_sim <- ifelse(some_zero,
-    # Continuity-corrected log-OR variance is a SUM of four reciprocals. Kept bit-for-bit
-    # in sync with the live copy in internal_multiple_formulas.R (this file's definition is
-    # shadowed by that one under the current source order); the missing ')' after the first
-    # term previously folded the whole sum into a single denominator -- fixed so a load-order
-    # change cannot reactivate the wrong formula (mirrors the .estimate_n_from_rr twin policy).
-    1 / ((n_exp + 1) - (n_controls_exp_sim + 0.5)) + 1 / (n_controls_exp_sim + 0.5) + 1 / ((n_nexp + 1) - (n_controls_nexp_sim + 0.5)) + 1 / (n_controls_nexp_sim + 0.5),
-    1 / (n_exp - n_controls_exp_sim) + 1 / n_controls_exp_sim + 1 / (n_nexp - n_controls_nexp_sim) + 1 / n_controls_nexp_sim
-  )
-
-  # var_sim = 1 / (n_exp - n_controls_exp_sim) + 1 / n_controls_exp_sim + 1 / (n_nexp - n_controls_nexp_sim) + 1 / n_controls_nexp_sim
-  best <- order((var_sim - var)^2)[1]
-  n_controls_exp <- n_controls_exp_sim[best]
-  n_controls_nexp <- n_controls_nexp_sim[best]
-  n_cases_exp <- n_exp - n_controls_exp
-  n_cases_nexp <- n_nexp - n_controls_nexp
-
-  return(data.frame(n_cases_exp, n_cases_nexp, n_controls_exp, n_controls_nexp))
-}
 #' Estimate the number of cases and controls exposed and non-exposed given the risk ratio
 #'
 #' @param rr RR
