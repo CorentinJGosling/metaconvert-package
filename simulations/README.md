@@ -943,7 +943,20 @@ run_everything(nrep = 10000)               # everything
 Outputs: `data/raw/<study>_raw_nrep<N>.rds` (per replication) and
 `data/aggregated/<study>_nrep<N>.csv` (one row per condition × method × target,
 with `bias`, `bias_mcse`, `emp_se`, `mod_se`, `se_ratio`, `rmse`, `coverage`,
-`coverage_mcse`, `nonest_rate`, `n_valid`).
+`coverage_mcse`, `nonest_rate`, `n_valid`, `n_valid_se`, `n_valid_ci`).
+
+**Read `n_valid_se` and `n_valid_ci`, not just `n_valid`.** A row's columns rest on
+three different subsets of the replications: `bias`/`emp_se`/`rmse` on those whose
+point estimate is finite, `mod_se`/`se_ratio` on those whose standard error is, and
+`coverage`/`ci_width` on those whose interval is. A method can return a perfectly
+good point estimate with a non-finite variance for most of a cell — `grant` does,
+whenever `rr × br_guess ≥ 1` — so these counts differ, and only the first used to be
+reported. Statistics resting on fewer than `SIM_DEFAULTS$min_valid` (30) valid
+replications are now withheld as `NA`, per family, keyed on that family's own count;
+the counts are always reported, so a withheld cell is explainable and a reader can
+apply a different floor. Note also that the surviving replications are in general a
+*selected* subset, so a statistic computed over a handful of them is conditional on
+the estimator not having failed.
 
 **Monte Carlo error is not the binding constraint.** MCSE on coverage at p=0.95 is
 0.0044 at nrep=2500 and 0.0022 at 10000; the contrasts of interest are far larger.

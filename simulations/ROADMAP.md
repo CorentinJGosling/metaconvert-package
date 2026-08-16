@@ -693,7 +693,48 @@ study registers methods with different estimands (a generic anti-regression).
 
 ---
 
-### 3.3 ☐ `performance()` publishes cells built from 3–10 replications while advertising `n_valid` 380–996
+### 3.3 ☑ `performance()` publishes cells built from 3–10 replications while advertising `n_valid` 380–996 — DONE
+
+> **Census run over the raw files before fixing** (19,129 cells, grouping keys taken
+> from each study's own aggregate). The earlier write-up's five cells were the tip:
+>
+> | statistic published from | cells | share |
+> |---|---|---|
+> | < 100 replications | 54 | 0.28% |
+> | < 30 | 30 | 0.16% |
+> | < 10 | 4 | 0.02% |
+> | < 5 | 2 | 0.01% |
+>
+> Worst cell: `n_valid` 440, coverage from **3**. 124 cells have a CI count below half
+> their `n_valid`, 44 below a tenth. **Not confined to `grant`** (40 cells): study 03a's
+> `phi (r)` / `phi (z)` account for 14 more, which the earlier write-up missed.
+> 798 cells already reported `coverage = NA`, so the *fully* empty case was handled — it
+> is the partial ones that looked populated.
+>
+> **Landed:** `n_valid_se` and `n_valid_ci` returned beside `n_valid` (computed before
+> the early return, so they appear on the give-up path too — otherwise that row could not
+> be `rbind`ed beside a normal one). Statistics withheld below `SIM_DEFAULTS$min_valid`
+> (**30**, owner's call), **per family, keyed on that family's own count**: a cell with
+> 1000 usable point estimates and 3 usable intervals keeps its bias and loses its
+> coverage. Counts always reported, so suppression is explainable and a reader can apply
+> their own floor.
+>
+> **No floor on the point-estimate family, and that is measured rather than assumed:**
+> `n_valid` has always been printed beside `bias`, and **0 of 57,026** shipped cells
+> report a bias from fewer than 100 valid estimates. A rule there would govern nothing.
+>
+> **Consumers checked, not assumed safe.** `summarise_raw()` is the only caller. The app
+> reads one CSV at a time (no cross-file `rbind`, so mixed schemas during the 3.5
+> rollout are harmless) and derives condition columns as "everything before `method`" —
+> the new columns land after it, so they cannot be mistaken for grid factors.
+> README's schema paragraph updated.
+>
+> ⚠️ **A test caught a real design slip**: `min_valid = Inf` disabled the floor instead of
+> withholding everything, because the guard was `is.finite(min_valid) && > 0`. Now
+> `!is.na(min_valid) && > 0`. Only NA or a non-positive value disables it.
+>
+> **Verified:** `simulations/tests` **204 pass / 0 fail / 0 error / 0 skip** (128 + 76
+> new). No package file touched.
 
 **Symptom.** `n_valid` and `nonest_rate` are computed from the **point estimate**
 only ([03_performance.R:56-64](R/03_performance.R#L56-L64)); `sum(ok_se)` and

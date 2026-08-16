@@ -54,7 +54,14 @@ SIM_DEFAULTS <- list(
   nrep  = 10000L,
   cores = max(1L, parallel::detectCores() - 2L),
   ## Nominal CI level used by every estimator and every coverage computation.
-  level = 0.95
+  level = 0.95,
+  ## Minimum valid replications below which performance() withholds a statistic
+  ## rather than publishing it (roadmap 3.3). Applies PER FAMILY: the SE columns
+  ## are keyed on n_valid_se, the interval columns on n_valid_ci. Worst-case
+  ## coverage MCSE at 30 is sqrt(0.25/30) = 0.091, so a value computed from fewer
+  ## is not a measurement. Measured against the shipped aggregates this withholds
+  ## 30 of 19,129 cells (0.16%), all in study 05's `grant` and study 03a's `phi`.
+  min_valid = 30L
 )
 
 dir_raw <- function(...) sim_path("data", "raw", ...)
