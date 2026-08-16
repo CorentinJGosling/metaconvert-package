@@ -671,7 +671,55 @@ separate named column holds the logRR.
 
 ---
 
-### 3.2 ☐ Study 03's `theta_own` is scale-matched, not estimand-matched
+### 3.2 ☑ Study 03's `theta_own` is scale-matched, not estimand-matched — DONE
+
+> **Confirmed in the shipped files, not inferred:** for every `(r)` route in both
+> `03a_CAT` and `03b_CONT`, the `own` bias column is **bit-identical** to `population`
+> — 200 cells each, max |difference| exactly **0**. The `(z)` routes differ by up to
+> 0.223, which is purely the `atanh` scale correction. So the column that exists to
+> remove estimand mismatch was removing nothing for half the rows.
+>
+> **Size of the mis-scoring it left in place**, over study 03's own grid:
+>
+> | direction | mean \|gap\| | max |
+> |---|---|---|
+> | CONT: phi scored against ρ | 0.0925 | 0.2429 |
+> | CAT: tetrachoric scored against phi | 0.1341 | 0.4186 |
+>
+> Worst condition (CAT, ρ = 0.5, p_exp = 0.3, p_case = 0.1): the tetrachoric's true
+> estimand is **0.9186** while it was scored against **0.50**.
+>
+> **Fixed** by computing the genuine per-method estimand, as study 09 already did. In
+> each mechanism exactly one method's estimand equals ρ — CONT: tetrachoric = ρ, phi =
+> the dichotomised table's phi; CAT: phi = ρ, tetrachoric = the latent ρ implied — which
+> is precisely why one shared `theta_pop` column cannot serve both.
+>
+> **The mechanism is stamped on the data (`dat$dgm`), not captured in a closure**, so it
+> survives serialisation to a parallel worker regardless of how `run_study()` exports its
+> arguments; `estimate_2x2()` **errors** if the stamp is missing rather than silently
+> reverting to scale-only matching.
+>
+> **The roadmap's `atanh`-vs-VST warning checked and cleared:** `es_from_2x2()`'s `z` is
+> Fisher's z exactly (`max |z − atanh(r)| = 0` over 20 random tables) and
+> `phi_candidate()` builds `z <- atanh(r)`, so plain `atanh` is right *here*. A test pins
+> it, so if the package ever changes that transform this fails instead of the targets
+> going quietly wrong.
+>
+> **Duplicate helpers removed (the simulation-side 1.6).** Study 03's `phi_to_p11` /
+> `phi_attainable` were functionally identical to study 09's `.phi_to_p11` /
+> `.phi_attainable` — verified on 500 random inputs each. All five latent-2×2 helpers now
+> live once in **`simulations/R/05_latent_2x2.R`**, bodies moved **byte-identical**
+> (`deparse()`-compared against `git show HEAD`), so study 09's numbers cannot move.
+>
+> **Verified:** `simulations/tests` **367 pass / 0 fail / 0 error / 0 skip** (204 + 163
+> new). Guard has teeth: reverting study 03 alone gives **11 failures**. The generic
+> anti-regression the item asks for runs over all seven studies exposing a `theta_own`
+> and reports which separate `own` from `population` — currently **all seven**. No
+> package file touched.
+>
+> ⚠️ Study 03's aggregates are now stale for a second reason (the first being the
+> `theta_own` change this item fixes). Folds into 3.5, which also needs study 09
+> re-run only if one wants the two-column schema from 3.3.
 
 **Symptom.** [03_2x2_to_cor.R:153](studies/03_2x2_to_cor.R#L153) is
 `theta_own <- if (meas == "r") theta_pop else atanh(theta_pop)`, so for every

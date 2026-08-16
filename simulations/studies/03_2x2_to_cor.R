@@ -23,8 +23,17 @@
 ##
 ## TARGETS
 ##   theta_pop     the population correlation the data were generated from
+##                 (the latent rho under CONT, phi under CAT) -- ONE shared column
+##                 on the r scale, so it matches only the method whose estimand
+##                 happens to be rho under that mechanism
 ##   theta_sample  the same correlation recomputed on that replication's own
-##                 sample (Pearson r on the two 0/1 vectors = the sample phi)
+##                 sample (Pearson r on the two 0/1 vectors = the sample phi;
+##                 under CONT, the correlation of the underlying continuous pair)
+##   theta_own     the PER-METHOD estimand on that method's own scale: phi for the
+##                 phi routes, the tetrachoric for the tetrachoric routes, atanh()
+##                 for the (z) variants. This is the column that makes a bias
+##                 comparison across methods mean "computational error" rather
+##                 than "these two are measuring different things".
 ## =============================================================================
 
 ## This file defines functions only. Load the harness first:
@@ -33,24 +42,22 @@
 
 ## ---- data-generating mechanisms ---------------------------------------------
 
-## Solve the joint cell probability p11 that gives a target phi with fixed
-## marginals p (row) and q (column). phi has a closed form here, so no root
-## finding and no escape hatch: the original script used uniroot() with a `9e9`
-## fallback that silently returned NA for 100% of replications in the
-## (r = 0.5, br = 0.7) block, which is why 30 rows are missing from the shipped
-## CAT file. Instead we check attainability up front and skip the condition.
-phi_to_p11 <- function(phi, p, q) phi * sqrt(p * q * (1 - p) * (1 - q)) + p * q
-
-phi_attainable <- function(phi, p, q) {
-  p11 <- phi_to_p11(phi, p, q)
-  ## all four cells must be non-negative probabilities
-  p11 >= 0 && p11 <= min(p, q) && (p11 - p - q + 1) >= 0 &&
-    (p - p11) >= 0 && (q - p11) >= 0
-}
+## The joint cell probability p11 that gives a target phi with fixed marginals p
+## (row) and q (column), and the attainability check, are .phi_to_p11() and
+## .phi_attainable() in R/05_latent_2x2.R. This file used to define its own copies
+## under the names phi_to_p11 / phi_attainable -- verified identical to study 09's
+## on 500 random inputs, i.e. the same function written twice (the simulation-side
+## instance of roadmap 1.6). Deleted; the shared versions are used below.
+##
+## phi has a closed form here, so no root finding and no escape hatch: the
+## original script used uniroot() with a `9e9` fallback that silently returned NA
+## for 100% of replications in the (r = 0.5, br = 0.7) block, which is why 30 rows
+## are missing from the shipped CAT file. Attainability is checked up front and
+## the condition skipped instead.
 
 gen_cat <- function(cond, nrep) {
   n <- cond$n; rho <- cond$rho; p <- cond$p_exp; q <- cond$p_case
-  p11 <- phi_to_p11(rho, p, q)
+  p11 <- .phi_to_p11(rho, p, q)
   prob <- c(p11, p - p11, q - p11, 1 - p - q + p11)   # exp&case, exp&ctrl, nexp&case, nexp&ctrl
 
   cells <- stats::rmultinom(nrep, size = n, prob = prob)
@@ -60,7 +67,11 @@ gen_cat <- function(cond, nrep) {
   theta_sample <- (a * d - b * c_) /
     sqrt(as.numeric(a + b) * (c_ + d) * (a + c_) * (b + d))
 
-  data.frame(a = a, b = b, c = c_, d = d,
+  ## The mechanism is stamped on the data because estimate_2x2() is shared by both
+  ## runs and must know which quantity each method is estimating (roadmap 3.2).
+  ## Carried on `dat`, not in a closure, so it survives serialisation to a parallel
+  ## worker without depending on how run_study() exports its arguments.
+  data.frame(a = a, b = b, c = c_, d = d, dgm = "cat",
              theta_pop = rho, theta_sample = theta_sample)
 }
 
@@ -82,6 +93,7 @@ gen_cont <- function(cond, nrep) {
 
   dat <- as.data.frame(t(out))
   dat$theta_pop <- rho
+  dat$dgm <- "cont"          # see gen_cat()
   dat
 }
 
@@ -137,20 +149,48 @@ estimate_2x2 <- function(dat, cond) {
     phi = list(route = "candidate",
       f = function() phi_candidate(dat$a, dat$b, dat$c, dat$d))
   )
+  ## ESTIMAND MATCHING, then SCALE MATCHING -- theta_own must do both.
+  ##
+  ## Until 2026-08 it did only the second: theta_own was theta_pop for the (r)
+  ## routes and atanh(theta_pop) for the (z) routes, so for every (r) route `own`
+  ## WAS `population` -- bit-identical bias columns across all 200 cells of each
+  ## shipped file. The column that exists to remove estimand mismatch removed
+  ## nothing, and under CAT the tetrachoric was still scored against phi while
+  ## under CONT phi was still scored against the latent rho (roadmap 3.2).
+  ##
+  ## phi and the tetrachoric are different population quantities. In each
+  ## mechanism exactly ONE of them equals rho, which is why theta_pop cannot serve
+  ## both and why the target has to be computed per method:
+  ##   CONT  tetrachoric = rho          phi = phi of the dichotomised table
+  ##   CAT   phi         = rho          tetrachoric = the latent rho implied
+  ## Measured over this grid, the mis-scoring left in place was mean |gap| 0.0925
+  ## (max 0.2429) under CONT and 0.1341 (max 0.4186) under CAT -- worst case, the
+  ## tetrachoric's true estimand is 0.9186 while it was scored against 0.50.
+  ##
+  ## SCALE: both routes report FISHER's z -- es_from_2x2()'s z is atanh(r) exactly
+  ## (verified: max |z - atanh(r)| = 0), and phi_candidate() builds z <- atanh(r).
+  ## So plain atanh() is right here. It would NOT be for a variance-stabilising
+  ## route, e.g. smd_to_cor = "viechtbauer"; do not copy this line to one.
+  ## Scoring a (z) route against an r-scale target reports atanh(rho) - rho as
+  ## bias: at rho = 0.75 that alone is +0.223.
+  ##
+  ## `population` and `sample` stay shared and on the r scale -- they are single
+  ## columns for the whole row set -- so they remain interpretable only for the
+  ## method whose estimand happens to be rho under that mechanism.
+  dgm <- if (!is.null(dat$dgm)) as.character(dat$dgm[1]) else NA_character_
+  if (is.na(dgm))
+    stop("estimate_2x2(): the generator did not stamp `dgm` on its output, so the ",
+         "per-method estimand cannot be determined. See R/05_latent_2x2.R.")
+  est <- .estimands_2x2(dgm, cond$rho, cond$p_exp, cond$p_case)
+
   pieces <- list()
   for (m in names(routes)) {
     res <- routes[[m]]$f()
+    own_r <- est[[m]]                       # names of `routes` == names of `est`
     for (meas in c("r", "z")) {
       p <- as_method(res, meas, paste0(m, " (", meas, ")"))
       p$route <- routes[[m]]$route
-      # SCALE MATCHING. The (z) routes report a Fisher-z, so scoring them against
-      # theta_pop -- which is on the r scale -- reports atanh(rho) - rho as if it
-      # were bias. At rho = 0.75 that alone is +0.223, and it dominates: the
-      # correlation between phi (z)'s apparent bias and the pure scale gap is 0.993.
-      # theta_own carries the scale-matched target so the `own` column is honest;
-      # `population` and `sample` remain on the r scale and are meaningful only for
-      # the (r) routes.
-      p$theta_own <- if (meas == "r") dat$theta_pop else atanh(dat$theta_pop)
+      p$theta_own <- if (meas == "r") own_r else atanh(own_r)
       pieces[[paste(m, meas)]] <- p
     }
   }
@@ -170,7 +210,7 @@ build_grid <- function() {
   )
   ## Drop conditions where the requested phi is not attainable with these
   ## marginals, and RECORD how many were dropped rather than emitting silent NAs.
-  ok <- mapply(phi_attainable, g$rho, g$p_exp, g$p_case)
+  ok <- mapply(.phi_attainable, g$rho, g$p_exp, g$p_case)
   if (any(!ok))
     message(sprintf("  [03_2x2_to_cor] %d/%d conditions dropped: phi unattainable ",
                     sum(!ok), nrow(g)),
@@ -183,9 +223,11 @@ run_03 <- function(nrep = SIM_DEFAULTS$nrep, cores = SIM_DEFAULTS$cores) {
   load_metaconvert()
   grid <- build_grid()
 
-  # `own` is the scale-matched target (r for the (r) routes, atanh(r) for the (z)
-  # routes); `population`/`sample` stay on the r scale and are interpretable only
-  # for the (r) routes. See the note in estimate_2x2().
+  # `own` is the per-method ESTIMAND, on that method's own scale: phi for the phi
+  # routes, the tetrachoric for the tetrachoric routes, atanh() applied for the
+  # (z) variants. `population`/`sample` are single shared columns on the r scale,
+  # so each is interpretable only for the method whose estimand equals rho under
+  # that mechanism. See the note in estimate_2x2().
   tg <- c(own = "theta_own", population = "theta_pop", sample = "theta_sample")
 
   message("STUDY 03a: 2x2 -> cor, CATEGORICAL latent (phi is the estimand)")
