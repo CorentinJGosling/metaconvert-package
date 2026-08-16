@@ -1,5 +1,75 @@
 # metaConvert (development version)
 
+## Results change: the tetrachoric correlation's confidence interval
+
+**The point estimate and its standard error are unchanged.** Only the interval on the
+**r scale** moves, and only for correlations derived from a 2×2 table (including via
+`phi`, `chi-square` and proportions, which route through it).
+
+It was a symmetric Wald interval, `r ± z·SE`. Because a correlation is bounded on
+[−1, 1] and that interval is not, it escaped the parameter space on **6.7%** of tables
+in a simulation over 1,345 dichotomised bivariate-normal samples. metaConvert now
+returns the back-transformed Fisher-*z* interval, `tanh(atanh(r) ± z·SE_z)`, which
+cannot overshoot:
+
+| | Wald (previous) | back-transformed *z* (now) |
+|---|---|---|
+| coverage of the true correlation | 0.945 | **0.952** |
+| interval escapes [−1, 1] | 6.7% | **0.0%** |
+| median interval width | 0.542 | 0.541 |
+
+**This is a deliberate divergence from `metafor`.** `summary(escalc())` builds a generic
+Wald interval for every measure it supports; applied to `RTET` that inherits the
+unboundedness. metaConvert's point estimate and variance still match `metafor` bitwise
+(pinned to 1e-10), and the *z*-scale interval is unchanged and still matches exactly;
+only the r-scale bounds differ. Flag **B1b** (a correlation CI leaving [−1, 1]) is
+therefore no longer reachable from the tetrachoric route — it is retained for the
+routes that still build a symmetric Wald interval on r, namely `es_from_pearson_r()`
+and the `or_to_cor` family.
+
+## `table_2x2_to_cor` is now validated, and documented as tetrachoric-only by design
+
+`convert_df()` accepted this argument and **silently ignored it** — it was commented out
+of the per-row method loop and of all three `es_from_2x2*()` call sites, so
+`convert_df(x, measure = "r", table_2x2_to_cor = "banana")` ran without error and
+returned byte-identical output. The guard fired only on a direct `es_from_2x2()` call,
+and its message advertised three methods (`cooper_delta`, `cooper_std`, `lipsey`) that
+no reachable code implemented. Both are fixed: the argument is validated on the
+`convert_df()` path, the message names only the value that exists, and the dead
+commented-out `lipsey` branch — an if-branch containing nothing but comments and, having
+no `return()`, silently yielding NULL had anyone re-enabled it — has been removed.
+
+`?convert_df` no longer says "For now only 'tetrachoric' is available", which read as a
+temporary restriction. It now states the position: the tetrachoric is the only
+margin-free member of this family, which is what makes it poolable. The obvious
+alternative, phi, has an attainable range bounded by the margins (max |phi| is 1.00 at a
+50% event rate but 0.33 at 10% and 0.10 at 1%), so pooling it manufactures heterogeneity
+that is pure margin artefact — at a fixed latent correlation, I² for pooled phi rises
+from 14% to 88% as the primary studies get *larger*. And the choice could not be offered
+responsibly anyway: a 2×2 with fixed *n* has three free parameters and the
+dichotomised-bivariate-normal family also has three, so the latent-normal model is
+saturated and admits no goodness-of-fit test. If your variables are genuinely
+dichotomous rather than dichotomised, use a binary measure (`logor`, `rr`, `rd`).
+
+## New quality flag
+
+- **V35** (`[INFO]`, cross-row): fires when a correlation pool's 2×2 event rates span a
+  wide range *and* reach into the extremes. The tetrachoric is weakly identified at
+  extreme margins — identification falls roughly tenfold from a 50% to a 2% event rate —
+  so its standard error inflates there and rare-outcome studies contribute less weight
+  than their sample size suggests. Correct behaviour, disclosed rather than corrected.
+  Threshold `margin_range_min` (default 0.30) via `flag_options`.
+
+## `es_from_phi()` no longer switches estimand silently
+
+`es_from_phi()` returns the **tetrachoric** correlation when the 2×2 table can be
+reconstructed, and the **phi coefficient itself** when `n_cases`/`n_exp` are missing and
+it cannot be. The two differ by roughly 1.5×–3.2×, and both were reported as
+`info_used = "phi"` with nothing said — so which estimand a row received depended only
+on whether the user happened to record the margins, and a dataset mixing the two put two
+different correlations in one column. The function now says so, with a stronger message
+when a single call produces both.
+
 ## Results change: OR to RR conversions via `metaumbrella_exp` / `metaumbrella_cases`
 
 **Re-run any analysis that used `or_to_rr = "metaumbrella_exp"` or

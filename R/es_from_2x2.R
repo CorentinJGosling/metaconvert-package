@@ -92,13 +92,19 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
   if (length(reverse_2x2) == 1) reverse_2x2 = c(rep(reverse_2x2, length(n_cases_exp)))
   if (length(reverse_2x2) != length(n_cases_exp)) stop("The length of the 'reverse_2x2' argument is incorrectly specified.")
 
-  if (!all(table_2x2_to_cor %in% c("tetrachoric"))) { # , "cooper", "lipsey"
+  if (!all(table_2x2_to_cor %in% c("tetrachoric"))) {
     stop(paste0(
       "'",
-      unique(table_2x2_to_cor[!table_2x2_to_cor %in% c("tetrachoric")]), #, "cooper", "lipsey"
-      "' not in tolerated values for the 'table_2x2_to_cor' argument.",
-      " Possible inputs are: 'tetrachoric', "#'cooper', 'lipsey'
-    ))
+      paste(unique(table_2x2_to_cor[!table_2x2_to_cor %in% c("tetrachoric")]),
+            collapse = "', '"),
+      "' not in tolerated values for the 'table_2x2_to_cor' argument. ",
+      "The only possible input is 'tetrachoric'.\n",
+      "  A 2x2 table is converted to a correlation by assuming both binary variables ",
+      "are dichotomised continua, and estimating the correlation of those latent ",
+      "variables. This is a deliberate restriction, not a temporary one -- see ",
+      "?convert_df. If your variables are genuinely dichotomous rather than ",
+      "dichotomised, prefer a binary effect size (measure = 'logor', 'rr' or 'rd')."
+    ), call. = FALSE)
   }
 
   # rd from raw counts

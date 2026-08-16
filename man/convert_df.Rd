@@ -57,7 +57,32 @@ convert_df(
 
 \item{hierarchy}{a character string indicating the hierarchy in the information to be prioritized for the effect size calculations. See details.}
 
-\item{table_2x2_to_cor}{formula used to obtain a correlation coefficient from the contingency table. For now only 'tetrachoric' is available.}
+\item{table_2x2_to_cor}{formula used to obtain a correlation coefficient from a 2x2
+contingency table. \strong{Only \code{"tetrachoric"} is available, by design rather than
+as a temporary restriction.}
+
+The tetrachoric correlation treats both binary variables as \emph{dichotomised continua}
+and estimates the correlation of the two latent variables. It is the only member of
+this family that is invariant to the margins, which is what makes it poolable: the
+obvious alternative, the phi coefficient, has an attainable range bounded by the
+margins (with balanced exposure, max \eqn{|\phi|} is 1.00 at a 50\% event rate but
+0.33 at 10\% and 0.10 at 1\%). Two studies of the same association but different event
+rates therefore report different phi values, so pooling phi manufactures
+heterogeneity that is pure margin artefact -- at a fixed latent correlation of 0.40,
+\eqn{I^2} for pooled phi rises from 14\% to 88\% as the primary studies get \emph{larger},
+because the between-study variance is pinned by the margins while the within-study
+variance falls as \eqn{1/n}. Jacobs & Viechtbauer (2017) make the same point.
+
+No argument is offered to select the alternative, because the choice cannot be made
+correctly: a 2x2 table with fixed \emph{n} has three free parameters and the
+dichotomised-bivariate-normal family also has three, so the latent-normal model is
+saturated and admits no goodness-of-fit test. Nothing in the data can tell a user
+whether their variables are dichotomised or genuinely dichotomous.
+
+\strong{If your variables are genuinely dichotomous} (allocation, genotype, sex) rather
+than thresholded severity, a correlation is the wrong effect size for them: use a
+binary measure instead (\code{measure = "logor"}, \code{"rr"} or \code{"rd"}), all
+of which metaConvert estimates from the same table.}
 
 \item{rr_to_or}{formula used to convert the \code{rr} value into an odds ratio.}
 

@@ -42,7 +42,8 @@
     templated_min_match = 3, # V23
     paired_as_indep_tol = 0.07, # V26
     sd_outlier_ratio = 5, # V27/D3
-    sd_outlier_smd = FALSE # V27/D3, off: smd pools mix instrument scales
+    sd_outlier_smd = FALSE, # V27/D3, off: smd pools mix instrument scales
+    margin_range_min = 0.30 # V35
   )
 }
 
@@ -346,6 +347,7 @@
                                   templated_min_match = 3,
                                   measure = NULL,
                                   paired_as_indep_tol = 0.07,
+                                  margin_range_min = 0.30,
                                   correct_inputs = TRUE) {
   n <- nrow(x)
   row_issues <- vector("list", n)
@@ -1318,6 +1320,54 @@
     }
   }
 
+  # V35: 2x2 event rates spanning a wide range in a correlation pool.
+  #
+  # This is a DISCLOSURE about the tetrachoric route's precision, not a data error and
+  # not a suggestion to use a different estimand (there is no alternative -- see
+  # ?convert_df on why table_2x2_to_cor is tetrachoric-only).
+  #
+  # The tetrachoric is estimated by solving a bivariate-normal probability for rho, and
+  # how sharply the data identify rho depends on the margins: dp11/drho at rho = 0.30
+  # falls from 0.167 at a 50% event rate to 0.068 at 10% and 0.016 at 2%, i.e. a ~10x
+  # collapse in identification. Its standard error inflates correspondingly, so a rare-
+  # event study contributes far less precision to an inverse-variance pool than its
+  # sample size suggests. That is correct behaviour -- the information really is not
+  # there -- but in a pool mixing common and rare outcomes it silently concentrates the
+  # weight on the common-outcome studies. Worth stating; nothing to fix.
+  #
+  # Deliberately NOT a phi gate. phi is not offered as an alternative, and margin
+  # heterogeneity is precisely the condition under which phi would be least defensible.
+  if (isTRUE(enable_cross_row) && n >= 2 &&
+      !is.null(measure) && length(measure) == 1 && measure %in% c("r", "z")) {
+    cell_cols <- c("n_cases_exp", "n_controls_exp", "n_cases_nexp", "n_controls_nexp")
+    if (all(cell_cols %in% colnames(x))) {
+      cm <- suppressWarnings(matrix(as.numeric(as.matrix(x[, cell_cols, drop = FALSE])),
+                                    nrow = n, dimnames = list(NULL, cell_cols)))
+      ok2x2 <- rowSums(!is.finite(cm)) == 0 & rowSums(cm) > 0
+      if (sum(ok2x2) >= 2) {
+        ev <- rep(NA_real_, n)
+        ev[ok2x2] <- (cm[ok2x2, "n_cases_exp"] + cm[ok2x2, "n_cases_nexp"]) /
+                       rowSums(cm[ok2x2, , drop = FALSE])
+        rng <- range(ev[ok2x2])
+        # Fire only when the pool BOTH spans a wide range and reaches into the region
+        # where identification is materially weaker; a pool sitting entirely at 0.3-0.6
+        # has nothing to disclose.
+        if ((rng[2] - rng[1]) >= margin_range_min && (rng[1] < 0.10 || rng[2] > 0.90)) {
+          for (i in which(ok2x2)) {
+            row_issues[[i]] <- c(row_issues[[i]], sprintf(
+              paste0("[INFO] Event rates across the 2x2 rows span %.2f to %.2f. The ",
+                     "tetrachoric correlation is weakly identified at extreme margins ",
+                     "(identification falls ~10x from a 50%% to a 2%% event rate), so ",
+                     "its standard error inflates there and rare-outcome rows carry ",
+                     "less weight than their sample size implies. This row's event ",
+                     "rate is %.2f. Correct behaviour, not an extraction error"),
+              rng[1], rng[2], ev[i]))
+          }
+        }
+      }
+    }
+  }
+
   issues <- vapply(row_issues, function(v) {
     if (length(v) == 0) return("")
     paste(v, collapse = "; ")
@@ -1635,13 +1685,19 @@
     # the tetrachoric route with small off-diagonal cells; B1 above tests only the
     # point estimate, so without this the bound passes through silently.
     #
-    # [INFO], not [UNUSUAL], deliberately. The data, the table and the point
-    # estimate are all sound -- there is nothing to verify and nothing extracted
-    # wrongly. This is a property of the interval metaConvert itself constructs, and
-    # the user has no corrective action available (table_2x2_to_cor accepts only
-    # "tetrachoric"). That is V31's situation, not B7b/B8b's: B7b/B8b are [UNUSUAL]
-    # because they can point the user at alpha_to_es/icc_to_es = "bonett", which
-    # cannot overshoot. Here there is no such escape, so the flag is a disclosure.
+    # [INFO], not [UNUSUAL], deliberately. The data and the point estimate are sound --
+    # there is nothing to verify and nothing extracted wrongly. This is a property of
+    # the interval metaConvert constructs, so the flag is a disclosure rather than a
+    # request to check the extraction.
+    #
+    # NB the reasoning here USED to say the tetrachoric route was the main source and
+    # that "the user has no corrective action available". That is no longer true of the
+    # tetrachoric: its r-scale interval is now the tanh back-transform of the Fisher-z
+    # interval (.tet_r in internal_multiple_formulas.R), which cannot leave (-1, 1) --
+    # measured escape fell from 45.8% of tables to 0.0% with coverage unchanged
+    # (96.1% -> 96.2%). B1b is retained as a backstop for the correlation routes that
+    # still build a symmetric Wald interval on the r scale (the or_to_cor family,
+    # pearson_r and their derivatives), where it remains reachable.
     if (measure == "r" && is.finite(es[i]) && abs(es[i]) <= 1) {
       lo_out <- !is.na(ci_lo[i]) && is.finite(ci_lo[i]) && ci_lo[i] < -1
       up_out <- !is.na(ci_up[i]) && is.finite(ci_up[i]) && ci_up[i] > 1

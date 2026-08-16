@@ -32,15 +32,23 @@ test_that("es_from_2x2 tetrachoric: the documented reference table reflects exac
   rev <- es_from_2x2(143, 52, 41, 164, table_2x2_to_cor = "tetrachoric",
                      reverse_2x2 = TRUE)
 
-  # Forward values are unchanged by this fix (regression anchors, 8+ significant digits)
+  # Regression anchors, 8+ significant digits.
+  # NB the r-scale bounds changed when the tetrachoric r interval became the tanh
+  # back-transform of the Fisher-z interval instead of a symmetric Wald interval on r
+  # (see .tet_r in internal_multiple_formulas.R): a symmetric r interval is unbounded
+  # and escaped [-1, 1] on 6.7% of tables. The POINT ESTIMATE, the SE and the z-scale
+  # bounds are unchanged, and so is the property this file exists to test -- that
+  # reverse REFLECTS the interval rather than negating it in place.
+  #   old (Wald):   r_ci_lo 0.65912073, r_ci_up 0.83262844
+  #   new (tanh z): r_ci_lo 0.64579710, r_ci_up 0.82075547
   expect_equal(fwd$r, 0.74587459, tolerance = 1e-7)
-  expect_equal(fwd$r_ci_lo, 0.65912073, tolerance = 1e-7)
-  expect_equal(fwd$r_ci_up, 0.83262844, tolerance = 1e-7)
+  expect_equal(fwd$r_ci_lo, 0.64579710, tolerance = 1e-7)
+  expect_equal(fwd$r_ci_up, 0.82075547, tolerance = 1e-7)
 
   # Reversed: (lo, up) -> (-up, -lo)
   expect_equal(rev$r, -0.74587459, tolerance = 1e-7)
-  expect_equal(rev$r_ci_lo, -0.83262844, tolerance = 1e-7)
-  expect_equal(rev$r_ci_up, -0.65912073, tolerance = 1e-7)
+  expect_equal(rev$r_ci_lo, -0.82075547, tolerance = 1e-7)
+  expect_equal(rev$r_ci_up, -0.64579710, tolerance = 1e-7)
   expect_equal(rev$z_ci_lo, -1.15912791, tolerance = 1e-7)
   expect_equal(rev$z_ci_up, -0.76805510, tolerance = 1e-7)
 
@@ -93,19 +101,23 @@ test_that("es_from_2x2 tetrachoric: reversing maps (lo, up) -> (-up, -lo) exactl
 
 test_that("es_from_2x2 tetrachoric: reflected bounds equal the Wald interval rebuilt around -est", {
   skip_if_not_installed("mvtnorm")  # metafor RTET (tetrachoric) requires it
-  # An independent check that does not reference the forward interval at all: both
-  # tetrachoric intervals are est +- qnorm(.975) * se, so the reversed row must satisfy
-  # that identity about its own (negated) estimate.
+  # An independent check that does not reference the forward interval at all. The
+  # z interval is est +- qnorm(.975) * se; the r interval is its tanh back-transform.
+  # A reversed row must satisfy both identities about its own (negated) estimate --
+  # which it does, because tanh is odd, so reflecting the z interval and reflecting
+  # the r interval are the same operation.
   g <- tetra_grid()
   rev <- suppressWarnings(es_from_2x2(g$a, g$b, g$c, g$d,
                                       table_2x2_to_cor = "tetrachoric",
                                       reverse_2x2 = rep(TRUE, nrow(g))))
   ok <- !is.na(rev$r) & !is.na(rev$r_se) & !is.na(rev$z) & !is.na(rev$z_se)
   z975 <- stats::qnorm(.975)
-  expect_equal(rev$r_ci_lo[ok], rev$r[ok] - z975 * rev$r_se[ok], tolerance = 1e-12)
-  expect_equal(rev$r_ci_up[ok], rev$r[ok] + z975 * rev$r_se[ok], tolerance = 1e-12)
   expect_equal(rev$z_ci_lo[ok], rev$z[ok] - z975 * rev$z_se[ok], tolerance = 1e-12)
   expect_equal(rev$z_ci_up[ok], rev$z[ok] + z975 * rev$z_se[ok], tolerance = 1e-12)
+  expect_equal(rev$r_ci_lo[ok], tanh(rev$z_ci_lo[ok]), tolerance = 1e-12)
+  expect_equal(rev$r_ci_up[ok], tanh(rev$z_ci_up[ok]), tolerance = 1e-12)
+  # ...and the reflected r interval never leaves the parameter space.
+  expect_true(all(rev$r_ci_lo[ok] >= -1 & rev$r_ci_up[ok] <= 1))
 })
 
 test_that("es_from_2x2_sum tetrachoric also reflects (wrapper reaches the same route)", {

@@ -114,6 +114,36 @@ es_from_phi <- function(phi, n_cases, n_exp,
       intersect(colnames(es), colnames(pr))
     )
     es[miss, fb_cols] <- pr[, fb_cols]
+
+    # THE ESTIMAND SWITCHES HERE, so say so. The reconstructed path returns the
+    # TETRACHORIC correlation of the two latent continua (typically 1.5x-3.2x the
+    # supplied phi); this fallback returns phi itself. Which one a row receives depends
+    # only on whether the user happened to record n_cases / n_exp, and both are labelled
+    # info_used = "phi". A single call that produces both is therefore mixing two
+    # different correlations in one column -- and phi is additionally not comparable
+    # across studies with different margins (see ?convert_df). Silence here was the
+    # package's own version of the defect this release documents elsewhere.
+    .mixed <- any(!is.na(es$r[-miss]))
+    .notify_once(
+      if (.mixed) "phi_estimand_mixed" else "phi_estimand_fallback",
+      if (.mixed) {
+        paste0(
+          "es_from_phi(): this call returned TWO DIFFERENT correlation estimands. ",
+          length(miss), " row(s) lack n_cases / n_exp, so their 2x2 table could not be ",
+          "reconstructed and R/Z are the phi coefficient itself; the remaining rows ",
+          "have R/Z as the TETRACHORIC correlation derived from the reconstructed ",
+          "table, which is typically 1.5-3x larger. Both are reported as ",
+          "info_used = 'phi'. Do NOT pool them together: supply n_cases and n_exp for ",
+          "every row, or analyse the two groups separately. See ?es_from_phi.")
+      } else {
+        paste0(
+          "es_from_phi(): n_cases / n_exp are missing, so the 2x2 table could not be ",
+          "reconstructed. R and Z are the phi coefficient itself, NOT the tetrachoric ",
+          "correlation returned when the table is available. phi is bounded by the ",
+          "margins and is not comparable across studies with different event rates ",
+          "(see ?convert_df). OR, RR and NNT need the margins and are NA. Supply ",
+          "n_cases and n_exp to obtain the tetrachoric instead.")
+      })
   }
 
   es$info_used <- "phi"

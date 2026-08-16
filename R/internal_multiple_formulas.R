@@ -773,39 +773,25 @@
 .contingency_to_cor <- function(n_cases_exp, n_controls_exp, n_cases_nexp, n_controls_nexp,
                                table_2x2_to_cor, reverse_2x2) {
 
-  if (table_2x2_to_cor == "lipsey") {
-    # TO DO
-    #
-    # NB before enabling: the phi denominator below was previously written with
-    # (n_controls_exp + n_cases_nexp) as its last factor. That is a diagonal, not
-    # a margin. phi requires all four MARGINS:
-    #   (a+b)(c+d)(a+c)(b+d), i.e. the last factor is the CONTROLS margin
-    #   (n_controls_exp + n_controls_nexp). Corrected below.
-    #
-    # log_or <- log((n_cases_exp * n_controls_nexp) / (n_cases_nexp * n_controls_exp))
-    # v.log_or <- 1 / n_cases_exp + 1 / n_cases_nexp + 1 / n_controls_exp + 1 / n_controls_nexp
-    #
-    # r <- (n_cases_exp * n_controls_nexp - n_controls_exp * n_cases_nexp) /
-    #   sqrt((n_cases_exp + n_controls_exp) * (n_cases_nexp + n_controls_nexp) *
-    #     (n_cases_exp + n_cases_nexp) * (n_controls_exp + n_controls_nexp))
-    # r_lipsey <- ifelse(reverse_2x2, -r, r)
-    # z_lipsey <- atanh(r_lipsey)
-    # vz_lipsey <- v.log_or * (z_lipsey^2) / (log_or^2)
-    #
-    # z_lo_lipsey <- z_lipsey - qnorm(.975) * sqrt(vz_lipsey)
-    # z_up_lipsey <- z_lipsey + qnorm(.975) * sqrt(vz_lipsey)
-    # r_lo_lipsey <- tanh(z_lo_lipsey)
-    # r_up_lipsey <- tanh(z_up_lipsey)
-    #
-    # effective_n = 1/vz_lipsey + 3
-    # vr_lipsey = (1 - r_lipsey^2)^2 / (effective_n - 1)
-    #
-    # res <- cbind(
-    #   r_lipsey, vr_lipsey, r_lo_lipsey, r_up_lipsey,
-    #   z_lipsey, vz_lipsey, z_lo_lipsey, z_up_lipsey
-    # )
-    # return(res)
-  } else if (table_2x2_to_cor == "tetrachoric") {
+  # NB there is deliberately no "lipsey" (phi) branch. A commented-out one lived here
+  # until it was removed: an if-branch containing nothing but comments and, because it
+  # had no return(), silently falling through to NULL had anyone re-enabled it.
+  #
+  # It is not coming back, and the reason is not that the formula was wrong (the version
+  # kept here had already been corrected -- its denominator originally used the diagonal
+  # (n_controls_exp + n_cases_nexp) where phi needs the controls MARGIN
+  # (n_controls_exp + n_controls_nexp)). It is that phi is not a poolable estimand:
+  # its attainable range is bounded by the margins, so studies of the same association
+  # with different event rates report different phi values, and pooling them manufactures
+  # heterogeneity that is pure margin artefact (I^2 rising from 14% to 88% as the primary
+  # studies get LARGER, because tau^2 is pinned by the margins while the within-study
+  # variance falls as 1/n). And the choice could not be offered responsibly even if it
+  # were wanted: a 2x2 table with fixed n has three free parameters and the
+  # dichotomised-bivariate-normal family also has three, so the latent-normal model is
+  # saturated and no goodness-of-fit test can tell a user which estimand applies to their
+  # data. See ?convert_df. Genuinely dichotomous variables should use a binary measure
+  # (logor / rr / rd), not a correlation.
+  if (table_2x2_to_cor == "tetrachoric") {
     res <- .tet_r(as.numeric(n_cases_exp),
                   as.numeric(n_controls_exp),
                   as.numeric(n_cases_nexp),
@@ -816,10 +802,11 @@
     # On reverse: negate AND swap each CI (new_lo = -old_up, new_up = -old_lo). Negating
     # the bounds in place left lo > up -- a wrong-signed, inverted interval that did not
     # bracket the negated point estimate. This is the same defect that was fixed on the
-    # OR path (see es_from_stand_OR.R, the .or_to_cor result block). Both intervals here
-    # are symmetric Wald bounds around their own estimate (r +- z*sqrt(vr) and
-    # z +- z*sqrt(vz)), so the reflected interval is exactly the interval recomputed
-    # around the negated estimate. Old bounds are saved first, since res is overwritten.
+    # OR path (see es_from_stand_OR.R, the .or_to_cor result block). The z interval is a
+    # symmetric Wald interval (z +- z*sqrt(vz)) and the r interval is its tanh
+    # back-transform; both are therefore odd-symmetric about 0, since tanh(-x) = -tanh(x).
+    # So the reflected interval is exactly the interval recomputed around the negated
+    # estimate, in both cases. Old bounds are saved first, since res is overwritten.
     r_lo_raw <- res[3]; r_up_raw <- res[4]
     z_lo_raw <- res[7]; z_up_raw <- res[8]
     res[1] <- ifelse(reverse_2x2, -res[1], res[1])
@@ -831,7 +818,12 @@
 
     return(res)
   } else {
-    stop(paste0("'", table_2x2_to_cor, "' not in tolerated values for the 'table_2x2_to_cor' argument. Possible inputs are: 'tetrachoric', 'cooper_delta', 'cooper_std' or 'lipsey'"))
+    # The previous message advertised 'cooper_delta', 'cooper_std' and 'lipsey'. None of
+    # the three was implemented by any reachable code, so it named three methods the user
+    # could not select.
+    stop(paste0("'", table_2x2_to_cor, "' not in tolerated values for the ",
+                "'table_2x2_to_cor' argument. The only possible input is 'tetrachoric'."),
+         call. = FALSE)
   }
 }
 
@@ -887,8 +879,16 @@
 
       z_lo <- z - qnorm(.975) * sqrt(vz)
       z_up <- z + qnorm(.975) * sqrt(vz)
-      r_lo <- r - qnorm(.975) * sqrt(vr)
-      r_up <- r + qnorm(.975) * sqrt(vr)
+      # The r-scale interval is the BACK-TRANSFORMED z interval, not a symmetric Wald
+      # interval on r. A symmetric interval r +- z*sqrt(vr) is unbounded and routinely
+      # escapes the parameter space: measured over a realistic grid it left [-1, 1] on
+      # 45.8% of tables (and flag B1b -- the [INFO] disclosure that exists only because
+      # of this -- fired on 20.6%, rising to 67% at n = 50 with |r| >= 0.6). Since vz is
+      # already the delta-method transform of vr (line above), tanh() of the z bounds is
+      # the same interval expressed on a scale where it cannot overshoot: escape falls to
+      # 0.0% with coverage of the true correlation unchanged (96.1% -> 96.2%).
+      r_lo <- tanh(z_lo)
+      r_up <- tanh(z_up)
 
       dat <- cbind(r, vr, r_lo, r_up, z, vz, z_lo, z_up)
       return(dat)

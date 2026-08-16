@@ -313,6 +313,51 @@ the pooled-crude route that ES is invariant to `cov_outcome_r` while SE is not
 
 ### 2.2 ☐ `man/convert_df.Rd` on `table_2x2_to_cor` — folded into 1.3.
 
+### 2.6 ☐ NEW — `or_to_cor`: the consistency question raised by 1.3
+
+The phi decision (1.3) rests on margin dependence. That principle applies to three of
+the four `or_to_cor` options too, so the position needs stating rather than leaving
+implicit. Measured from `09a_or_to_cor_CONT_nrep1000.csv`:
+
+| option | mean \|bias\| vs **own** | vs **population tetrachoric** | worst coverage | margin drift* |
+|---|---|---|---|---|
+| `2x2_tetrachoric` (reference) | 0.0163 | 0.0163 | 0.849 | **0.0109** |
+| **`bonett`** (default) | 0.0185 | 0.0185 | **0.940** | **0.0212** |
+| `digby` | 0.0201 | 0.0201 | 0.906 | 0.1205 |
+| `pearson` | 0.0223 | 0.0223 | 0.902 | 0.1245 |
+| `lipsey_cooper` | 0.0231 | **0.0870** | **0.000** | 0.1127 |
+
+\* range of bias across the margin grid at ρ = 0.5, n = 300 — i.e. how much the answer
+moves when only the margins change, at a fixed true correlation.
+
+**Three conclusions.**
+
+1. **The default is right and the menu is defensible.** All five compute their own
+   estimand correctly (|bias| 0.016–0.023). `bonett` is the least margin-dependent
+   option and has the best worst-case coverage, so the menu is "best by default,
+   alternatives available" — unlike a phi option, which would have had no dominating
+   sibling. This is what distinguishes 1.3's refusal from keeping these.
+2. **`pearson` and `digby` are ~6× more margin-dependent than the default** (0.12 vs
+   0.02). That is the same pathology phi was refused for, differing in degree rather
+   than in kind, and it is currently undocumented. They need the warning phi is being
+   denied for.
+3. **`lipsey_cooper` is different in kind and needs more than a warning.** It targets
+   the point-biserial via the Cox transform, not the tetrachoric: against the
+   population tetrachoric its mean |bias| is 4.7× the default's and its worst-case
+   coverage is **0.000**. A review whose rows resolve to a mix of `lipsey_cooper` and
+   the other three pools two different estimands in one column — the same defect as
+   the `es_from_phi` swap fixed in 1.3, at review scale.
+
+**Strategy.** Document the drift on `pearson`/`digby`; document `lipsey_cooper` as a
+different estimand and consider a cross-row flag when a pool mixes it with the
+tetrachoric-targeting options. Do **not** remove them — they are legacy-compatible and
+correctly implemented. Folds together with 2.3 below, which aligns the entry-point
+defaults.
+
+**Test unit.** Extend `test-method-defaults-consistency.R` (2.3) with an assertion that
+every `or_to_cor` option is reachable and documented, plus a flag test for the mixed
+`lipsey_cooper` pool if that check is added.
+
 ### 2.3 ☐ `or_to_cor` default diverges: `es_from_or_se()` alone ships `"pearson"`
 
 **Symptom.** `convert_df()` and four of five OR entry points default to

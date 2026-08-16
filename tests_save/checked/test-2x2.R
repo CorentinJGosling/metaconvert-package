@@ -264,10 +264,32 @@ test_that("2x2 to R (TETRACHORIC)", {
   ))
 
   expect_equal(unique(es.mcv_r$info_used_crude), "2x2")
+  # Point estimate and variance keep bit-parity with metafor.
   expect_equal(es.mcv_r$es_crude, as.numeric(comp_res_r$yi), tolerance = 1e-10)
   expect_equal(es.mcv_r$se_crude, sqrt(comp_res_r$vi), tolerance = 1e-10)
-  expect_equal(es.mcv_r$es_ci_lo_crude, comp_res_r$ci.lb, tolerance = 1e-10)
-  expect_equal(es.mcv_r$es_ci_up_crude, comp_res_r$ci.ub, tolerance = 1e-10)
+
+  # THE R-SCALE INTERVAL DELIBERATELY DIVERGES FROM metafor. summary.escalc() builds a
+  # generic Wald interval yi +- z*sqrt(vi) for every measure it supports. Applied to
+  # RTET, whose parameter is bounded on [-1, 1], that interval is unbounded: measured
+  # over 1345 dichotomised bivariate-normal samples it escaped the parameter space on
+  # 6.7% of tables. metaConvert now returns the tanh back-transform of the Fisher-z
+  # interval instead (.tet_r, R/internal_multiple_formulas.R) -- escape 0.0%, coverage
+  # of the true correlation 0.952 against the Wald interval's 0.945, median width
+  # essentially unchanged (0.541 vs 0.542). The Z block below still matches metafor
+  # exactly, because the z-scale interval was not touched.
+  expect_equal(
+    es.mcv_r$es_ci_lo_crude,
+    tanh(atanh(as.numeric(comp_res_r$yi)) - qnorm(.975) *
+           sqrt(comp_res_r$vi) / (1 - as.numeric(comp_res_r$yi)^2)),
+    tolerance = 1e-8)
+  expect_equal(
+    es.mcv_r$es_ci_up_crude,
+    tanh(atanh(as.numeric(comp_res_r$yi)) + qnorm(.975) *
+           sqrt(comp_res_r$vi) / (1 - as.numeric(comp_res_r$yi)^2)),
+    tolerance = 1e-8)
+  # Whatever else changes, the interval must stay inside the parameter space.
+  expect_true(all(es.mcv_r$es_ci_lo_crude >= -1, na.rm = TRUE))
+  expect_true(all(es.mcv_r$es_ci_up_crude <= 1, na.rm = TRUE))
 })
 
 test_that("2x2 to Z (TETRACHORIC)", {
@@ -733,10 +755,18 @@ test_that("prop - Reverse", {
   #                                        table_2x2_to_cor = "cooper"), digits = 11)
   es.mcv_2x2_r3_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "2x2_prop", measure = "r",
                                          table_2x2_to_cor = "tetrachoric"), digits = 11)
-  es.mcv_2x2_z1_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "2x2_prop", measure = "z",
-                                         table_2x2_to_cor = "lipsey"), digits = 11)
-  es.mcv_2x2_z2_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "2x2_prop", measure = "z",
-                                         table_2x2_to_cor = "cooper"), digits = 11)
+  # Commented out to match their non-reverse twins above (:740-743) and the two sibling
+  # blocks ("2x2 - Reverse" :568-571, "2x2 sum - Reverse" :663-666). "lipsey" and
+  # "cooper" are not implemented; these two calls only ran because convert_df() accepted
+  # table_2x2_to_cor and then silently ignored it, so they computed the tetrachoric under
+  # another name. Every assertion using es.mcv_2x2_z1_rv / z2_rv is already commented
+  # out, so nothing is lost. convert_df() now validates the argument, which turned these
+  # dead lines into an error that aborted the whole test_that block and took its 24
+  # assertions with it.
+  # es.mcv_2x2_z1_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "2x2_prop", measure = "z",
+  #                                        table_2x2_to_cor = "lipsey"), digits = 11)
+  # es.mcv_2x2_z2_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "2x2_prop", measure = "z",
+  #                                        table_2x2_to_cor = "cooper"), digits = 11)
   es.mcv_2x2_z3_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "2x2_prop", measure = "z",
                                          table_2x2_to_cor = "tetrachoric"), digits = 11)
 

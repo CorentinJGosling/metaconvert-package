@@ -8,7 +8,32 @@
 #' @param hierarchy a character string indicating the hierarchy in the information to be prioritized for the effect size calculations. See details.
 #' @param selection_auto a character string giving details on the best "auto" hierarchy to use (only useful when \code{es_selected="auto"} and \code{measure= "d", "g" or "md"}). See details.
 #' @param es_selected the method used to select the main effect size when several information allows to estimate an effect size for the same association/comparison. Must be either "auto" (the default; the effect size computed from the information specified highest in the built-in hierarchy described below will be selected), "hierarchy" (same, using the hierarchy passed to the \code{hierarchy} argument), "minimum" (the smallest effect size will be selected) or "maximum" (the largest effect size will be selected). See details.
-#' @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contingency table. For now only 'tetrachoric' is available.
+#' @param table_2x2_to_cor formula used to obtain a correlation coefficient from a 2x2
+#'   contingency table. **Only \code{"tetrachoric"} is available, by design rather than
+#'   as a temporary restriction.**
+#'
+#'   The tetrachoric correlation treats both binary variables as *dichotomised continua*
+#'   and estimates the correlation of the two latent variables. It is the only member of
+#'   this family that is invariant to the margins, which is what makes it poolable: the
+#'   obvious alternative, the phi coefficient, has an attainable range bounded by the
+#'   margins (with balanced exposure, max \eqn{|\phi|} is 1.00 at a 50% event rate but
+#'   0.33 at 10% and 0.10 at 1%). Two studies of the same association but different event
+#'   rates therefore report different phi values, so pooling phi manufactures
+#'   heterogeneity that is pure margin artefact -- at a fixed latent correlation of 0.40,
+#'   \eqn{I^2} for pooled phi rises from 14% to 88% as the primary studies get *larger*,
+#'   because the between-study variance is pinned by the margins while the within-study
+#'   variance falls as \eqn{1/n}. Jacobs & Viechtbauer (2017) make the same point.
+#'
+#'   No argument is offered to select the alternative, because the choice cannot be made
+#'   correctly: a 2x2 table with fixed *n* has three free parameters and the
+#'   dichotomised-bivariate-normal family also has three, so the latent-normal model is
+#'   saturated and admits no goodness-of-fit test. Nothing in the data can tell a user
+#'   whether their variables are dichotomised or genuinely dichotomous.
+#'
+#'   **If your variables are genuinely dichotomous** (allocation, genotype, sex) rather
+#'   than thresholded severity, a correlation is the wrong effect size for them: use a
+#'   binary measure instead (\code{measure = "logor"}, \code{"rr"} or \code{"rd"}), all
+#'   of which metaConvert estimates from the same table.
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio.
 #' @param or_to_cor formula used to convert the \code{or} value into a correlation coefficient.
@@ -452,6 +477,11 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   } else {
     .default_flag_options()$paired_as_indep_tol
   }
+  margin_range_min_val <- if (!is.null(flag_options$margin_range_min)) {
+    flag_options$margin_range_min
+  } else {
+    .default_flag_options()$margin_range_min
+  }
   validation <- .validate_input_data(x, max_asymmetry = max_asymmetry, verbose = verbose,
                                       enable_informational = enable_info,
                                       sd_ratio_max = sd_ratio_max_val,
@@ -461,6 +491,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                                       templated_min_match = templated_min_match_val,
                                       measure = measure,
                                       paired_as_indep_tol = paired_as_indep_tol_val,
+                                      margin_range_min = margin_range_min_val,
                                       correct_inputs = correct_inputs)
   x <- validation$data
 
@@ -502,6 +533,22 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     stop(paste0("'es_selected = \"", es_selected, "\"' selects a single effect size per comparison ",
                 "and is incompatible with 'main_es = FALSE', which returns every estimation route. ",
                 "Use es_selected = 'auto' or 'hierarchy' with main_es = FALSE."))
+  }
+
+  # table_2x2_to_cor was previously accepted and SILENTLY IGNORED here: it is commented
+  # out of the per-row method-column loop and of all three es_from_2x2*() call sites, so
+  # convert_df(x, measure = "r", table_2x2_to_cor = "banana") ran without error and
+  # returned byte-identical output. The guard fired only on a direct es_from_2x2() call.
+  # Validate it on this path too, so a typo is reported rather than absorbed.
+  if (!all(table_2x2_to_cor %in% c("tetrachoric"))) {
+    stop(paste0(
+      "'",
+      paste(unique(table_2x2_to_cor[!table_2x2_to_cor %in% c("tetrachoric")]),
+            collapse = "', '"),
+      "' not in tolerated values for the 'table_2x2_to_cor' argument. ",
+      "The only possible input is 'tetrachoric' -- see ?convert_df for why this is ",
+      "by design rather than a temporary restriction."
+    ), call. = FALSE)
   }
 
   if (measure %in% c("or", "rr", "irr", "hr")) {
