@@ -1,5 +1,35 @@
 # metaConvert (development version)
 
+## New flag E8: `measure = "z"` can hold two different transforms
+
+**No result changes; this is a disclosure.** The `z` column is meant to hold one
+quantity — Fisher's z — so that it can be pooled. It does not:
+
+| route family | what lands in `z` |
+|---|---|
+| `pearson_r`, `fisher_z`, the OR routes, `2x2` | Fisher's z, `atanh(r)` |
+| `means_sd`, `cohen_d`, `student_t` | a **variance-stabilising** transform |
+
+and the second is the **default** (`smd_to_cor = "viechtbauer"`). On identical data
+at a point-biserial ρ = 0.75 that route returns z = **1.0925** where `atanh()` of its
+own `r` is **1.7468**. So a `measure = "z"` review holding both SMD studies and
+correlation studies — the ordinary case — pools two different functions of the
+correlation, with no user choice involved.
+
+`convert_df()` now records which transform each route used, and `summary(flags =
+TRUE)` reports **E8** on every row of a pool that mixes them. Setting
+`smd_to_cor = "lipsey_cooper"` puts the whole pool on Fisher's z and silences it.
+
+This is **not** the same as the estimand difference between `"viechtbauer"` (which
+estimates the biserial correlation) and `"lipsey_cooper"` (the point-biserial) —
+that is a documented choice about *which* correlation to estimate. E8 is about the
+`z` column not being `atanh()` of the `r` column on every route.
+
+E8 mirrors the existing **E6** (mixed SMD standardizers) in severity, scoping and
+wording, because it is the same class of defect. The SMD family was already covered
+by E6/E7, and ANCOVA estimates cannot mix silently with endpoint ones at all — they
+go to the *adjusted* columns. `z` was the one place the check was missing.
+
 ## Results change: `or_to_cor` no longer depends on which function you call
 
 `convert_df()` and four of the five OR entry points defaulted to

@@ -713,7 +713,62 @@ argument. Arithmetic is correct — this is docs + a guard.
 
 ---
 
-### 2.5 ☐ `measure = "z"` returns two different transforms depending on route
+### 2.5 ☑ `measure = "z"` returns two different transforms depending on route — DONE
+
+> ⚠️ **The item understated the scope, and the owner's challenge is what exposed it.**
+> The write-up frames this as a consequence of *choosing* `smd_to_cor = "lipsey_cooper"`
+> over `"viechtbauer"`. Measured, the split is **by input family, at package defaults,
+> with no user choice involved**:
+>
+> | family | what lands in `z` |
+> |---|---|
+> | `pearson_r`, `fisher_z`, `or_se`, `2x2` | Fisher's z = `atanh(r)` |
+> | `means_sd`, `cohen_d`, `student_t` | a **variance-stabilising** transform |
+>
+> At a point-biserial ρ = 0.75 the SMD route returns z = **1.0925** where `atanh()` of
+> its own r is **1.7468**. One ordinary `convert_df(measure = "z")` call over a mixed
+> sheet produced 0.564 (VST) beside 0.549 / 0.332 / 0.199 (Fisher) — the first row sits
+> 0.174 from where the others' scale puts it.
+>
+> **"Why only z — isn't this the same for pre/post, mean-change, ANCOVA, paired F?"**
+> (owner). Answered by measurement, and the answer changed the framing:
+>
+> | family | can two scales share one column? | already flagged? |
+> |---|---|---|
+> | mean-change vs endpoint | yes | **E6 fires** ✔ measured |
+> | paired-F vs endpoint | yes | **E6 fires** ✔ measured |
+> | pre/post means vs endpoint | yes | E6's method list covers it |
+> | **ANCOVA vs endpoint** | **no** — ANCOVA lands in the *adjusted* columns, endpoint in the *crude* | nothing to flag |
+> | **z** | yes | **nothing** ✔ measured |
+>
+> So it was never "only z": the package already implements this principle for the SMD
+> family (E6/E7) and separates ANCOVA structurally. **z was the one gap**, and filling it
+> restores consistency rather than singling z out.
+>
+> **Landed as E8**, deliberately mirroring E6 — same `[INFO]` severity (a pool property;
+> every row is individually correct), same `cmp_rep` selected-route logic, same
+> `group_key` scoping, same `enable_cross_row` gate, same message shape.
+>
+> **Classification is derived from the output, never from a route list.**
+> `.z_transform_by_route()` asks each method frame whether its own `z` equals `atanh()`
+> of its own `r`, and records the verdict per `info_used` in `attr(res, "z_transform")`
+> (threaded like `r_defaulted` / `smd_denom_used`). A hardcoded map is exactly what
+> rotted in item 1.2. It also means the marker tracks `smd_to_cor` automatically —
+> verified: `means_sd` is `"vst"` under the default and `"fisher"` under
+> `lipsey_cooper`.
+>
+> **Kept distinct from the estimand question**, in code comments, docs and tests:
+> `viechtbauer` estimates the *biserial* and `lipsey_cooper` the *point-biserial*, which
+> is a documented choice study 01 already measures. E8 is only about the `z` column not
+> being `atanh()` of the `r` column on every route.
+>
+> Documented on `convert_df`'s `@param smd_to_cor` and in the `es_from_means_*` details;
+> E8 added to the flag catalogue in `CLAUDE.md`; NEWS entry.
+>
+> **Verified:** `tests/testthat` **2964 pass / 0 fail / 0 error / 0 skip** (2921 + 43 new)
+> and `tests_save/checked` **7193 / 0 / 0 / 0**, exactly the baseline. The remedy the flag
+> recommends is itself tested: `smd_to_cor = "lipsey_cooper"` silences E8 and puts every
+> route on Fisher's z.
 
 **Symptom.** `smd_to_cor = "lipsey_cooper"` returns Fisher's `atanh(r)`;
 `"viechtbauer"` returns the Jacobs & Viechtbauer variance-stabilising transform.

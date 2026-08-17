@@ -53,6 +53,20 @@ This function first computes a Cohen's d (D), Hedges' g (G) and mean difference 
 from the means of two independent groups and the pooled standard deviation across the groups.
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
+\strong{The Z returned here is not Fisher's z under the default.} \code{smd_to_cor}
+chooses two things at once. It chooses WHICH correlation is estimated --
+"viechtbauer" (default) the biserial, "lipsey_cooper" the point-biserial -- and
+it chooses WHICH TRANSFORM fills the Z column. "lipsey_cooper" returns Fisher's z,
+\eqn{atanh(r)}; "viechtbauer" returns a variance-stabilising transform, which is a
+different function of the correlation: at a point-biserial rho = 0.75 it
+returns 1.0925 where \eqn{atanh(r)} of its own R is 1.7468.
+
+This matters when pooling. \code{es_from_pearson_r()}, \code{es_from_fisher_z()},
+the odds-ratio routes and \code{es_from_2x2()} all report Fisher's z, so a
+\code{measure = "z"} review that mixes those studies with SMD studies pools two
+transforms. \code{convert_df()} reports this as flag E8; setting
+\code{smd_to_cor = "lipsey_cooper"} puts every row on Fisher's z.
+
 \strong{To estimate a mean difference}  (formulas 12.1-12.6 in Cooper):
 \deqn{md = mean\_exp - mean\_nexp}
 \deqn{md\_se = \sqrt{\frac{n\_exp+n\_nexp}{n\_exp*n\_nexp} * mean\_sd\_pooled^2}}

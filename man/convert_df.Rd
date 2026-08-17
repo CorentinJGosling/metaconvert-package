@@ -90,7 +90,18 @@ of which metaConvert estimates from the same table.}
 
 \item{or_to_cor}{formula used to convert the \code{or} value into a correlation coefficient.}
 
-\item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation.}
+\item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient
+correlation. Two things differ between the options, and they are independent.
+(1) WHICH CORRELATION: "viechtbauer" (default) estimates the biserial correlation,
+"lipsey_cooper" the point-biserial. (2) WHICH TRANSFORM lands in the \code{z}
+column when \code{measure = "z"}: "lipsey_cooper" reports Fisher's z,
+\code{atanh(r)}, whereas "viechtbauer" reports a VARIANCE-STABILISING transform,
+which is a different function of the correlation -- at a point-biserial
+\eqn{\rho = 0.75} it returns 1.0925 where \code{atanh()} of its own r is 1.7468.
+Every other family (\code{pearson_r}, \code{fisher_z}, the OR routes, 2x2) reports
+Fisher's z. So under the default a \code{measure = "z"} review holding both SMD
+studies and correlation studies pools two transforms; flag E8 reports it, and
+\code{smd_to_cor = "lipsey_cooper"} puts the whole pool on Fisher's z.}
 
 \item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.}
 

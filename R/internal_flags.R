@@ -1396,6 +1396,54 @@
   paste0(" (from ", method, ")")
 }
 
+#' Which transform each route put in the `z` column
+#'
+#' `measure = "z"` is meant to hold one quantity, Fisher's z, so that the column can
+#' be pooled. It does not. The correlation and binary families report
+#' \eqn{z = atanh(r)}; the SMD family under \code{smd_to_cor = "viechtbauer"} (the
+#' default) reports a VARIANCE-STABILISING transform, which is a different function
+#' of the correlation. Measured on the same data at a point-biserial
+#' \eqn{\rho = 0.75}: the route reports z = 1.0925 while \code{atanh()} of its own r
+#' is 1.7468.
+#'
+#' NOT to be confused with the estimand difference between \code{viechtbauer} (the
+#' biserial) and \code{lipsey_cooper} (the point-biserial), which is a documented
+#' choice and is what study 01 of the simulation programme measures. This is the
+#' separate fact that the z COLUMN is not \code{atanh()} of the r column on every
+#' route, so a pool mixing families mixes two transforms.
+#'
+#' DERIVED FROM THE OUTPUT, NOT FROM A LIST OF ROUTE NAMES. Every method frame
+#' carries both \code{r} and \code{z}, so each route is classified by asking whether
+#' its own z equals \code{atanh()} of its own r. A hardcoded map of route names is
+#' exactly the construction that rotted in roadmap item 1.2 (64% of the names it
+#' listed did not exist), and it would silently misclassify any new route.
+#'
+#' @param res the list of per-method data frames built by \code{convert_df()}
+#' @return named character vector, names are \code{info_used} values, entries
+#'   "fisher", "vst" or NA when a route offered no row to classify
+#' @noRd
+.z_transform_by_route <- function(res) {
+  out <- character(0)
+  for (k in seq_along(res)) {
+    f <- res[[k]]
+    if (!is.data.frame(f) || !all(c("r", "z", "info_used") %in% names(f))) next
+    ok <- which(is.finite(f$r) & is.finite(f$z) & abs(f$r) < 1 & abs(f$r) > 1e-8)
+    if (!length(ok)) next
+    # Classify on ALL usable rows, not the first: a route that agreed with atanh()
+    # on one row and not another would be a third thing, and must not be recorded
+    # as either.
+    is_fisher <- abs(f$z[ok] - atanh(f$r[ok])) < 1e-8
+    lab <- if (all(is_fisher)) "fisher" else if (!any(is_fisher)) "vst" else "mixed"
+    for (nm in unique(as.character(f$info_used[ok]))) {
+      if (is.na(nm) || !nzchar(nm)) next
+      # A route seen twice must not flip label; disagreement is recorded as "mixed"
+      # rather than resolved silently.
+      out[nm] <- if (!is.null(out[nm]) && !is.na(out[nm]) && out[nm] != lab) "mixed" else lab
+    }
+  }
+  out
+}
+
 #' Format a min/max method suffix for cross-method flags
 #' @param min_info character scalar or NA/NULL
 #' @param max_info character scalar or NA/NULL
@@ -2724,7 +2772,8 @@
                              pool_sd = FALSE,
                              r_defaulted = NULL,
                              smd_denom = NULL,
-                             es_order = NULL) {
+                             es_order = NULL,
+                             z_transform = NULL) {
   n <- nrow(res)
   flag_col <- paste0("flags", suffix)
 
@@ -3099,6 +3148,65 @@
     }
   }
 
+  # E8: Cross-row z-transform mixing (Fisher's z vs a variance-stabilising z)
+  #
+  # [INFO], not [DISCORDANT], and scoped WITHIN group_key -- the same reasoning as
+  # E6 above: every row may be individually correct, and this is a property of the
+  # pool. E6 is the direct precedent and this check deliberately mirrors it.
+  #
+  # measure = "z" is supposed to hold one quantity so the column can be pooled. It
+  # does not. The correlation and binary families report z = atanh(r); the SMD
+  # family under smd_to_cor = "viechtbauer" (the DEFAULT) reports a
+  # variance-stabilising transform, a different function of the correlation.
+  # Measured on identical data at a point-biserial rho = 0.75: that route reports
+  # z = 1.0925 while atanh() of its own r is 1.7468. A review holding both SMD
+  # studies and correlation studies -- the ordinary case for a z meta-analysis --
+  # mixes the two by default, with no user choice involved.
+  #
+  # NOT the same thing as the estimand difference between viechtbauer (biserial)
+  # and lipsey_cooper (point-biserial): that is a documented choice about WHICH
+  # correlation to estimate. This is about the column not being atanh() of the r
+  # column on every route.
+  #
+  # Rows are classified from `z_transform`, built in convert_df() by asking each
+  # route whether its own z equals atanh() of its own r -- never from a hardcoded
+  # list of route names (roadmap 1.2).
+  f_ztrans_mix <- vector("list", n)
+  for (i in seq_len(n)) f_ztrans_mix[[i]] <- character(0)
+  if (isTRUE(opts$enable_cross_row) && measure == "z" &&
+      !is.null(info_used) && !is.null(z_transform) && length(z_transform)) {
+    row_trans <- unname(z_transform[as.character(info_used)])
+    valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es) &
+                         !is.na(row_trans))
+    multi_grp <- length(unique(group_key)) > 1L
+    for (g in unique(group_key[valid_idx])) {
+      gsel <- valid_idx[group_key[valid_idx] == g]
+      # Decided on the routes that would actually be SELECTED, as E4/E6/E7 do: under
+      # the route view one comparison legitimately offers several routes, which is a
+      # within-comparison difference (E1/E3), not cross-row mixing.
+      tr <- row_trans[gsel[cmp_rep[gsel]]]
+      if (length(unique(tr[!is.na(tr)])) < 2L) next
+      gtxt <- if (multi_grp) paste0(" (within group '", .group_label(g), "')") else ""
+      for (i in gsel) {
+        this_t <- row_trans[i]
+        if (is.na(this_t)) next
+        this_lab <- switch(this_t,
+                           fisher = "Fisher's z, atanh(r)",
+                           vst = "a variance-stabilising transform, not atanh(r)",
+                           "an inconsistent transform")
+        other_lab <- if (identical(this_t, "fisher"))
+          "a variance-stabilising transform" else "Fisher's z"
+        msuf <- .method_suffix(info_used[i])
+        f_ztrans_mix[[i]] <- paste0(
+          "[INFO] Mixed z transforms: this row is on ", this_lab, msuf,
+          ", but other rows are on ", other_lab,
+          " - these are different functions of the correlation and should not be ",
+          "pooled. Convert through a single family, or set smd_to_cor = ",
+          "'lipsey_cooper' to put the SMD rows on Fisher's z", gtxt)
+      }
+    }
+  }
+
   # E5: min and max ES on opposite sides of the null (0, or 1 when exp = TRUE)
   # suppressed with E1-E3 when all rows show min ~ -max
   f_direction <- vector("list", n)
@@ -3163,7 +3271,7 @@
         }
       }
     }
-    combined <- c(v_flags, f_a[[i]], f_b[[i]], f_c[[i]], f_d[[i]], f_e[[i]], f_f[[i]], f_g[[i]], f_dup[[i]], f_nnt_mix[[i]], f_std_mix[[i]], f_paired_t_mix[[i]], f_direction[[i]])
+    combined <- c(v_flags, f_a[[i]], f_b[[i]], f_c[[i]], f_d[[i]], f_e[[i]], f_f[[i]], f_g[[i]], f_dup[[i]], f_nnt_mix[[i]], f_std_mix[[i]], f_paired_t_mix[[i]], f_ztrans_mix[[i]], f_direction[[i]])
     if (length(combined) == 0) return("")
     paste(combined, collapse = "; ")
   }, character(1))

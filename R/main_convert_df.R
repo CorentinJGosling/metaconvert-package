@@ -53,7 +53,18 @@
 #'       assumes the two arms' true standardizing SDs are equal.
 #'   }
 #' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68% too small (95% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.
-#' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation.
+#' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient
+#'   correlation. Two things differ between the options, and they are independent.
+#'   (1) WHICH CORRELATION: "viechtbauer" (default) estimates the biserial correlation,
+#'   "lipsey_cooper" the point-biserial. (2) WHICH TRANSFORM lands in the \code{z}
+#'   column when \code{measure = "z"}: "lipsey_cooper" reports Fisher's z,
+#'   \code{atanh(r)}, whereas "viechtbauer" reports a VARIANCE-STABILISING transform,
+#'   which is a different function of the correlation -- at a point-biserial
+#'   \eqn{\rho = 0.75} it returns 1.0925 where \code{atanh()} of its own r is 1.7468.
+#'   Every other family (\code{pearson_r}, \code{fisher_z}, the OR routes, 2x2) reports
+#'   Fisher's z. So under the default a \code{measure = "z"} review holding both SMD
+#'   studies and correlation studies pools two transforms; flag E8 reports it, and
+#'   \code{smd_to_cor = "lipsey_cooper"} puts the whole pool on Fisher's z.
 #' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance. Only the endpoint means family (es_from_means_sd/se/ci) honours this argument: rows whose effect size comes from any other method (t/F, cohen_d/hedges_g, eta-squared, point-biserial r, medians/ranges, plots, ANCOVA, raw mean differences) always use the pooled-SD standardizer, and a message lists the scoping when a non-pooled value is requested ("glass_robust" additionally has a single variance form, so smd_var is ignored for it).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
@@ -1733,6 +1744,11 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   attr(res, "prop_to_es") <- prop_to_es
   # standardizer used by the pre/post routes (drives the E6/E7 mixing flags)
   attr(res, "pre_post_to_smd") <- pre_post_to_smd
+  # Which transform each route put in the `z` column -- Fisher's atanh(r) for the
+  # correlation and binary families, a variance-stabilising transform for the SMD
+  # family. Derived from the frames themselves rather than from a list of route
+  # names, and consumed by the E8 mixing flag. See .z_transform_by_route().
+  attr(res, "z_transform") <- .z_transform_by_route(res)
   attr(res, "pool_sd") <- pool_sd
   # per-row endpoint-SMD standardizer ("pooled"/"control"/"control_robust"),
   # used by the summary A6 CI-width check (Glass CIs are on qt(.975, n_nexp-1))
