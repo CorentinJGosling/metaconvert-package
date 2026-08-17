@@ -19,7 +19,7 @@ es_from_user_adj(
   baseline_risk,
   small_margin_prop,
   or_to_rr = "metaumbrella_cases",
-  or_to_cor = "pearson",
+  or_to_cor = "bonett",
   smd_to_cor = "viechtbauer",
   cor_to_smd = "viechtbauer",
   rr_to_or = "metaumbrella",

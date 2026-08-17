@@ -4,7 +4,7 @@
 #' @param n_sample the total number of participants
 #' @param sd_iv the standard deviation of the independent variable
 #' @param unit_increase_iv a value of the independent variable that will be used to estimate the Cohen's d (see details).
-#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value"
+#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
 #' @param n_exp number of the experimental/exposed group
 #' @param n_nexp number of the non-experimental/non-exposed group
 #' @param cor_to_smd formula used to convert the derived Pearson's r value into a SMD.
@@ -88,6 +88,7 @@ es_from_spearman_rho <- function(spearman_r, n_sample,
   if (missing(unit_type)) {
     unit_type <- rep(NA, length(spearman_r))
   }
+  .validate_unit_type(unit_type)
 
   # Mirror the sample-size fallback es_from_pearson_r applies internally, so a
   # direct call supplying only n_exp/n_nexp gets the same delta-method r/z SEs

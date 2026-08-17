@@ -102,7 +102,7 @@ of which metaConvert estimates from the same table.}
 
 \item{cor_to_smd}{formula used to convert a correlation coefficient value into a SMD.}
 
-\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value" (see \code{\link{es_from_pearson_r}}).}
+\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.}
 
 \item{yates_chisq}{a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).}
 

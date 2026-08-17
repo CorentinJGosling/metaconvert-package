@@ -16,7 +16,7 @@ es_from_or_se(
   n_controls,
   n_sample,
   or_to_rr = "metaumbrella_cases",
-  or_to_cor = "pearson",
+  or_to_cor = "bonett",
   reverse_or
 )
 }

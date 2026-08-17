@@ -223,7 +223,7 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
                           small_margin_prop,
                           n_exp, n_nexp, n_cases, n_controls, n_sample,
                           or_to_rr = "metaumbrella_cases",
-                          or_to_cor = "pearson", reverse_or) {
+                          or_to_cor = "bonett", reverse_or) {
 
   if (!all(or_to_cor %in% c("pearson", "digby", "bonett", "lipsey_cooper"))) {
     stop(paste0("'",

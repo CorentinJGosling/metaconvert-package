@@ -535,7 +535,138 @@ defaults.
 every `or_to_cor` option is reachable and documented, plus a flag test for the mixed
 `lipsey_cooper` pool if that check is added.
 
-### 2.3 ☐ `or_to_cor` default diverges: `es_from_or_se()` alone ships `"pearson"`
+### 2.3 ☑ `or_to_cor` default diverges: `es_from_or_se()` alone ships `"pearson"` — DONE
+
+> **The scan found 16 divergences, not 1.** Besides the three `or_to_cor` = `"pearson"`
+> functions (`es_from_or_se`, `es_from_user_crude`, `es_from_user_adj`), **13**
+> `es_from_mean_change_*` / `es_from_paired_*` functions default to
+> `pre_post_to_smd = "cooper"` against `convert_df()`'s `"bonett"`.
+>
+> **Those 13 are legitimate and must not be "fixed".** Verified by calling one:
+> `es_from_mean_change_sd(..., pre_post_to_smd = "bonett")` **errors** — bonett needs a
+> baseline SD that change-score and paired test-statistic data do not carry. A blanket
+> "every default must match `convert_df()`" test would have demanded 13 changes that
+> break every direct call to those routes.
+>
+> ⚠️ **THE ITEM'S PREMISE WAS WRONG, and measuring caught it.** The write-up assumed both
+> defaults produce a number differing by 1.30×. On the **minimal documented input**
+> `(or, logor_se)` they do not:
+>
+> | `or_to_cor` | r |
+> |---|---|
+> | `pearson` (old default) | 0.3463 |
+> | `digby` | 0.3307 |
+> | `bonett` (new default) | **NA** |
+> | `lipsey_cooper` | NA |
+>
+> So aligning turns `es_from_or_se(or, logor_se)` from 0.3463 into **NA**. That is a real
+> capability loss for direct callers — **and it is exactly what `convert_df()` already
+> returns for the identical row**, which is the whole point of the item. Landed as-is
+> (owner's call), pinned by a test, and documented in NEWS with the escape hatch
+> (`or_to_cor = "pearson"` explicitly). On a margin-complete table the change is
+> 0.3463 → 0.3205.
+>
+> **The test derives its allowlist instead of hardcoding one.** A divergence on
+> `pre_post_to_smd` is justified exactly when that function's own
+> `.validate_pre_post_to_smd(allowed_methods = ...)` excludes `convert_df()`'s default.
+> Self-maintaining, and it cannot hide real drift. **Delegation had to be followed
+> transitively**: `es_from_paired_f`, `es_from_paired_t_pval` and `es_from_paired_f_pval`
+> declare no `allowed_methods` at all — they hand off (`_f_pval` → `_t_pval` →
+> `es_from_paired_t`), and a one-level search called three legitimate defaults "drift".
+> Their refusal is also pinned behaviourally.
+>
+> **Verified:** `tests/testthat` **2921 pass / 0 fail / 0 error / 0 skip** (2817 + 104
+> new — no existing assertion changed outcome) and `tests_save/checked` **7193 / 0 / 0 /
+> 0**, exactly the baseline. Guard has teeth: reverting the alignment gives **16
+> failures**.
+
+### 2.7 ☐ NEW — the `or_to_cor` fallback picks the estimand-mismatched method
+
+Found while measuring 2.3. When a row lacks bonett's inputs, `es_from_or_se()` falls back
+to **`lipsey_cooper`** ([es_from_stand_OR.R:473-485](../R/es_from_stand_OR.R#L473-L485)) —
+which by item 2.6's own table targets the **point-biserial via the Cox transform, not the
+tetrachoric**, with worst-case coverage **0.000** against the population tetrachoric.
+Meanwhile `pearson` and `digby` *do* target the tetrachoric and need only
+`(or, logor_se)` — they were available and were not chosen.
+
+Measured: with `n_sample` present but no margins, bonett→fallback gives r = 0.2449 where
+`pearson` gives 0.3463 and true-bonett (margins supplied) gives 0.3205. So the fallback
+moves the answer **further** from the method actually requested than the estimand-matched
+alternatives would.
+
+This is **pre-existing and affects `convert_df()` too**, not something 2.3 introduced —
+which is why it was not folded in: changing the fallback to `pearson` would move results
+for every margin-poor row in the package and needs its own measured decision.
+
+**Test unit.** Extend `test-method-defaults-consistency.R` with the fallback chain's
+target, once the chain is decided.
+
+### 2.8 ☐ NEW — the `or_to_cor` fallback message tells users to supply something that does not work
+
+The message says *"For 'bonett', supply 'small_margin_prop', **or** 'n_sample' together
+with one of ('n_exp','n_nexp') and one of ('n_cases','n_controls')"*
+([es_from_stand_OR.R:483-484](../R/es_from_stand_OR.R#L483-L484)). The eligibility test at
+[:454-456](../R/es_from_stand_OR.R#L454) is a **conjunction**: `small_margin_prop` **and**
+`n_sample` **and** `n_exp` **and** `n_cases` must all be non-NA.
+
+Measured: `small_margin_prop = 0.3` alone → NA; `small_margin_prop + n_sample` → **still
+falls back**; only `n_sample + n_cases + n_exp` reaches bonett (which then *derives*
+`small_margin_prop` itself at [:436-439](../R/es_from_stand_OR.R#L436)). So the one input
+the message names first is the one that cannot work on its own.
+
+Either the message or the condition is wrong; deciding which is the item.
+
+### 2.9 ☐ NEW — a delegating route reports a failure in the function it delegated to
+
+`es_from_paired_f(pre_post_to_smd = "bonett")` errors with *"Invalid 'pre_post_to_smd'
+argument in **es_from_paired_t()**"* — naming a function the user never called. Same for
+`es_from_paired_t_pval()` and `es_from_paired_f_pval()`. Cosmetic, but it sends a user
+looking in the wrong place. `.validate_pre_post_to_smd()` already takes `func_name`; the
+delegating routes just pass the callee's.
+
+### 2.4 ☑ `unit_type`: documented values exclude the shipped default; no validation — DONE
+
+> Folded into 2.3 (owner's call): same defect class, shared test file.
+>
+> **Confirmed before fixing:** `convert_df(x, measure = "g", unit_type = "banana")` ran
+> without error. The argument is read in exactly one place, as `unit_type == "sd"`, so
+> every other value — a typo included — silently selected raw units. The docs were
+> inconsistent with each other as well as with the code: **six** `@param` blocks said
+> `"sd"` or `"raw_scale"`, **two** said `"sd"` or `"value"`, and the shipped default
+> `"raw_scale"` appeared in neither of those two.
+>
+> **Landed:** tolerated set `c("sd", "raw_scale", "value")` — `"value"` kept as a
+> documented synonym of `"raw_scale"` because the manual promised it and it already
+> behaved that way (everything non-`"sd"` means raw units). All **8** `@param` blocks
+> rewritten to one description that names the default. Validation added to `convert_df()`
+> and all **7** exported takers.
+>
+> ⚠️ **A test caught a design error.** Warning on a bad **column** while leaving the value
+> in place was not enough: `convert_df()` hands the column straight to the exported
+> `es_from_*()` routes, whose own argument check then **stops**. So the run aborted
+> anyway, two calls later, with a message naming the wrong layer. Bad column cells are now
+> **neutralised to NA** after the warning — NA is already the internal "not supplied"
+> value and means raw units, exactly what the warning says those rows will get.
+>
+> ⚠️⚠️ **THE ARCHIVED SUITE CAUGHT A REGRESSION THAT `tests/testthat` DID NOT — the third
+> time in this project.** The main suite was **2919 / 0 / 0 / 0** while
+> `tests_save/checked` was **7188 pass / 2 fail / 1 error** — and note the assertion
+> total had *fallen* by 5 from the 7193 baseline, the exact signature this file's header
+> warns about: the single **error** in `test-ES-COR.R` abandoned the rest of its block.
+>
+> Cause: the tolerated set had been built **from the documentation**, and the archived
+> tests use `unit_type = "raw_data"` — a **fourth** spelling that appears in no `@param`
+> block and worked only because everything that is not `"sd"` means raw units. Rebuilt
+> from a census of the whole repository: `raw_scale` (67 uses), `sd` (29), `value` (8),
+> `raw_data` (4). All four are accepted; a new test re-runs that census so a fifth
+> spelling entering the sources fails there rather than in the archived suite.
+>
+> The guard keeps its value regardless: what it catches is a value **intended** as `"sd"`
+> but not spelled `"sd"` (e.g. `"SD"`), which silently produced raw units and is the only
+> direction in which this argument can go wrong unnoticed.
+>
+> After the fix: `tests/testthat` **2921 / 0 / 0 / 0**, `tests_save/checked`
+> **7193 / 0 / 0 / 0** — both totals exact against baseline.
 
 **Symptom.** `convert_df()` and four of five OR entry points default to
 `"bonett"`; [es_from_stand_OR.R:198](../R/es_from_stand_OR.R#L198) defaults to
@@ -561,7 +692,7 @@ matches `convert_df()`'s. Generic, catches future drift on all 19 arguments.
 
 ---
 
-### 2.4 ☐ `unit_type`: documented values exclude the shipped default; no validation
+### 2.4-old (the original write-up, kept for the record — see the ☑ entry above)
 
 **Symptom.** `?convert_df` says "must be either 'sd' or 'value'"; the default is
 `"raw_scale"`; the only read is `ifelse(unit_type == "sd", ...)`. A typo silently
@@ -569,6 +700,13 @@ selects raw units.
 
 **Strategy.** Make the default one of the documented values and validate the
 argument. Arithmetic is correct — this is docs + a guard.
+
+> Landed differently from this plan in one respect: the default was **kept** at
+> `"raw_scale"` and the *documentation* corrected to match it, rather than the default
+> being changed to `"value"`. `unit_type` is also a data **column**, so changing the
+> shipped default would have silently altered the meaning of existing extraction files
+> for no behavioural gain — `"value"` and `"raw_scale"` are the same thing to the one
+> line that reads the argument.
 
 **Test unit.** Covered by `test-method-defaults-consistency.R` (2.3) plus an
 `expect_error` on an invalid value.

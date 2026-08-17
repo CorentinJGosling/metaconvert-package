@@ -61,7 +61,7 @@
 #' @param alpha_to_es method used to compute the effect size from Cronbach's alpha. Must be either "bonett" or "raw" (see \code{\link{es_from_cronbach_alpha}}).
 #' @param icc_to_es method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).
 #' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).
-#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "value" (see \code{\link{es_from_pearson_r}}).
+#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds. Asymmetric CIs are only flagged, not modified (see \code{\link{summary.metaConvert}}).
 #' @param verbose a logical variable indicating whether text outputs and messages should be generated. We recommend turning this option to FALSE only after having carefully read all the generated messages.
 #' @param correct_inputs a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'flags' column of summary() and kept in the data.
@@ -402,6 +402,13 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     }
   }
 
+  # unit_type is read in exactly one place, as `unit_type == "sd"`, so EVERY other
+  # value -- a typo included -- silently selects raw units. The argument is rejected
+  # outright; a column only warns, because one bad cell must never abort a whole run
+  # (the convention the dipietrantonj and proportion routes already follow).
+  # See R/internal_guards.R.
+  .validate_unit_type(unit_type)
+
   r_pre_post = rep(r_pre_post, nrow(x))
   for (i in c("rr_to_or",
               "or_to_rr",
@@ -425,6 +432,12 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
       x[, i] <- sapply(mget(i), function(x) x)
     }
   }
+
+  # Per-row values, after the column has been merged with the argument default.
+  # Unrecognised cells are neutralised to NA, not just reported: they are handed on
+  # to the exported es_from_*() routes, whose own argument check would stop.
+  x[, "unit_type"] <- .validate_unit_type(x[, "unit_type"], arg_name = "unit_type",
+                                          column = TRUE)
 
   # P10: smd_denom is honoured only by the endpoint means family; rows reaching
   # the SMD via any other route keep the pooled-SD standardizer. Say so once,

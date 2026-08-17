@@ -159,7 +159,7 @@ es_from_beta_unstd <- function(beta_unstd, sd_dv, n_exp, n_nexp,
 #' @param n_covariates the number of covariates in the model (excluding the predictor of interest).
 #' @param sd_iv the standard deviation of the independent variable (optional, see details)
 #' @param unit_increase_iv a value of the independent variable that will be used to estimate the Cohen's d (optional, see details).
-#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "raw_scale"
+#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
 #' @param n_exp number of the experimental/exposed group (optional)
 #' @param n_nexp number of the non-experimental/non-exposed group (optional)
 #' @param cor_to_smd formula used to convert a \code{pearson_r} or \code{fisher_z} value into a SMD.
@@ -237,6 +237,7 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_t))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_t))
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_t))
+  .validate_unit_type(unit_type)
 
   if (!all(cor_to_smd %in% c("cooper", "mathur", "viechtbauer"))) {
     stop(paste0("'",
@@ -341,7 +342,7 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
 #' @param n_covariates the number of covariates in the model (excluding the predictor of interest).
 #' @param sd_iv the standard deviation of the independent variable (optional, see details)
 #' @param unit_increase_iv a value of the independent variable that will be used to estimate the Cohen's d (optional, see details).
-#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "raw_scale"
+#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
 #' @param n_exp number of the experimental/exposed group (optional)
 #' @param n_nexp number of the non-experimental/non-exposed group (optional)
 #' @param cor_to_smd formula used to convert a \code{pearson_r} or \code{fisher_z} value into a SMD.
@@ -397,6 +398,7 @@ es_from_linreg_b_se <- function(linreg_b, linreg_b_se, n_sample, n_covariates,
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_b))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
+  .validate_unit_type(unit_type)
 
   # A non-positive standard error negates the t statistic and hence every effect
   # size derived from it, while linreg_b keeps its own sign -- and d_se stays
@@ -428,7 +430,7 @@ es_from_linreg_b_se <- function(linreg_b, linreg_b_se, n_sample, n_covariates,
 #' @param n_covariates the number of covariates in the model (excluding the predictor of interest).
 #' @param sd_iv the standard deviation of the independent variable (optional, see details)
 #' @param unit_increase_iv a value of the independent variable that will be used to estimate the Cohen's d (optional, see details).
-#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "raw_scale"
+#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
 #' @param n_exp number of the experimental/exposed group (optional)
 #' @param n_nexp number of the non-experimental/non-exposed group (optional)
 #' @param cor_to_smd formula used to convert a \code{pearson_r} or \code{fisher_z} value into a SMD.
@@ -479,6 +481,7 @@ es_from_linreg_b_ci <- function(linreg_b, linreg_b_ci_lo, linreg_b_ci_up,
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_b))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
+  .validate_unit_type(unit_type)
 
   df <- n_sample - n_covariates - 2
   linreg_b_se <- .ci_width(linreg_b_ci_lo, linreg_b_ci_up) / (2 * qt(.975, df))
@@ -506,7 +509,7 @@ es_from_linreg_b_ci <- function(linreg_b, linreg_b_ci_lo, linreg_b_ci_up,
 #' @param n_covariates the number of covariates in the model (excluding the predictor of interest).
 #' @param sd_iv the standard deviation of the independent variable (optional, see details)
 #' @param unit_increase_iv a value of the independent variable that will be used to estimate the Cohen's d (optional, see details).
-#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "raw_scale"
+#' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
 #' @param n_exp number of the experimental/exposed group (optional)
 #' @param n_nexp number of the non-experimental/non-exposed group (optional)
 #' @param cor_to_smd formula used to convert a \code{pearson_r} or \code{fisher_z} value into a SMD.
@@ -559,6 +562,7 @@ es_from_linreg_b_pval <- function(linreg_b, linreg_b_pval,
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_b))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
   if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
+  .validate_unit_type(unit_type)
 
   df <- n_sample - n_covariates - 2
   linreg_t <- qt(1 - linreg_b_pval / 2, df) * sign(linreg_b)

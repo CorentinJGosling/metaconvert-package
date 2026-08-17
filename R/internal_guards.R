@@ -84,3 +84,62 @@
 # standard error.
 .ci_lower <- function(ci_lo, ci_up) pmin(ci_lo, ci_up, na.rm = FALSE)
 .ci_upper <- function(ci_lo, ci_up) pmax(ci_lo, ci_up, na.rm = FALSE)
+
+
+# ---- unit_type -------------------------------------------------------------
+#
+# `unit_type` says whether `unit_increase_iv` is expressed in standard-deviation
+# units or in the raw units of the independent variable. It is read in exactly one
+# place -- `ifelse(unit_type == "sd", unit_increase_iv * sd_iv, unit_increase_iv)`,
+# in .cor_to_smd()/.cor_to_smd_vec() -- and only on the `cor_to_smd = "mathur"`
+# route. So ANY value other than "sd" silently selects raw units, including a typo.
+#
+# The shipped default is "raw_scale"; six @param blocks documented "sd" or
+# "raw_scale" and two documented "sd" or "value", so a user following ?convert_df
+# would type a value that worked only by accident. All three names are accepted --
+# "value" and "raw_scale" are synonyms, both meaning "already in raw units" -- and
+# anything else is now rejected instead of quietly behaving like "raw_scale".
+#
+# The ARGUMENT stops; a COLUMN warns and is NEUTRALISED to NA. That asymmetry is the
+# convention in this package: an argument is one decision by the analyst and can be
+# fixed on the spot, whereas one bad cell must never abort a whole convert_df() run
+# (the same reason the dipietrantonj and prop routes warn per row rather than stop).
+#
+# WHY THE COLUMN MUST BE NEUTRALISED AND NOT MERELY REPORTED. convert_df() hands the
+# column straight on to the exported es_from_*() routes, which validate their own
+# argument and stop. So warning while leaving 'banana' in place turned a per-row
+# warning into a hard error two calls later -- the run aborted anyway, just with a
+# message naming the wrong layer. NA is the right replacement: it is already the
+# internal "not supplied" value, and every non-"sd" value means raw units, which is
+# exactly what the warning says those rows will get.
+# THE SET IS BUILT FROM EVIDENCE, NOT FROM THE DOCUMENTATION. A first version listed
+# only the three names the @param blocks and the default mentioned, and the archived
+# suite immediately failed: tests_save/checked/test-ES-COR.R passes "raw_data", a
+# fourth spelling used nowhere in the docs and working only because everything that
+# is not "sd" means raw units. A census over the whole repository found exactly four
+# in real use -- raw_scale (67 uses), sd (29), value (8), raw_data (4) -- so all four
+# are accepted and only the fourth had to be added.
+#
+# The value of the guard is unchanged by that: what it catches is a value intended as
+# "sd" that is not spelled "sd" (e.g. "SD"), which silently produced raw units and is
+# the only direction in which this argument can go wrong unnoticed.
+.unit_type_values <- function() c("sd", "raw_scale", "value", "raw_data")
+
+.validate_unit_type <- function(x, arg_name = "unit_type", column = FALSE) {
+  if (is.null(x) || length(x) == 0) return(invisible(x))
+  bad_i <- !is.na(x) & !(x %in% .unit_type_values())
+  if (!any(bad_i)) return(invisible(x))
+  bad <- unique(x[bad_i])
+  msg <- paste0("'", paste(bad, collapse = "', '"), "' not in tolerated values for the '",
+                arg_name, "' argument. Possible inputs are: ",
+                paste0("'", .unit_type_values(), "'", collapse = ", "),
+                " ('value' and 'raw_scale' are synonyms).")
+  if (column) {
+    warning(msg, " Those rows are treated as raw units, which is what every ",
+            "non-'sd' value does; supply 'sd' if the increase is in SD units.",
+            call. = FALSE)
+    x[bad_i] <- NA
+    return(invisible(x))
+  }
+  stop(msg, call. = FALSE)
+}

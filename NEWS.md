@@ -1,5 +1,63 @@
 # metaConvert (development version)
 
+## Results change: `or_to_cor` no longer depends on which function you call
+
+`convert_df()` and four of the five OR entry points defaulted to
+`or_to_cor = "bonett"`. Three functions shipped `"pearson"` instead —
+`es_from_or_se()`, `es_from_user_crude()` and `es_from_user_adj()` — so **the same
+odds ratio converted to a different correlation depending on which door you came
+in**. All three now default to `"bonett"`, matching `convert_df()`.
+
+**Re-run any analysis that called those three functions directly without naming
+`or_to_cor`.** On a common-outcome table (OR 2.5, 60 cases / 140 controls,
+n = 200) the old default gave *r* = 0.3463 and the new one gives 0.3205.
+
+**One consequence is a loss of output, and it is deliberate.** `bonett` needs the
+table margins: `n_sample` together with one of (`n_exp`, `n_nexp`) and one of
+(`n_cases`, `n_controls`). `pearson` and `digby` need only `or` and `logor_se`. So
+on the minimal input, where `pearson` returned a number, the new default returns
+`NA`:
+
+```r
+es_from_or_se(or = 2.5, logor_se = 0.3)              # was r = 0.3463, now NA
+es_from_or_se(or = 2.5, logor_se = 0.3,
+              or_to_cor = "pearson")                  # still r = 0.3463
+```
+
+That is exactly what `convert_df()` has always done with the same row, which is the
+point of the change: one answer per table, not one answer per entry point. If you
+want a correlation from an odds ratio and its standard error alone, name
+`or_to_cor = "pearson"` (or `"digby"`) explicitly.
+
+Nothing else moves: the 13 `es_from_mean_change_*` / `es_from_paired_*` functions
+keep `pre_post_to_smd = "cooper"` against `convert_df()`'s `"bonett"`, because
+bonett needs a baseline SD that change-score and paired test-statistic data do not
+carry — those routes already **reject** `"bonett"` outright. A new test scans every
+exported function against `convert_df()`'s defaults for all shared method arguments
+and fails on any divergence that is not justified that way.
+
+## `unit_type` is validated, and its documented values now include the shipped default
+
+`unit_type` is read in exactly one place, as `unit_type == "sd"`, so **every** other
+value silently selected raw units — including a typo. `convert_df(x, unit_type =
+"banana")` ran without complaint.
+
+The tolerated set is now `"sd"`, `"raw_scale"`, `"value"` and `"raw_data"`, and
+anything else is rejected. The last three are synonyms, all meaning "the increase is
+in the raw units of the independent variable". All four are accepted because all four
+are in real use: the shipped default was `"raw_scale"`, two `@param` blocks documented
+`"value"`, and `"raw_data"` appears in the package's own test suite — so a user
+following the manual typed a value that worked only by accident, and so did the tests.
+All eight `@param` blocks now describe the same set and name the default.
+
+What the check is actually for is a value **meant** as `"sd"` but not spelled `"sd"`
+(`"SD"`, say). That silently produced raw units, and it is the only direction in which
+this argument can go wrong without anyone noticing.
+
+An invalid **argument** is an error. An invalid **column** value warns and is set to
+`NA` (which means raw units, exactly as the warning says), because one bad cell must
+never abort a whole `convert_df()` run.
+
 ## Results change: the tetrachoric correlation's confidence interval
 
 **The point estimate and its standard error are unchanged.** Only the interval on the

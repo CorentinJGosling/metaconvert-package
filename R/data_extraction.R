@@ -499,7 +499,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "whether the direction of the effect size generated from the Spearman's correlation should be flipped - logical",
       "Spearman's rank correlation coefficient - numeric",
       "a value of the independent variable that will be used to estimate the Cohen's d - numeric",
-      "type of unit for the unit_increase_iv variable. Must be either 'sd' or 'value' - character",
+      "type of unit for the unit_increase_iv variable. Must be 'sd' or 'raw_scale' ('value' and 'raw_data' are synonyms of 'raw_scale') - character",
       "standard deviation of the independent variable - numeric"
       )
 

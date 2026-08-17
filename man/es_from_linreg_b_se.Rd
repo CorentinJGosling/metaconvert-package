@@ -32,7 +32,7 @@ es_from_linreg_b_se(
 
 \item{unit_increase_iv}{a value of the independent variable that will be used to estimate the Cohen's d (optional, see details).}
 
-\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Must be either "sd" or "raw_scale"}
+\item{unit_type}{the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.}
 
 \item{n_exp}{number of the experimental/exposed group (optional)}
 
