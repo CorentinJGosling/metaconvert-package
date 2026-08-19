@@ -1,5 +1,72 @@
 # metaConvert (development version)
 
+## Four blocking defects in the reliability (alpha / ICC) path
+
+Found while assessing the package end-to-end for a Cronbach's alpha
+reliability-generalization meta-analysis. All four share a signature: a
+plausible-looking number, with no error, no warning and no `NA`.
+
+**1. A scalar `n_sample` / `n_items` silently dropped every row but the first.**
+`es_from_cronbach_alpha()` and `es_from_icc()` subset their sample-size arguments
+by row index without recycling a length-1 value first, so
+`es_from_cronbach_alpha(alpha_vector, n_sample = 200, n_items = 10)` returned a
+correct point estimate for every row and a **standard error only for row 1**. A
+`head()` check passes, the `alpha` column looks complete, and `rma()` then drops
+k-1 studies with a bare "N studies with NAs omitted". The idiom is the natural
+one in a reliability-generalization sheet, where the instrument fixes `n_items`.
+Both routes now recycle length-1 numeric arguments (as `es_from_pearson_r()`
+already did) and raise an error on a genuinely incompatible length.
+`convert_df()` was never affected -- data.frame columns are always full length.
+
+**2. `summary(digits = )` rounded the returned analysis columns, not just the
+printout.** `es`, `se`, `es_ci_lo` and `es_ci_up` were rounded **in the returned
+data.frame**, and `se` becomes an inverse-variance weight the moment the result
+reaches `rma()`. At the default `digits = 3`, a Bonett-scale alpha SE of
+`0.0203460` came back as `0.020` -- a 3.4% weight error on **every** study -- and
+on the raw scale an SE of `0.00010173` came back as **exactly 0**, at which point
+`metafor::rma()` aborts with "Division by zero when computing the inverse
+variance weights". These four columns are now always returned at full precision;
+`digits` continues to govern the `es_summary` / `es_consistency` display strings
+and the diagnostic min/max/dispersion columns.
+
+**3. `user_es_*` wrote a raw reliability into a transformed pool.**
+`.known_es_types()` lists no reliability type, so a row entered through
+`user_es_crude` fell to the untyped passthrough and its **raw** value was written
+verbatim into a column on the `ln(1 - alpha)` scale. An omega of `0.91` landed at
+`+0.91` beside native alpha rows near `-2.12`, carrying roughly **nineteen times**
+the correct inverse-variance weight, and the only flag raised --
+`"ln(1-alpha) = 0.91 > 0 implies a negative Cronbach's alpha"` -- blamed the
+extraction rather than the scale. This was the only route by which McDonald's
+omega, a CI-only alpha, or a pre-computed transform could enter an analysis.
+
+Passthrough is now refused for `alpha`, `icc` and `prop` whenever the active
+`alpha_to_es` / `icc_to_es` / `prop_to_es` is not the identity, with a warning
+that names the scale and points at the native column. Under `*_to_es = "raw"`
+the analysis scale *is* the coefficient scale, so the passthrough is still
+allowed and unchanged. Every other measure is unaffected: for those, the measure
+name pins the scale.
+
+**4. New `reliability_backtransform()`, and a warning against
+`metafor::transf.iabt`.** The back-transformation from the Bonett scale is
+`1 - exp(x)`, which is **decreasing**, so the confidence bounds swap -- the most
+frequently botched step in published reliability-generalization work, and a
+silent one, since the interval still looks like an interval. The recipe was
+prose-only in the vignette and appeared nowhere in `R/`.
+
+The obvious `metafor` idiom is actively wrong here: `transf.iabt` is
+`1 - exp(-x)` with negative inputs clamped to zero, because `metafor`'s
+`measure = "ABT"` stores `-log(1 - alpha)` where `metaConvert` follows
+Bonett (2002) and stores `+log(1 - alpha)`. The standard errors are identical
+but every sign is opposite, so `metaConvert`'s values are always negative and
+`predict(m, transf = transf.iabt)` returns a pooled reliability of exactly
+`0.0000` -- no error, no warning, no `NA`.
+
+`reliability_backtransform()` accepts a numeric vector, an `rma` object, or
+`predict.rma()` output; performs the bound swap; carries the prediction interval
+through when present; and does not clamp a negative reliability, which is
+unusual but possible and worth seeing.
+
+
 ## New flag E8: `measure = "z"` can hold two different transforms
 
 **No result changes; this is a disclosure.** The `z` column is meant to hold one

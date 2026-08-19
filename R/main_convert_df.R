@@ -1316,7 +1316,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     small_margin_prop = x$small_margin_prop,
     or_to_rr = or_to_rr, or_to_cor = or_to_cor,
     smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
-    rr_to_or = rr_to_or
+    rr_to_or = rr_to_or,
+    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es
   )
   es_user_adj <- es_from_user_adj(
     user_es_original_measure_adj = x$user_es_original_measure_adj,
@@ -1331,7 +1332,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     small_margin_prop = x$small_margin_prop,
     or_to_rr = or_to_rr, or_to_cor = or_to_cor,
     smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
-    rr_to_or = rr_to_or
+    rr_to_or = rr_to_or,
+    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es
   )
   # survival
   es_cases_time <- with(x, es_from_cases_time(

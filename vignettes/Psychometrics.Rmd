@@ -58,7 +58,14 @@ library(metafor)
 
 # DT is a Suggests-only dependency, so it is absent on the check flavour that
 # installs hard dependencies only. Fall back to a static table there.
-show_table <- function(x, ...) {
+show_table <- function(x, ..., digits = 3) {
+  # summary() returns es/se/CI at FULL precision on purpose (se becomes an
+  # inverse-variance weight downstream, so rounding it in the data would bias
+  # every pooled estimate). Rounding is therefore a display-time job, done here.
+  if (is.data.frame(x)) {
+    num <- vapply(x, is.numeric, logical(1))
+    x[num] <- lapply(x[num], round, digits)
+  }
   if (requireNamespace("DT", quietly = TRUE)) DT::datatable(x, ...)
   else knitr::kable(x)
 }
@@ -198,16 +205,30 @@ metafor::forest(ma_alpha, slab = paste0(summary_alpha$author, " (", dat_alpha$ye
 ```
 
 ```{r}
-# Back-transform pooled estimate and CI
-pooled_alpha    <- 1 - exp(ma_alpha$beta[1])
-pooled_alpha_lo <- 1 - exp(ma_alpha$ci.ub)
-pooled_alpha_up <- 1 - exp(ma_alpha$ci.lb)
+# Back-transform pooled estimate, CI and prediction interval.
+# reliability_backtransform() accepts the rma object directly and performs the
+# bound swap for you.
+bt <- reliability_backtransform(ma_alpha)
+bt
 
-cat(sprintf("Pooled alpha = %.3f [%.3f, %.3f]\n",
-            pooled_alpha, pooled_alpha_lo, pooled_alpha_up))
+pooled_alpha <- bt$reliability
 ```
 
-Note that the CI bounds are **swapped** when back-transforming because $1 - \exp(x)$ is a decreasing function of $x$.
+Note that the CI bounds are **swapped** when back-transforming, because $1 - \exp(x)$ is a decreasing function of $x$: the *upper* bound on the transformed scale is the *lower* bound on the alpha scale. Done by hand that is
+
+```{r, eval=FALSE}
+1 - exp(ma_alpha$beta[1])   # pooled alpha
+1 - exp(ma_alpha$ci.ub)     # LOWER alpha bound  <- from the UPPER T bound
+1 - exp(ma_alpha$ci.lb)     # UPPER alpha bound  <- from the LOWER T bound
+```
+
+<div style="background:#fff4f4;border-left:4px solid #c0392b;padding:0.6em 1em;margin:1em 0;">
+**Do not use `metafor::transf.iabt` on `metaConvert` output.** `metafor`'s `measure = "ABT"` stores $-\ln(1-\alpha)$ where `metaConvert` follows Bonett (2002) and stores $+\ln(1-\alpha)$. The standard errors are identical but every sign is opposite, so `metaConvert`'s values are always negative and `transf.iabt` -- which clamps negative inputs to zero -- maps the whole pool to exactly `0`, with no error, no warning and no `NA`. Use `reliability_backtransform()`.
+</div>
+
+The **prediction interval**, not the confidence interval, is what a reliability-generalization review is usually reporting: reliability is a property of scores in a sample, so the question is what alpha to expect in a *new* sample. `reliability_backtransform()` returns `reliability_pi_lo` / `reliability_pi_up` whenever the fitted model carries one.
+
+A caution on heterogeneity: do **not** read $I^2$ here as "these alphas disagree". The Bonett sampling variance $2k/((k-1)(n-2))$ does not involve alpha at all, so $I^2$ is largely a function of the sample sizes -- one fixed set of alphas between .80 and .86 gives $I^2 = 0\%$ at $n = 50$ and $97\%$ at $n = 5000$. Report the back-transformed prediction interval and the observed spread of alphas instead.
 
 The pooled reliability estimate can later serve as input for **disattenuation corrections** in criterion validity, construct validity, and responsiveness analyses (see below).
 

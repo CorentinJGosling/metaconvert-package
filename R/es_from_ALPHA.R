@@ -61,6 +61,18 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
   if (missing(n_sample)) n_sample <- rep(NA, length(cronbach_alpha))
   if (missing(n_items)) n_items <- rep(NA, length(cronbach_alpha))
 
+  # A reliability-generalization sheet fixes the instrument, so `n_items` (and
+  # often `n_sample`) is naturally passed as ONE number beside a vector of
+  # coefficients. Without this recycling the subsetting below
+  # (`n_sample[nn_miss]`) indexes a length-1 vector at positions 2..k and
+  # returns NA, so every row after the first got an NA standard error while its
+  # point estimate stayed correct -- a fully populated `alpha` column hiding a
+  # pool that rma() then silently drops. Same idiom as es_from_pearson_r().
+  if (length(n_sample) == 1) n_sample <- rep(n_sample, length(cronbach_alpha))
+  if (length(n_items) == 1) n_items <- rep(n_items, length(cronbach_alpha))
+  if (length(n_sample) != length(cronbach_alpha)) stop("The length of the 'n_sample' argument is incorrectly specified.")
+  if (length(n_items) != length(cronbach_alpha)) stop("The length of the 'n_items' argument is incorrectly specified.")
+
   if (!alpha_to_es %in% c("bonett", "raw")) {
     stop(paste0("'", alpha_to_es, "' not in tolerated values for the 'alpha_to_es' argument. ",
                 "Possible inputs are: 'bonett', 'raw'"))

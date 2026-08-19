@@ -85,11 +85,21 @@
   res
 }
 
-# round ES/SE/CI columns (flags need full precision)
+# Round the DIAGNOSTIC numeric columns for display.
+#
+# `es`, `se`, `es_ci_lo` and `es_ci_up` are deliberately NOT in this list. They
+# are the analysis columns: `se` becomes an inverse-variance weight the moment
+# the result reaches rma(), so rounding it in the RETURNED data.frame (not
+# merely in the printout) silently corrupts every pooled estimate. At the
+# default digits = 3 a Bonett-scale alpha SE of 0.0203460 came back as 0.020 --
+# a 3.4% weight error on every study -- and a raw-scale alpha SE of 0.00010173
+# came back as exactly 0, at which point rma() aborts with "Division by zero
+# when computing the inverse variance weights". Rounding for the reader is the
+# job of the `es_summary` / `es_consistency` strings, which .make_es_summary()
+# and .make_es_consistency() build at `digits` from these full-precision values.
 .round_numeric_cols <- function(res, digits, suffix) {
   cols_to_round <- paste0(
-    c("es", "se", "es_ci_lo", "es_ci_up",
-      "overlap_min_max", "diff_min_max", "dispersion_es",
+    c("overlap_min_max", "diff_min_max", "dispersion_es",
       "min_es_value", "min_es_se", "min_es_ci_lo", "min_es_ci_up",
       "max_es_value", "max_es_se", "max_es_ci_lo", "max_es_ci_up"),
     suffix
@@ -110,6 +120,10 @@
 #'
 #' @param object an object of class \dQuote{metaConvert}
 #' @param digits an integer value specifying the number of decimal places for the rounding of numeric values. Default is 3.
+#'   This controls the human-readable \code{es_summary} / \code{es_consistency} strings and the diagnostic
+#'   min/max/dispersion columns. The analysis columns \code{es}, \code{se}, \code{es_ci_lo} and \code{es_ci_up}
+#'   are always returned at full precision, since \code{se} is used as an inverse-variance weight downstream and
+#'   rounding it would bias every pooled estimate.
 #' @param flags a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{flags} column (\code{flags_crude} / \code{flags_adjusted} when \code{split_adjusted = TRUE} and \code{format = "wide"}) includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.
 #' @param flag_options a named list of thresholds overriding the defaults (and any options set in \code{\link{convert_df}}).
 #' Available options:

@@ -18,7 +18,11 @@
 \arguments{
 \item{object}{an object of class \dQuote{metaConvert}}
 
-\item{digits}{an integer value specifying the number of decimal places for the rounding of numeric values. Default is 3.}
+\item{digits}{an integer value specifying the number of decimal places for the rounding of numeric values. Default is 3.
+This controls the human-readable \code{es_summary} / \code{es_consistency} strings and the diagnostic
+min/max/dispersion columns. The analysis columns \code{es}, \code{se}, \code{es_ci_lo} and \code{es_ci_up}
+are always returned at full precision, since \code{se} is used as an inverse-variance weight downstream and
+rounding it would bias every pooled estimate.}
 
 \item{flags}{a logical value indicating whether quality/plausibility flags should be generated. Default is TRUE. The \code{flags} column (\code{flags_crude} / \code{flags_adjusted} when \code{split_adjusted = TRUE} and \code{format = "wide"}) includes both input validation flags (generated during \code{\link{convert_df}}) and post-computation quality flags.}
 

@@ -87,7 +87,11 @@ test_that("convert_df: n=1 median row is flagged (V16) and neighbours stay corre
     q1_exp = c(10, 10), med_exp = c(20, 20), q3_exp = c(40, 40), n_exp = c(9, 13),
     q1_nexp = c(12, 12), med_nexp = c(22, 22), q3_nexp = c(41, 41), n_nexp = c(9, 13)
   )
-  expect_equal(unname(s[[es_col]][2:3]), round(direct$d[1:2], 3), tolerance = 1e-3)
+  # summary() used to round es_crude IN the returned data.frame, so this had to
+  # compare against round(direct$d, 3) at a 1e-3 tolerance. The analysis columns
+  # are now returned at full precision, so the pipeline and the standalone route
+  # agree to machine precision -- a strictly stronger assertion.
+  expect_equal(unname(s[[es_col]][2:3]), direct$d[1:2], tolerance = 1e-10)
 
   # V16 flag present on the n=1 row
   expect_match(s[[fl_col]][1], "n_exp = 1|within-group variance is undefined")

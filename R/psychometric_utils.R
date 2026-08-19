@@ -284,3 +284,182 @@ compute_sdc <- function(sem, sem_se) {
 
   return(result)
 }
+
+#' Back-transform a pooled reliability estimate to the coefficient scale
+#'
+#' @param x a numeric vector of estimates on the analysis scale, OR an
+#'   \code{rma}/\code{rma.mv} object returned by \code{metafor}, OR the output of
+#'   \code{metafor::predict.rma()}.
+#' @param ci_lo lower confidence bound(s) on the analysis scale. Ignored when
+#'   \code{x} is an \code{rma} or \code{predict.rma} object.
+#' @param ci_up upper confidence bound(s) on the analysis scale. Ignored when
+#'   \code{x} is an \code{rma} or \code{predict.rma} object.
+#' @param method the transformation that produced \code{x}, i.e. the value passed
+#'   as \code{alpha_to_es} / \code{icc_to_es} in \code{\link{convert_df}}. Must be
+#'   either \code{"bonett"} (default) or \code{"raw"}.
+#'
+#' @details
+#' Under the default \code{"bonett"} scale, \code{\link{convert_df}} returns
+#' \eqn{T = \ln(1 - \rho)}, so the coefficient is recovered with
+#'
+#' \deqn{\rho = 1 - \exp(T)}
+#'
+#' \strong{This map is monotone decreasing, so the confidence bounds swap}: the
+#' upper bound on the \eqn{T} scale is the \emph{lower} bound on the reliability
+#' scale. Getting that swap wrong is the single most-botched step in published
+#' reliability-generalization work, and it is silent -- the interval still looks
+#' like an interval. This helper performs the swap for you.
+#'
+#' It also exists to keep users away from \code{metafor::transf.iabt}, which is
+#' \strong{not} a valid back-transformation for \code{metaConvert} output.
+#' \code{transf.iabt} implements \eqn{1 - \exp(-x)} and then \emph{clamps
+#' negative inputs to zero}, because \code{metafor}'s \code{measure = "ABT"}
+#' stores \eqn{-\ln(1 - \rho)} where \code{metaConvert} follows Bonett (2002) and
+#' stores \eqn{+\ln(1 - \rho)}. The standard errors are identical, but every sign
+#' is opposite, so \code{metaConvert}'s values are always negative and
+#' \code{transf.iabt} maps the whole pool to exactly 0 with no error, no warning
+#' and no \code{NA}.
+#'
+#' A negative back-transformed reliability is returned as computed rather than
+#' clamped: a negative Cronbach's alpha is unusual but mathematically possible
+#' (negative average inter-item covariance), and silently flooring it at zero
+#' would hide the very extraction problem worth seeing.
+#'
+#' Under \code{method = "raw"} the analysis scale already is the coefficient
+#' scale, so values pass through unchanged and the bounds are not swapped. Both
+#' methods are accepted so that the same reporting code works whichever
+#' \code{alpha_to_es} / \code{icc_to_es} was used.
+#'
+#' @export reliability_backtransform
+#'
+#' @references
+#' Bonett, D. G. (2002). Sample size requirements for testing and estimating
+#' coefficient alpha. Journal of Educational and Behavioral Statistics, 27(4),
+#' 335-340.
+#'
+#' @md
+#'
+#' @return
+#' A data.frame with the back-transformed reliability and its interval
+#' (\code{reliability}, \code{reliability_ci_lo}, \code{reliability_ci_up}).
+#' When \code{x} is an \code{rma} object or \code{predict.rma} output that
+#' carries a prediction interval, \code{reliability_pi_lo} and
+#' \code{reliability_pi_up} are added.
+#'
+#' @examples
+#' # A per-study summary() column on the Bonett scale
+#' reliability_backtransform(c(-2.12, -1.90, -1.61))
+#'
+#' # A pooled metafor model: CI and prediction interval, bounds swapped for you
+#' \donttest{
+#' es <- es_from_cronbach_alpha(
+#'   cronbach_alpha = c(0.78, 0.85, 0.91, 0.88),
+#'   n_sample = 200, n_items = 10
+#' )
+#' m <- metafor::rma(yi = es$alpha, sei = es$alpha_se, method = "REML")
+#' reliability_backtransform(m)
+#' }
+reliability_backtransform <- function(x, ci_lo, ci_up, method = "bonett") {
+
+  if (!method %in% c("bonett", "raw")) {
+    stop(paste0("'", method, "' not in tolerated values for the 'method' argument. ",
+                "Possible inputs are: 'bonett', 'raw'"))
+  }
+
+  pi_lo <- NULL
+  pi_up <- NULL
+
+  # metafor objects carry their own bounds; taking them from the object rather
+  # than from the user is the point of accepting them here, since hand-copying
+  # ci.lb/ci.ub (or pi.lb/pi.ub) into the wrong slot is exactly the error this
+  # function exists to prevent.
+  if (inherits(x, "rma")) {
+    fit <- x
+    # A moderator model has no single pooled reliability: its coefficients are
+    # contrasts on the transformed scale, and 1 - exp() of a contrast is not a
+    # reliability of anything. Refuse explicitly and name the route that works,
+    # rather than returning the reference level (fixed-effect fits, which carry
+    # no prediction interval, would otherwise do exactly that, silently).
+    n_coef <- if (!is.null(fit$X)) ncol(fit$X) else length(fit$beta)
+    if (isTRUE(n_coef > 1L)) {
+      stop(paste0(
+        "'x' is a meta-regression with ", n_coef, " coefficients, which has no ",
+        "single pooled reliability to back-transform. Pass the fitted values ",
+        "instead -- reliability_backtransform(predict(x)) -- or, for named ",
+        "moderator levels, predict(x, newmods = ...)."
+      ))
+    }
+    x <- as.numeric(fit$beta[1])
+    ci_lo <- as.numeric(fit$ci.lb[1])
+    ci_up <- as.numeric(fit$ci.ub[1])
+    pred <- try(stats::predict(fit), silent = TRUE)
+    if (!inherits(pred, "try-error") && !is.null(pred$pi.lb)) {
+      pi_lo <- as.numeric(pred$pi.lb)
+      pi_up <- as.numeric(pred$pi.ub)
+    }
+  } else if (inherits(x, "list.rma") ||
+             (is.list(x) && !is.null(x[["pred"]]))) {
+    # A prediction table is a prediction table whether or not it has been through
+    # as.data.frame() / tibble(); excluding data.frames here sent that (routine)
+    # shape to as.numeric(), which FLATTENED the columns and returned one bogus
+    # "reliability" per column with row 1 coincidentally correct. Read members by
+    # [[ ]] so partial matching cannot pick up an unrelated `pred_type` column.
+    pred <- x
+    x <- as.numeric(pred[["pred"]])
+    # blup() and some predict() shapes carry pi.* but no ci.*; a zero-length
+    # numeric here would defeat the is.null() fallback below and abort with a
+    # complaint about a `ci_lo` the caller never passed.
+    ci_lo <- if (is.null(pred[["ci.lb"]])) rep(NA_real_, length(x)) else as.numeric(pred[["ci.lb"]])
+    ci_up <- if (is.null(pred[["ci.ub"]])) rep(NA_real_, length(x)) else as.numeric(pred[["ci.ub"]])
+    if (!is.null(pred[["pi.lb"]])) {
+      pi_lo <- as.numeric(pred[["pi.lb"]])
+      pi_up <- as.numeric(pred[["pi.ub"]])
+    }
+  }
+
+  x <- as.numeric(x)
+  if (missing(ci_lo) || is.null(ci_lo)) ci_lo <- rep(NA_real_, length(x))
+  if (missing(ci_up) || is.null(ci_up)) ci_up <- rep(NA_real_, length(x))
+  ci_lo <- as.numeric(ci_lo)
+  ci_up <- as.numeric(ci_up)
+
+  if (length(ci_lo) == 1) ci_lo <- rep(ci_lo, length(x))
+  if (length(ci_up) == 1) ci_up <- rep(ci_up, length(x))
+  if (length(ci_lo) != length(x)) stop("The length of the 'ci_lo' argument is incorrectly specified.")
+  if (length(ci_up) != length(x)) stop("The length of the 'ci_up' argument is incorrectly specified.")
+
+  # bonett: 1 - exp(t) is DECREASING, so the transformed-scale upper bound is the
+  # reliability-scale LOWER bound. raw: identity, bounds keep their roles.
+  if (method == "bonett") {
+    bt <- function(t) 1 - exp(t)
+    out_lo <- bt(ci_up)
+    out_up <- bt(ci_lo)
+  } else {
+    bt <- function(t) t
+    out_lo <- ci_lo
+    out_up <- ci_up
+  }
+
+  result <- data.frame(
+    reliability = bt(x),
+    reliability_ci_lo = out_lo,
+    reliability_ci_up = out_up
+  )
+
+  # defensive: never recycle a prediction interval of a different length onto the
+  # estimate (that mismatch is what made the moderator case abort inside
+  # `$<-.data.frame` with a message naming no argument of this function).
+  if (!is.null(pi_lo) && length(pi_lo) != length(x)) { pi_lo <- NULL; pi_up <- NULL }
+
+  if (!is.null(pi_lo)) {
+    if (method == "bonett") {
+      result$reliability_pi_lo <- bt(pi_up)
+      result$reliability_pi_up <- bt(pi_lo)
+    } else {
+      result$reliability_pi_lo <- pi_lo
+      result$reliability_pi_up <- pi_up
+    }
+  }
+
+  return(result)
+}

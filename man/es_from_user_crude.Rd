@@ -23,6 +23,9 @@ es_from_user_crude(
   smd_to_cor = "viechtbauer",
   cor_to_smd = "viechtbauer",
   rr_to_or = "metaumbrella",
+  alpha_to_es = "bonett",
+  icc_to_es = "bonett",
+  prop_to_es = "raw",
   measure,
   user_es_measure_crude
 )
@@ -63,6 +66,18 @@ es_from_user_crude(
 \item{cor_to_smd}{formula used to convert a correlation coefficient value into a SMD (see \code{\link{es_from_pearson_r}}).}
 
 \item{rr_to_or}{formula used to convert a risk ratio value into an odds ratio (see \code{\link{es_from_rr_se}}).}
+
+\item{alpha_to_es}{transformation applied to Cronbach's alpha (see \code{\link{convert_df}}). When it is
+not \code{"raw"}, the analysis scale differs from the coefficient scale, so an untyped
+\code{user_es_crude} value targeting \code{measure = "alpha"} is refused (set to NA with a warning)
+rather than written unconverted onto the transformed scale.}
+
+\item{icc_to_es}{transformation applied to the ICC (see \code{\link{convert_df}}); same refusal rule as
+\code{alpha_to_es}, for \code{measure = "icc"}.}
+
+\item{prop_to_es}{transformation applied to a proportion (see \code{\link{convert_df}}); same refusal rule
+as \code{alpha_to_es}, for \code{measure = "prop"}. The default \code{"raw"} IS the coefficient scale,
+so the passthrough is unaffected unless \code{"logit"} or \code{"freeman_tukey"} is requested.}
 
 \item{measure}{deprecated alias for \code{user_es_target_measure_crude}, kept for backward compatibility with metaConvert <= 1.0.3.}
 

@@ -853,6 +853,21 @@
 
   methods_to_check <- .get_applicable_methods(measure, suffix)
 
+  # Do not advertise a route that the active analysis scale forbids. For
+  # alpha/icc/prop the user-input route is refused whenever *_to_es is not the
+  # identity (see .user_passthrough_blocked() in R/es_from_USER.R), so telling a
+  # user to complete their user_es_* columns would send them to a dead end --
+  # the row would come back NA with a warning either way.
+  if (!is.null(object) && measure %in% c("alpha", "icc", "prop")) {
+    blocked <- .user_passthrough_blocked(
+      measure,
+      alpha_to_es = if (is.null(attr(object, "alpha_to_es"))) "bonett" else attr(object, "alpha_to_es"),
+      icc_to_es   = if (is.null(attr(object, "icc_to_es")))   "bonett" else attr(object, "icc_to_es"),
+      prop_to_es  = if (is.null(attr(object, "prop_to_es")))  "raw"    else attr(object, "prop_to_es"))
+    if (isTRUE(blocked))
+      methods_to_check <- setdiff(methods_to_check, c("user_input_crude", "user_input_adj"))
+  }
+
   res[[guidance_col]] <- rep("", n)
 
   # only rows with NA es

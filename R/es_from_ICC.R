@@ -84,6 +84,16 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
   icc_type[is.na(icc_type)] <- "agreement"
   if (length(icc_type) == 1) icc_type <- rep(icc_type, length(icc))
 
+  # See the note in es_from_cronbach_alpha(): `icc_type` was already recycled
+  # here, but the two numeric arguments were not, so a scalar `n_sample` or
+  # `n_measurements` beside a vector of ICCs returned an NA standard error for
+  # every row after the first while leaving the point estimates intact.
+  if (length(n_sample) == 1) n_sample <- rep(n_sample, length(icc))
+  if (length(n_measurements) == 1) n_measurements <- rep(n_measurements, length(icc))
+  if (length(n_sample) != length(icc)) stop("The length of the 'n_sample' argument is incorrectly specified.")
+  if (length(n_measurements) != length(icc)) stop("The length of the 'n_measurements' argument is incorrectly specified.")
+  if (length(icc_type) != length(icc)) stop("The length of the 'icc_type' argument is incorrectly specified.")
+
   if (!all(icc_type %in% c("agreement", "consistency"))) {
     stop(paste0("'", unique(icc_type[!icc_type %in% c("agreement", "consistency")]),
                 "' not in tolerated values for the 'icc_type' argument. ",

@@ -4,6 +4,62 @@
     "irr", "logirr", "nnt", "dw", "gw", "mdw", "hr", "loghr")
 }
 
+# Is the target measure's ANALYSIS SCALE set by a package argument rather than by
+# the measure name?
+#
+# For every other measure, "the user says it is already a `g`" pins the scale, so
+# writing the value through unconverted is a defensible default. For alpha, icc
+# and prop it is not: `measure = "alpha"` returns ln(1 - alpha) under the default
+# alpha_to_es = "bonett" and alpha itself under "raw", so the same column name
+# means two different quantities. An unconverted passthrough therefore drops a
+# RAW coefficient into a transformed pool -- an alpha of 0.91 landing at +0.91
+# beside native rows near -2.12, carrying roughly nineteen times the correct
+# inverse-variance weight, flagged only as "implies a negative Cronbach's alpha",
+# which blames the extraction rather than the scale.
+#
+# Returns TRUE when the active transform is NOT the identity, i.e. when a
+# passthrough cannot be correct. Under `*_to_es = "raw"` the analysis scale IS
+# the coefficient scale and the passthrough is allowed unchanged.
+.user_passthrough_blocked <- function(target, alpha_to_es = "bonett",
+                                      icc_to_es = "bonett", prop_to_es = "raw") {
+  if (length(target) != 1 || is.na(target) || !is.character(target)) return(FALSE)
+  switch(target,
+    "alpha" = !identical(as.character(alpha_to_es), "raw"),
+    "icc"   = !identical(as.character(icc_to_es), "raw"),
+    "prop"  = !identical(as.character(prop_to_es), "raw"),
+    FALSE
+  )
+}
+
+# Message shared by the crude and adjusted routes.
+#
+# Two things this must not overclaim. (a) `*_to_es = "raw"` is a DATASET-WIDE
+# switch, not a per-row rescue: it re-scales every native cronbach_alpha / icc /
+# prop row in the pool too, so it must not be offered as if it fixed only the
+# offending row. (b) For measure = "alpha"/"icc"/"prop" the ADJUSTED user route
+# is not in the convert_df() hierarchy at all, so on that route nothing could
+# have received a weight in the first place -- claiming a weight error was
+# averted would be false there.
+.user_passthrough_block_msg <- function(target, scale_arg, scale_val, n_rows, suffix) {
+  native <- switch(target,
+    "alpha" = "'cronbach_alpha' + 'n_sample' + 'n_items'",
+    "icc"   = "'icc' + 'n_sample' + 'n_measurements'",
+    "'prop' + 'n_sample'")
+  paste0(
+    "measure = '", target, "' is analysed on the '", scale_val, "' scale (",
+    scale_arg, " = '", scale_val, "'), but user_es_", suffix, " values are read ",
+    "on the coefficient scale, so an unconverted value cannot be correct here. ",
+    n_rows, " row(s) were set to NA instead of being written onto the ",
+    "transformed scale",
+    if (suffix == "crude") " with a badly wrong meta-analytic weight" else "",
+    ". Supply the coefficient in its native columns instead (", native, "). ",
+    "Setting ", scale_arg, " = 'raw' would also accept these values, but it is a ",
+    "DATASET-WIDE change of analysis scale -- it re-scales every other row too, ",
+    "not just these. To report on the coefficient scale while analysing on the ",
+    "transformed one, use reliability_backtransform() at the reporting step."
+  )
+}
+
 # output slots of the entered measure (dw mirrors d, etc.)
 .user_slot_prefixes <- function(orig_type) {
   switch(orig_type,
@@ -338,6 +394,15 @@
 #' @param smd_to_cor formula used to convert a SMD value into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD (see \code{\link{es_from_pearson_r}}).
 #' @param rr_to_or formula used to convert a risk ratio value into an odds ratio (see \code{\link{es_from_rr_se}}).
+#' @param alpha_to_es transformation applied to Cronbach's alpha (see \code{\link{convert_df}}). When it is
+#'   not \code{"raw"}, the analysis scale differs from the coefficient scale, so an untyped
+#'   \code{user_es_crude} value targeting \code{measure = "alpha"} is refused (set to NA with a warning)
+#'   rather than written unconverted onto the transformed scale.
+#' @param icc_to_es transformation applied to the ICC (see \code{\link{convert_df}}); same refusal rule as
+#'   \code{alpha_to_es}, for \code{measure = "icc"}.
+#' @param prop_to_es transformation applied to a proportion (see \code{\link{convert_df}}); same refusal rule
+#'   as \code{alpha_to_es}, for \code{measure = "prop"}. The default \code{"raw"} IS the coefficient scale,
+#'   so the passthrough is unaffected unless \code{"logit"} or \code{"freeman_tukey"} is requested.
 #' @param measure deprecated alias for \code{user_es_target_measure_crude}, kept for backward compatibility with metaConvert <= 1.0.3.
 #' @param user_es_measure_crude deprecated alias for \code{user_es_original_measure_crude}, kept for backward compatibility with metaConvert <= 1.0.3.
 #'
@@ -388,6 +453,9 @@ es_from_user_crude <- function(user_es_original_measure_crude,
                                 smd_to_cor = "viechtbauer",
                                 cor_to_smd = "viechtbauer",
                                 rr_to_or = "metaumbrella",
+                                alpha_to_es = "bonett",
+                                icc_to_es = "bonett",
+                                prop_to_es = "raw",
                                 measure, user_es_measure_crude) {
 
   # Backward compatibility with the pre-2.0 argument names (metaConvert <= 1.0.3,
@@ -532,6 +600,16 @@ es_from_user_crude <- function(user_es_original_measure_crude,
   res[[paste0(target, "_ci_up")]] <- rep(NA_real_, len)
 
   passthrough_idx <- which(!has_known_type & !is.na(es_val))
+  # See .user_passthrough_blocked(): for alpha/icc/prop under a non-identity
+  # transform there is no scale on which an unconverted value could be right.
+  if (length(passthrough_idx) > 0 &&
+      .user_passthrough_blocked(target, alpha_to_es, icc_to_es, prop_to_es)) {
+    scale_arg <- switch(target, "alpha" = "alpha_to_es", "icc" = "icc_to_es", "prop_to_es")
+    scale_val <- switch(target, "alpha" = alpha_to_es, "icc" = icc_to_es, prop_to_es)
+    warning(.user_passthrough_block_msg(target, scale_arg, scale_val,
+                                        length(passthrough_idx), "crude"))
+    passthrough_idx <- integer(0)
+  }
   if (length(passthrough_idx) > 0) {
     res[[target]][passthrough_idx] <- es_val[passthrough_idx]
     res[[paste0(target, "_se")]][passthrough_idx] <- se_val[passthrough_idx]
@@ -610,6 +688,15 @@ es_from_user_crude <- function(user_es_original_measure_crude,
 #' @param smd_to_cor formula used to convert a SMD value into a coefficient correlation (see \code{\link{es_from_cohen_d}}).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD (see \code{\link{es_from_pearson_r}}).
 #' @param rr_to_or formula used to convert a risk ratio value into an odds ratio (see \code{\link{es_from_rr_se}}).
+#' @param alpha_to_es transformation applied to Cronbach's alpha (see \code{\link{convert_df}}). When it is
+#'   not \code{"raw"}, the analysis scale differs from the coefficient scale, so an untyped
+#'   \code{user_es_adj} value targeting \code{measure = "alpha"} is refused (set to NA with a warning)
+#'   rather than written unconverted onto the transformed scale.
+#' @param icc_to_es transformation applied to the ICC (see \code{\link{convert_df}}); same refusal rule as
+#'   \code{alpha_to_es}, for \code{measure = "icc"}.
+#' @param prop_to_es transformation applied to a proportion (see \code{\link{convert_df}}); same refusal rule
+#'   as \code{alpha_to_es}, for \code{measure = "prop"}. The default \code{"raw"} IS the coefficient scale,
+#'   so the passthrough is unaffected unless \code{"logit"} or \code{"freeman_tukey"} is requested.
 #' @param measure deprecated alias for \code{user_es_target_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.
 #' @param user_es_measure_adj deprecated alias for \code{user_es_original_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.
 #'
@@ -660,6 +747,9 @@ es_from_user_adj <- function(user_es_original_measure_adj,
                               smd_to_cor = "viechtbauer",
                               cor_to_smd = "viechtbauer",
                               rr_to_or = "metaumbrella",
+                              alpha_to_es = "bonett",
+                              icc_to_es = "bonett",
+                              prop_to_es = "raw",
                               measure, user_es_measure_adj) {
 
   # Backward compatibility with the pre-2.0 argument names (metaConvert <= 1.0.3):
@@ -797,6 +887,16 @@ es_from_user_adj <- function(user_es_original_measure_adj,
   res[[paste0(target, "_ci_up")]] <- rep(NA_real_, len)
 
   passthrough_idx <- which(!has_known_type & !is.na(es_val))
+  # See .user_passthrough_blocked(): for alpha/icc/prop under a non-identity
+  # transform there is no scale on which an unconverted value could be right.
+  if (length(passthrough_idx) > 0 &&
+      .user_passthrough_blocked(target, alpha_to_es, icc_to_es, prop_to_es)) {
+    scale_arg <- switch(target, "alpha" = "alpha_to_es", "icc" = "icc_to_es", "prop_to_es")
+    scale_val <- switch(target, "alpha" = alpha_to_es, "icc" = icc_to_es, prop_to_es)
+    warning(.user_passthrough_block_msg(target, scale_arg, scale_val,
+                                        length(passthrough_idx), "adj"))
+    passthrough_idx <- integer(0)
+  }
   if (length(passthrough_idx) > 0) {
     res[[target]][passthrough_idx] <- es_val[passthrough_idx]
     res[[paste0(target, "_se")]][passthrough_idx] <- se_val[passthrough_idx]

@@ -250,9 +250,12 @@ test_that("aligning or_to_cor makes the entry points agree with convert_df()", {
                   n_cases = row$n_cases, n_controls = row$n_controls,
                   n_exp = row$n_exp, n_nexp = row$n_nexp))
   via_df <- suppressMessages(summary(suppressMessages(convert_df(row, measure = "r"))))
-  # summary() rounds es_crude for display (0.32 against the direct 0.320469), so the
-  # comparison is made at the precision summary() actually publishes.
-  expect_equal(round(direct$r, 2), via_df$es_crude, tolerance = 1e-8)
+  # summary() used to round es_crude IN the returned data.frame, so this
+  # comparison had to be made at 2 dp (0.32 against the direct 0.320469). The
+  # analysis columns are now returned at full precision -- `digits` governs only
+  # the es_summary/es_consistency display strings -- so the two doors can be
+  # held to the exact agreement the test name claims.
+  expect_equal(direct$r, via_df$es_crude, tolerance = 1e-8)
 })
 
 test_that("the documented consequence: the minimal input now yields NA, both ways", {

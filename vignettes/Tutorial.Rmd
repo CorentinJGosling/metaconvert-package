@@ -57,7 +57,14 @@ library(metaConvert)
 
 # DT is a Suggests-only dependency, so it is absent on the check flavour that
 # installs hard dependencies only. Fall back to a static table there.
-show_table <- function(x, ...) {
+show_table <- function(x, ..., digits = 3) {
+  # summary() returns es/se/CI at FULL precision on purpose (se becomes an
+  # inverse-variance weight downstream, so rounding it in the data would bias
+  # every pooled estimate). Rounding is therefore a display-time job, done here.
+  if (is.data.frame(x)) {
+    num <- vapply(x, is.numeric, logical(1))
+    x[num] <- lapply(x[num], round, digits)
+  }
   if (requireNamespace("DT", quietly = TRUE)) DT::datatable(x, ...)
   else knitr::kable(x)
 }
