@@ -66,7 +66,9 @@ mix-up moves the Bonett SE by 1.039x, against D2's 3x gate). Guarded against
 multi-instrument reviews: it fires only when **more than half** the rows agree on a
 value, and then only on the rows that disagree.
 
-**V38 -- mixed omega estimands** (`[UNUSUAL]`). `omega_total` (all common factors) and
+**V38 -- mixed omega estimands** (`[INFO]`, matching E6/E8: nothing is mis-extracted,
+so there is nothing to verify -- both values are correct and what is wrong is *pooling*
+them, which is an analyst choice). `omega_total` (all common factors) and
 `omega_hierarchical` (general factor only, systematically smaller) answer different
 questions, so a pool mixing them estimates neither. The omega analogue of E6/E8, at
 Tier 1 because the estimand is fixed by what the study reported.

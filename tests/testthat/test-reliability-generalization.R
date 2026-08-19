@@ -280,6 +280,10 @@ test_that("V38 flags a pool that mixes omega estimands", {
                                            split_adjusted = FALSE),
                                 flags = TRUE, digits = 15))
   expect_true(all(grepl("mixes omega estimands", s$flags)))
+  # severity matches its stated analogues E6/E8: nothing is mis-extracted, so this
+  # is a disclosure about pooling, not a suspicion about the data
+  expect_true(all(grepl("[INFO] Pool mixes omega", s$flags, fixed = TRUE)))
+  expect_false(any(grepl("[UNUSUAL] Pool mixes omega", s$flags, fixed = TRUE)))
   d2 <- d; d2$omega_type <- "total"
   s2 <- suppressWarnings(summary(convert_df(d2, measure = "omega", verbose = FALSE,
                                             split_adjusted = FALSE),

@@ -1442,6 +1442,11 @@
   # subscale omegas are different quantities again. Averaging them produces a number
   # that estimates none of them.
   #
+  # Severity is [INFO], matching E6/E8: nothing here is mis-extracted, so there is
+  # nothing for the reviewer to "verify" -- [UNUSUAL] would misdescribe it. Both
+  # values are correct; what is wrong is pooling them. That is an analyst choice,
+  # which is what [INFO] marks in this package (cf. E6, E8, V18, V21).
+  #
   # This is the omega analogue of E6 (mixed SMD standardizers) and E8 (mixed z
   # transforms), and it belongs at Tier 1 because it is a property of the INPUT: the
   # estimand is fixed by what the primary study reported, not by any conversion the
@@ -1456,7 +1461,7 @@
     if (length(present) > 1) {
       for (i in which(is.finite(om) & !is.na(ot))) {
         row_issues[[i]] <- c(row_issues[[i]], sprintf(
-          paste0("[UNUSUAL] Pool mixes omega estimands: this row reports omega_type = ",
+          paste0("[INFO] Pool mixes omega estimands: this row reports omega_type = ",
                  "'%s' while the pool also contains '%s'. omega_total (all common ",
                  "factors) and omega_hierarchical (general factor only) answer different ",
                  "questions and omega_h is systematically smaller, so their average ",
