@@ -29,7 +29,7 @@
               logvr = "logVR", logcvr = "logCVR",
               nnt = "NNT", rd = "RD", dw = "d_w", gw = "g_w", mdw = "MD_w",
               rp = "r_p", zp = "z_p",
-              prop = "prop", alpha = "alpha", icc = "ICC")
+              prop = "prop", alpha = "alpha", omega = "omega", icc = "ICC")
   if (measure %in% names(labels)) labels[measure] else measure
 }
 
@@ -355,6 +355,7 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     "rd", "rd_se", "rd_ci_lo", "rd_ci_up",
     "prop", "prop_se", "prop_ci_lo", "prop_ci_up",
     "alpha", "alpha_se", "alpha_ci_lo", "alpha_ci_up",
+    "omega", "omega_se", "omega_ci_lo", "omega_ci_up",
     "icc", "icc_se", "icc_ci_lo", "icc_ci_up"
   ))
 
@@ -674,6 +675,7 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
                 mdw = "Within-group MD",
                 rp = "Partial r", zp = "Fisher's z of partial r",
                 prop = "Proportion", alpha = "Cronbach's alpha",
+                omega = "McDonald's omega",
                 icc = "ICC")
     if (m %in% names(labels)) labels[m] else m
   }

@@ -7,7 +7,8 @@
 convert_df(
   x,
   measure = c("d", "g", "md", "dw", "gw", "mdw", "logor", "logrr", "logirr", "loghr",
-    "nnt", "rd", "r", "z", "rp", "zp", "logvr", "logcvr", "prop", "alpha", "icc"),
+    "nnt", "rd", "r", "z", "rp", "zp", "logvr", "logcvr", "prop", "alpha", "omega",
+    "icc"),
   main_es = TRUE,
   es_selected = c("auto", "hierarchy", "minimum", "maximum"),
   selection_auto = c("crude", "paired", "adjusted"),
@@ -31,6 +32,7 @@ convert_df(
   pool_sd = FALSE,
   prop_to_es = "raw",
   alpha_to_es = "bonett",
+  omega_to_es = "bonett",
   icc_to_es = "bonett",
   correct_inputs = TRUE,
   flag_options = list()
@@ -134,7 +136,9 @@ assumes the two arms' true standardizing SDs are equal.
 
 \item{prop_to_es}{method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).}
 
-\item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha. Must be either "bonett" or "raw" (see \code{\link{es_from_cronbach_alpha}}).}
+\item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha. One of "bonett" (default, the variance-stabilising log(1 - alpha) transform), "raw", or "hakstian_whalen" (the cube-root transform Rodriguez & Maeda (2006) recommend and most published reliability-generalization syntheses use; stored in metafor's increasing orientation, matching measure = "AHW"). See \code{\link{es_from_cronbach_alpha}}.}
+
+\item{omega_to_es}{method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no closed-form sampling variance in (n, k): the standard error is taken from the reported omega_se or confidence interval.}
 
 \item{icc_to_es}{method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).}
 
@@ -191,6 +195,7 @@ Possible effect size measures are:
 \item risk difference ("rd")
 \item proportion ("prop")
 \item Cronbach's alpha ("alpha")
+\item McDonald's omega ("omega")
 \item intraclass correlation coefficient ("icc")
 }
 

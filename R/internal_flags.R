@@ -410,6 +410,10 @@
   .bounded_columns <- list(
     # alpha can be negative, only > 1 impossible (V25 warns on negatives)
     list(col = "cronbach_alpha",  lo = -Inf, up = 1, label = "alpha"),
+    # omega is a variance ratio, so it cannot exceed 1 in the population; an
+    # estimate above 1 is a Heywood case (negative estimated error variance) and
+    # is handled as UNUSUAL-and-preserved by es_from_omega(), not NA'd here.
+    list(col = "omega",           lo = -Inf, up = 1, label = "omega"),
     # icc bounded below by -1/(k-1) >= -1
     list(col = "icc",             lo = -1, up = 1, label = "ICC"),
     list(col = "prop",            lo = 0, up = 1, label = "proportion"),
@@ -1320,6 +1324,149 @@
     }
   }
 
+  # V36: RELIABILITY INDUCTION -- the same reliability coefficient reported by two
+  # DIFFERENT studies.
+  #
+  # "Reliability induction" (Vacha-Haase 1998; Vacha-Haase & Thompson 2011) is the
+  # central criticism of reliability-generalization work: a primary study reports the
+  # alpha printed in the test manual, or in the original validation paper, instead of
+  # computing alpha in its OWN sample. Those rows are not independent estimates of
+  # anything and must not be pooled -- the whole premise of RG is that reliability is a
+  # property of the scores in a sample, not a fixed property of the instrument.
+  #
+  # This is V23 applied to the reliability columns, and it needs its own entropy gate.
+  # V23 requires >= templated_min_match NON-INTEGER values in the matched block, which a
+  # reliability block can never supply: it has one continuous column (the coefficient)
+  # and one integer one (n_items). And alpha is usually printed to 2 decimals, where
+  # collisions are common by chance -- there are only ~30 plausible two-decimal values
+  # in [.70, .99], so in a 30-study pool a shared ".87" is unremarkable. Hussey et al.
+  # (2025) make the same point from the other side: alphas pile up at round thresholds.
+  #
+  # Two ways to clear the gate, both keyed on genuine improbability rather than on a
+  # count of decimals alone:
+  #   (a) the coefficient carries >= 3 decimals -- 0.8734 shared by two independent
+  #       samples is a near-certain copy;
+  #   (b) the coefficient carries >= 2 decimals AND n_sample is identical too -- two
+  #       different studies agreeing on BOTH alpha and N is far stronger evidence than
+  #       either alone, and is the signature of a manual-quoted value.
+  if (isTRUE(enable_cross_row) && n >= 2) {
+    rel_blocks <- list(
+      alpha = c(coef = "cronbach_alpha", n = "n_sample"),
+      omega = c(coef = "omega",          n = "n_sample"),
+      icc   = c(coef = "icc",            n = "n_sample")
+    )
+    sid_r <- if ("study_id" %in% colnames(x)) as.character(x[["study_id"]]) else rep(NA_character_, n)
+    for (bl in names(rel_blocks)) {
+      cc <- unname(rel_blocks[[bl]]["coef"])
+      nc <- unname(rel_blocks[[bl]]["n"])
+      if (!cc %in% colnames(x)) next
+      coef_v <- suppressWarnings(as.numeric(x[[cc]]))
+      n_v <- if (nc %in% colnames(x)) suppressWarnings(as.numeric(x[[nc]])) else rep(NA_real_, n)
+      ok <- which(is.finite(coef_v))
+      if (length(ok) < 2) next
+      for (key in unique(coef_v[ok][duplicated(coef_v[ok])])) {
+        grp <- ok[coef_v[ok] == key]
+        dec <- .count_decimals(key)
+        for (i in grp) {
+          others <- setdiff(grp, i)
+          # a repeated value WITHIN one study is legitimate (subscales, timepoints)
+          # and is Category H job; only cross-study repetition is induction
+          others <- others[is.na(sid_r[i]) | is.na(sid_r[others]) | sid_r[others] != sid_r[i]]
+          if (length(others) == 0) next
+          same_n <- others[is.finite(n_v[i]) & is.finite(n_v[others]) & n_v[others] == n_v[i]]
+          if (dec >= 3) {
+            why <- sprintf("to %d decimals", dec)
+            hit <- others
+          } else if (dec >= 2 && length(same_n) > 0) {
+            why <- sprintf("to %d decimals, and n_sample is identical too (%s)", dec,
+                           format(n_v[i], scientific = FALSE))
+            hit <- same_n
+          } else next
+          row_issues[[i]] <- c(row_issues[[i]], sprintf(
+            paste0("[INFO] Same %s (%s) reported by %s, %s. Reliability is a property of the ",
+                   "scores in a sample, so independent samples rarely reproduce a coefficient ",
+                   "exactly - check these studies computed it in their own data rather than ",
+                   "quoting a test manual or an earlier validation study (reliability induction). ",
+                   "Induced values are not independent estimates and should not be pooled"),
+            cc, format(key, scientific = FALSE),
+            paste(.row_ref(hit, sid_r), collapse = ", "), why))
+        }
+      }
+    }
+  }
+
+  # V37: the item count is not constant across a pool that shares one instrument.
+  #
+  # A reliability-generalization review is by construction about ONE questionnaire, and
+  # a questionnaire has a fixed number of items. A row whose n_items differs from its
+  # peers is therefore a short form, a different version, or a transcription slip -- and
+  # in all three cases it should not be pooled silently, because k enters the sampling
+  # variance of every transform (Bonett and Hakstian-Whalen alike).
+  #
+  # Nothing else can see this. n_items is only in .positive_columns() (which checks the
+  # sign), and the SE consequence is far too small for the D2 SE-outlier check: across
+  # ALL k the Bonett SE moves by at most sqrt(2), and an 8-vs-18 mix-up moves it 1.039x,
+  # well under D2 3x gate.
+  #
+  # FALSE-POSITIVE GUARD. A review may legitimately span several instruments, in which
+  # case k varies by design and this check is meaningless. So it fires only when there
+  # is a DOMINANT item count -- more than half the rows agreeing -- and then only on the
+  # rows that disagree with it. A pool with no majority k is treated as multi-instrument
+  # and left alone.
+  if (isTRUE(enable_cross_row) && n >= 3 && "n_items" %in% colnames(x)) {
+    k_v <- suppressWarnings(as.numeric(x[["n_items"]]))
+    ok <- which(is.finite(k_v) & k_v > 0)
+    if (length(ok) >= 3) {
+      tab <- table(k_v[ok])
+      modal_k <- as.numeric(names(tab)[which.max(tab)])
+      if (max(tab) > length(ok) / 2 && length(tab) > 1) {
+        for (i in ok[k_v[ok] != modal_k]) {
+          row_issues[[i]] <- c(row_issues[[i]], sprintf(
+            paste0("[UNUSUAL] Item count differs from the rest of the pool: n_items = %s ",
+                   "where %d of %d studies report %s. In a reliability-generalization review the ",
+                   "instrument is fixed, so this is a short form, a different version, or an ",
+                   "extraction error - k enters the sampling variance of every transform, so ",
+                   "verify it before pooling"),
+            format(k_v[i], scientific = FALSE), max(tab), length(ok),
+            format(modal_k, scientific = FALSE)))
+        }
+      }
+    }
+  }
+
+  # V38: a pool mixing different omegas.
+  #
+  # omega_type is an ESTIMAND, not a label. omega_total is the proportion of total
+  # score variance due to ALL common factors; omega_hierarchical is the proportion due
+  # to the GENERAL factor alone and is systematically smaller; omega_asymptotic and
+  # subscale omegas are different quantities again. Averaging them produces a number
+  # that estimates none of them.
+  #
+  # This is the omega analogue of E6 (mixed SMD standardizers) and E8 (mixed z
+  # transforms), and it belongs at Tier 1 because it is a property of the INPUT: the
+  # estimand is fixed by what the primary study reported, not by any conversion the
+  # package performs. Always active (no enable_cross_row gate) -- unlike the induction
+  # and item-count checks, this one cannot false-fire, since two different omega_type
+  # values in one pool are different estimands by definition.
+  if (n >= 2 && "omega_type" %in% colnames(x) && "omega" %in% colnames(x)) {
+    ot <- as.character(x[["omega_type"]])
+    om <- suppressWarnings(as.numeric(x[["omega"]]))
+    ot[is.na(ot) & is.finite(om)] <- "total"
+    present <- unique(ot[is.finite(om) & !is.na(ot)])
+    if (length(present) > 1) {
+      for (i in which(is.finite(om) & !is.na(ot))) {
+        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+          paste0("[UNUSUAL] Pool mixes omega estimands: this row reports omega_type = ",
+                 "'%s' while the pool also contains '%s'. omega_total (all common ",
+                 "factors) and omega_hierarchical (general factor only) answer different ",
+                 "questions and omega_h is systematically smaller, so their average ",
+                 "estimates neither - split the analysis by omega_type, or enter it as a ",
+                 "moderator and report the contrast"),
+          ot[i], paste(setdiff(present, ot[i]), collapse = "', '")))
+      }
+    }
+  }
+
   # V35: 2x2 event rates spanning a wide range in a correlation pool.
   #
   # This is a DISCLOSURE about the tetrachoric route's precision, not a data error and
@@ -1928,7 +2075,9 @@
                                 info_used = NULL,
                                 n_exp = NULL, n_nexp = NULL,
                                 exp = FALSE,
-                                prop_to_es = "raw") {
+                                prop_to_es = "raw",
+                                alpha_to_es = "bonett",
+                                icc_to_es = "bonett") {
   n <- length(es)
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
@@ -1985,22 +2134,29 @@
                " (threshold: ", opts$n_min, ")"))
     }
 
-    # C7: Near-perfect Cronbach's alpha (raw scale only: ES in (0, 1])
-    if (measure == "alpha" &&
-        !is.na(es[i]) && is.finite(es[i]) &&
-        es[i] > 0 && es[i] <= 1 && es[i] > opts$alpha_max) {
-      flags[[i]] <- c(flags[[i]],
-        paste0("[UNUSUAL] Near-perfect alpha: ", round(es[i], 3),
-               " (threshold: ", opts$alpha_max, ")", msuf))
+    # C7: Near-perfect Cronbach's alpha. Compared on the COEFFICIENT scale, not
+    # the analysis scale: the old `es > 0 && es <= 1` guard is unreachable under
+    # the Bonett default (ln(1 - alpha) is negative for every valid alpha), so
+    # this check was dead exactly where it was needed -- and worse, the Bonett
+    # values that DID satisfy it, (0.99, 1], are strongly NEGATIVE alphas, which
+    # it then announced as "near-perfect".
+    if (measure == "alpha" && !is.na(es[i]) && is.finite(es[i])) {
+      a_raw <- .to_reliability_scale(es[i], alpha_to_es)
+      if (is.finite(a_raw) && a_raw > 0 && a_raw <= 1 && a_raw > opts$alpha_max) {
+        flags[[i]] <- c(flags[[i]],
+          paste0("[UNUSUAL] Near-perfect alpha: ", round(a_raw, 3),
+                 " (threshold: ", opts$alpha_max, ")", msuf))
+      }
     }
 
-    # C8: Near-perfect ICC (raw scale only: ES in (0, 1])
-    if (measure == "icc" &&
-        !is.na(es[i]) && is.finite(es[i]) &&
-        es[i] > 0 && es[i] <= 1 && es[i] > opts$icc_max) {
-      flags[[i]] <- c(flags[[i]],
-        paste0("[UNUSUAL] Near-perfect ICC: ", round(es[i], 3),
-               " (threshold: ", opts$icc_max, ")", msuf))
+    # C8: Near-perfect ICC. Same coefficient-scale comparison as C7.
+    if (measure == "icc" && !is.na(es[i]) && is.finite(es[i])) {
+      i_raw <- .to_reliability_scale(es[i], icc_to_es)
+      if (is.finite(i_raw) && i_raw > 0 && i_raw <= 1 && i_raw > opts$icc_max) {
+        flags[[i]] <- c(flags[[i]],
+          paste0("[UNUSUAL] Near-perfect ICC: ", round(i_raw, 3),
+                 " (threshold: ", opts$icc_max, ")", msuf))
+      }
     }
 
     # C9: Extreme transformed proportion (logit or Freeman-Tukey scale)
@@ -2918,7 +3074,8 @@
                                   prop_to_es = prop_to_es)
   f_c <- .flag_plausibility(es, se, measure, opts, n_sample, info_used,
                             n_exp = n_exp_vec, n_nexp = n_nexp_vec,
-                            exp = exp, prop_to_es = prop_to_es)
+                            exp = exp, prop_to_es = prop_to_es,
+                            alpha_to_es = alpha_to_es, icc_to_es = icc_to_es)
   sd_exp_vec  <- if ("mean_sd_exp"  %in% colnames(raw_data)) {
     suppressWarnings(as.numeric(raw_data$mean_sd_exp[match(res$row_id, raw_data$row_id)]))
   } else NULL

@@ -443,6 +443,15 @@
     ),
 
     # psychometric
+    # omega alone is not enough: without a reported SE (or CI) there is no
+    # aggregate-data sampling variance for omega, so the row cannot be pooled.
+    # Listing omega_se as "shared" makes a bare-omega row a NEAR MISS, so the
+    # user is told what to add instead of getting the generic
+    # "No partial input data found" fallback.
+    omega = list(
+      specific = c("omega"),
+      shared = c("omega_se")
+    ),
     cronbach_alpha = list(
       specific = c("cronbach_alpha"),
       shared   = c("n_sample", "n_items")
@@ -579,6 +588,7 @@
     prop_single_group_counts        = "Cases + total (counts)",
 
     cronbach_alpha                  = "Cronbach's alpha (direct input)",
+    omega                           = "McDonald's omega (needs omega_se on the natural scale, or omega_ci_lo + omega_ci_up)",
     icc                             = "ICC (direct input)",
     spearman_r                      = "Spearman correlation (converted to Pearson)"
   )
@@ -642,6 +652,8 @@
     return(c(prop_sg, "user_input_crude"))
   } else if (measure == "alpha") {
     return(c("cronbach_alpha", "user_input_crude"))
+  } else if (measure == "omega") {
+    return(c("omega", "user_input_crude"))
   } else if (measure == "icc") {
     return(c("icc", "user_input_crude"))
   } else if (measure %in% c("hr", "loghr")) {
@@ -858,7 +870,7 @@
   # identity (see .user_passthrough_blocked() in R/es_from_USER.R), so telling a
   # user to complete their user_es_* columns would send them to a dead end --
   # the row would come back NA with a warning either way.
-  if (!is.null(object) && measure %in% c("alpha", "icc", "prop")) {
+  if (!is.null(object) && measure %in% c("alpha", "omega", "icc", "prop")) {
     blocked <- .user_passthrough_blocked(
       measure,
       alpha_to_es = if (is.null(attr(object, "alpha_to_es"))) "bonett" else attr(object, "alpha_to_es"),

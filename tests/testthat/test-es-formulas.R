@@ -77,7 +77,7 @@ test_that("scale-changing parameters report values but no range", {
   expect_true(all(is.na(fx$deviation)))
   expect_true(all(is.na(attr(fx, "summary")$spread)))
   # the values themselves are still reported
-  expect_equal(sort(unique(fx$formula)), c("bonett", "raw"))
+  expect_equal(sort(unique(fx$formula)), c("bonett", "hakstian_whalen", "raw"))
   expect_true(all(is.finite(fx$es)))
 })
 

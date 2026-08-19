@@ -33,6 +33,7 @@
     ("rd_se" %in% colnames(x) & !is.na(x$rd) & !is.na(x$rd_se)) |
     ("prop_se" %in% colnames(x) & !is.na(x$prop) & !is.na(x$prop_se)) |
     ("alpha_se" %in% colnames(x) & !is.na(x$alpha) & !is.na(x$alpha_se)) |
+    ("omega_se" %in% colnames(x) & !is.na(x$omega) & !is.na(x$omega_se)) |
     ("icc_se" %in% colnames(x) & !is.na(x$icc) & !is.na(x$icc_se)))
   info <- rep(NA, nrow(x))
   if (length(row) > 0) {
@@ -265,6 +266,13 @@
       x$value_ci_up <- x$prop_ci_up
     } else {
       x$value <- x$se_value <- x$value_ci_lo <- x$value_ci_up <- rep(NA_real_, nrow(x))
+    }
+  } else if (measure == "omega") {
+    if ("omega" %in% colnames(x)) {
+      x$value <- x$omega
+      x$se_value <- x$omega_se
+      x$value_ci_lo <- x$omega_ci_lo
+      x$value_ci_up <- x$omega_ci_up
     }
   } else if (measure == "alpha") {
     if ("alpha" %in% colnames(x)) {

@@ -69,7 +69,8 @@
 #' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance. Only the endpoint means family (es_from_means_sd/se/ci) honours this argument: rows whose effect size comes from any other method (t/F, cohen_d/hedges_g, eta-squared, point-biserial r, medians/ranges, plots, ANCOVA, raw mean differences) always use the pooled-SD standardizer, and a message lists the scoping when a non-pooled value is requested ("glass_robust" additionally has a single variance form, so smd_var is ignored for it).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
 #' @param prop_to_es method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).
-#' @param alpha_to_es method used to compute the effect size from Cronbach's alpha. Must be either "bonett" or "raw" (see \code{\link{es_from_cronbach_alpha}}).
+#' @param alpha_to_es method used to compute the effect size from Cronbach's alpha. One of "bonett" (default, the variance-stabilising log(1 - alpha) transform), "raw", or "hakstian_whalen" (the cube-root transform Rodriguez & Maeda (2006) recommend and most published reliability-generalization syntheses use; stored in metafor's increasing orientation, matching measure = "AHW"). See \code{\link{es_from_cronbach_alpha}}.
+#' @param omega_to_es method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no closed-form sampling variance in (n, k): the standard error is taken from the reported omega_se or confidence interval.
 #' @param icc_to_es method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).
 #' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).
 #' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
@@ -111,6 +112,8 @@
 #' 18. risk difference ("rd")
 #' 19. proportion ("prop")
 #' 20. Cronbach's alpha ("alpha")
+#'
+#' 21. McDonald's omega ("omega")
 #' 21. intraclass correlation coefficient ("icc")
 #'
 #' The hazard ratio is estimated from a user-reported effect size only
@@ -313,7 +316,7 @@
 convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                                       "logor", "logrr", "logirr", "loghr",
                                       "nnt", "rd", "r", "z", "rp", "zp",
-                                      "logvr", "logcvr", "prop", "alpha", "icc"),
+                                      "logvr", "logcvr", "prop", "alpha", "omega", "icc"),
                        main_es = TRUE,
                        es_selected = c("auto", "hierarchy", "minimum", "maximum"),
                        selection_auto = c("crude", "paired", "adjusted"),
@@ -337,6 +340,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                        pool_sd = FALSE,
                        prop_to_es = "raw",
                        alpha_to_es = "bonett",
+                       omega_to_es = "bonett",
                        icc_to_es = "bonett",
                        correct_inputs = TRUE,
                        flag_options = list()) {
@@ -538,8 +542,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
 
   if (verbose) message("Calculations in progress, it may take up to 30 sec...")
   measure = tolower(measure)
-  if (!measure %in% c("d", "g", "md", "dw", "gw", "mdw", "r", "z", "rp", "zp", "or", "rr", "irr", "hr", "logor", "logrr", "logirr", "loghr", "logvr", "logcvr", "nnt", "rd", "prop", "alpha", "icc")) {
-    stop(paste0("'", measure, "' not in tolerated measures. Possible inputs are: 'md', 'd', 'g', 'dw', 'gw', 'mdw', 'or', 'rr', 'irr', 'hr', 'logor', 'logrr', 'logirr', 'loghr', 'r', 'z', 'rp', 'zp', 'logvr', 'logcvr', 'nnt', 'rd', 'prop', 'alpha', 'icc'"))
+  if (!measure %in% c("d", "g", "md", "dw", "gw", "mdw", "r", "z", "rp", "zp", "or", "rr", "irr", "hr", "logor", "logrr", "logirr", "loghr", "logvr", "logcvr", "nnt", "rd", "prop", "alpha", "omega", "icc")) {
+    stop(paste0("'", measure, "' not in tolerated measures. Possible inputs are: 'md', 'd', 'g', 'dw', 'gw', 'mdw', 'or', 'rr', 'irr', 'hr', 'logor', 'logrr', 'logirr', 'loghr', 'r', 'z', 'rp', 'zp', 'logvr', 'logcvr', 'nnt', 'rd', 'prop', 'alpha', 'omega', 'icc'"))
   } else if (!split_adjusted %in% c(TRUE, FALSE)) {
     stop(paste0("'", split_adjusted, "' not in tolerated values for the 'split_adjusted' argument. Should be a logical value (TRUE/FALSE)"))
   } else if (!format_adjusted %in% c("wide", "long")) {
@@ -959,6 +963,12 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   ))
 
   # CRONBACH'S ALPHA -----------------------------------------
+  es_omega_sg <- with(x, es_from_omega(
+    omega = omega, omega_se = omega_se,
+    omega_ci_lo = omega_ci_lo, omega_ci_up = omega_ci_up,
+    n_sample = n_sample, n_items = n_items,
+    omega_type = omega_type, omega_to_es = omega_to_es
+  ))
   es_alpha_sg <- with(x, es_from_cronbach_alpha(
     cronbach_alpha = cronbach_alpha, n_sample = n_sample,
     n_items = n_items, alpha_to_es = alpha_to_es
@@ -1488,6 +1498,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                        es_prop_counts_sg = es_prop_counts_sg)
 
   alpha_list_L28 = list(es_alpha_sg = es_alpha_sg)
+  omega_list_L31 = list(es_omega_sg = es_omega_sg)
 
   icc_list_L29 = list(es_icc_sg = es_icc_sg)
 
@@ -1612,6 +1623,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
 
     } else if (measure == "alpha") {
       res = c(USER_crude, alpha_list_L28)
+    } else if (measure == "omega") {
+      res = c(USER_crude, omega_list_L31)
 
     } else if (measure == "icc") {
       res = c(USER_crude, icc_list_L29)
@@ -1627,6 +1640,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
       res = c(USER_crude, prop_list_L26)
     } else if (measure == "alpha") {
       res = c(USER_crude, alpha_list_L28)
+    } else if (measure == "omega") {
+      res = c(USER_crude, omega_list_L31)
     } else if (measure == "icc") {
       res = c(USER_crude, icc_list_L29)
     } else if (measure %in% c("rp", "zp")) {
@@ -1716,7 +1731,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     9
   } else if (measure == "prop") {
     3
-  } else if (measure %in% c("alpha", "icc", "loghr", "hr")) {
+  } else if (measure %in% c("alpha", "omega", "icc", "loghr", "hr")) {
     2
   } else if (measure %in% c("rp", "zp")) {
     5
@@ -1742,6 +1757,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   # rows where r_pre_post was defaulted (used by the summary flags)
   attr(res, "r_defaulted") <- .r_defaulted
   attr(res, "alpha_to_es") <- alpha_to_es
+  attr(res, "omega_to_es") <- omega_to_es
   attr(res, "icc_to_es") <- icc_to_es
   attr(res, "prop_to_es") <- prop_to_es
   # standardizer used by the pre/post routes (drives the E6/E7 mixing flags)
@@ -1763,7 +1779,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     smd_denom = smd_denom, pre_post_to_smd = pre_post_to_smd,
     r_pre_post = r_pre_post[1], cor_to_smd = cor_to_smd, unit_type = unit_type,
     yates_chisq = yates_chisq, pool_sd = pool_sd, prop_to_es = prop_to_es,
-    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es,
+    alpha_to_es = alpha_to_es, omega_to_es = omega_to_es, icc_to_es = icc_to_es,
     max_asymmetry = max_asymmetry, correct_inputs = correct_inputs,
     selection_auto = selection_auto
   )

@@ -1,5 +1,83 @@
 # metaConvert (development version)
 
+## Reliability generalization: McDonald's omega, the Hakstian-Whalen transform, and three RG-specific checks
+
+A reliability-generalization (RG) review pools **reliability coefficients** for one
+instrument and asks what moves them (language, population, test length). Five gaps
+stood between metaConvert and that workflow.
+
+**`measure = "omega"` -- McDonald's omega is now a first-class route**
+(`es_from_omega()`, new `R/es_from_OMEGA.R`). Neither metaConvert nor `metafor`
+supported omega before, so this is a genuine addition rather than a wrapper.
+
+Its design differs from alpha's for a real statistical reason. Both alpha variances
+descend from the Feldt (1965) / Kristof (1963) result that `(1 - r)/(1 - alpha)` is
+distributed as F, which holds only under **essential tau-equivalence** -- and omega
+exists precisely to drop that assumption. There is no `(n, k)`-only replacement:
+omega's asymptotic variance needs the covariance matrix of the estimated loadings and
+error variances (Raykov 2002), and the recommended interval is a bootstrap one from raw
+data (Kelley & Pornprasertmanit 2016). So the uncertainty is taken from what the study
+reported -- `omega_se` (natural scale, delta-mapped) or `omega_ci_lo`/`omega_ci_up`
+(read at the **bounds**, so an asymmetric BCa interval maps correctly). A bare omega
+keeps its point estimate with `se = NA`: the study stays visible and countable but is
+not pooled, which is the honest outcome. New columns `omega`, `omega_se`,
+`omega_ci_lo`, `omega_ci_up`, `omega_type`; new `omega_to_es` argument mirroring
+`alpha_to_es`. Heywood cases (`omega >= 1`, a negative estimated error variance) have
+no transform and return NA on the transformed scales, but are kept on `"raw"`.
+
+**`alpha_to_es = "hakstian_whalen"`** -- the cube-root transform Rodriguez & Maeda
+(2006) recommend and that most published RG syntheses use. Verified bit-exact against
+`metafor::escalc(measure = "AHW")` in both `yi` and `vi`. It is stored in metafor's
+**increasing** orientation `1 - (1 - alpha)^(1/3)` rather than Rodriguez & Maeda's
+decreasing `(1 - alpha)^(1/3)`, so `metafor::transf.iahw()` inverts our output
+correctly and moderator coefficients read in the same direction as alpha -- deliberately
+avoiding a second instance of the `transf.iabt` sign trap. The choice matters: Bonett's
+variance does not involve alpha, so two studies with the same `n` and `k` get
+**identical weight** whether alpha is .85 or .98, where Hakstian-Whalen gives a 3.83:1
+ratio. `reliability_backtransform()` gained the matching `method`.
+
+**C7/C8 (near-perfect alpha/ICC) were dead code, and also misfiring.** Both were
+guarded by `es > 0 && es <= 1`, which the always-negative Bonett scale can never
+satisfy -- so the only two reliability-specific magnitude checks were silent under the
+shipped default. Worse, the Bonett values that *did* satisfy the guard, `(0.99, 1]`,
+correspond to strongly **negative** alphas around -1.7, which the check then announced
+as "Near-perfect alpha: 0.99". Both now back-transform to the coefficient scale before
+comparing (`.to_reliability_scale()`), so they fire correctly on every scale and the
+misfire is gone. `alpha_to_es` / `icc_to_es` are threaded into `.flag_plausibility()`.
+
+**V36 -- reliability induction** (`[INFO]`). A primary study reporting the alpha printed
+in the test manual, rather than computing it in its own sample, is the central criticism
+of RG work (Vacha-Haase 1998): such rows are not independent estimates and must not be
+pooled. It shows up as the same coefficient in two **different** studies. This is V23
+applied to the reliability columns, and it needs its own entropy gate, because V23
+requires >= 3 non-integer values in the matched block and a reliability block has only
+one continuous column. Two ways to clear it: the coefficient carries **>= 3 decimals**,
+or it carries >= 2 decimals **and `n_sample` is identical too**. A bare shared ".87"
+with different Ns is left alone -- there are only ~30 plausible two-decimal values in
+[.70, .99], so those collide by chance. Repetition *within* one `study_id` stays
+Category H's job.
+
+**V37 -- item-count constancy** (`[UNUSUAL]`). An RG review is about one questionnaire,
+and a questionnaire has a fixed number of items, so a row whose `n_items` differs from
+its peers is a short form, a different version, or a typo -- and `k` enters the sampling
+variance of every transform. Nothing else could see this: `n_items` was only checked for
+sign, and the SE consequence is far too small for the D2 outlier check (an 8-vs-18
+mix-up moves the Bonett SE by 1.039x, against D2's 3x gate). Guarded against
+multi-instrument reviews: it fires only when **more than half** the rows agree on a
+value, and then only on the rows that disagree.
+
+**V38 -- mixed omega estimands** (`[UNUSUAL]`). `omega_total` (all common factors) and
+`omega_hierarchical` (general factor only, systematically smaller) answer different
+questions, so a pool mixing them estimates neither. The omega analogue of E6/E8, at
+Tier 1 because the estimand is fixed by what the study reported.
+
+The Psychometrics vignette gains sections on choosing the transform, on omega, and on
+two things **not** to report for a reliability pool: `I^2` (the Bonett variance is
+alpha-free, so `I^2` tracks the sample sizes -- one fixed set of alphas in [.80, .86]
+gives 0% at n = 50 and 97% at n = 5000) and funnel-based publication-bias tests (alpha's
+expectation does not depend on n, so asymmetry is uninterpretable).
+
+
 ## Four blocking defects in the reliability (alpha / ICC) path
 
 Found while assessing the package end-to-end for a Cronbach's alpha

@@ -508,6 +508,14 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "Cronbach's alpha reliability coefficient - numeric",
       "number of items in the scale - numeric")
 
+    cols_omega = c("omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type")
+    inf_omega = c(
+      "McDonald's omega reliability coefficient (natural scale) - numeric",
+      "standard error of omega, ON THE NATURAL SCALE - numeric",
+      "lower bound of the 95% CI of omega (natural scale) - numeric",
+      "upper bound of the 95% CI of omega (natural scale) - numeric",
+      "which omega: 'total' (default), 'hierarchical', 'asymptotic' or 'subscale' - character")
+
     cols_icc = c("icc", "n_measurements", "icc_type")
     inf_icc = c(
       "intraclass correlation coefficient - numeric",
@@ -695,6 +703,11 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       dat = data.frame(t(c(inf_req, inf_sample, inf_alpha, inf_input_crude, inf_input_adjusted)))
       colnames(dat) <- c(cols_req, cols_sample, cols_alpha, cols_input_crude, cols_input_adjusted)
 
+    } else if (measure == "omega") {
+
+      dat = data.frame(t(c(inf_req, inf_sample, inf_omega, inf_input_crude, inf_input_adjusted)))
+      colnames(dat) <- c(cols_req, cols_sample, cols_omega, cols_input_crude, cols_input_adjusted)
+
     } else if (measure == "icc") {
 
       dat = data.frame(t(c(inf_req, inf_sample, inf_icc, inf_input_crude, inf_input_adjusted)))
@@ -712,7 +725,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
                            inf_sample, inf_r,
                            inf_irr,
                            inf_prop_single,
-                           inf_alpha, inf_icc,
+                           inf_alpha, inf_omega, inf_icc,
                            inf_input_crude, inf_input_adjusted)))
       colnames(dat) <- c(cols_req, cols_exposed, cols_means_post,
                          cols_md, cols_anova, cols_regression,
@@ -725,7 +738,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
                          cols_sample, cols_r,
                          cols_irr,
                          cols_prop_single,
-                         cols_alpha, cols_icc,
+                         cols_alpha, cols_omega, cols_icc,
                          cols_input_crude, cols_input_adjusted)
 
     }

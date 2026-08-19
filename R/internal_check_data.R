@@ -177,6 +177,7 @@
     "reverse_spearman_r", "spearman_r",
     # psychometrics
     "cronbach_alpha", "n_items",
+    "omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type",
     "icc", "n_measurements", "icc_type",
     "discard",
     # multi-arm trial pooling
@@ -214,6 +215,10 @@
   # is a harmless belt-and-braces guard (kept for symmetry).
   expected_cols_type[which(expected_cols == "n_measurements")] <- "numeric"
   expected_cols_type[which(expected_cols == "n_items")] <- "numeric"
+  # omega_type is a character estimand label; without this override the automatic
+  # grepl() detection types it numeric and every value becomes NA (same reason
+  # n_items / n_measurements need explicit overrides).
+  expected_cols_type[which(expected_cols == "omega_type")] <- "char"
   expected_cols_type[which(expected_cols == "pool_side")] <- "char"
   # per-row Yates flag for chi-square back-derivation
   expected_cols_type[which(expected_cols == "yates_chisq")] <- "logical"

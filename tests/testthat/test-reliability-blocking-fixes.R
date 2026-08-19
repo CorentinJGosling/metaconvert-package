@@ -223,7 +223,7 @@ test_that("reliability_backtransform does not clamp a negative reliability", {
 })
 
 test_that("reliability_backtransform validates its arguments", {
-  expect_error(reliability_backtransform(1, method = "hakstian_whalen"), "method")
+  expect_error(reliability_backtransform(1, method = "fisher_z"), "method")
   expect_error(reliability_backtransform(c(1, 2, 3), ci_lo = c(1, 2)), "ci_lo")
   expect_true(all(is.na(reliability_backtransform(c(-1, -2))$reliability_ci_lo)))
 })

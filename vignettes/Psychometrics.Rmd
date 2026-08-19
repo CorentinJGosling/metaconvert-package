@@ -232,6 +232,87 @@ A caution on heterogeneity: do **not** read $I^2$ here as "these alphas disagree
 
 The pooled reliability estimate can later serve as input for **disattenuation corrections** in criterion validity, construct validity, and responsiveness analyses (see below).
 
+## Choosing the transformation
+
+`alpha_to_es` offers three scales, and the choice is not cosmetic.
+
+| `alpha_to_es` | stores | sampling variance | notes |
+|:---|:---|:---|:---|
+| `"bonett"` (default) | $\ln(1-\alpha)$ | $2k/((k-1)(n-2))$ | does **not** involve $\alpha$ |
+| `"hakstian_whalen"` | $1-(1-\alpha)^{1/3}$ | $18k(n-1)(1-\alpha)^{2/3}/((k-1)(9n-11)^2)$ | involves $\alpha$ |
+| `"raw"` | $\alpha$ | $(1-\alpha)^2 \cdot 2k/((k-1)(n-2))$ | skewed near 1; not recommended |
+
+Because the Bonett variance is free of $\alpha$, two studies with the same $n$ and the same $k$ receive **identical weight** whether their alpha is .85 or .98. The Hakstian--Whalen variance does involve $\alpha$ and separates them --- a 3.83:1 weight ratio at $n = 200$, $k = 10$:
+
+```{r}
+wr <- function(m) {
+  x <- es_from_cronbach_alpha(c(0.85, 0.98), n_sample = 200, n_items = 10, alpha_to_es = m)
+  (x$alpha_se[1] / x$alpha_se[2])^2
+}
+c(bonett = wr("bonett"), hakstian_whalen = wr("hakstian_whalen"))
+```
+
+Hakstian & Whalen (1976) is the transformation Rodriguez & Maeda (2006) recommend and that most published **reliability-generalization** syntheses use, so choose it when you need to reproduce or audit that literature. It is stored in `metafor`'s increasing orientation (identical to `measure = "AHW"` in both `yi` and `vi`), so higher values mean higher reliability and moderator coefficients read in the same direction as alpha. Only the Bonett scale swaps the confidence bounds on back-transformation; `reliability_backtransform()` handles both.
+
+## Heterogeneity, and what not to report
+
+Two cautions specific to reliability pools, neither of which the package can enforce for you.
+
+**$I^2$ is not "how much these alphas disagree".** Under the default Bonett scale the sampling variance $2k/((k-1)(n-2))$ does not involve alpha, so $I^2$ is largely a function of the sample sizes. Holding one fixed set of alphas between .80 and .86 and varying only $n$:
+
+```{r}
+a <- c(.80, .82, .83, .84, .85, .86)
+sapply(c(50, 200, 1000, 5000), function(n) {
+  e <- es_from_cronbach_alpha(a, n_sample = n, n_items = 10)
+  round(metafor::rma(yi = e$alpha, sei = e$alpha_se, method = "REML")$I2, 1)
+})
+```
+
+Same alphas throughout. Report the back-transformed **prediction interval** and the observed spread of alphas instead.
+
+**Do not run funnel plots, trim-and-fill, or Egger's test on this pool.** Those diagnostics assume the effect's expectation depends on the sample size; the expectation of alpha does not (only its precision does), so an asymmetry test is not interpretable here. Edelsbrunner et al. (2025) found trim-and-fill pointing in the *opposite* direction to three valid non-funnel diagnostics on the same data. The reliability-generalization analogue of publication bias is **selective reporting of reliability** --- compare the characteristics of studies that did and did not report alpha at all --- and **reliability induction**, which `summary(flags = TRUE)` screens for automatically.
+
+# McDonald's omega
+
+Omega is increasingly recommended over alpha because it does not assume essential tau-equivalence (equal true-score loadings). That same freedom is why it is entered differently.
+
+**Omega has no closed-form sampling variance in $(n, k)$.** Both alpha variances above descend from the Feldt (1965) / Kristof (1963) result that $(1-r)/(1-\alpha)$ is distributed as $F$, which holds *only* under tau-equivalence. Omega's asymptotic variance depends on the full covariance matrix of the estimated factor loadings and error variances (Raykov, 2002), which primary studies never print, and the recommended interval is a bootstrap one computed from raw data (Kelley & Pornprasertmanit, 2016). So `es_from_omega()` takes the uncertainty **from what the study reported** --- `omega_se` (on the natural scale) or `omega_ci_lo` / `omega_ci_up`:
+
+```{r}
+dat_omega <- data.frame(
+  study_id    = paste0("S", 1:4),
+  omega       = c(0.86, 0.91, 0.78, 0.88),
+  omega_se    = c(0.021, NA, 0.035, NA),
+  omega_ci_lo = c(NA, 0.87, NA, 0.84),
+  omega_ci_up = c(NA, 0.94, NA, 0.92),
+  omega_type  = "total",
+  n_sample    = c(300, 450, 180, 260),
+  n_items     = 12
+)
+res_omega <- convert_df(dat_omega, measure = "omega", verbose = FALSE,
+                        split_adjusted = FALSE)
+summary_omega <- summary(res_omega, digits = 15)
+ma_omega <- metafor::rma(yi = es, sei = se, data = summary_omega, method = "REML")
+reliability_backtransform(ma_omega)
+```
+
+A confidence interval is read at its **bounds**, not as a half-width, so an asymmetric bootstrap interval maps correctly (BCa is transformation-respecting). The interval is then summarised by one standard error, from which a symmetric Wald interval is rebuilt: the width is preserved, the asymmetry is not.
+
+A bare omega with neither an SE nor a CI keeps its point estimate and gets `se = NA`, so the study stays visible and countable in the pipeline (and in your reporting-rate accounting) but is not pooled. `summary(guidance = TRUE)` names what is missing.
+
+## Two things not to pool
+
+**`omega_type` is an estimand, not a label.** `"total"` is the proportion of variance due to all common factors; `"hierarchical"` is the proportion due to the *general* factor alone, and is systematically smaller. A pool mixing them is flagged:
+
+```{r}
+mixed <- data.frame(study_id = c("A", "B"), omega = c(0.86, 0.72), omega_se = 0.02,
+                    omega_type = c("total", "hierarchical"), n_sample = 300, n_items = 12)
+summary(convert_df(mixed, measure = "omega", verbose = FALSE, split_adjusted = FALSE),
+        flags = TRUE)$flags
+```
+
+**Do not pool omega with alpha.** Under a congeneric model $\omega_{total} \ge \alpha$, with equality only under exact tau-equivalence, so they are different quantities. There is a second reason specific to this package: alpha's standard errors are analytic functions of $(n, k)$ while omega's come from reported intervals, so the *weighting scheme* differs systematically by metric --- metric would be perfectly confounded with precision. Run two pools and report them side by side. If some studies report both, estimate the gap as a **within-study paired contrast** rather than by differencing two separately pooled means: the two coefficients are computed on the same data and are near-perfectly dependent, so treating the pools as independent badly understates the standard error of the difference.
+
 ## Alternative: raw alpha
 
 An alternative is to meta-analyse raw Cronbach's alpha values directly (`alpha_to_es = "raw"`), using the SE formula from Feldt et al. (1987). This is simpler to interpret but the sampling distribution may be skewed when alpha is close to 1. The Bonett transformation is generally recommended.

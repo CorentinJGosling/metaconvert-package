@@ -21,10 +21,12 @@
 # passthrough cannot be correct. Under `*_to_es = "raw"` the analysis scale IS
 # the coefficient scale and the passthrough is allowed unchanged.
 .user_passthrough_blocked <- function(target, alpha_to_es = "bonett",
-                                      icc_to_es = "bonett", prop_to_es = "raw") {
+                                      icc_to_es = "bonett", prop_to_es = "raw",
+                                      omega_to_es = "bonett") {
   if (length(target) != 1 || is.na(target) || !is.character(target)) return(FALSE)
   switch(target,
     "alpha" = !identical(as.character(alpha_to_es), "raw"),
+    "omega" = !identical(as.character(omega_to_es), "raw"),
     "icc"   = !identical(as.character(icc_to_es), "raw"),
     "prop"  = !identical(as.character(prop_to_es), "raw"),
     FALSE
@@ -43,6 +45,7 @@
 .user_passthrough_block_msg <- function(target, scale_arg, scale_val, n_rows, suffix) {
   native <- switch(target,
     "alpha" = "'cronbach_alpha' + 'n_sample' + 'n_items'",
+    "omega" = "'omega' + 'omega_se' (or 'omega_ci_lo' + 'omega_ci_up')",
     "icc"   = "'icc' + 'n_sample' + 'n_measurements'",
     "'prop' + 'n_sample'")
   paste0(

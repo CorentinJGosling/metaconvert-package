@@ -285,6 +285,20 @@ compute_sdc <- function(sem, sem_se) {
   return(result)
 }
 
+# Map ONE analysis-scale value back to the coefficient (alpha / ICC) scale.
+#
+# Shared by reliability_backtransform() and the Tier-2 magnitude flags, which
+# must compare against a threshold expressed in coefficient units. Doing that
+# comparison on the analysis scale is what made C7/C8 dead under the Bonett
+# default AND made C7 misfire: on that scale a STRONGLY NEGATIVE alpha maps to
+# ln(1 - alpha) in (0.99, 1], which satisfied the old `es > 0 && es <= 1` guard
+# and got reported as "Near-perfect alpha: 0.99".
+.to_reliability_scale <- function(es, scale) {
+  if (identical(scale, "bonett")) return(1 - exp(es))
+  if (identical(scale, "hakstian_whalen")) return(1 - (1 - es)^3)
+  es
+}
+
 #' Back-transform a pooled reliability estimate to the coefficient scale
 #'
 #' @param x a numeric vector of estimates on the analysis scale, OR an
@@ -296,7 +310,9 @@ compute_sdc <- function(sem, sem_se) {
 #'   \code{x} is an \code{rma} or \code{predict.rma} object.
 #' @param method the transformation that produced \code{x}, i.e. the value passed
 #'   as \code{alpha_to_es} / \code{icc_to_es} in \code{\link{convert_df}}. Must be
-#'   either \code{"bonett"} (default) or \code{"raw"}.
+#'   one of \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}.
+#'   Only the Bonett scale swaps the confidence bounds; the Hakstian-Whalen scale is
+#'   stored in metafor's increasing orientation and does not.
 #'
 #' @details
 #' Under the default \code{"bonett"} scale, \code{\link{convert_df}} returns
@@ -361,9 +377,9 @@ compute_sdc <- function(sem, sem_se) {
 #' }
 reliability_backtransform <- function(x, ci_lo, ci_up, method = "bonett") {
 
-  if (!method %in% c("bonett", "raw")) {
+  if (!method %in% c("bonett", "raw", "hakstian_whalen")) {
     stop(paste0("'", method, "' not in tolerated values for the 'method' argument. ",
-                "Possible inputs are: 'bonett', 'raw'"))
+                "Possible inputs are: 'bonett', 'raw', 'hakstian_whalen'"))
   }
 
   pi_lo <- NULL
@@ -429,11 +445,17 @@ reliability_backtransform <- function(x, ci_lo, ci_up, method = "bonett") {
   if (length(ci_up) != length(x)) stop("The length of the 'ci_up' argument is incorrectly specified.")
 
   # bonett: 1 - exp(t) is DECREASING, so the transformed-scale upper bound is the
-  # reliability-scale LOWER bound. raw: identity, bounds keep their roles.
+  # reliability-scale LOWER bound -- the bounds swap. hakstian_whalen is stored in
+  # metafor's INCREASING orientation, so its inverse 1 - (1 - t)^3 keeps the bounds
+  # in place (identical to metafor::transf.iahw). raw: identity.
   if (method == "bonett") {
     bt <- function(t) 1 - exp(t)
     out_lo <- bt(ci_up)
     out_up <- bt(ci_lo)
+  } else if (method == "hakstian_whalen") {
+    bt <- function(t) 1 - (1 - t)^3
+    out_lo <- bt(ci_lo)
+    out_up <- bt(ci_up)
   } else {
     bt <- function(t) t
     out_lo <- ci_lo
@@ -452,12 +474,14 @@ reliability_backtransform <- function(x, ci_lo, ci_up, method = "bonett") {
   if (!is.null(pi_lo) && length(pi_lo) != length(x)) { pi_lo <- NULL; pi_up <- NULL }
 
   if (!is.null(pi_lo)) {
+    # bt() must be applied on every scale (it is the identity for "raw"); only
+    # the decreasing bonett map additionally swaps the two bounds.
     if (method == "bonett") {
       result$reliability_pi_lo <- bt(pi_up)
       result$reliability_pi_up <- bt(pi_lo)
     } else {
-      result$reliability_pi_lo <- pi_lo
-      result$reliability_pi_up <- pi_up
+      result$reliability_pi_lo <- bt(pi_lo)
+      result$reliability_pi_up <- bt(pi_up)
     }
   }
 

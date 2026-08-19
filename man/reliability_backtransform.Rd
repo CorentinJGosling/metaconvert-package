@@ -19,7 +19,9 @@ reliability_backtransform(x, ci_lo, ci_up, method = "bonett")
 
 \item{method}{the transformation that produced \code{x}, i.e. the value passed
 as \code{alpha_to_es} / \code{icc_to_es} in \code{\link{convert_df}}. Must be
-either \code{"bonett"} (default) or \code{"raw"}.}
+one of \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}.
+Only the Bonett scale swaps the confidence bounds; the Hakstian-Whalen scale is
+stored in metafor's increasing orientation and does not.}
 }
 \value{
 A data.frame with the back-transformed reliability and its interval

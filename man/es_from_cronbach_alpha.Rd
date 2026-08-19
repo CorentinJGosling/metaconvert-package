@@ -19,7 +19,7 @@ es_from_cronbach_alpha(
 \item{n_items}{number of items in the scale}
 
 \item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha.
-Must be either \code{"bonett"} or \code{"raw"}.}
+Must be one of \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}.}
 }
 \value{
 This function estimates the standard error of the Cronbach's alpha.
@@ -51,9 +51,37 @@ the form implemented by \code{metafor}'s \code{measure = "ARAW"}):
 Note that Feldt et al.'s (1987) classical asymptotic variance instead uses an
 \eqn{(n - 1)} denominator; the \eqn{(n - 2)} form above follows Bonett (2002)
 for consistency with the Bonett transformation used in method 1.
+\item When \code{alpha_to_es = "hakstian_whalen"}, the Hakstian & Whalen (1976)
+cube-root normalising transformation is applied. This is the transformation
+Rodriguez & Maeda (2006) recommend for the meta-analysis of coefficient alpha,
+and the one used by most published reliability-generalization syntheses:
+\deqn{T(lpha) = 1 - (1 - lpha)^{1/3}}
+\deqn{T\_var = rac{18 k (n - 1) (1 - lpha)^{2/3}}{(k - 1)(9n - 11)^2}}
+It derives from Paulson's (1942) normalising transformation of the \eqn{F}
+distribution applied to the Feldt (1965) / Kristof (1963) result that
+\eqn{(1 - r)/(1 - lpha)} is distributed as \eqn{F}.
 }
 
-The Bonett transformation stabilizes the variance and is recommended for meta-analysis.
+\strong{Orientation.} Rodriguez & Maeda write \eqn{T = (1 - lpha)^{1/3}},
+which \emph{decreases} in alpha; this function instead stores
+\eqn{1 - (1 - lpha)^{1/3}}, which \emph{increases} in alpha, matching
+\code{metafor}'s \code{measure = "AHW"} bit for bit (both \code{yi} and
+\code{vi}). The two differ by a constant, so the sampling variance is
+identical, but the increasing orientation means \code{metafor::transf.iahw()}
+back-transforms this output correctly and moderator coefficients read in the
+same direction as alpha. Contrast the Bonett scale, where metaConvert and
+metafor deliberately differ in sign (see \code{\link{reliability_backtransform}}).
+
+\strong{Choosing between them.} Bonett's standard error does not involve alpha
+at all, so two studies with the same \eqn{n} and \eqn{k} receive identical
+weight whether their alpha is .85 or .98; the Hakstian-Whalen variance does
+involve alpha and separates them (a 3.8:1 weight ratio at \eqn{n = 200},
+\eqn{k = 10}). Use \code{"hakstian_whalen"} to reproduce or audit the
+reliability-generalization method literature, and \code{"bonett"} (the
+default) otherwise.
+
+Both the Bonett and Hakstian-Whalen transformations stabilise the variance and
+are suitable for meta-analysis; the raw scale is not recommended.
 }
 \examples{
 es_from_cronbach_alpha(
@@ -63,6 +91,12 @@ es_from_cronbach_alpha(
 \references{
 Bonett, D. G. (2002). Sample size requirements for testing and estimating coefficient alpha.
 Journal of Educational and Behavioral Statistics, 27(4), 335-340.
+
+Hakstian, A. R., & Whalen, T. E. (1976). A k-sample significance test for independent
+alpha coefficients. Psychometrika, 41(2), 219-231.
+
+Rodriguez, M. C., & Maeda, Y. (2006). Meta-analysis of coefficient alpha.
+Psychological Methods, 11(3), 306-322.
 
 Feldt, L. S., Woodruff, D. J., & Salih, F. A. (1987). Statistical inference for coefficient alpha.
 Applied Psychological Measurement, 11(1), 93-103.

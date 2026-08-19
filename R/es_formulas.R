@@ -45,7 +45,7 @@
     smd_denom       = c("pooled", "glass", "glass_robust"),
     smd_var         = c("borenstein", "hedges_olkin"),
     prop_to_es      = c("raw", "logit", "freeman_tukey"),
-    alpha_to_es     = c("bonett", "raw"),
+    alpha_to_es     = c("bonett", "raw", "hakstian_whalen"),
     icc_to_es       = c("bonett", "raw")
   )
 }
@@ -202,7 +202,7 @@
 #'  \code{smd_denom} \tab pooled, glass (alias control), glass_robust (alias control_robust)\cr
 #'  \code{smd_var} \tab borenstein, hedges_olkin (alias viechtbauer)\cr
 #'  \code{prop_to_es} \tab raw, logit, freeman_tukey\cr
-#'  \code{alpha_to_es} \tab bonett, raw\cr
+#'  \code{alpha_to_es} \tab bonett, raw, hakstian_whalen\cr
 #'  \code{icc_to_es} \tab bonett, raw\cr
 #' }
 #' Options documented under two names are evaluated once, under the name listed
