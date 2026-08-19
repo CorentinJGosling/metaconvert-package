@@ -49,16 +49,23 @@ against the *other* estimand. That is the documented behaviour, not error. Study
 when correct); study 08's 0.65–1.62 tracks `r_guess − r_true` monotonically, centred
 on 1.005. Both are the misspecification surfaces working as designed.
 
-Confirmed at full grid: **`or_to_rr = "metaumbrella_exp"` has coverage 0.497** — the
-worst shipped option, and worse than the 0.756 seen on the smaller grid.
-`metafor_conv2x2` fails to reconstruct in up to 83% of a cell (negative discriminant).
-`grant`'s non-estimability reaches 0.620 in study 05 (`rr × br_guess ≥ 1`), now
-counted rather than silently dropped.
+Confirmed at full grid, and **now fixed**: `or_to_rr = "metaumbrella_exp"` had
+coverage **0.497** — the worst shipped option, worse than the 0.756 seen on the
+smaller grid. The cause was a non-identified 2x2 reconstruction (roadmap 1.1/1.8) and
+a rounding rule that destroyed continuity-corrected tables (roadmap 1.10). After both
+fixes its mean |bias| against the sample log RR is **exactly 0.00000** and its full-grid
+coverage is **0.976**; `metaumbrella_cases` is identical to it, because the two now
+solve the same table rather than searching for it.
+`metafor_conv2x2` still fails to reconstruct in up to 83% of a cell (negative
+discriminant; full-grid non-estimability 0.152). `grant`'s non-estimability reaches
+0.620 in study 05 (`rr × br_guess ≥ 1`), now counted rather than silently dropped.
 
 ### THREE THINGS THE NEXT PERSON SHOULD KNOW
 
-**1. Study 03's `nrep = 1000` files are stale.** They were produced before a fix and
-must be regenerated. The bug was in the *simulation*, not the package: the `(z)`
+**1. Study 03's `nrep = 1000` files WERE stale; they have been regenerated
+(roadmap 3.5), together with every other aggregate in `data/aggregated/`.** The
+history is kept because the lesson is general. The bug was in the *simulation*, not
+the package: the `(z)`
 routes were scored against `theta_pop = rho`, an r-scale target, so `atanh(rho) − rho`
 was being reported as bias. Proof: the correlation between `phi (z)`'s apparent bias
 and the pure scale gap was **0.9929**. After the fix (a scale-matched `theta_own`),
@@ -577,24 +584,39 @@ not documented in `?convert_df` and is a candidate metaDETECT check.
 
 ### Study 04/05 result: a no-go map for OR ⇄ RR
 
-Scored against the population log RR (nrep = 600, n = 300, correct baseline risk):
+Scored against the population log RR (nrep = 1000, n = 300, correct baseline risk),
+**after the 1.1 / 1.8 / 1.9 / 1.10 fixes**:
 
 | | br = 0.50 (common) | br = 0.15 |
 |---|---|---|
-| metaumbrella_cases | **−0.009** (cov 0.93) | **−0.028** (cov 0.96) |
-| dipietrantonj | −0.010 (0.93) | −0.028 (0.96) |
-| grant / Zhang-Yu | −0.017 (0.94) | −0.033 (0.96) |
-| **vanderweele √OR** | **+0.024 (0.93)** | +0.290 (0.64) |
-| metafor conv.2x2 | +0.022 (0.94) | +0.290 (0.37) |
-| metaumbrella_exp | +0.045 (0.90) | +0.471 (0.22) |
-| transpose (OR as RR) | **−0.239 (0.81)** | −0.114 (0.95) |
+| metaumbrella_cases | **−0.011** (cov 0.95) | **−0.018** (cov 0.96) |
+| metaumbrella_exp | **−0.011** (0.95) | **−0.018** (0.96) |
+| metafor conv.2x2 | −0.011 (0.95) | −0.016 (0.96) |
+| dipietrantonj | −0.012 (0.95) | −0.018 (0.96) |
+| grant / Zhang-Yu | −0.018 (0.95) | −0.025 (0.96) |
+| **vanderweele √OR** | **+0.141 (0.94)** | +0.153 (0.90) |
+| transpose (OR as RR) | **−0.311 (0.73)** | −0.030 (0.95) |
 
-Two headlines. **VanderWeele's √OR matches the baseline-risk-requiring methods for
-a common outcome while needing no baseline risk at all** — exactly its minimax
-claim — and degrades outside that regime. And **`metaumbrella_exp`, a shipped
-option, is the worst performer in both columns** (coverage 0.22–0.90), consistent
-with the legacy files' mean coverage of 0.756; the package offers two
-`metaumbrella` variants with very different reliability and says nothing about it.
+Three headlines, and the first two are changes from the pre-fix table.
+
+**`metaumbrella_exp` is no longer the worst performer — it is now identical to
+`metaumbrella_cases`.** Both previously searched for the 2x2 table; both now solve it,
+so they return the same table and the same answer. `metaumbrella_exp`'s old coverage of
+0.22 at br = 0.15 was the non-identified rotation (roadmap 1.1/1.8), and its residual
+bias after that fix was continuity-corrected tables being rounded to integers
+(roadmap 1.10). The sentence this README used to carry — "the package offers two
+`metaumbrella` variants with very different reliability and says nothing about it" —
+no longer describes the package.
+
+**VanderWeele's √OR still needs no baseline risk, but its interval is now the
+conservative one the paper actually prescribes** (roadmap 1.9): the previous arm built
+a symmetric interval, which VanderWeele (2020, p.748) explicitly rules out. Its point
+estimates are unchanged. Within the band the method is defined for — both outcome
+probabilities in [0.2, 0.8] — coverage is **0.996** at width 1.299; outside it,
+**0.941**. Read its coverage in those two regions separately, never pooled.
+
+**`transpose` remains the one clearly disqualifying choice for a common outcome**
+(bias −0.311, coverage 0.73 at br = 0.50).
 
 On misspecification (true br = 0.15, analyst guesses 0.50), **only Grant moves**
 (bias −0.033 → −0.293); `metaumbrella_*` and `dipietrantonj` are unchanged because

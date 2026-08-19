@@ -1073,14 +1073,87 @@ registered runner accepts `(nrep, cores)`.
 
 ---
 
-### 3.5 ☐ Regenerate stale aggregates
+### 3.5 ☑ Regenerate stale aggregates — DONE
 
-**Depends on 3.1, 3.2.** Study 03's `nrep1000` files predate the `theta_own` fix
-(confirmed by target-column diff, not just mtime). Study 09's predate two commits
-to the package file it evaluates. Study 05 must be regenerated after 3.1.
+All 17 aggregates regenerated at the shipped **nrep = 1000** (owner's call: keeping the
+replication count fixed means every before/after difference is a change of CODE, not of
+Monte Carlo error), plus the two study-03 `nrep = 300` variants so they were not left
+orphaned. Full pass 120.8 min on 26 cores, no errors; studies 04 and 05 then re-run a
+second time (83.8 min) against the item-1.10 rounding fix, in an isolated git worktree
+so concurrent editing of the main checkout could not reach the 26 parallel workers
+mid-run.
 
-**Test unit.** `simulations/tests/test-aggregates-fresh.R` — assert each shipped
-CSV is newer than the study file and than the package files it exercises.
+**Every predicted change landed, and one prediction of mine was wrong.**
+
+*Study 05 (item 3.1) — the artifact is gone.* The descending baseline-risk gradient the
+student task had invented an explanation for **was the bug**:
+
+| br | coverage before | after |
+|---|---|---|
+| 0.01 | 1.000 | 1.000 |
+| 0.15 | 0.870 | 0.988 |
+| 0.30 | 0.658 | 0.985 |
+| **0.50** | **0.509** | **0.987** |
+
+Mean \|bias\| 0.687 → 0.440, against the ~0.443 predicted. `grant` moved 0.222 → 0.476,
+which is item 1.4 working: it now returns NA instead of an estimate with a NaN variance,
+so the surviving cells are a different set.
+
+*Study 04 (items 1.1 / 1.8 / 1.9 / 1.10) — the headline reverses.*
+
+| method | shipped | after 1.1/1.8 | after 1.10 |
+|---|---|---|---|
+| `metaumbrella_exp` | 0.36493 | 0.05785 | **0.00000** |
+| `metaumbrella_cases` | 0.00596 | 0.03110 | **0.00000** |
+| every other method | — | unchanged | **bit-identical** |
+
+Coverage for `metaumbrella_exp`: **0.505 → 1.000**. The two variants are now *identical
+to each other*, because both solve the same table instead of searching for it — so the
+README's "two `metaumbrella` variants with very different reliability" no longer
+describes the package. VanderWeele's √OR keeps its point estimates exactly (0.20998
+throughout) with in-band coverage **0.931 → 0.996** (width 0.853 → 1.299), which is
+item 1.9 doing precisely what it was scoped to do.
+
+*Study 03 (item 3.2).* `own` is no longer a copy of `population` in any of the four
+files (max \|diff\| 0.4186 CAT, 0.2429 CONT — the exact estimand gaps measured when the
+item was built).
+
+*The item-3.3 floor withheld **64** cells*, not the ~30 predicted — 52 in study 05, 12
+in study 03a. Explainable: item 1.4 lowered `n_valid_ci` in the grant cells, pushing
+more of them below 30. (A first count of 1,394 was wrong: it included cells whose
+coverage was *always* NA, which is what study 06 is about.)
+
+⚠️ **My "study 09 is a control that must not move" prediction was wrong, and this file
+had already said so** — item 3.5's own text records that study 09's aggregates predate
+package commits. Cause pinned: commit `4955631` (13 Aug) versus aggregates from 12 Aug,
+which changed rows lacking bonett's inputs from *blanked to NA* to *keep the
+lipsey_cooper value*. Effect: `n_valid` **964 → 1000** in 138 cells, none lost, all at
+low event rates. Verified rather than inferred: with a degenerate margin,
+`or_to_cor = "bonett"` returns r = 0.30533, bit-identical to `lipsey_cooper`, and fires
+the fallback message. **So study 09's `bonett` row is now a mixture of two estimands**
+(~3.6% of its replications), which is finding **2.7** appearing in the results, and is
+why its mean \|bias\| rose 0.0498 → 0.0546 — the old figure was conditional on not having
+failed.
+
+**Test unit landed**, and keyed on **git commit times, not file mtimes**: the roadmap's
+literal wording (`newer than the study file`) cannot work in a git repository, because a
+clone stamps every file with the checkout time, so an mtime test would pass everywhere
+and detect nothing. Package dependencies are **derived** by tracing each study's
+`es_from_*` calls to their defining files, rather than hand-listed — depending on the
+whole of `R/` instead would mark every aggregate stale on any package commit and the
+test would be ignored. Teeth confirmed: dirtying `studies/07_ancova_to_smd.R` makes it
+name `07a`/`07b` as stale; reverting restores **407 pass / 0 fail / 0 error**.
+
+**Also updated:** the README's headline figures (the "coverage 0.497, worst shipped
+option" claim, the no-go map table, and the "study 03's files are stale" note), and the
+student task's `vanderweele_rr_squared` narrative — rewritten to teach the two lessons
+the episode actually carries (a number that looks odd deserves a check, not a story; an
+artifact often tracks the design rather than the method) rather than quietly deleted.
+⚠️ `students/` is **gitignored**, so that rewrite is on disk only and appears in no
+commit.
+
+⚠️ **This item earned its keep as a check, not a chore**: regenerating the simulations
+exposed a package defect (item 1.10) that four test suites and two audits had missed.
 
 ---
 
