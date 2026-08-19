@@ -73,12 +73,37 @@ and the pure scale gap was **0.9929**. After the fix (a scale-matched `theta_own
 `phi (r)`. `tetrachoric (z)`'s remaining ≈0.23 is the genuine CAT estimand mismatch.
 *Lesson worth carrying: whenever a study reports both r and z, check the target scale.*
 
-**2. An unexplained pattern, not yet diagnosed.** In **both** binary studies,
-`se_ratio` is systematically **> 1 for every method** (1.13–1.62), including
-`transpose`, which merely copies `logor_se` through. A pattern that uniform across
-unrelated methods usually points at something structural — the +0.5 continuity
-correction, or an OR-SE-vs-RR-spread comparison in `transpose`'s case — rather than a
-per-method bug. **This has not been chased. Do not assume it is benign.**
+**2. The `se_ratio` > 1 pattern is diagnosed: it is SPARSITY, and the continuity
+correction is innocent.** In both binary studies `se_ratio` is > 1 for every method
+(1.17–1.66 on the full grid), including `transpose`, which merely copies `logor_se`
+through. This README used to name the +0.5 continuity correction as the likely cause
+and say it had not been chased. It has now been chased, and **the causal direction was
+backwards**. Split the grid by how likely a zero cell actually is:
+
+| region | conditions | `se_ratio`, study 04 |
+|---|---|---|
+| **dense** — P(any zero cell) < 1e-4 | 105 | **0.989 – 1.000**, every method |
+| **sparse** — everything else | 255 | 1.298 – 1.410 |
+
+Where zero cells essentially never occur, every route is calibrated. The inflation
+appears exactly where the tables get sparse, so the driver is **sparsity itself**
+(Woolf's variance bias in the log OR / log RR), and the +0.5 correction — which only
+ever applies in the sparse region — *suppresses* part of it. Removing the correction
+makes the ratio worse (1.20–1.71 against 1.08–1.32), which is the opposite of what
+"the correction inflates the SE" predicts. `transpose` being affected is the tell: a
+route that copies the standard error through cannot have a per-method bug.
+
+Reproduce it with `sparsity_split()` in `R/06_sparsity.R`; the split is pinned by
+`tests/test-sparsity-diagnostic.R`.
+
+**2b. Two routes must be read with `nonest_rate` beside them, or they look
+miscalibrated when they are not.** `metafor_conv2x2` sits at 1.62 full-grid and looks
+like the worst performer; it is at **0.992** in the dense region. Its full-grid figure
+is a **selection artifact** — it fails to reconstruct a table in up to **82.6%** of a
+cell (mean non-estimability 0.152) and is scored on the survivors. `grant` in study 05
+is the same case: dense-region 1.10, but non-estimability reaching **1.000** in whole
+cells where `rr × br_guess ≥ 1`. Every other route reconstructs essentially always
+(non-estimability < 0.01), which is why only these two need the caveat.
 
 **3. Pre-post coverage is much thinner than the eight-study structure suggests.**
 Study 08 exercises all five `pre_post_to_smd` values but only **one of three kernels**:

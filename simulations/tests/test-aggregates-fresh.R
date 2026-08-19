@@ -51,6 +51,27 @@
   length(out) > 0 && any(nzchar(out))
 }
 
+## Which simulations/R/ files can actually affect a run: those defining at least one
+## function that is referenced outside the file itself, in studies/ or elsewhere in R/.
+.live_harness_files <- function() {
+  hf <- list.files(file.path(.sim_root, "R"), pattern = "[.]R$", full.names = TRUE)
+  others <- c(list.files(file.path(.sim_root, "studies"), pattern = "[.]R$", full.names = TRUE), hf)
+  keep <- vapply(hf, function(f) {
+    l <- readLines(f, warn = FALSE)
+    defs <- unlist(regmatches(l, regexpr("^[.]?[A-Za-z][A-Za-z0-9_.]*(?= *<- *function)",
+                                         l, perl = TRUE)))
+    defs <- unique(defs)
+    if (!length(defs)) return(TRUE)          # no functions: cannot rule it out
+    for (g in setdiff(others, f)) {
+      txt <- paste(readLines(g, warn = FALSE), collapse = "
+")
+      if (any(vapply(defs, function(d) grepl(d, txt, fixed = TRUE), logical(1)))) return(TRUE)
+    }
+    FALSE
+  }, logical(1))
+  hf[keep]
+}
+
 ## aggregate stem -> study file. Study 01 writes 01a/01b, study 03 writes 03a/03b, etc,
 ## so the numeric prefix is the key.
 .study_file_for <- function(agg_basename) {
@@ -83,8 +104,13 @@ test_that("every shipped aggregate is at least as new as the code that produced 
                      pattern = "[.]csv$", full.names = TRUE)
   skip_if(length(aggs) == 0, "no aggregates present")
 
-  # The harness itself feeds every aggregate.
-  harness <- list.files(file.path(.sim_root, "R"), pattern = "[.]R$", full.names = TRUE)
+  # The harness files that actually feed a run. DERIVED, not listed: a file under
+  # simulations/R/ is a dependency only if something outside it -- a study, or
+  # another harness file -- calls a function it defines. A pure analysis helper
+  # (06_sparsity.R, used only by the write-up and by tests) cannot change any
+  # aggregate, and treating it as a dependency would mark all 17 stale the moment
+  # it was added, which is how a freshness test becomes noise and gets ignored.
+  harness <- .live_harness_files()
 
   stale <- character(0)
   for (a in aggs) {

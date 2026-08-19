@@ -1159,7 +1159,51 @@ exposed a package defect (item 1.10) that four test suites and two audits had mi
 
 ## Phase 4 — Reporting corrections (before anything is published)
 
-### 4.1 ☐ The Haldane–Anscombe diagnosis is backwards
+### 4.1 ☑ The Haldane–Anscombe diagnosis is backwards — DONE
+
+> **Re-measured on the regenerated aggregates, and it reproduces cleanly.** Splitting
+> study 04's grid by P(any zero cell):
+>
+> | region | conditions | `se_ratio` |
+> |---|---|---|
+> | dense (P < 1e-4) | 105 | **0.989 – 1.000**, every method |
+> | sparse | 255 | 1.298 – 1.410 |
+>
+> So the driver is sparsity, and the +0.5 correction — which only ever applies in the
+> sparse region — suppresses part of it. `transpose` being affected is the tell: a route
+> that copies `logor_se` through cannot have a per-method bug.
+>
+> **`metafor_conv2x2` confirmed as a selection artifact, not a miscalibration**: 0.992
+> dense, non-estimability mean 0.152 and **max 0.826**, against < 0.01 for every other
+> route.
+>
+> ⚠️ **Two corrections to the item as written.**
+> (a) "Of the two methods that stay miscalibrated, only `metaumbrella_exp` does" is now
+> obsolete — after 1.1/1.8/1.10 it is bit-identical to `metaumbrella_cases` (0.992 dense,
+> 1.410 sparse) and is not an outlier at all.
+> (b) **A second route needs the selection caveat, found by writing the test**: `grant`
+> in study 05 has dense-region 1.10, but its non-estimability reaches **1.000** in whole
+> cells where `rr × br_guess ≥ 1` (item 1.4 now returns NA there). It is the study-05
+> analogue of `metafor_conv2x2`. Exactly two routes across the two binary studies need
+> reading with `nonest_rate` beside them; a test pins that count.
+>
+> **Landed as reusable code, not a paragraph**: `R/06_sparsity.R` provides
+> `zero_cell_prob()` and `sparsity_split()`, so the claim can be re-run rather than taken
+> on trust; `tests/test-sparsity-diagnostic.R` pins the split, the dense region's own
+> density, `transpose`'s inclusion, both selection cases, and that the diagnostic refuses
+> a non-binary study. README's "an unexplained pattern, not yet diagnosed" rewritten as
+> the diagnosis.
+>
+> ⚠️ **The freshness test needed refining as a result.** Adding a pure analysis helper to
+> `simulations/R/` marked all 17 aggregates stale, because the test treated every harness
+> file as feeding every run. It now **derives** which harness files can affect a run — a
+> file counts only if something in `studies/` or the rest of `R/` calls a function it
+> defines. A freshness test that cries wolf on an unrelated addition is one that gets
+> ignored.
+>
+> **Verified:** `simulations/tests` **438 pass / 0 fail / 0 error** (407 + 31 new).
+
+### 4.1-old (the original write-up, kept for the record)
 
 The claim that the +0.5 continuity correction *causes* the `se_ratio > 1` pattern
 in studies 04/05 is wrong in causal direction. Removing it makes the ratio
