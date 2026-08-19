@@ -967,7 +967,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     omega = omega, omega_se = omega_se,
     omega_ci_lo = omega_ci_lo, omega_ci_up = omega_ci_up,
     n_sample = n_sample, n_items = n_items,
-    omega_type = omega_type, omega_to_es = omega_to_es
+    omega_type = omega_type, omega_estimator = omega_estimator,
+    omega_to_es = omega_to_es
   ))
   es_alpha_sg <- with(x, es_from_cronbach_alpha(
     cronbach_alpha = cronbach_alpha, n_sample = n_sample,

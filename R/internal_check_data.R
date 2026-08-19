@@ -177,7 +177,7 @@
     "reverse_spearman_r", "spearman_r",
     # psychometrics
     "cronbach_alpha", "n_items",
-    "omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type",
+    "omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type", "omega_estimator",
     "icc", "n_measurements", "icc_type",
     "discard",
     # multi-arm trial pooling
@@ -219,6 +219,7 @@
   # grepl() detection types it numeric and every value becomes NA (same reason
   # n_items / n_measurements need explicit overrides).
   expected_cols_type[which(expected_cols == "omega_type")] <- "char"
+  expected_cols_type[which(expected_cols == "omega_estimator")] <- "char"
   expected_cols_type[which(expected_cols == "pool_side")] <- "char"
   # per-row Yates flag for chi-square back-derivation
   expected_cols_type[which(expected_cols == "yates_chisq")] <- "logical"

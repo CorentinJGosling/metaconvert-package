@@ -1,5 +1,55 @@
 # metaConvert (development version)
 
+## `omega_estimator`: record which computation produced the omega
+
+Omega is not one computation, and which one produced the number moves it further than
+most of the moderators a reliability-generalization review codes. Zinbarg et al. (2006)
+ran several estimators over identical data: the first principal component overestimated
+`omega_h` by about **+0.40** on average, against about **+0.02** for a hierarchical
+(bifactor) CFA. Revelle & Zinbarg (2009) record EFA returning `omega_h = .04` on data
+where CFA returns exactly `0.0`. A bias that large is bigger than any moderator effect
+such a review is likely to find, so a pool mixing estimators can manufacture a "language
+effect" that is purely an artefact of which software each author ran.
+
+New `omega_estimator` column and `es_from_omega()` argument:
+`"cfa_bifactor"` / `"cfa_1factor"` / `"efa_schmid_leiman"` / `"first_pc"` / `"first_pf"` /
+`"unspecified"` (default), case-insensitive with the obvious synonyms accepted. It is a
+**provenance** field: it changes nothing in the arithmetic.
+
+**V39** (`[INFO]`, matching V38 and its Tier-2 cousins E6/E8) flags a pool that mixes
+them. **The `"unspecified"` rule is the whole design**: most primary studies do not name
+their estimator, so counting `"unspecified"` as a level would make the check fire on
+nearly every real dataset and be tuned out within a week. It fires only when two
+*different, known* estimators coexist — a fact about the data, not about what the
+reviewer failed to code. A pool that is mostly `"unspecified"` is a reporting-quality
+observation for the review to make.
+
+The estimator is usually codeable from the software a paper reports, and the normaliser
+encodes exactly that much and no more: `psych::omega()` defaults to an EFA with a
+Schmid-Leiman transformation, so `"psych"` maps to `"efa_schmid_leiman"`. `semTools`,
+`MBESS` and `lavaan` are CFA-based but do **not** fix whether the fitted model was
+unidimensional or bifactor, so those names deliberately fall through to `"unspecified"`
+rather than guessing a level V39 would then act on.
+
+Also documented in `?es_from_omega` and the Psychometrics vignette, two extraction traps
+that produce a wrong number silently:
+
+1. **Do not recompute omega from a printed loadings table unless the residual variances
+   are printed too.** `lavaan`'s `std.lv = TRUE` fixes the *factor* variance to 1, not the
+   item variances, so the "Estimate" column is unstandardised. Assuming
+   `theta_j = 1 - lambda_j^2` gives 0.7725 for the worked example in Flora (2020) whose
+   published omega is 0.5999 — an error of +0.17 that nothing downstream can detect.
+2. **On a bifactor model the output row labelled `omega` is not `omega_h`.** In `semTools`
+   it is the total (0.97 in Flora's example, where `omega_h` is 0.91).
+
+A route that reconstructs omega from a loadings table was considered and **rejected**: with
+no sampling variance available from loadings, a recomputed row gets `se = NA` and lands
+exactly where a bare reported omega already lands (visible and countable, not poolable), so
+it rescues nothing for pooling; it would require the extractor to sum a column by hand,
+against the package's transcription rule; and its defence against trap 1 above can only
+engage when the study prints the residual variances, which the motivating paper does not.
+
+
 ## Reliability generalization: McDonald's omega, the Hakstian-Whalen transform, and three RG-specific checks
 
 A reliability-generalization (RG) review pools **reliability coefficients** for one

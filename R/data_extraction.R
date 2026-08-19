@@ -508,13 +508,15 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "Cronbach's alpha reliability coefficient - numeric",
       "number of items in the scale - numeric")
 
-    cols_omega = c("omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type")
+    cols_omega = c("omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type",
+                   "omega_estimator")
     inf_omega = c(
       "McDonald's omega reliability coefficient (natural scale) - numeric",
       "standard error of omega, ON THE NATURAL SCALE - numeric",
       "lower bound of the 95% CI of omega (natural scale) - numeric",
       "upper bound of the 95% CI of omega (natural scale) - numeric",
-      "which omega: 'total' (default), 'hierarchical', 'asymptotic' or 'subscale' - character")
+      "which omega: 'total' (default), 'hierarchical', 'asymptotic' or 'subscale' - character",
+      "how omega was estimated: 'cfa_bifactor', 'cfa_1factor', 'efa_schmid_leiman', 'first_pc', 'first_pf' or 'unspecified' - character")
 
     cols_icc = c("icc", "n_measurements", "icc_type")
     inf_icc = c(

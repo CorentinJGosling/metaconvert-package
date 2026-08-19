@@ -363,3 +363,69 @@ test_that("a negative omega is impossible and is now caught", {
                                             split_adjusted = FALSE), digits = 15))
   expect_equal(s2$es, log(1 - 0.86), tolerance = 1e-12)
 })
+
+# ---------------------------------------------------------------------------
+# omega_estimator provenance + V39 mixed-estimator flag
+# ---------------------------------------------------------------------------
+omega_est_flags <- function(est) {
+  d <- data.frame(study_id = paste0("S", seq_along(est)),
+                  omega = 0.85 + seq_along(est) / 100, omega_se = 0.02,
+                  omega_estimator = est, n_sample = 300, n_items = 12)
+  suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                      split_adjusted = FALSE),
+                           flags = TRUE, digits = 15))$flags
+}
+
+test_that("V39 fires when two KNOWN omega estimators are pooled", {
+  f <- omega_est_flags(c("cfa_bifactor", "first_pc"))
+  expect_true(all(grepl("mixes omega estimators", f)))
+  # severity matches V38 / E6 / E8: nothing is mis-extracted
+  expect_true(all(grepl("[INFO] Pool mixes omega estimators", f, fixed = TRUE)))
+})
+
+test_that("V39 ignores 'unspecified' -- the design point", {
+  # most primary studies do not name their estimator; counting "unspecified" as a
+  # level would make this fire on nearly every real dataset
+  expect_false(any(grepl("mixes omega estimators",
+                         omega_est_flags(c("cfa_bifactor", "unspecified", "unspecified")))))
+  expect_false(any(grepl("mixes omega estimators",
+                         omega_est_flags(c("unspecified", "unspecified")))))
+})
+
+test_that("V39 stays silent on one estimator, however it is spelled", {
+  expect_false(any(grepl("mixes omega estimators",
+                         omega_est_flags(c("cfa_bifactor", "cfa_bifactor")))))
+  expect_false(any(grepl("mixes omega estimators",
+                         omega_est_flags(c("CFA_Bifactor", "bifactor", "Hi-CF")))))
+})
+
+test_that("omega_estimator normalises the synonyms a reviewer would actually type", {
+  n <- function(x) suppressWarnings(.normalise_omega_estimator(x))
+  expect_equal(n("bifactor"), "cfa_bifactor")
+  expect_equal(n("Schmid-Leiman"), "efa_schmid_leiman")
+  expect_equal(n("PCA"), "first_pc")
+  expect_equal(n("first PF"), "first_pf")
+  expect_equal(n("CFA"), "cfa_1factor")
+  expect_equal(n("not reported"), "unspecified")
+  # psych::omega() defaults to EFA + Schmid-Leiman, so the package name determines it
+  expect_equal(n("psych_omega"), "efa_schmid_leiman")
+  expect_equal(n("psych"), "efa_schmid_leiman")
+  # but semTools / MBESS are CFA-based WITHOUT fixing the model, so they must NOT be
+  # guessed into a level the mixing flag would then act on
+  expect_equal(n("semTools"), "unspecified")
+  expect_equal(n("MBESS"), "unspecified")
+  # unrecognised values warn and fall back rather than aborting the run
+  expect_warning(es_from_omega(0.8, omega_se = 0.02, omega_estimator = "bogus"),
+                 "Unrecognised omega_estimator")
+})
+
+test_that("omega_estimator reaches the extraction sheet and survives convert_df()", {
+  sh <- data_extraction_sheet(measure = "omega", extension = "data.frame")
+  expect_true("omega_estimator" %in% names(sh))
+  d <- data.frame(study_id = c("a", "b"), omega = c(.86, .88), omega_se = 0.02,
+                  omega_estimator = c("bifactor", "PCA"), n_sample = 300, n_items = 12)
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                           split_adjusted = FALSE), digits = 15))
+  expect_equal(nrow(s), 2L)
+  expect_false(anyNA(s$es))
+})

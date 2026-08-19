@@ -300,6 +300,49 @@ A confidence interval is read at its **bounds**, not as a half-width, so an asym
 
 A bare omega with neither an SE nor a CI keeps its point estimate and gets `se = NA`, so the study stays visible and countable in the pipeline (and in your reporting-rate accounting) but is not pooled. `summary(guidance = TRUE)` names what is missing.
 
+## Record how omega was estimated
+
+Omega is not one computation, and **which one produced the number matters more than most of the moderators you will code**. Zinbarg et al. (2006) ran several estimators over identical data:
+
+| estimator | bias in $\omega_h$ |
+|:---|:---|
+| first principal component | **≈ +0.40** |
+| hierarchical (bifactor) CFA | ≈ +0.02 |
+
+Revelle and Zinbarg (2009) record the same point from the other side: EFA returns $\omega_h = .04$ on data where CFA returns exactly $0.0$. A bias of that size is larger than any moderator effect a reliability-generalization review is likely to find, so a pool that mixes estimators can manufacture a "language effect" or an "age effect" that is purely an artefact of which software each author ran.
+
+Record it in `omega_estimator`. In practice it is usually codeable from the software a paper reports:
+
+| the paper says | code it as |
+|:---|:---|
+| `psych::omega()` | `efa_schmid_leiman` (that function defaults to EFA + Schmid–Leiman) |
+| a bifactor / hierarchical CFA | `cfa_bifactor` |
+| a one-factor CFA, congeneric model | `cfa_1factor` |
+| first principal component | `first_pc` |
+| principal-axis factoring | `first_pf` |
+| `semTools` / `MBESS` / `lavaan`, model not stated | `unspecified` — these are CFA-based, but they do **not** tell you whether the fitted model was unidimensional or bifactor |
+| nothing | `unspecified` |
+
+The column is case-insensitive and accepts the obvious synonyms (`bifactor`, `Schmid-Leiman`, `PCA`, …).
+
+```{r}
+mixed_est <- data.frame(study_id = c("A", "B"), omega = c(0.86, 0.91), omega_se = 0.02,
+                        omega_estimator = c("bifactor", "PCA"),
+                        n_sample = 300, n_items = 12)
+summary(convert_df(mixed_est, measure = "omega", verbose = FALSE,
+                   split_adjusted = FALSE), flags = TRUE)$flags[1]
+```
+
+The flag fires only when two **known, different** estimators coexist. Rows left `unspecified` are never counted as mixing — most primary studies do not name their estimator, and treating that as a conflict would make the check fire on nearly every real dataset. A pool that is mostly `unspecified` is a *reporting-quality* observation for your review to make, and worth stating: it means the estimator is a source of heterogeneity you cannot rule out.
+
+## Two extraction traps
+
+Both produce a wrong number silently, and neither can be detected downstream.
+
+**1. Do not recompute omega from a printed loadings table unless the residual variances are printed too.** `lavaan`'s `std.lv = TRUE` fixes the *factor* variance to 1, not the item variances, so the "Estimate" column is **unstandardised**. Assuming $\theta_j = 1 - \lambda_j^2$ from such a table gives 0.7725 for the worked example in Flora (2020) whose published omega is **0.5999** — an error of +0.17. If you need to recompute, you need $\sum\lambda_j$ *and* $\sum\theta_j$, both printed.
+
+**2. On a bifactor model, the output row labelled `omega` is not $\omega_h$.** In `semTools` it is the total — 0.97 in Flora's example, where $\omega_h$ is 0.91. Copy the row you actually mean, and record which one in `omega_type`.
+
 ## Two things not to pool
 
 **`omega_type` is an estimand, not a label.** `"total"` is the proportion of variance due to all common factors; `"hierarchical"` is the proportion due to the *general* factor alone, and is systematically smaller. A pool mixing them is flagged:

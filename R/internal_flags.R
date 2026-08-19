@@ -1482,6 +1482,47 @@
     }
   }
 
+  # V39: a pool mixing omega ESTIMATORS.
+  #
+  # Omega is not one computation, and which one produced the number moves it far more
+  # than most moderators do. Zinbarg et al. (2006) ran several estimators over identical
+  # data: the first principal component overestimated omega_h by about +0.40 on average,
+  # against about +0.02 for a hierarchical (bifactor) CFA; Revelle & Zinbarg (2009) record
+  # EFA returning omega_h = .04 where CFA returns exactly 0.0 on the same data. A bias of
+  # that size is larger than any moderator effect a reliability-generalization review is
+  # likely to report, so a pool mixing estimators can manufacture a "finding" that is
+  # purely an artefact of which software each author ran.
+  #
+  # THE "unspecified" RULE IS THE WHOLE DESIGN. Most primary studies do not name their
+  # estimator, so counting "unspecified" as a level would make this fire on nearly every
+  # real dataset and get tuned out within a week. It fires only when two DIFFERENT KNOWN
+  # estimators coexist -- that is a fact about the data, not about what the reviewer
+  # failed to code. A pool of known + unspecified is silent here (the unspecified rows
+  # are a reporting-quality observation for the review to make, not a mixing error).
+  #
+  # Severity is [INFO], matching V38 and its Tier-2 cousins E6/E8: nothing is
+  # mis-extracted and there is nothing to verify -- every value is correct for the
+  # estimator that produced it. What is wrong is pooling them, an analyst choice.
+  if (n >= 2 && "omega_estimator" %in% colnames(x) && "omega" %in% colnames(x)) {
+    oe <- .normalise_omega_estimator(x[["omega_estimator"]], warn = FALSE)
+    om_v <- suppressWarnings(as.numeric(x[["omega"]]))
+    known <- is.finite(om_v) & !is.na(oe) & oe != "unspecified"
+    present <- unique(oe[known])
+    if (length(present) > 1) {
+      for (i in which(known)) {
+        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+          paste0("[INFO] Pool mixes omega estimators: this row was estimated by '%s' ",
+                 "while the pool also contains '%s'. The estimator moves omega more than ",
+                 "most moderators do - a first principal component overestimates omega_h by ",
+                 "~0.40 where a bifactor CFA overestimates it by ~0.02 (Zinbarg et al. 2006) ",
+                 "- so a mixed pool can produce a moderator effect that is an artefact of ",
+                 "which software each author ran. Split by estimator, or enter it as a ",
+                 "moderator and report the contrast"),
+          oe[i], paste(setdiff(present, oe[i]), collapse = "', '")))
+      }
+    }
+  }
+
   # V35: 2x2 event rates spanning a wide range in a correlation pool.
   #
   # This is a DISCLOSURE about the tetrachoric route's precision, not a data error and

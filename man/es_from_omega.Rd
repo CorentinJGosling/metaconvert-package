@@ -12,6 +12,7 @@ es_from_omega(
   n_sample,
   n_items,
   omega_type = "total",
+  omega_estimator = "unspecified",
   omega_to_es = "bonett"
 )
 }
@@ -34,6 +35,14 @@ the standard error.}
 \item{omega_type}{which omega is reported: \code{"total"} (default), \code{"hierarchical"},
 \code{"asymptotic"} or \code{"subscale"}. These are \strong{different estimands} and must
 not be pooled together (see \strong{Details}).}
+
+\item{omega_estimator}{how omega was estimated in the primary study: one of
+\code{"cfa_bifactor"}, \code{"cfa_1factor"}, \code{"efa_schmid_leiman"},
+\code{"first_pc"}, \code{"first_pf"} or \code{"unspecified"} (default).
+Case-insensitive, with the common synonyms accepted. This is a
+\strong{provenance} field, not a computational one -- it changes nothing in the
+arithmetic, but a pool that mixes estimators is flagged, because the estimator
+moves omega far more than most moderators do (see \strong{Details}).}
 
 \item{omega_to_es}{method used to compute the effect size from omega. One of
 \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}, matching
@@ -77,4 +86,11 @@ McDonald, R. P. (1999). Test theory: A unified treatment. Lawrence Erlbaum.
 
 Raykov, T. (2002). Analytic estimation of standard error and confidence interval for
 scale reliability. Multivariate Behavioral Research, 37(1), 89-103.
+
+Revelle, W., & Zinbarg, R. E. (2009). Coefficients alpha, beta, omega, and the glb:
+comments on Sijtsma. Psychometrika, 74(1), 145-154.
+
+Zinbarg, R. E., Yovel, I., Revelle, W., & McDonald, R. P. (2006). Estimating
+generalizability to a latent variable common to all of a scale's indicators: A
+comparison of estimators for omega_h. Applied Psychological Measurement, 30(2), 121-144.
 }
