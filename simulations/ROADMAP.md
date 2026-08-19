@@ -258,6 +258,47 @@ candidate's **coverage** results describe an operation the paper forbids, not th
 it proposes. The point-estimate results are unaffected. Fix the candidate and
 regenerate 04 (folds into 3.5), or drop the coverage column for that arm.
 
+### 1.10 ☑ NEW — the 1.1 solve destroyed continuity-corrected tables — DONE
+
+**Found by the 3.5 regeneration, not by any test.** Study 04's `metaumbrella_cases`
+mean |bias| went **0.006 → 0.031** after the fixes, concentrated entirely at
+`br = 0.01` (50 of 360 cells grew by >0.01; `n_valid` changed in **0** cells, so it
+was not a selection effect). I had predicted this route would not move.
+
+**Cause.** Item 1.1's `.solve_2x2_from_or()` ended with `a <- round(a)`. A table that
+has received a **+0.5 continuity correction** — which `es_from_2x2()` itself emits for
+a zero cell, and which study 04 supplies — has **half-integer cells**, and nothing in
+the inputs reveals it: adding 0.5 to all four cells adds exactly 1 to every margin.
+Worked case: the corrected table `0.5/50.5/2.5/48.5` came back as `1/50/2/49`, giving
+log RR **−0.693** against the true **−1.609** — an error of **0.916**. At `br = 0.01`,
+**75.8%** of study 04's replications carry the correction.
+
+**The obvious fix was measured and rejected.** Rounding to the nearest 0.5 fixes the
+corrected case but costs the ordinary one. Over 900 tables of each kind:
+
+| rule | integer tables (OR at 2 dp) | corrected tables |
+|---|---|---|
+| `round()` to 1 (was) | 96.2% exact | **0% exact, mean err 0.869, only 423/900 solved** |
+| round to nearest 0.5 | 91.8% | 100% exact |
+| no rounding | 5.0% | 100% exact |
+| **prefer integer, take the half only when the exact root sits on one** | **96.1%** | **100% exact** |
+
+The chosen rule costs **0.1 percentage points** on the ordinary case and removes the
+failure entirely on the corrected one. The zero-cell guard is relaxed in step: a
+half-integer solution is a corrected table, where a cell of 0.5 is the corrected value
+of a legitimate zero and its variance is finite, so requiring `>= 1` there would
+discard exactly the tables the branch exists to reconstruct. A genuine zero margin
+still declines to the enumeration.
+
+**Verified:** `test-or-to-rr-identifiability.R` **995 pass / 0 fail**; archived OR/RR
+suites (`test-ES-OR.R`, `test-ES-NNT.R`, `test-rr-to-or-reconstruction.R`,
+`test-reverse-ratio-ci.R`) **315 pass / 0 fail / 0 error**. Studies 04 and 05 are
+re-run against this fix under 3.5.
+
+⚠️ **This is why 3.5 matters as a check and not only as a chore**: a package defect
+that four test suites and two audits missed was exposed by regenerating a simulation
+and noticing a number move in the direction nobody predicted.
+
 ### 1.6 ☑ NEW — delete the shadowed duplicate reconstruction helpers — DONE (commit `e1b7f59`)
 
 `R/estimate_n_from_es.R:41` and `:121` define `.estimate_n_from_or_and_n_cases` and

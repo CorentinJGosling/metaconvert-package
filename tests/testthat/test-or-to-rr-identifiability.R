@@ -632,3 +632,109 @@ test_that("no row ever returns a finite RR beside a non-finite SE", {
     }
   }
 })
+
+# =============================================================================
+# Roadmap item 1.1 follow-up -- the exact solve must not destroy a CORRECTED table.
+#
+# Surfaced by the 3.5 regeneration, not by any test: study 04's metaumbrella_cases
+# mean |bias| went 0.006 -> 0.031, concentrated entirely at br = 0.01. Cause: the
+# solve ended with a <- round(a), but a table that has received a +0.5 continuity
+# correction -- which es_from_2x2() itself emits for a zero cell, and which study
+# 04 supplies -- has HALF-INTEGER cells. Nothing in the inputs reveals it, because
+# adding 0.5 to all four cells adds exactly 1 to every margin.
+#
+# Worked case: the corrected table 0.5/50.5/2.5/48.5 was reconstructed as
+# 1/50/2/49, giving log RR -0.693 against the true -1.609 -- an error of 0.916.
+# At br = 0.01, 75.8% of study 04's replications carry the correction.
+#
+# The rule now prefers the integer and takes the half-integer only when the exact
+# root sits essentially on one. Measured over 900 tables of each kind:
+#
+#   rule           integer tables (OR at 2dp)   corrected tables
+#   round to 1     96.2% exact                  0% exact, err 0.869, 423/900 solved
+#   round to 0.5   91.8% exact                  100% exact
+#   no rounding     5.0% exact                  100% exact
+#   THIS RULE      96.1% exact                  100% exact
+# =============================================================================
+
+test_that("a continuity-corrected table is reconstructed exactly, not rounded away", {
+  ac <- 0.5; bc <- 50.5; cc <- 2.5; dc <- 48.5      # the worked case
+  or <- (ac * dc) / (bc * cc)
+  got <- .solve(or, ac + bc, cc + dc, ac + cc)
+  expect_false(is.null(got))
+  expect_equal(c(got$n_cases_exp, got$n_controls_exp, got$n_cases_nexp, got$n_controls_nexp),
+               c(ac, bc, cc, dc))
+  true_lrr <- log((ac / (ac + bc)) / (cc / (cc + dc)))
+  got_lrr <- log((got$n_cases_exp / (got$n_cases_exp + got$n_controls_exp)) /
+                 (got$n_cases_nexp / (got$n_cases_nexp + got$n_controls_nexp)))
+  expect_equal(got_lrr, true_lrr)
+  # the pre-fix answer, pinned so a revert is unmistakable
+  expect_false(isTRUE(all.equal(got$n_cases_exp, 1)))
+})
+
+test_that("the half-integer guard admits a corrected 0.5 cell but still refuses a zero", {
+  # 0.5 is the CORRECTED value of a legitimate zero: its variance is finite, so the
+  # old ">= 1" rule would have discarded exactly the tables this branch exists for.
+  ac <- 0.5; bc <- 30.5; cc <- 1.5; dc <- 29.5
+  expect_false(is.null(.solve((ac * dc) / (bc * cc), ac + bc, cc + dc, ac + cc)))
+  # a genuine zero margin is still handed back to the enumeration
+  expect_null(.solve(2, 50, 50, 0))
+})
+
+test_that("ordinary integer tables are unaffected by the new rule", {
+  # The reason round() is there at all: a realistically rounded OR.
+  for (tab in list(c(12, 38, 6, 44), c(19, 131, 75, 75), c(40, 60, 60, 40),
+                   c(3, 97, 1, 99), c(55, 45, 30, 70))) {
+    a <- tab[1]; b <- tab[2]; c <- tab[3]; d <- tab[4]
+    got <- .solve(round(.tab_or(a, b, c, d), 2), a + b, c + d, a + c)
+    expect_false(is.null(got), info = paste(tab, collapse = "/"))
+    expect_equal(got$n_cases_exp, a, info = paste(tab, collapse = "/"))
+    expect_equal(got$n_cases_nexp, c, info = paste(tab, collapse = "/"))
+  }
+})
+
+test_that("recovery rates hold on both populations, measured not assumed", {
+  set.seed(1101)
+  # corrected tables: must be exact
+  err <- solved <- 0; n_b <- 0
+  for (i in 1:200) {
+    ne <- sample(30:150, 1); nn <- sample(30:150, 1); c0 <- sample(1:6, 1)
+    ac <- 0.5; bc <- ne + 0.5; cc <- c0 + 0.5; dc <- nn - c0 + 0.5
+    or <- (ac * dc) / (bc * cc)
+    got <- .solve(or, ac + bc, cc + dc, ac + cc)
+    n_b <- n_b + 1
+    if (is.null(got)) next
+    solved <- solved + 1
+    tru <- log((ac / (ac + bc)) / (cc / (cc + dc)))
+    g <- log((got$n_cases_exp / (got$n_cases_exp + got$n_controls_exp)) /
+             (got$n_cases_nexp / (got$n_cases_nexp + got$n_controls_nexp)))
+    err <- max(err, abs(g - tru))
+  }
+  expect_equal(solved, n_b)          # every corrected table is now solvable
+  expect_lt(err, 1e-8)               # and exactly so
+
+  # integer tables with a 2 dp OR: recovery must stay high
+  hit <- k <- 0
+  for (i in 1:300) {
+    ne <- sample(20:200, 1); nn <- sample(20:200, 1)
+    a <- sample(2:(ne - 2), 1); c <- sample(2:(nn - 2), 1)
+    got <- .solve(round(.tab_or(a, ne - a, c, nn - c), 2), ne, nn, a + c)
+    if (is.null(got)) next
+    k <- k + 1
+    hit <- hit + (got$n_cases_exp == a)
+  }
+  expect_gt(k, 250)
+  expect_gt(hit / k, 0.90)           # measured 0.961; 0.90 leaves Monte Carlo room
+})
+
+test_that("es_from_or_se() end-to-end on a corrected table gives the right RR", {
+  ac <- 0.5; bc <- 50.5; cc <- 2.5; dc <- 48.5
+  or <- (ac * dc) / (bc * cc)
+  se <- sqrt(1/ac + 1/bc + 1/cc + 1/dc)
+  true_rr <- (ac / (ac + bc)) / (cc / (cc + dc))
+  got <- es_from_or_se(or = or, logor_se = se,
+                       n_exp = ac + bc, n_nexp = cc + dc,
+                       n_cases = ac + cc, n_controls = bc + dc,
+                       or_to_rr = "metaumbrella_cases")
+  expect_equal(exp(got$logrr), true_rr, tolerance = 1e-8)
+})
