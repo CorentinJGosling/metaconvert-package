@@ -410,10 +410,16 @@
   .bounded_columns <- list(
     # alpha can be negative, only > 1 impossible (V25 warns on negatives)
     list(col = "cronbach_alpha",  lo = -Inf, up = 1, label = "alpha"),
-    # omega is a variance ratio, so it cannot exceed 1 in the population; an
-    # estimate above 1 is a Heywood case (negative estimated error variance) and
-    # is handled as UNUSUAL-and-preserved by es_from_omega(), not NA'd here.
-    list(col = "omega",           lo = -Inf, up = 1, label = "omega"),
+    # omega = (sum lambda)^2 / ((sum lambda)^2 + sum theta) is a square divided by
+    # itself plus a sum of variances, so unlike alpha it is structurally NON-NEGATIVE
+    # -- there is no measurement pattern that produces a negative omega, and a
+    # 1.34M-run simulation found 0 negative omega_total against 107 negative alphas.
+    # So the lower bound is 0, not -Inf (which is alpha's, because a negative average
+    # inter-item covariance really can drive alpha below zero -- see V25). Before this,
+    # omega = -0.12 sailed through every check and was pooled with a positive SE and
+    # an empty flags column. The UPPER bound stays 1: an estimate above it is a
+    # Heywood case, which es_from_omega() preserves on the raw scale.
+    list(col = "omega",           lo = 0,    up = 1, label = "omega"),
     # icc bounded below by -1/(k-1) >= -1
     list(col = "icc",             lo = -1, up = 1, label = "ICC"),
     list(col = "prop",            lo = 0, up = 1, label = "proportion"),
@@ -1454,7 +1460,11 @@
   # and item-count checks, this one cannot false-fire, since two different omega_type
   # values in one pool are different estimands by definition.
   if (n >= 2 && "omega_type" %in% colnames(x) && "omega" %in% colnames(x)) {
-    ot <- as.character(x[["omega_type"]])
+    # Compare the ESTIMAND, not its spelling: 'total', 'Total' and 'omega_t' are one
+    # estimand, and flagging them as mixed would be a pure false positive on
+    # capitalisation. Normalise silently -- es_from_omega() already warns about
+    # unrecognised values, and this check must not warn twice.
+    ot <- .normalise_omega_type(x[["omega_type"]], warn = FALSE)
     om <- suppressWarnings(as.numeric(x[["omega"]]))
     ot[is.na(ot) & is.finite(om)] <- "total"
     present <- unique(ot[is.finite(om) & !is.na(ot)])

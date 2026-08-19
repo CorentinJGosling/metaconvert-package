@@ -229,7 +229,9 @@ test_that("es_from_omega recycles scalars and validates arguments", {
   expect_equal(nrow(o), 3L)
   expect_false(anyNA(o$omega_se))
   expect_error(es_from_omega(c(.7, .8, .9), omega_se = c(0.02, 0.03)), "omega_se")
-  expect_error(es_from_omega(0.8, omega_type = "bogus"), "omega_type")
+  # omega_type comes from a data column, so it warns and falls back per row
+  # rather than aborting the run; only the *_to_es API arguments hard-stop
+  expect_warning(es_from_omega(0.8, omega_type = "bogus"), "Unrecognised omega_type")
   expect_error(es_from_omega(0.8, omega_to_es = "fisher_z"), "omega_to_es")
 })
 
@@ -301,4 +303,63 @@ test_that("a raw omega cannot pass through user_es_* into a transformed pool", {
                                            split_adjusted = FALSE), digits = 15))
   expect_true(is.na(s$es[s$study_id == "via_user"]))
   expect_equal(s$es[s$study_id == "native"], log(1 - 0.88), tolerance = 1e-12)
+})
+
+# ---------------------------------------------------------------------------
+# Defects found by reading the supplied omega literature (Beland, Flora,
+# Malkewitz, Revelle & Zinbarg, Zinbarg et al.) against the implementation.
+# ---------------------------------------------------------------------------
+test_that("a raw-scale CI whose upper bound is exactly 1.00 still yields an SE", {
+  # "omega = .88 [.79, 1.00]" is a routine bootstrap print-out at high reliability.
+  # The ci < 1 guard is needed only where log(0) / (0)^(1/3) would be taken.
+  o <- es_from_omega(omega = 0.88, omega_ci_lo = 0.79, omega_ci_up = 1.00,
+                     omega_to_es = "raw")
+  expect_true(is.finite(o$omega_se))
+  expect_equal(o$omega_se, (1.00 - 0.79) / (2 * qnorm(0.975)), tolerance = 1e-12)
+  # on the transformed scales the bound genuinely has no image, so NA is correct
+  expect_true(is.na(es_from_omega(omega = 0.88, omega_ci_lo = 0.79,
+                                  omega_ci_up = 1.00)$omega_se))
+})
+
+test_that("a mis-cased or synonymous omega_type does not abort convert_df()", {
+  d <- data.frame(study_id = c("a", "b", "c"), omega = c(.86, .88, .90),
+                  omega_se = 0.02, omega_type = c("total", "Total", "omega_t"),
+                  n_sample = 300, n_items = 12)
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                           split_adjusted = FALSE), digits = 15))
+  expect_equal(nrow(s), 3L)
+  expect_false(anyNA(s$es))
+  # all three normalise to the same estimand, so V38 must NOT fire
+  expect_false(any(grepl("mixes omega estimands", s$flags)))
+  # an unrecognised value warns and falls back rather than stopping
+  expect_warning(es_from_omega(0.8, omega_se = 0.02, omega_type = "bogus"),
+                 "Unrecognised omega_type")
+  expect_equal(suppressWarnings(
+    es_from_omega(0.8, omega_se = 0.02, omega_type = "bogus")$omega_type), "total")
+})
+
+test_that("a mis-cased icc_type does not abort convert_df() either", {
+  expect_equal(suppressWarnings(
+    es_from_icc(0.8, 50, 3, icc_type = "Agreement"))$icc_type, "agreement")
+  expect_equal(suppressWarnings(
+    es_from_icc(0.8, 50, 3, icc_type = "Consistency"))$icc_type, "consistency")
+  expect_warning(es_from_icc(0.8, 50, 3, icc_type = "bogus"), "Unrecognised icc_type")
+})
+
+test_that("a negative omega is impossible and is now caught", {
+  # omega = (sum lambda)^2 / ((sum lambda)^2 + sum theta) is structurally >= 0,
+  # unlike alpha. It used to pass every check: es = +0.113, se = 0.045, no flag.
+  d <- data.frame(study_id = "x", omega = -0.12, omega_se = 0.05,
+                  n_sample = 300, n_items = 12)
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                           split_adjusted = FALSE),
+                                flags = TRUE, digits = 15))
+  expect_true(is.na(s$es))
+  expect_match(s$flags, "INVALID")
+  expect_match(s$flags, "omega")
+  # a valid omega is untouched
+  d2 <- d; d2$omega <- 0.86
+  s2 <- suppressWarnings(summary(convert_df(d2, measure = "omega", verbose = FALSE,
+                                            split_adjusted = FALSE), digits = 15))
+  expect_equal(s2$es, log(1 - 0.86), tolerance = 1e-12)
 })

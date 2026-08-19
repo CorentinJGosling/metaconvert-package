@@ -138,7 +138,7 @@ assumes the two arms' true standardizing SDs are equal.
 
 \item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha. One of "bonett" (default, the variance-stabilising log(1 - alpha) transform), "raw", or "hakstian_whalen" (the cube-root transform Rodriguez & Maeda (2006) recommend and most published reliability-generalization syntheses use; stored in metafor's increasing orientation, matching measure = "AHW"). See \code{\link{es_from_cronbach_alpha}}.}
 
-\item{omega_to_es}{method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no closed-form sampling variance in (n, k): the standard error is taken from the reported omega_se or confidence interval.}
+\item{omega_to_es}{method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no PUBLISHED sampling variance in (n, k). The alpha formula is numerically close under a correct unidimensional normal model but 8-26\% anti-conservative under ordinal items, mild misspecification, or a hierarchical omega, so the standard error is taken from the reported omega_se or confidence interval instead.}
 
 \item{icc_to_es}{method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).}
 

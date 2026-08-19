@@ -18,18 +18,45 @@
 #'
 #' @details
 #' \strong{Why this function needs a standard error or a confidence interval, and
-#' \code{es_from_cronbach_alpha()} does not.} Coefficient alpha has a closed-form sampling
-#' variance in \eqn{(n, k)} alone -- Bonett's \eqn{2k/((k-1)(n-2))} and the
+#' \code{es_from_cronbach_alpha()} does not.} Coefficient alpha has a closed-form
+#' sampling variance in \eqn{(n, k)} alone -- Bonett's \eqn{2k/((k-1)(n-2))} and the
 #' Hakstian-Whalen variance both descend from the Feldt (1965) / Kristof (1963) result
 #' that \eqn{(1 - r)/(1 - \alpha)} is distributed as \eqn{F}, which holds under
-#' \strong{essential tau-equivalence} (equal true-score loadings), compound symmetry and
-#' multivariate normality. Omega exists precisely to \emph{drop} tau-equivalence: it is
-#' defined for a congeneric model with freely estimated loadings. Borrowing either alpha
-#' variance for omega would therefore be a category error, and there is no (n, k)-only
-#' replacement: the asymptotic variance of omega depends on the full covariance matrix of
-#' the estimated loadings and error variances (Raykov, 2002), which primary studies do not
-#' print, and the recommended interval is a bootstrap (BCa) one computed from raw data
-#' (Kelley & Pornprasertmanit, 2016).
+#' essential tau-equivalence, compound symmetry and multivariate normality. Omega exists
+#' precisely to \emph{drop} tau-equivalence.
+#'
+#' It would be tidy to say that borrowing the alpha variance is therefore a category
+#' error, but that is \strong{not what the numbers show}, and the honest reasons are
+#' more specific. Under a correct unidimensional congeneric \emph{normal} model the
+#' Bonett variance on the \eqn{\ln(1-\omega)} scale is within \eqn{[0.899, 1.003]} of
+#' the full normal-theory asymptotic SE of \eqn{\omega_{total}} (1283 random loading
+#' patterns, \eqn{k \ge 4}, \eqn{\omega \ge 0.60}, \eqn{n = 200}), and coincides with
+#' it exactly under tau-equivalence. The reasons not to use it are that it is
+#' anti-conservative exactly where omega is actually reached for:
+#'
+#' \itemize{
+#'   \item \strong{7.6\% and 25.6\% narrower} than the two published bootstrap CIs in
+#'     Flora (2020) -- inverse-variance weight inflated 1.17x and 1.81x;
+#'   \item \strong{13\% narrower} under a single correlated residual
+#'     (\eqn{r = .30}, \eqn{k = 6}, \eqn{n = 200}), where \eqn{\hat\omega} is also
+#'     biased \eqn{+0.028};
+#'   \item \strong{14-24\% narrower} for a bifactor \eqn{\omega_h}, whose sampling
+#'     variance is governed by the number of \emph{group factors} \eqn{m}, not by
+#'     \eqn{k} (the normal-theory identity is
+#'     \eqn{SE(\ln(1-\omega_h)) = \sqrt{2m/((m-1)n)}});
+#'   \item it \strong{diverges at \eqn{k = 3}} (a just-identified one-factor model);
+#'   \item and \strong{no published source endorses it} -- every source consulted
+#'     declines to give an omega variance at all.
+#' }
+#'
+#' There is also no route through the loadings that adds information: conditioning on a
+#' correctly specified model makes Raykov's (2002) delta method evaluable from
+#' \eqn{(\lambda, n)}, but the result lands inside that same
+#' \eqn{[0.899, 1.003]} band, so a printed loadings table buys essentially nothing over
+#' \eqn{(k, n)} -- while the dominant source of variability \emph{across} studies is
+#' which estimator was used (EFA / Schmid-Leiman / bifactor CFA / first principal
+#' component), which no summary statistic identifies. The recommended interval remains a
+#' bootstrap (BCa) one computed from raw data (Kelley & Pornprasertmanit, 2016).
 #'
 #' The standard error is therefore taken from what the primary study reported, in this
 #' order:
@@ -141,12 +168,13 @@ es_from_omega <- function(omega, omega_se, omega_ci_lo, omega_ci_up,
   omega_type <- rec(omega_type, "omega_type")
   omega_type[is.na(omega_type)] <- "total"
 
-  if (!all(omega_type %in% c("total", "hierarchical", "asymptotic", "subscale"))) {
-    stop(paste0("'", paste(unique(omega_type[!omega_type %in%
-                c("total", "hierarchical", "asymptotic", "subscale")]), collapse = "', '"),
-                "' not in tolerated values for the 'omega_type' argument. ",
-                "Possible inputs are: 'total', 'hierarchical', 'asymptotic', 'subscale'"))
-  }
+  # omega_type arrives from a DATA COLUMN, so it is user transcription rather than
+  # an API argument, and must degrade per row: the package's own rule is that one
+  # bad cell cannot abort a convert_df() run (cf. es_from_prop_single_group). A
+  # capitalised "Total" -- the natural way a human extractor writes it -- used to
+  # throw and take the whole run with it. Case is folded and the common synonyms
+  # mapped; anything still unrecognised falls back to the default with a warning.
+  omega_type <- .normalise_omega_type(omega_type)
   if (!omega_to_es %in% c("bonett", "raw", "hakstian_whalen")) {
     stop(paste0("'", omega_to_es, "' not in tolerated values for the 'omega_to_es' argument. ",
                 "Possible inputs are: 'bonett', 'raw', 'hakstian_whalen'"))
@@ -188,8 +216,14 @@ es_from_omega <- function(omega, omega_se, omega_ci_lo, omega_ci_up,
 
   # 2. otherwise the reported CI, transformed at the BOUNDS so an asymmetric bootstrap
   #    interval maps correctly (BCa is transformation-respecting)
+  # A bound of exactly 1.00 has no log(1 - .) or (1 - .)^(1/3) transform, so it must
+  # be excluded on those scales -- but on the raw scale fwd() is the identity and a
+  # reported "omega = .88 [.79, 1.00]" (a routine bootstrap print-out at high
+  # reliability) is perfectly usable. The guard is therefore scale-conditional;
+  # before, such a row silently lost its SE and became unpoolable for no reason.
+  ci_usable <- if (identical(omega_to_es, "raw")) rep(TRUE, len) else (ci_lo < 1 & ci_up < 1)
   from_ci <- which(transformable & is.na(se) &
-                     !is.na(ci_lo) & !is.na(ci_up) & ci_lo < 1 & ci_up < 1)
+                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable)
   if (length(from_ci)) {
     t_lo <- fwd(ci_lo[from_ci])
     t_up <- fwd(ci_up[from_ci])
@@ -210,4 +244,31 @@ es_from_omega <- function(omega, omega_se, omega_ci_lo, omega_ci_up,
     omega_type = omega_type,
     info_used = "omega"
   )
+}
+
+# Fold case and map the common synonyms for omega_type. Unrecognised values fall
+# back to the default with a warning rather than aborting the run (see the note in
+# es_from_omega()).
+.normalise_omega_type <- function(x, warn = TRUE) {
+  raw <- as.character(x)
+  key <- tolower(trimws(raw))
+  key <- gsub("[^a-z]", "", key)
+  map <- c(
+    total = "total", omegat = "total", omegatotal = "total", tot = "total",
+    hierarchical = "hierarchical", omegah = "hierarchical", hierarchique = "hierarchical",
+    hier = "hierarchical", general = "hierarchical",
+    asymptotic = "asymptotic", omegalim = "asymptotic", asymp = "asymptotic",
+    subscale = "subscale", subscales = "subscale", sub = "subscale"
+  )
+  out <- unname(map[key])
+  bad <- which(is.na(out) & !is.na(raw) & nzchar(key))
+  if (length(bad) && isTRUE(warn)) {
+    warning(paste0(
+      "Unrecognised omega_type value(s): '", paste(unique(raw[bad]), collapse = "', '"),
+      "'. Treated as 'total'. Recognised values are 'total', 'hierarchical', ",
+      "'asymptotic', 'subscale' (case-insensitive; 'omega_t'/'omega_h'/'omega.lim' ",
+      "are also accepted)."))
+  }
+  out[is.na(out)] <- "total"
+  out
 }

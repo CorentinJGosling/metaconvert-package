@@ -94,11 +94,23 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
   if (length(n_measurements) != length(icc)) stop("The length of the 'n_measurements' argument is incorrectly specified.")
   if (length(icc_type) != length(icc)) stop("The length of the 'icc_type' argument is incorrectly specified.")
 
-  if (!all(icc_type %in% c("agreement", "consistency"))) {
-    stop(paste0("'", unique(icc_type[!icc_type %in% c("agreement", "consistency")]),
-                "' not in tolerated values for the 'icc_type' argument. ",
-                "Possible inputs are: 'agreement', 'consistency'"))
+  # Same rule as omega_type: icc_type comes from a DATA COLUMN, so a single
+  # mis-cased cell ("Agreement") must not abort a whole convert_df() run.
+  icc_key <- gsub("[^a-z]", "", tolower(trimws(as.character(icc_type))))
+  icc_map <- c(agreement = "agreement", absoluteagreement = "agreement",
+               icc21 = "agreement", twowayrandom = "agreement",
+               consistency = "consistency", icc31 = "consistency",
+               twowaymixed = "consistency")
+  icc_norm <- unname(icc_map[icc_key])
+  icc_bad <- which(is.na(icc_norm) & nzchar(icc_key))
+  if (length(icc_bad)) {
+    warning(paste0("Unrecognised icc_type value(s): '",
+                   paste(unique(as.character(icc_type)[icc_bad]), collapse = "', '"),
+                   "'. Treated as 'agreement'. Recognised values are 'agreement' and ",
+                   "'consistency' (case-insensitive)."))
   }
+  icc_norm[is.na(icc_norm)] <- "agreement"
+  icc_type <- icc_norm
 
   if (!icc_to_es %in% c("bonett", "raw")) {
     stop(paste0("'", icc_to_es, "' not in tolerated values for the 'icc_to_es' argument. ",
