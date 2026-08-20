@@ -16,7 +16,8 @@ remote    origin  https://github.com/CorentinJGosling/metaconvert-package.git
 ```
 
 **Nothing has been pushed.** On the other laptop the branch does not exist. Before you
-travel, one of these has to happen:
+travel, one of these has to happen — **(d) is the chosen route**; (a)–(c) are recorded
+because they are what you would need if the folder ever has to travel over a network.
 
 **(a) Push it.**
 
@@ -46,25 +47,56 @@ git fetch ../metaconvert-audit-200826.bundle audit-remediation:audit-remediation
 
 **(c) Push to a private remote** you add as a second origin.
 
-### What will NOT travel even after a push
+**(d) Copy the whole folder — CHOSEN.** Better than (a)–(c), not a fallback: it is the
+only route that carries `.git/` *and* the gitignored files, and it needs no publication
+decision. Verified before recommending it — the working tree is clean, and the only
+absolute path in the codebase is inside a dead comment at `R/internal_check_data.R:193`,
+so nothing breaks on a different machine.
 
-These are gitignored, live only on this disk, and contain edits from this session:
+- **Copy the folder itself, not its contents.** `.git` is hidden. Opening `metaConvert/`,
+  Ctrl+A with hidden items not shown, and copying *that* gives you the files with no
+  history and no branch — the one way this goes wrong. Right-click `metaConvert` → Copy.
+- **786 MB** total: `.git` 163 MB, `simulations/data/raw/` 313 MB. Dropping `data/raw/`
+  saves 313 MB and loses nothing you cannot regenerate (seeded, bit-for-bit; the
+  aggregated CSVs are tracked).
+- **Let any running R process finish first**, or the copy picks up a temp file.
+- **The R library does not travel.** The other laptop needs `devtools`, `testthat`,
+  `pkgload`, `metafor`, `estimraw`, `compareDF`, `rio`, `esc`, `MASS`, `mvtnorm`, `psych`,
+  `MBESS`, `semTools` for the package and suites, plus `shiny`, `bslib`, `ggplot2`, `DT`
+  for the app.
+
+#### Copy-back protocol — one authoritative copy at a time
+
+The plan is: work on the other laptop, then delete this folder and drop the returning one
+in its place. That is clean and needs no merge, but it has exactly one failure mode:
+
+> ⚠️ **The moment the copy leaves, THIS machine is frozen.** Any commit made here
+> afterwards is destroyed by the copy-back, silently — the returning `.git` simply does
+> not contain it, and there is no conflict to warn you.
+
+So: no work here while the copy is away. And on the way back, **rename rather than
+delete** — `metaConvert` → `metaConvert-OLD-200826` — confirm the returning copy runs
+(`git log --oneline -1`, then `cd simulations && Rscript tests/run_tests.R`), and only
+then remove the old one. Deleting first turns a bad copy into a lost repository.
+
+### What (d) makes moot — but a push or bundle would leave behind
+
+These are gitignored, so they live only on this disk and contain edits from this session.
+A folder copy carries all of them; (a)–(c) do not:
 
 | path | why it matters |
 |---|---|
-| `simulations/students/` | I added a "not a bug" entry to `task-04-or-to-rr.md` and `task-05-rr-to-or.md` about the single-valued `p_exp` column (roadmap 4.2). Copy the folder manually if you want it. |
+| `simulations/students/` | I added a "not a bug" entry to `task-04-or-to-rr.md` and `task-05-rr-to-or.md` about the single-valued `p_exp` column (roadmap 4.2). |
 | `CLAUDE.md` (repo root) | gitignored; whatever it says about the package does not travel |
 | `simulations/data/raw/*.rds` | ~315 MB, regenerable — every `(study, condition)` re-runs bit-for-bit from `SIM_BASE_SEED`. The **aggregated CSVs are tracked**, so nothing you need for analysis is missing. |
 | `simulations/papers/` | copyrighted PDFs, deliberately excluded |
 
-### Uncommitted right now (yours, not mine)
+### Working tree at the moment of writing
 
-```
- M R/internal_flags.R
- M tests/testthat/test-reliability-generalization.R
-```
-
-Your reliability/omega workstream. I did not touch, stage, or stash them.
+**Clean** — `git status --porcelain` is empty, tip `22e7fb0`. Earlier in the session two
+files were open (`R/internal_flags.R`, `tests/testthat/test-reliability-generalization.R`,
+your reliability/omega workstream); you committed them in `7e385fb`. Nothing of mine is
+left unstaged. Re-check before copying, in case that changed after this was written.
 
 ---
 
@@ -343,11 +375,18 @@ kept for the record**. The ☑ entry above each is the live one. Check before ac
 
 ## 6. One-minute restart on the other laptop
 
+After a folder copy the branch is already checked out; these four lines confirm the copy
+arrived intact and put the next item in front of you.
+
 ```bash
-git checkout audit-remediation
-git log --oneline -3            # 7e385fb / 4732667 / 17c5813 at the time of writing
+git status -sb                  # expect "## audit-remediation", clean. If it errors,
+                                # .git did not come across -- copy the FOLDER, not its contents
+git log --oneline -3            # 22e7fb0 / 7e385fb / 4732667 at the time of writing
 cd simulations && Rscript tests/run_tests.R     # expect 548 / 0 / 0 / 0
 sed -n '/^### 4.4/,/^### 4.5/p' ROADMAP.md      # the next item
 ```
+
+If the suite errors on a missing package, install from the list in §0(d) — the R library
+does not travel with the folder.
 
 Then re-read §4 above and implement — the measurement is done.
