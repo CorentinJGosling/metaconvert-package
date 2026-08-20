@@ -549,3 +549,22 @@ test_that("the omega passthrough refusal names omega_to_es, not prop_to_es", {
                                            verbose = FALSE, split_adjusted = FALSE), digits = 15))
   expect_equal(s$es[2], 0.91)
 })
+
+test_that("V31 is scoped to measure = 'icc' and does not leak into other runs", {
+  # A COSMIN-style sheet holds alpha, omega and ICC columns side by side and is
+  # run once per property. Tier-1 checks key on which COLUMNS exist, not on the
+  # requested measure, so without an explicit test the ICC standard-error note
+  # appeared on every alpha and omega run off the same sheet.
+  d <- data.frame(study_id = c("a", "b"),
+                  n_sample = c(300, 120),
+                  cronbach_alpha = c(0.87, NA), n_items = c(9, NA),
+                  omega = c(0.89, NA), omega_se = c(0.02, NA),
+                  icc = c(NA, 0.94), n_measurements = c(NA, 2),
+                  icc_type = c(NA, "agreement"))
+  f <- function(m) suppressWarnings(summary(
+    convert_df(d, measure = m, split_adjusted = FALSE, verbose = FALSE),
+    flags = TRUE, digits = 15))$flags
+  expect_false(any(grepl("ICC agreement-type", f("alpha"))))
+  expect_false(any(grepl("ICC agreement-type", f("omega"))))
+  expect_true(any(grepl("ICC agreement-type", f("icc"))))
+})

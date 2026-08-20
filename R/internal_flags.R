@@ -595,7 +595,16 @@
   # when raters differ systematically (informational, always active, like
   # V18/V21). icc_type = NA or an absent column resolves to the package
   # default "agreement".
-  if ("icc" %in% colnames(x)) {
+  #
+  # Scoped to measure = "icc". This note is about the ICC SE, so it has no
+  # business on an alpha or omega run -- and a COSMIN-style extraction sheet
+  # that holds alpha, omega and ICC columns side by side (one sheet, several
+  # properties, one pool per property) would otherwise carry it into every run.
+  # Tier-1 checks are keyed on which COLUMNS exist rather than on the requested
+  # measure, so the measure test has to be explicit here, as it already is for
+  # V26. NULL/empty measure keeps the old behaviour for direct callers.
+  icc_measure_ok <- is.null(measure) || !nzchar(measure) || identical(measure, "icc")
+  if ("icc" %in% colnames(x) && icc_measure_ok) {
     icc_type_eff <- if ("icc_type" %in% colnames(x)) {
       tt <- as.character(x[["icc_type"]])
       tt[is.na(tt)] <- "agreement"
