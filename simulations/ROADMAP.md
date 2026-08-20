@@ -1273,12 +1273,69 @@ diagnostic in `simulations/R/`.
 > `aggregates-fresh` unchanged at 40, i.e. adding the two analysis helpers did not mark
 > any aggregate stale (the 4.1 refinement doing its job).
 
-### 4.3 ☐ App: study 01b's default target is the one wrong target
+### 4.3 ☑ App: study 01b's default target is the one wrong target — DONE
 
-The app's target-ordering heuristic defaults 01b to `fisherz_biserial`, and the
-sidebar advises preferring shared targets over `own` — exactly backwards for a VST
-route. (01b is not the app's default *study*, only the default target within it.)
-Fix the ordering for VST-scaled studies, or suppress the mismatched shared cell.
+> **Confirmed exactly as written, and quantified.** 01b records no target named
+> "population", so the ordering rule fell through to the alphabetically first shared
+> target, `fisherz_biserial`, while the sidebar told the reader to prefer shared
+> benchmarks over `own`. That target is `atanh()` of the biserial correlation, and on
+> the z scale **neither route produces it**: viechtbauer returns a variance-stabilising
+> transform, lipsey_cooper returns `atanh()` of the POINT-biserial. At
+> `rho = 0.75, p_exp = 0.5` the three quantities are **0.973 / 0.724 / 0.691**.
+> Measured consequence, mean over the shipped grid:
+>
+> | target | lipsey_cooper | viechtbauer |
+> |---|---|---|
+> | `fisherz_biserial` (the old default) | bias −0.108, coverage **0.736** | −0.092, **0.773** |
+> | `fisherz_pointbiserial` | −0.0004, 0.944 | +0.015, 0.934 |
+> | `own` | −0.0004, 0.944 | +0.007, 0.938 |
+>
+> ⚠️ **Two corrections to the item, both from measurement.**
+>
+> (a) **Studies 03 and 09 look like the same defect and are not**, so they were
+> deliberately left alone — an earlier draft of this fix would have changed them and
+> deleted a finding. Their `population` target is attained **exactly** by the route
+> that is correct for the mechanism (03a `phi (r)` 0.0035 / 0.962, identical to its
+> `own`; 03b and 09a `tetrachoric (r)` likewise), and where nothing attains it — 09b,
+> where phi is the estimand and metaConvert ships no phi route — **that gap is the
+> study's result**. Both also carry a scale switch that opens on `(r)`, which is the
+> scale their shared targets are on.
+>
+> (b) **The fix cannot be a rule derived from the data.** The shape "every method
+> misses this shared target by a margin that is large and flat in n" is the intended
+> FINDING in 07, 08 and 09b and the defect in 01b, and no statistic in the aggregates
+> separates them — an estimand gap and a wrong-scale gap are both flat in n. Four
+> candidate predicates were tried and all four misfired. The judgement already exists
+> in each study file's header prose, so it is declared: `STUDY_RANK_ON` in `app/app.R`,
+> beside the `STUDY_LABELS` map the app already carries, with the same
+> missing-entry-is-fine fallback. **One entry**, for 01b.
+>
+> **What landed.** `app/app.R` gains three pure, Shiny-free helpers — `target_order()`,
+> `default_target()`, `unattained_targets()` — plus `.scale_mismatch()` and the two
+> declared maps `STUDY_RANK_ON` / `STUDY_SHARED_SCALE`. 01b now opens on
+> `fisherz_pointbiserial`; `fisherz_biserial` stays in the list, marked *no route
+> estimates this*. That marker is **derived, not declared**: a route whose own estimand
+> is a named target produces the identical bias column against both, so exact vector
+> equality answers "does anything target this?" with no threshold. It is neutral by
+> design — in 08 and 09b it fires on `population` and states those studies' results.
+> A second warning fires when a reader switches studies 03/09 to the `(z)` routes while
+> a shared target is selected, since `population`/`sample` stay on the r scale there.
+> The HOW TO READ modal explains the marker and both of its meanings.
+>
+> ⚠️ **A regression caught by running it**: the first version of
+> `unattained_targets()` labelled every `*sample*` target, i.e. all 12 studies. `own` is
+> a population quantity everywhere, so a same-sample target can never equal it — the
+> marker would have been noise on the study it was built for. Sample targets are now
+> excluded, and a test pins that they stay excluded.
+>
+> **Verified in the running app**, not only by unit test: `shiny::testServer()` renders
+> 01b with `fisherz_pointbiserial` carrying `checked="checked"` and the marker on
+> `fisherz_biserial` alone; 01a still opens on `biserial_population` and 09b on
+> `population` (marked); the scale warning is absent at `(r)`, present at `(z)`, and
+> absent again on `own`.
+>
+> **Verified:** `simulations/tests` **548 pass / 0 fail / 0 error / 0 skip** (477 + 71).
+> No package code touched.
 
 ### 4.4 ☐ README kernel table: `.single_group_pre_post_to_smd` **is** run
 

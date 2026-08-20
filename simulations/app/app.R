@@ -73,6 +73,60 @@ STUDY_LABELS <- c(
   "09b_or_to_cor_CAT"     = "Odds ratio to correlation (categorical latent)"
 )
 
+## Which target this study should OPEN on, where the generic ordering below gets it
+## wrong. A study missing from this list falls back to the ordering rule in
+## target_ui(); this map only overrides, it never has to be complete.
+##
+## WHY IT HAS TO BE DECLARED RATHER THAN DERIVED (roadmap 4.3). The generic rule
+## prefers a shared benchmark over `own`, which is right almost everywhere: the gap to
+## the population parameter is usually the FINDING (study 07's covariate
+## misspecification, study 08's standardiser choice, study 03a's tetrachoric-under-a-
+## categorical-mechanism). But the same shape also occurs when the benchmark is simply
+## on the wrong scale for the routes being scored, and no statistic in the file
+## separates the two: both produce a bias that is large and flat in n. The judgement
+## lives in the study file's header prose, so it is written down here.
+##
+## 01b IS THE CASE THAT NEEDS IT. Its targets were named symmetrically with 01a's, but
+## the two scales are not symmetric: on the r scale `biserial_population` IS what
+## viechtbauer estimates, whereas on the z scale viechtbauer returns a
+## VARIANCE-STABILISING transform, not atanh() of anything. So `fisherz_biserial` --
+## which the ordering rule picks, there being no target named "population" -- is a
+## quantity NEITHER route estimates. At rho = 0.75, p_exp = 0.5 the three values are
+## atanh(biserial) 0.973, viechtbauer's transform 0.724, atanh(point-biserial) 0.691.
+## Measured consequence on the shipped aggregate, mean over the grid:
+##
+##   target                  lipsey_cooper          viechtbauer
+##   fisherz_biserial        bias -0.108, cov 0.736 bias -0.092, cov 0.773
+##   fisherz_pointbiserial   bias -0.000, cov 0.944 bias +0.015, cov 0.934
+##
+## i.e. the app opened on the one benchmark that makes both routes look broken while
+## the sidebar told the reader to prefer it over `own`. `fisherz_pointbiserial` is a
+## genuine shared benchmark -- lipsey_cooper estimates it exactly, and viechtbauer's
+## gap to it is a real, interpretable estimand difference -- so that is the opening
+## view. `fisherz_biserial` stays available and is labelled for what it is.
+##
+## STUDIES 03 AND 09 WERE CHECKED AND ARE NOT LISTED, deliberately. They look like the
+## same defect and are not: their `population` target is attained exactly by the route
+## that is correct for the mechanism (03a phi (r) 0.0035/0.962 = its own; 03b and 09a
+## tetrachoric (r) likewise), and where no route attains it -- 09b, where phi is the
+## estimand and metaConvert ships no phi route -- that gap IS the study's result. Both
+## also carry a scale switch that opens on (r), which is the scale their shared targets
+## are on. Changing their default would have deleted the finding.
+STUDY_RANK_ON <- c(
+  "01b_smd_to_cor_z" = "fisherz_pointbiserial"
+)
+
+## The scale the SHARED targets are expressed on, for the studies whose method names
+## carry an "(r)" / "(z)" suffix. Their population/sample columns stay on the r scale
+## whichever route is being scored -- studies/09_or_to_cor.R says so in terms
+## ("`population`/`sample` stay on the r scale and are interpretable only for the (r)
+## routes") -- so selecting the (z) methods against one of them compares two different
+## transforms. The app opens on (r), so this only fires after the reader switches.
+STUDY_SHARED_SCALE <- c(
+  "03a_2x2_to_cor_CAT" = "r", "03b_2x2_to_cor_CONT" = "r",
+  "09a_or_to_cor_CONT" = "r", "09b_or_to_cor_CAT"   = "r"
+)
+
 ## The package argument each study evaluates. Shown beside the title so the app
 ## answers "which setting am I looking at?" without opening the study file.
 STUDY_ARG <- c(
@@ -129,6 +183,21 @@ METRICS <- list(
 ## What is wrong with `own` is that it is a DIFFERENT quantity per method, so it
 ## cannot rank methods against each other -- a separate warning, raised
 ## separately.
+## Is the selected shared target on a different scale from the selected methods?
+##
+## Studies whose method names carry an "(r)" / "(z)" suffix keep their population and
+## sample columns on ONE scale whichever route is scored -- studies/09_or_to_cor.R:
+## "`population`/`sample` stay on the r scale and are interpretable only for the (r)
+## routes". Selecting the (z) methods against one of them compares two different
+## transforms, and the resulting gap is arithmetic, not performance. The app opens on
+## (r), so this only fires once the reader has switched the scale.
+.scale_mismatch <- function(study, scale, target) {
+  if (is.null(study) || is.null(scale) || is.null(target)) return(FALSE)
+  if (!study %in% names(STUDY_SHARED_SCALE)) return(FALSE)
+  if (grepl("^own", target)) return(FALSE)          # own is scale-matched by construction
+  !identical(scale, unname(STUDY_SHARED_SCALE[[study]]))
+}
+
 .calibration_ok <- function(metric, target) {
   if (is.null(metric) || is.null(target)) return(TRUE)
   if (!metric %in% c("coverage", "se_ratio")) return(TRUE)
@@ -167,6 +236,69 @@ pretty_target <- function(z) {
   if (z == "own") "own estimand"
   else if (z == "own_true_r") "own estimand at the true r"
   else gsub("_", " ", z)
+}
+
+## Order the targets for the radio list, shared benchmarks first.
+##
+## Targets are two different kinds of thing, and presenting them as one flat list
+## invites the mistake of ranking methods against `own`. A SHARED target is one
+## benchmark applied to every method, and is what you need to choose between them;
+## `own` is a DIFFERENT benchmark per method, a diagnostic rather than a basis for
+## comparison. Shared first, population-scale ones ahead of the rest, `own` last.
+target_order <- function(targets) {
+  own_like <- grep("^own", targets, value = TRUE)
+  shared <- setdiff(targets, own_like)
+  pop <- grep("population", shared, value = TRUE)
+  c(sort(pop), sort(setdiff(shared, pop)), sort(own_like))
+}
+
+## Which target the app opens on. A declared entry in STUDY_RANK_ON wins, but only if
+## the study actually records it -- an entry naming a target that is not in the file
+## would silently do nothing, which is how a hardcoded list rots. Otherwise: the first
+## population-scale target, else the first in the ordering above.
+default_target <- function(targets, study = NULL) {
+  if (!length(targets)) return(NULL)
+  if (!is.null(study) && study %in% names(STUDY_RANK_ON)) {
+    want <- STUDY_RANK_ON[[study]]
+    if (want %in% targets) return(want)
+  }
+  pop <- grep("population", setdiff(targets, grep("^own", targets, value = TRUE)),
+              value = TRUE)
+  if (length(pop)) sort(pop)[1] else target_order(targets)[1]
+}
+
+## Shared targets that NO method in this study estimates.
+##
+## Exact and threshold-free: run_study() writes one row per (condition, method,
+## target), so a method whose `own` estimand IS a named shared target produces the
+## identical bias column against both. Comparing the two ordered vectors therefore
+## answers "does any route actually target this?" with no tolerance to choose.
+##
+## The answer is worth showing either way, and the label is deliberately neutral. In
+## 01b it says `fisherz_biserial` is an artefact of the target naming; in 08 and 09b it
+## says no route recovers the quantity the review wants, which is those studies' result.
+##
+## SAME-SAMPLE TARGETS ARE EXCLUDED, and must stay excluded. `own` is a population
+## quantity in every study, so a `*sample*` target -- the same statistic recomputed on
+## the replication's own draw -- can never equal it, and the test would fire on all 12
+## studies while saying nothing: a method DOES estimate that statistic, it is simply
+## random rather than fixed. The app already carries a dedicated warning for them.
+unattained_targets <- function(agg) {
+  tg <- unique(agg$target)
+  if (!"own" %in% tg) return(character(0))
+  shared <- setdiff(tg, grep("^own", tg, value = TRUE))
+  shared <- shared[!grepl("sample", shared)]
+  if (!length(shared) || !"bias" %in% names(agg)) return(character(0))
+  k <- condition_cols(agg)
+  if (!length(k)) return(character(0))
+  vec <- function(m, t) {
+    d <- agg[agg$method == m & agg$target == t, , drop = FALSE]
+    d[do.call(order, d[k]), "bias"]
+  }
+  ms <- unique(agg$method)
+  shared[!vapply(shared, function(t)
+    any(vapply(ms, function(m) isTRUE(all.equal(vec(m, t), vec(m, "own"))), logical(1))),
+    logical(1))]
 }
 
 ## ---- plot theme --------------------------------------------------------------
@@ -532,6 +664,15 @@ HOW_TO_READ <- HTML(
    not the one being asked for. The <b>Estimand check</b> tab shows both at once,
    which is the only place the comparison is safe.</p>
 
+   <p>A shared benchmark is sometimes marked <i>no route estimates this</i>. That is
+   read off the data, not declared: a route whose own estimand IS a named target
+   produces the identical bias column against both, so where no route does, nothing
+   in the study is trying to produce that number. It means two different things and
+   the tab you are on tells you which. In study 08 and in <b>OR to correlation
+   (categorical latent)</b> it is the RESULT &mdash; the quantity a review wants and
+   no conversion delivers. In <b>SMD to correlation (z)</b> it is an artefact of how
+   the targets were named, which is why that study opens elsewhere.</p>
+
    <h4>Why coverage is the default measure</h4>
    <p>A conversion can be nearly unbiased in the point estimate and badly
    miscalibrated in its standard error &mdash; which matters more in meta-analysis
@@ -697,34 +838,32 @@ server <- function(input, output, session) {
   ## Target names are study-specific: most studies record own/population/sample,
   ## but study 01 records biserial_* and pointbiserial_* separately and study 08
   ## adds own_true_r. Read them from the file rather than assuming.
-  ## Targets are of two different kinds, and presenting them as one flat list
-  ## invites the mistake of ranking methods against `own`. A SHARED target is one
-  ## benchmark applied to every method, and is what you need to choose between
-  ## them. `own` is a DIFFERENT benchmark per method -- it measures whether each
-  ## method computes its own quantity correctly, which is a diagnostic, not a
-  ## basis for comparison. Shared targets are listed first and one of them is the
-  ## default; `own` is separated and labelled for what it is.
+  ## The ordering, the opening selection and the "no route estimates this" labelling
+  ## live in target_order() / default_target() / unattained_targets() at the top of
+  ## this file, so they can be exercised without starting Shiny (roadmap 4.3).
   output$target_ui <- renderUI({
-    tg <- unique(raw()$target)
+    ag <- raw()
+    tg <- unique(ag$target)
     own_like <- grep("^own", tg, value = TRUE)
-    shared <- setdiff(tg, own_like)
-    pop <- grep("population", shared, value = TRUE)
-    ord <- c(sort(pop), sort(setdiff(shared, pop)), sort(own_like))
+    ord <- target_order(tg)
+    unattained <- unattained_targets(ag)
     pretty <- vapply(ord, function(z) {
-      if (z == "own") "Each method's own estimand"
+      base <- if (z == "own") "Each method's own estimand"
       else if (z == "own_true_r") "Own estimand, at the true r"
       else if (z == "population") "Population parameter"
       else if (z == "sample") "Same-sample statistic"
       else gsub("_", " ", z)
+      if (z %in% unattained) paste0(base, " — no route estimates this") else base
     }, character(1))
     tagList(
       div(class = "opts",
           radioButtons("target", NULL,
                        choices = stats::setNames(ord, pretty),
-                       selected = if (length(pop)) sort(pop)[1] else ord[1])),
+                       selected = default_target(tg, input$study))),
       div(class = "hint",
           if (length(own_like))
-            HTML(paste0("Shared benchmarks come first — use those to compare methods. ",
+            HTML(paste0("Shared benchmarks come first — use those to compare methods, ",
+                        "except where one is marked <i>no route estimates this</i>. ",
                         "<b>Own estimand</b> scores each method against a different quantity. ",
                         "<a id=\"howto2\" class=\"action-button\">What that means</a>"))
           else NULL)
@@ -944,6 +1083,18 @@ server <- function(input, output, session) {
     ok <- .calibration_ok(input$metric, input$target)
     own <- grepl("^own", input$target)
 
+    if (.scale_mismatch(input$study, input$scale, input$target)) {
+      return(div(
+        class = "note warn", span(class = "ic", "!"),
+        div(HTML(paste0(
+          "<b>The <code>", input$target, "</code> target is on the <b>",
+          unname(STUDY_SHARED_SCALE[[input$study]]), "</b> scale, and you are viewing the <b>",
+          input$scale, "</b> routes.</b> The two are different transforms of the same ",
+          "quantity, so the gap below is arithmetic rather than a difference in ",
+          "performance. Switch the reported scale back, or score against ",
+          "<b>each method&rsquo;s own estimand</b>, which is scale-matched by construction.")))))
+    }
+
     if (!ok) {
       return(div(
         class = "note warn", span(class = "ic", "!"),
@@ -1154,7 +1305,14 @@ server <- function(input, output, session) {
             "the time and 1.00 the rest averages to a perfect 0.95 while being miscalibrated ",
             "throughout. <code>worst</code> is the least favourable single condition, which ",
             "is what a review should plan for."))),
-      if (grepl("sample", input$target))
+      if (.scale_mismatch(input$study, input$scale, input$target))
+        div(class = "note warn", span(class = "ic", "!"),
+            div(HTML(paste0("The <b>", input$target, "</b> target is on the <b>",
+                            unname(STUDY_SHARED_SCALE[[input$study]]), "</b> scale while these ",
+                            "routes report <b>", input$scale, "</b>. This ranking is of two ",
+                            "different transforms; switch the scale back or rank on ",
+                            "<b>each method&rsquo;s own estimand</b>."))))
+      else if (grepl("sample", input$target))
         div(class = "note warn", span(class = "ic", "!"),
             div(HTML(paste0("Coverage and the SE ratio are <b>not interpretable</b> against the ",
                             "<b>", input$target, "</b> target: a nominal 95% interval is not built ",
