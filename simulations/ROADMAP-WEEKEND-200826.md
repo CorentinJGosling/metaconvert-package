@@ -10,9 +10,11 @@ what is blocking, what was measured this session, and what the next item needs.
 
 ```
 branch    audit-remediation
-ahead of  master by 33 commits
-upstream  NONE   (git status -sb prints "## audit-remediation" with no ...origin/…)
+upstream  NONE   <- the durable fact: git status -sb prints "## audit-remediation"
+                    with no "...origin/…", i.e. this branch exists nowhere else
 remote    origin  https://github.com/CorentinJGosling/metaconvert-package.git
+ahead of  master by 35 commits, tip 11ab2f8   <- drifts; check with
+                    git log --oneline master..HEAD | wc -l
 ```
 
 **Nothing has been pushed.** On the other laptop the branch does not exist. Before you
@@ -93,10 +95,11 @@ A folder copy carries all of them; (a)–(c) do not:
 
 ### Working tree at the moment of writing
 
-**Clean** — `git status --porcelain` is empty, tip `22e7fb0`. Earlier in the session two
-files were open (`R/internal_flags.R`, `tests/testthat/test-reliability-generalization.R`,
-your reliability/omega workstream); you committed them in `7e385fb`. Nothing of mine is
-left unstaged. Re-check before copying, in case that changed after this was written.
+**Clean** — `git status --porcelain` empty. Earlier in the session two files were open
+(`R/internal_flags.R`, `tests/testthat/test-reliability-generalization.R`, the
+reliability/omega workstream); they landed in `7e385fb`. Nothing of mine is left
+unstaged. **Re-run `git status --porcelain` immediately before copying** — this drifted
+several times while the file was being written.
 
 ---
 
@@ -131,7 +134,7 @@ cd simulations && Rscript tests/run_tests.R
 | suite | count | note |
 |---|---|---|
 | `tests/testthat/` | **3210** pass / 0 fail / 0 error | moved 3178 → 3207 → 3210 *during* the session as your reliability work landed. **Re-measure before trusting it**; it is not a fixed number while two people are in the tree. |
-| `tests_save/checked/` | **7198** pass / 0 fail / 0 error | was 7193; the +5 came from your uncommitted `R/` edits, not from test edits (`tests_save/` is clean in git). A re-run was still in flight when this was written. |
+| `tests_save/checked/` | **7198** pass / 0 fail / 0 error | confirmed twice, second run finished after `7e385fb` landed. Was 7193 before this session; the +5 came from the reliability changes in `R/`, not from test edits — `tests_save/` itself is unmodified in git. Takes ~25 min. |
 | `simulations/tests/` | **548** pass / 0 fail / 0 error / 0 skip | 438 at session start, +39 (item 4.2) +71 (item 4.3) |
 
 **Check the `error` column, not just `failed`.** An erroring `test_that` block reports
