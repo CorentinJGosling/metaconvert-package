@@ -334,8 +334,11 @@ test_that("a mis-cased or synonymous omega_type does not abort convert_df()", {
   # an unrecognised value warns and falls back rather than stopping
   expect_warning(es_from_omega(0.8, omega_se = 0.02, omega_type = "bogus"),
                  "Unrecognised omega_type")
+  # the fallback is deliberately "unspecified", NOT the default estimand: mapping an
+  # unreadable value onto "total" would silently relabel a hierarchical omega and
+  # disarm V38, the flag that exists for exactly that error
   expect_equal(suppressWarnings(
-    es_from_omega(0.8, omega_se = 0.02, omega_type = "bogus")$omega_type), "total")
+    es_from_omega(0.8, omega_se = 0.02, omega_type = "bogus")$omega_type), "unspecified")
 })
 
 test_that("a mis-cased icc_type does not abort convert_df() either", {
@@ -428,4 +431,121 @@ test_that("omega_estimator reaches the extraction sheet and survives convert_df(
                                            split_adjusted = FALSE), digits = 15))
   expect_equal(nrow(s), 2L)
   expect_false(anyNA(s$es))
+})
+
+# ---------------------------------------------------------------------------
+# Defects found by a hostile end-to-end dry run of a real RG analysis.
+# Every one of these produced a wrong weight or a silent study loss.
+# ---------------------------------------------------------------------------
+test_that("omega confidence intervals are validated (its SE comes ENTIRELY from them)", {
+  d <- data.frame(study_id = c("ok", "transposed", "outside"), omega = c(.86, .86, .95),
+                  omega_ci_lo = c(.81, .90, .70), omega_ci_up = c(.90, .81, .80),
+                  n_sample = 300, n_items = 12)
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                           split_adjusted = FALSE), flags = TRUE, digits = 15))
+  expect_false(is.na(s$es[1]))
+  expect_true(is.na(s$es[2])); expect_match(s$flags[2], "Inverted CI for 'omega'")
+  expect_true(is.na(s$es[3])); expect_match(s$flags[3], "outside CI for 'omega'")
+})
+
+test_that("a non-positive omega_se is flagged rather than silently dropping the study", {
+  d <- data.frame(study_id = c("neg", "zero", "ok"), omega = c(.86, .80, .90),
+                  omega_se = c(-0.03, 0, 0.02), n_sample = 300, n_items = 12)
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                           split_adjusted = FALSE), flags = TRUE, digits = 15))
+  expect_match(s$flags[1], "Negative input: 'omega_se'")
+  expect_match(s$flags[2], "Zero SE: 'omega_se'")
+  expect_false(is.na(s$es[3]))
+})
+
+test_that("an unrecognised omega_type falls back to 'unspecified', not to an estimand", {
+  # mapping it onto "total" silently relabels a hierarchical omega AND disarms V38
+  n <- function(x) suppressWarnings(.normalise_omega_type(x))
+  expect_equal(n("omega_hierarchical"), "hierarchical")
+  expect_equal(n("general factor"), "hierarchical")
+  expect_equal(n("Omega Hierarchical"), "hierarchical")
+  expect_equal(n("bogus"), "unspecified")
+  # and V38 ignores unspecified, as V39 does
+  d <- data.frame(study_id = c("a", "b"), omega = c(.86, .72), omega_se = 0.02,
+                  omega_type = c("total", "bogus"), n_sample = 300, n_items = 12)
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                           split_adjusted = FALSE), flags = TRUE, digits = 15))
+  expect_false(any(grepl("mixes omega estimands", s$flags)))
+})
+
+test_that("a coefficient of exactly 1 is explained instead of vanishing (V40)", {
+  d <- data.frame(study_id = c("a", "b"), cronbach_alpha = c(1.00, .87),
+                  n_sample = 300, n_items = 18)
+  s <- suppressWarnings(summary(convert_df(d, measure = "alpha", verbose = FALSE,
+                                           split_adjusted = FALSE), flags = TRUE, digits = 15))
+  expect_true(is.na(s$es[1]))
+  expect_match(s$flags[1], "= 1 exactly")
+  expect_match(s$flags[1], "no bonett transform")
+  # on the raw scale 1 is a usable boundary, so V40 must stay silent there
+  s_raw <- suppressWarnings(summary(convert_df(d, measure = "alpha", alpha_to_es = "raw",
+                                               verbose = FALSE, split_adjusted = FALSE),
+                                    flags = TRUE, digits = 15))
+  expect_equal(s_raw$es[1], 1)
+  expect_false(grepl("= 1 exactly", s_raw$flags[1]))
+})
+
+test_that("summary() returns NORMALISED omega_estimator so meta-regression works", {
+  skip_if_not_installed("metafor")
+  d <- data.frame(study_id = paste0("S", 1:6), omega = c(.86, .88, .90, .84, .91, .87),
+                  omega_se = 0.02,
+                  omega_estimator = c("psych", "bifactor CFA", "PCA",
+                                      "psych_omega", "cfa_bifactor", "first PC"),
+                  n_sample = 300, n_items = 12)
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", verbose = FALSE,
+                                           split_adjusted = FALSE), digits = 15))
+  expect_equal(sort(unique(s$omega_estimator)),
+               c("cfa_bifactor", "efa_schmid_leiman", "first_pc"))
+  m <- metafor::rma(yi = s$es, sei = s$se, mods = ~ s$omega_estimator, method = "REML")
+  expect_equal(length(m$beta), 3L)
+})
+
+test_that("D1 does not flag a homogeneous reliability pool, but still catches a real outlier", {
+  set.seed(1)
+  a <- round(runif(20, .91, .93), 3)
+  d <- data.frame(study_id = paste0("S", 1:20), cronbach_alpha = a,
+                  n_sample = sample(150:400, 20), n_items = 18)
+  for (sc in c("bonett", "hakstian_whalen", "raw")) {
+    s <- suppressWarnings(summary(convert_df(d, measure = "alpha", alpha_to_es = sc,
+                                             verbose = FALSE, split_adjusted = FALSE),
+                                  flags = TRUE, digits = 15))
+    expect_equal(sum(grepl("ES outlier", s$flags)), 0L, info = sc)
+  }
+  d2 <- d; d2$cronbach_alpha[7] <- 0.30
+  s2 <- suppressWarnings(summary(convert_df(d2, measure = "alpha", verbose = FALSE,
+                                            split_adjusted = FALSE), flags = TRUE, digits = 15))
+  expect_true(grepl("ES outlier", s2$flags[7]))
+})
+
+test_that("V36 and V37 route to the crude scope only", {
+  d <- data.frame(study_id = paste0("S", 1:5), cronbach_alpha = c(.88, .85, .90, .86, .87),
+                  n_sample = c(200, 210, 190, 205, 195), n_items = c(20, 20, 8, 20, 20))
+  s <- suppressWarnings(summary(convert_df(d, measure = "alpha", verbose = FALSE),
+                                flags = TRUE, digits = 15))
+  expect_gt(sum(nzchar(s$flags_crude)), 0)
+  # measure = "alpha" has no adjusted hierarchy, so nothing may land there
+  expect_equal(sum(nzchar(s$flags_adjusted)), 0L)
+})
+
+test_that("the omega passthrough refusal names omega_to_es, not prop_to_es", {
+  d <- data.frame(study_id = c("n", "u"), omega = c(0.88, NA), omega_se = c(0.02, NA),
+                  n_sample = 300, n_items = 12,
+                  user_es_crude = c(NA, 0.91), user_se_crude = c(NA, 0.02),
+                  user_es_original_measure_crude = c(NA, "omega"),
+                  user_es_target_measure_crude = c(NA, "omega"))
+  w <- character(0)
+  withCallingHandlers({convert_df(d, measure = "omega", verbose = FALSE,
+                                  split_adjusted = FALSE); NULL},
+                      warning = function(x) { w <<- c(w, conditionMessage(x))
+                                              invokeRestart("muffleWarning") })
+  expect_true(any(grepl("omega_to_es", w)))
+  expect_false(any(grepl("prop_to_es", w)))
+  # and omega_to_es = "raw" really does unlock it, as the message says
+  s <- suppressWarnings(summary(convert_df(d, measure = "omega", omega_to_es = "raw",
+                                           verbose = FALSE, split_adjusted = FALSE), digits = 15))
+  expect_equal(s$es[2], 0.91)
 })

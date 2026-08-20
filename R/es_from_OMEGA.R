@@ -42,12 +42,12 @@
 #' anti-conservative exactly where omega is actually reached for:
 #'
 #' \itemize{
-#'   \item \strong{7.6\% and 25.6\% narrower} than the two published bootstrap CIs in
+#'   \item \strong{7.6% and 25.6% narrower} than the two published bootstrap CIs in
 #'     Flora (2020) -- inverse-variance weight inflated 1.17x and 1.81x;
-#'   \item \strong{13\% narrower} under a single correlated residual
+#'   \item \strong{13% narrower} under a single correlated residual
 #'     (\eqn{r = .30}, \eqn{k = 6}, \eqn{n = 200}), where \eqn{\hat\omega} is also
 #'     biased \eqn{+0.028};
-#'   \item \strong{14-24\% narrower} for a bifactor \eqn{\omega_h}, whose sampling
+#'   \item \strong{14-24% narrower} for a bifactor \eqn{\omega_h}, whose sampling
 #'     variance is governed by the number of \emph{group factors} \eqn{m}, not by
 #'     \eqn{k} (the normal-theory identity is
 #'     \eqn{SE(\ln(1-\omega_h)) = \sqrt{2m/((m-1)n)}});
@@ -309,21 +309,32 @@ es_from_omega <- function(omega, omega_se, omega_ci_lo, omega_ci_up,
   key <- gsub("[^a-z]", "", key)
   map <- c(
     total = "total", omegat = "total", omegatotal = "total", tot = "total",
+    omegatot = "total",
     hierarchical = "hierarchical", omegah = "hierarchical", hierarchique = "hierarchical",
-    hier = "hierarchical", general = "hierarchical",
+    hier = "hierarchical", general = "hierarchical", omegahierarchical = "hierarchical",
+    generalfactor = "hierarchical", omegageneral = "hierarchical",
     asymptotic = "asymptotic", omegalim = "asymptotic", asymp = "asymptotic",
-    subscale = "subscale", subscales = "subscale", sub = "subscale"
+    subscale = "subscale", subscales = "subscale", sub = "subscale",
+    # the normaliser must be IDEMPOTENT: convert_df() normalises the stored column
+    # and es_from_omega() normalises again, so every output must be a valid input
+    unspecified = "unspecified", unknown = "unspecified", notreported = "unspecified",
+    nr = "unspecified", none = "unspecified"
   )
   out <- unname(map[key])
   bad <- which(is.na(out) & !is.na(raw) & nzchar(key))
   if (length(bad) && isTRUE(warn)) {
     warning(paste0(
       "Unrecognised omega_type value(s): '", paste(unique(raw[bad]), collapse = "', '"),
-      "'. Treated as 'total'. Recognised values are 'total', 'hierarchical', ",
+      "'. Treated as 'unspecified'. Recognised values are 'total', 'hierarchical', ",
       "'asymptotic', 'subscale' (case-insensitive; 'omega_t'/'omega_h'/'omega.lim' ",
       "are also accepted)."))
   }
-  out[is.na(out)] <- "total"
+  # Fall back to "unspecified", NOT to "total". Mapping an unrecognised value onto a
+  # real estimand is worse than leaving it unknown: it silently relabels a
+  # hierarchical omega as a total one and DISARMS V38, the flag that exists for
+  # exactly that error. (.normalise_omega_estimator() already fell back this way;
+  # this one did not.) V38 ignores "unspecified" the same way V39 does.
+  out[is.na(out)] <- "unspecified"
   out
 }
 

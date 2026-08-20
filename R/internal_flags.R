@@ -270,7 +270,7 @@
     "mean_change_se_exp", "mean_change_se_nexp",
     "ancova_mean_se_exp", "ancova_mean_se_nexp",
     "md_se", "ancova_md_se", "logor_se", "logrr_se", "logirr_se",
-    "rd_se", "linreg_b_se",
+    "rd_se", "omega_se", "linreg_b_se",
     "user_se_crude", "user_se_adj",
     # Psychometric counts
     "n_items", "n_measurements",
@@ -313,6 +313,13 @@
     list(val = "loghr",            lo = "loghr_ci_lo",            up = "loghr_ci_up",            scale = "additive"),
     # Risk difference (additive scale)
     list(val = "rd",        lo = "rd_ci_lo",        up = "rd_ci_up",        scale = "additive"),
+    # omega is the one measure whose standard error is derived ENTIRELY from the
+    # reported interval (there is no (n, k) variance for it), so an unvalidated CI
+    # is an unvalidated WEIGHT. Without this entry a transposed interval, a point
+    # estimate outside its own interval, and bounds outside [0, 1] all produced a
+    # plausible omega with a wrong SE and an empty flag string -- and .ci_lower()/
+    # .ci_upper() absorb the transposition, so this is the last chance to notice.
+    list(val = "omega",     lo = "omega_ci_lo",     up = "omega_ci_up",     scale = "additive"),
     # Regression coefficient (additive scale)
     list(val = "linreg_b",  lo = "linreg_b_ci_lo",  up = "linreg_b_ci_up",  scale = "additive"),
     # Natural-scale ratios (exp scale - inherently asymmetric CIs)
@@ -344,6 +351,9 @@
                                   sd_ratio_bl_ep_min = 0.7,
                                   baseline_imbalance_max = 0.30,
                                   enable_cross_row = TRUE,
+                                  alpha_to_es = "bonett",
+                                  icc_to_es = "bonett",
+                                  omega_to_es = "bonett",
                                   templated_min_match = 3,
                                   measure = NULL,
                                   paired_as_indep_tol = 0.07,
@@ -382,6 +392,12 @@
   .se_columns <- c("mean_se_exp", "mean_se_nexp",
                     "mean_change_se_exp", "mean_change_se_nexp",
                     "ancova_mean_se_exp", "ancova_mean_se_nexp",
+                    # omega_se is the ONLY route by which an omega row gets a weight,
+                    # so a zero there silently removes the study. The alpha route
+                    # surfaces the equivalent through the Tier-2 "SE is zero" check,
+                    # which omega cannot reach: .positive_or_na() has already NA'd the
+                    # value before any effect size exists to check.
+                    "omega_se",
                     "ancova_md_se")
   for (col in c(.sd_columns, .se_columns)) {
     if (!col %in% colnames(x)) next
@@ -532,6 +548,34 @@
           sprintf("[INVALID] Out-of-range eta-squared: '%s' = %g (valid: [0, 1))",
                   col, vals[i]))
       }
+    }
+  }
+
+  # V40: a reliability coefficient of EXACTLY 1 has no transform, so the row is
+  # dropped -- but silently, which is the failure this whole family exists to prevent.
+  # V11 bounds alpha at (-Inf, 1] and omega/icc at [0, 1] INCLUSIVE, so 1.00 passes
+  # validation; the route then NAs it against a strict `< 1` gate with no message, and
+  # es_guidance reports "No partial input data found" on a fully populated row.
+  # Contrast alpha = 1.02, one rounding step away, which IS explained. alpha = 1.00 is
+  # a routine printed value (short subscales, or a paper rounding .996).
+  #
+  # Warn-only and scale-aware: on the raw scale 1.00 is a perfectly usable boundary
+  # value (es = 1, se = 0), so this fires only where the transform is undefined.
+  for (rel1 in list(c("cronbach_alpha", "alpha", "alpha"),
+                    c("omega", "omega", "omega"),
+                    c("icc", "ICC", "icc"))) {
+    cl <- rel1[1]; lab <- rel1[2]; which_scale <- rel1[3]
+    if (!cl %in% colnames(x)) next
+    sc <- switch(which_scale, "alpha" = alpha_to_es, "omega" = omega_to_es, icc_to_es)
+    if (identical(as.character(sc), "raw")) next
+    v1 <- suppressWarnings(as.numeric(x[[cl]]))
+    for (i in which(!is.na(v1) & v1 == 1)) {
+      row_issues[[i]] <- c(row_issues[[i]], sprintf(
+        paste0("[UNUSUAL] '%s' = 1 exactly. A perfect %s has no %s transform ",
+               "(log(0) is undefined), so this row yields no effect size and drops out ",
+               "of the pool. Verify the value - a reported 1.00 is usually a rounded ",
+               "0.99x - or set the analysis scale to 'raw', where 1 is a usable boundary"),
+        cl, lab, as.character(sc)))
     }
   }
 
@@ -1389,7 +1433,11 @@
             hit <- same_n
           } else next
           row_issues[[i]] <- c(row_issues[[i]], sprintf(
-            paste0("[INFO] Same %s (%s) reported by %s, %s. Reliability is a property of the ",
+            # Lead with the QUOTED column name so .v_flag_matches_scope() routes this to
+            # the crude scope only -- the rule V23 documents. Unquoted, the router cannot
+            # identify the column and copies the flag into flags_adjusted, a scope with
+            # no estimates at all for these measures.
+            paste0("[INFO] Same '%s' (%s) reported by %s, %s. Reliability is a property of the ",
                    "scores in a sample, so independent samples rarely reproduce a coefficient ",
                    "exactly - check these studies computed it in their own data rather than ",
                    "quoting a test manual or an earlier validation study (reliability induction). ",
@@ -1428,7 +1476,8 @@
       if (max(tab) > length(ok) / 2 && length(tab) > 1) {
         for (i in ok[k_v[ok] != modal_k]) {
           row_issues[[i]] <- c(row_issues[[i]], sprintf(
-            paste0("[UNUSUAL] Item count differs from the rest of the pool: n_items = %s ",
+            # quoted for the same scope-routing reason as V36 above
+            paste0("[UNUSUAL] Item count differs from the rest of the pool: 'n_items' = %s ",
                    "where %d of %d studies report %s. In a reliability-generalization review the ",
                    "instrument is fixed, so this is a short form, a different version, or an ",
                    "extraction error - k enters the sampling variance of every transform, so ",
@@ -1467,9 +1516,13 @@
     ot <- .normalise_omega_type(x[["omega_type"]], warn = FALSE)
     om <- suppressWarnings(as.numeric(x[["omega"]]))
     ot[is.na(ot) & is.finite(om)] <- "total"
-    present <- unique(ot[is.finite(om) & !is.na(ot)])
+    # "unspecified" is now the fallback for an unrecognised omega_type, so it must be
+    # excluded here for the same reason V39 excludes it: a value we could not read is
+    # not evidence of a mixed estimand, and counting it would fire on any typo.
+    ot_known <- is.finite(om) & !is.na(ot) & ot != "unspecified"
+    present <- unique(ot[ot_known])
     if (length(present) > 1) {
-      for (i in which(is.finite(om) & !is.na(ot))) {
+      for (i in which(ot_known)) {
         row_issues[[i]] <- c(row_issues[[i]], sprintf(
           paste0("[INFO] Pool mixes omega estimands: this row reports omega_type = ",
                  "'%s' while the pool also contains '%s'. omega_total (all common ",
@@ -2268,7 +2321,8 @@
                                       measure = NULL, n_total = NULL,
                                       n_exp = NULL, n_nexp = NULL,
                                       sd_exp = NULL, sd_nexp = NULL,
-                                      suffix = "", exp = FALSE) {
+                                      suffix = "", exp = FALSE,
+                                      rel_scale = "bonett") {
   n <- length(es)
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
@@ -2299,7 +2353,15 @@
       "r" = 0.3,
       "z" = 0.5,
       "rd" = 0.3,
-      0 # no floor for md, nnt, prop, alpha, icc
+      # Reliability coefficients live on a universal bounded scale, so a floor is
+      # meaningful here in a way it is not for md/nnt (arbitrary units). Without one
+      # a 20-study pool whose reported alphas span .91-.93 -- textbook homogeneity --
+      # raised 6 "ES outlier" flags. Values are in ANALYSIS-scale units: on the
+      # Bonett ln(1-x) scale 0.5 is about a .05 swing in the coefficient near .9;
+      # the Hakstian-Whalen scale is roughly 6x tighter, so it gets its own floor.
+      # Override per analysis with flag_options$outlier_min_deviation.
+      "alpha" = , "icc" = , "omega" = if (identical(rel_scale, "hakstian_whalen")) 0.08 else if (identical(rel_scale, "raw")) 0.05 else 0.5,
+      0 # no floor for md, nnt, prop
     )
   }
 
@@ -2979,6 +3041,7 @@
                              input_validation = NULL,
                              alpha_to_es = "bonett",
                              icc_to_es = "bonett",
+                             omega_to_es = "bonett",
                              prop_to_es = "raw",
                              pre_post_to_smd = "bonett",
                              pool_sd = FALSE,
@@ -3158,7 +3221,10 @@
                              n_total = n_totalR[idx],
                              n_exp = n_expR[idx], n_nexp = n_nexpR[idx],
                              sd_exp = sd_expR[idx], sd_nexp = sd_nexpR[idx],
-                             suffix = suffix, exp = exp)))
+                             suffix = suffix, exp = exp,
+                             rel_scale = switch(measure, "alpha" = alpha_to_es,
+                                               "icc" = icc_to_es,
+                                               "omega" = omega_to_es, "bonett"))))
   f_g <- .cmp_broadcast(.by_group(group_keyR, nR, function(idx)
     .flag_cross_row_direction_conflict(esR[idx], ci_loR[idx], ci_upR[idx], opts,
                                        info_usedR[idx], measure, exp)))

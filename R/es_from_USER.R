@@ -406,6 +406,8 @@
 #' @param prop_to_es transformation applied to a proportion (see \code{\link{convert_df}}); same refusal rule
 #'   as \code{alpha_to_es}, for \code{measure = "prop"}. The default \code{"raw"} IS the coefficient scale,
 #'   so the passthrough is unaffected unless \code{"logit"} or \code{"freeman_tukey"} is requested.
+#' @param omega_to_es transformation applied to McDonald's omega (see \code{\link{convert_df}}); same
+#'   refusal rule as \code{alpha_to_es}, for \code{measure = "omega"}.
 #' @param measure deprecated alias for \code{user_es_target_measure_crude}, kept for backward compatibility with metaConvert <= 1.0.3.
 #' @param user_es_measure_crude deprecated alias for \code{user_es_original_measure_crude}, kept for backward compatibility with metaConvert <= 1.0.3.
 #'
@@ -459,6 +461,7 @@ es_from_user_crude <- function(user_es_original_measure_crude,
                                 alpha_to_es = "bonett",
                                 icc_to_es = "bonett",
                                 prop_to_es = "raw",
+                                omega_to_es = "bonett",
                                 measure, user_es_measure_crude) {
 
   # Backward compatibility with the pre-2.0 argument names (metaConvert <= 1.0.3,
@@ -606,9 +609,9 @@ es_from_user_crude <- function(user_es_original_measure_crude,
   # See .user_passthrough_blocked(): for alpha/icc/prop under a non-identity
   # transform there is no scale on which an unconverted value could be right.
   if (length(passthrough_idx) > 0 &&
-      .user_passthrough_blocked(target, alpha_to_es, icc_to_es, prop_to_es)) {
-    scale_arg <- switch(target, "alpha" = "alpha_to_es", "icc" = "icc_to_es", "prop_to_es")
-    scale_val <- switch(target, "alpha" = alpha_to_es, "icc" = icc_to_es, prop_to_es)
+      .user_passthrough_blocked(target, alpha_to_es, icc_to_es, prop_to_es, omega_to_es)) {
+    scale_arg <- switch(target, "alpha" = "alpha_to_es", "icc" = "icc_to_es", "omega" = "omega_to_es", "prop_to_es")
+    scale_val <- switch(target, "alpha" = alpha_to_es, "icc" = icc_to_es, "omega" = omega_to_es, prop_to_es)
     warning(.user_passthrough_block_msg(target, scale_arg, scale_val,
                                         length(passthrough_idx), "crude"))
     passthrough_idx <- integer(0)
@@ -700,6 +703,8 @@ es_from_user_crude <- function(user_es_original_measure_crude,
 #' @param prop_to_es transformation applied to a proportion (see \code{\link{convert_df}}); same refusal rule
 #'   as \code{alpha_to_es}, for \code{measure = "prop"}. The default \code{"raw"} IS the coefficient scale,
 #'   so the passthrough is unaffected unless \code{"logit"} or \code{"freeman_tukey"} is requested.
+#' @param omega_to_es transformation applied to McDonald's omega (see \code{\link{convert_df}}); same
+#'   refusal rule as \code{alpha_to_es}, for \code{measure = "omega"}.
 #' @param measure deprecated alias for \code{user_es_target_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.
 #' @param user_es_measure_adj deprecated alias for \code{user_es_original_measure_adj}, kept for backward compatibility with metaConvert <= 1.0.3.
 #'
@@ -753,6 +758,7 @@ es_from_user_adj <- function(user_es_original_measure_adj,
                               alpha_to_es = "bonett",
                               icc_to_es = "bonett",
                               prop_to_es = "raw",
+                              omega_to_es = "bonett",
                               measure, user_es_measure_adj) {
 
   # Backward compatibility with the pre-2.0 argument names (metaConvert <= 1.0.3):
@@ -893,9 +899,9 @@ es_from_user_adj <- function(user_es_original_measure_adj,
   # See .user_passthrough_blocked(): for alpha/icc/prop under a non-identity
   # transform there is no scale on which an unconverted value could be right.
   if (length(passthrough_idx) > 0 &&
-      .user_passthrough_blocked(target, alpha_to_es, icc_to_es, prop_to_es)) {
-    scale_arg <- switch(target, "alpha" = "alpha_to_es", "icc" = "icc_to_es", "prop_to_es")
-    scale_val <- switch(target, "alpha" = alpha_to_es, "icc" = icc_to_es, prop_to_es)
+      .user_passthrough_blocked(target, alpha_to_es, icc_to_es, prop_to_es, omega_to_es)) {
+    scale_arg <- switch(target, "alpha" = "alpha_to_es", "icc" = "icc_to_es", "omega" = "omega_to_es", "prop_to_es")
+    scale_val <- switch(target, "alpha" = alpha_to_es, "icc" = icc_to_es, "omega" = omega_to_es, prop_to_es)
     warning(.user_passthrough_block_msg(target, scale_arg, scale_val,
                                         length(passthrough_idx), "adj"))
     passthrough_idx <- integer(0)

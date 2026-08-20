@@ -1220,11 +1220,58 @@ miscalibrated", only `metaumbrella_exp` does.
 **Test unit.** N/A (analysis). Record the dense-region restriction as a reusable
 diagnostic in `simulations/R/`.
 
-### 4.2 ☐ `metaumbrella_exp`'s 0.497 is conditional on `p_exp = 0.5`
+### 4.2 ☑ Studies 04/05 run at 1:1 allocation only — DONE (documented, no regeneration)
 
-Studies 04 and 05 hold `p_exp = 0.5`, so equal arms occur in 100% of replicates —
-precisely the non-identified case (1.1). Coverage is 0.955 at `p_exp = 0.40`. Add
-`p_exp` to the grid and state the conditionality in `README.md`.
+> **The item's own premise dissolved and had to be re-derived from measurement.**
+> "`metaumbrella_exp`'s 0.497 is conditional on `p_exp = 0.5`" was about the
+> non-identified tie the old enumerating *search* faced at equal arms. After 1.1/1.8/
+> 1.10 the route SOLVES the table, so 0.497 no longer exists: the shipped aggregate has
+> mean coverage **0.976** and `metaumbrella_exp` is bit-identical to
+> `metaumbrella_cases` — max |difference| **0** across bias, coverage and `se_ratio` on
+> all 360 conditions. There was no reporting correction left to make.
+>
+> **What replaced it, all measured, none of it requiring a simulation run:**
+>
+> (a) **The point-estimate side is allocation-free**, so the no-go map needs no caveat.
+> Both metaumbrella routes recover the table exactly — 400 draws per allocation at
+> `p_exp` = 0.10/0.25/0.50/0.75/0.90, exact-recovery rate **1.000**, max |log RR error|
+> **0** — because study 04 always supplies both margins and the quadratic is then
+> determined. This overturns the item as written: equal arms are no longer a hazard.
+>
+> (b) **`p_exp = 0.5` is the most FAVOURABLE allocation for item 4.1's sparsity
+> diagnosis**, which is the part that is genuinely conditional. Closed form over the
+> same 360 cells, dense region (P(any zero cell) < 1e-4): **25 / 65 / 105 / 85 / 45** at
+> `p_exp` = 0.10 / 0.25 / 0.50 / 0.75 / 0.90. The shipped grid sits at the maximum, and
+> the two directions are **not** interchangeable — so a single unbalanced level would
+> not have covered it either.
+>
+> (c) **The mechanism behind 4.1's second caveat is the same one.** Enumerating the
+> WHOLE 2×2 table space at `n = 50`: `metafor::conv.2x2` reconstructs **every** integer
+> table (failure 0.000 at every allocation) and fails on **0.45–0.68** of the
+> continuity-corrected ones. So its non-estimability is the corrected-table share times
+> that per-corrected rate, and the share is minimised at balance by a closed-form argument
+> ((n1−1)(n0−1) is maximised at n1 = n0): **0.148** at 1:1 against **0.362** at 1:9 or
+> 9:1. Its shipped 0.152 — and `grant`'s in study 05 — are best cases.
+>
+> **Decision: documented, not regenerated.** Adding `p_exp = c(0.5, 0.25, 0.75)` was
+> costed and would have been strictly additive — `expand.grid` varies the last factor
+> slowest, so the current 360 conditions keep positions 1–360, keep their
+> `condition_seed()` streams, and reproduce bit-for-bit (verified by construction) — but
+> at ~3.4 h wall (README's measured budget: `run_04` 41 min, `run_05` 26 min at
+> nrep = 1000 on 26 cores, ×3). Since (a) shows the point estimates have nothing to
+> learn and (b)/(c) are closed-form, the design limitation can be stated exactly rather
+> than measured, so the compute was not spent.
+>
+> **Landed as reusable code, not a paragraph** (the 4.1 rule): `R/06_sparsity.R` gains
+> `dense_region_by_allocation()` and `corrected_table_share()`. README gets a **2c**
+> block beside 2/2b (where the conditional findings live) plus a pointer on the no-go
+> map. `tests/test-allocation-scope.R` pins the premise, the non-vacuity, the mechanism
+> and the allocation-free half — and **its first assertion fails on purpose if anyone
+> adds a `p_exp` level**, at which point the README block is to be deleted, not edited.
+>
+> **Verified:** `simulations/tests` **477 pass / 0 fail / 0 error / 0 skip** (438 + 39);
+> `aggregates-fresh` unchanged at 40, i.e. adding the two analysis helpers did not mark
+> any aggregate stale (the 4.1 refinement doing its job).
 
 ### 4.3 ☐ App: study 01b's default target is the one wrong target
 

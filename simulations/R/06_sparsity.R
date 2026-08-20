@@ -100,3 +100,65 @@ sparsity_split <- function(agg, stat = "se_ratio", target = "sample",
   attr(res, "n_sparse_conditions") <- sum(!dense)
   res
 }
+
+#' How much of the sparsity diagnostic is a property of 1:1 allocation?
+#'
+#' Studies 04 and 05 hold `p_exp = 0.5`, so every figure they publish is measured at
+#' equal arm sizes. That matters for the split above and nowhere else in an obvious
+#' place, so it is worth being able to re-run rather than assert: P(any zero cell)
+#' depends on the arms SEPARATELY, not on the total, and the smaller arm drives it.
+#'
+#' Balance is the FAVOURABLE end. For a fixed total, moving participants out of one
+#' arm can only raise the chance that arm is empty of cases or of controls, so the
+#' dense region -- the region in which the diagnostic finds every route calibrated --
+#' is largest at 1:1 and shrinks in either direction. Measured on study 04's grid:
+#' 105 conditions dense at 0.50 against 65 at 0.25 and 85 at 0.75.
+#'
+#' @param grid  a study-04-shaped grid (columns n, br, rr; p_exp is supplied here,
+#'   so the grid's own p_exp column is ignored if present)
+#' @param p_exp allocations to sweep
+#' @param threshold P(any zero cell) below which a condition counts as dense
+#' @return one row per allocation: dense / sparse counts and the dense share
+dense_region_by_allocation <- function(grid, p_exp = c(0.10, 0.25, 0.50, 0.75, 0.90),
+                                       threshold = 1e-4) {
+  need <- c("n", "br", "rr")
+  missing_cols <- setdiff(need, names(grid))
+  if (length(missing_cols))
+    stop("dense_region_by_allocation(): grid has no ", paste(missing_cols, collapse = "/"),
+         " column, so it is not one of the binary grids (04 / 05).", call. = FALSE)
+  out <- lapply(p_exp, function(p) {
+    pz <- zero_cell_prob(grid$n, p, grid$br, grid$rr)
+    dense <- !is.na(pz) & pz < threshold
+    data.frame(p_exp = p, dense = sum(dense), sparse = sum(!dense),
+               dense_share = mean(dense))
+  })
+  res <- do.call(rbind, out)
+  rownames(res) <- NULL
+  attr(res, "threshold") <- threshold
+  res
+}
+
+#' Share of the 2x2 table space that carries a zero cell, at a given allocation
+#'
+#' Closed form, no simulation: with arms n1 and n0 the tables are indexed by the two
+#' case counts, (n1 + 1)(n0 + 1) of them, and the ones with NO zero cell are the
+#' strictly interior (n1 - 1)(n0 - 1). A zero cell is what triggers the +0.5
+#' continuity correction, so this is the share of the table space that reaches any
+#' downstream route already corrected.
+#'
+#' The interior product is maximised at n1 = n0 for a fixed total, so this share is
+#' MINIMISED at 1:1 allocation -- the same reason the dense region is largest there.
+#' It is the mechanism behind `metafor::conv.2x2`'s non-estimability: that route
+#' reconstructs every integer table and roughly half of the corrected ones, so its
+#' failure rate tracks this share (0.081 at 1:1 with n = 50, against 0.210 / 0.246 at
+#' 1:9 and 9:1).
+#'
+#' @param n total sample size; p_exp proportion allocated to the exposed arm
+#' @return numeric vector, same length as the inputs
+corrected_table_share <- function(n, p_exp) {
+  n1 <- round(n * p_exp)
+  n0 <- n - n1
+  total <- (n1 + 1) * (n0 + 1)
+  interior <- pmax((n1 - 1) * (n0 - 1), 0)
+  (total - interior) / total
+}

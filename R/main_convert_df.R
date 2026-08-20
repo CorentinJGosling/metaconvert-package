@@ -510,6 +510,16 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   } else {
     .default_flag_options()$margin_range_min
   }
+  # Normalise the reliability estimand / provenance columns BEFORE validation and
+  # before they are stored, so the flags, the route and the data.frame the user
+  # meta-regresses on all refer to the same levels. Without this, summary() returned
+  # the raw strings ("psych", "bifactor CFA") while V39 reported the normalised ones,
+  # and rma(mods = ~ omega_estimator) aborted on singleton levels.
+  if ("omega_type" %in% colnames(x))
+    x$omega_type <- .normalise_omega_type(x$omega_type, warn = FALSE)
+  if ("omega_estimator" %in% colnames(x))
+    x$omega_estimator <- .normalise_omega_estimator(x$omega_estimator, warn = FALSE)
+
   validation <- .validate_input_data(x, max_asymmetry = max_asymmetry, verbose = verbose,
                                       enable_informational = enable_info,
                                       sd_ratio_max = sd_ratio_max_val,
@@ -518,6 +528,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                                       enable_cross_row = enable_cross_row_val,
                                       templated_min_match = templated_min_match_val,
                                       measure = measure,
+                                      alpha_to_es = alpha_to_es,
+                                      icc_to_es = icc_to_es,
+                                      omega_to_es = omega_to_es,
                                       paired_as_indep_tol = paired_as_indep_tol_val,
                                       margin_range_min = margin_range_min_val,
                                       correct_inputs = correct_inputs)
@@ -1328,7 +1341,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     or_to_rr = or_to_rr, or_to_cor = or_to_cor,
     smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
     rr_to_or = rr_to_or,
-    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es
+    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es,
+    omega_to_es = omega_to_es
   )
   es_user_adj <- es_from_user_adj(
     user_es_original_measure_adj = x$user_es_original_measure_adj,
@@ -1344,7 +1358,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     or_to_rr = or_to_rr, or_to_cor = or_to_cor,
     smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
     rr_to_or = rr_to_or,
-    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es
+    alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es,
+    omega_to_es = omega_to_es
   )
   # survival
   es_cases_time <- with(x, es_from_cases_time(

@@ -27,15 +27,15 @@
 #' cube-root normalising transformation is applied. This is the transformation
 #' Rodriguez & Maeda (2006) recommend for the meta-analysis of coefficient alpha,
 #' and the one used by most published reliability-generalization syntheses:
-#' \deqn{T(lpha) = 1 - (1 - lpha)^{1/3}}
-#' \deqn{T\_var = rac{18 k (n - 1) (1 - lpha)^{2/3}}{(k - 1)(9n - 11)^2}}
+#' \deqn{T(\alpha) = 1 - (1 - \alpha)^{1/3}}
+#' \deqn{T\_var = \frac{18 k (n - 1) (1 - \alpha)^{2/3}}{(k - 1)(9n - 11)^2}}
 #' It derives from Paulson's (1942) normalising transformation of the \eqn{F}
 #' distribution applied to the Feldt (1965) / Kristof (1963) result that
-#' \eqn{(1 - r)/(1 - lpha)} is distributed as \eqn{F}.
+#' \eqn{(1 - r)/(1 - \alpha)} is distributed as \eqn{F}.
 #'
-#' \strong{Orientation.} Rodriguez & Maeda write \eqn{T = (1 - lpha)^{1/3}},
+#' \strong{Orientation.} Rodriguez & Maeda write \eqn{T = (1 - \alpha)^{1/3}},
 #' which \emph{decreases} in alpha; this function instead stores
-#' \eqn{1 - (1 - lpha)^{1/3}}, which \emph{increases} in alpha, matching
+#' \eqn{1 - (1 - \alpha)^{1/3}}, which \emph{increases} in alpha, matching
 #' \code{metafor}'s \code{measure = "AHW"} bit for bit (both \code{yi} and
 #' \code{vi}). The two differ by a constant, so the sampling variance is
 #' identical, but the increasing orientation means \code{metafor::transf.iahw()}

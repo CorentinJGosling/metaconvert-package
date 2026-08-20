@@ -64,7 +64,126 @@ This function estimates the standard error of McDonald's omega.
 Convert McDonald's omega into an effect size measure
 }
 \details{
+\strong{Why this function needs a standard error or a confidence interval, and
+\code{es_from_cronbach_alpha()} does not.} Coefficient alpha has a closed-form
+sampling variance in \eqn{(n, k)} alone -- Bonett's \eqn{2k/((k-1)(n-2))} and the
+Hakstian-Whalen variance both descend from the Feldt (1965) / Kristof (1963) result
+that \eqn{(1 - r)/(1 - \alpha)} is distributed as \eqn{F}, which holds under
+essential tau-equivalence, compound symmetry and multivariate normality. Omega exists
+precisely to \emph{drop} tau-equivalence.
 
+It would be tidy to say that borrowing the alpha variance is therefore a category
+error, but that is \strong{not what the numbers show}, and the honest reasons are
+more specific. Under a correct unidimensional congeneric \emph{normal} model the
+Bonett variance on the \eqn{\ln(1-\omega)} scale is within \eqn{[0.899, 1.003]} of
+the full normal-theory asymptotic SE of \eqn{\omega_{total}} (1283 random loading
+patterns, \eqn{k \ge 4}, \eqn{\omega \ge 0.60}, \eqn{n = 200}), and coincides with
+it exactly under tau-equivalence. The reasons not to use it are that it is
+anti-conservative exactly where omega is actually reached for:
+
+\itemize{
+\item \strong{7.6\% and 25.6\% narrower} than the two published bootstrap CIs in
+Flora (2020) -- inverse-variance weight inflated 1.17x and 1.81x;
+\item \strong{13\% narrower} under a single correlated residual
+(\eqn{r = .30}, \eqn{k = 6}, \eqn{n = 200}), where \eqn{\hat\omega} is also
+biased \eqn{+0.028};
+\item \strong{14-24\% narrower} for a bifactor \eqn{\omega_h}, whose sampling
+variance is governed by the number of \emph{group factors} \eqn{m}, not by
+\eqn{k} (the normal-theory identity is
+\eqn{SE(\ln(1-\omega_h)) = \sqrt{2m/((m-1)n)}});
+\item it \strong{diverges at \eqn{k = 3}} (a just-identified one-factor model);
+\item and \strong{no published source endorses it} -- every source consulted
+declines to give an omega variance at all.
+}
+
+There is also no route through the loadings that adds information: conditioning on a
+correctly specified model makes Raykov's (2002) delta method evaluable from
+\eqn{(\lambda, n)}, but the result lands inside that same
+\eqn{[0.899, 1.003]} band, so a printed loadings table buys essentially nothing over
+\eqn{(k, n)} -- while the dominant source of variability \emph{across} studies is
+which estimator was used (EFA / Schmid-Leiman / bifactor CFA / first principal
+component), which no summary statistic identifies. The recommended interval remains a
+bootstrap (BCa) one computed from raw data (Kelley & Pornprasertmanit, 2016).
+
+The standard error is therefore taken from what the primary study reported, in this
+order:
+
+\enumerate{
+\item \code{omega_se}, interpreted on the \strong{natural} scale and mapped to the
+analysis scale by the delta method:
+\deqn{SE_T = SE_\omega / (1 - \omega)}  (bonett)
+\deqn{SE_T = SE_\omega / (3 (1 - \omega)^{2/3})}  (hakstian_whalen)
+\item otherwise the reported confidence interval, whose \strong{bounds} are transformed
+and differenced. Transforming the bounds rather than the point estimate is what makes
+this correct for the asymmetric bootstrap intervals omega usually carries, since a
+BCa interval is transformation-respecting.
+\item otherwise the effect size is returned with \code{omega_se = NA}. The row is then
+visible and countable in the pipeline (it appears in the extraction sheet and in the
+reporting-rate accounting) but is dropped by \code{summary()} and cannot be pooled --
+which is the honest outcome for a bare omega with no uncertainty attached.
+}
+
+\strong{Lossiness.} Step 2 collapses a possibly asymmetric interval into a single
+standard error, from which a symmetric Wald interval is rebuilt (the convention used by
+every other \code{*_ci} route in this package). The point estimate and the interval
+width are preserved; the asymmetry is not.
+
+\strong{omega_type is an estimand, not a label.} \code{"total"} is the proportion of
+total score variance attributable to all common factors; \code{"hierarchical"} is the
+proportion attributable to the \emph{general} factor only, and is systematically smaller.
+They answer different questions and must not share a pool. \code{convert_df()} flags a
+pool that mixes them.
+
+\strong{Do not pool omega with alpha either.} Under a congeneric model
+\eqn{\omega_{total} \ge \alpha}, with equality only under exact tau-equivalence, so the
+two are different quantities and their average is neither. There is a second, subtler
+reason specific to this package: alpha's standard errors here are analytic functions of
+\eqn{(n, k)} while omega's come from reported (often bootstrap) intervals, so the
+\emph{weighting scheme} would differ systematically by metric, making metric perfectly
+confounded with precision. Run two pools and report them side by side; if a study
+reports both, estimate the gap as a within-study paired contrast rather than by
+differencing two separately pooled means (the two coefficients are computed on the same
+data and are near-perfectly dependent).
+
+\strong{Which estimator produced the number matters more than most moderators.}
+Omega is not one computation. Zinbarg et al. (2006) applied several estimators to
+identical data and found the first principal component overestimated
+\eqn{\omega_h} by about \strong{+0.40} on average, against about +0.02 for a
+hierarchical (bifactor) confirmatory factor analysis; Revelle & Zinbarg (2009)
+record EFA returning \eqn{\omega_h = .04} where CFA returns exactly 0.0 on the
+same data. A bias of that size is larger than any moderator effect a
+reliability-generalization review is likely to report, so a pool that mixes
+estimators can manufacture a "finding" that is purely an artefact of which
+software each author ran. Record it in \code{omega_estimator}; a pool mixing two
+\emph{known} estimators is flagged (rows left \code{"unspecified"} are not
+counted as mixing, or the flag would fire on nearly every real dataset).
+
+In practice the estimator is usually codeable from the software a paper reports:
+\code{psych::omega()} performs an EFA with a Schmid-Leiman transformation
+(\code{"efa_schmid_leiman"}), \code{semTools::compRelSEM()} and
+\code{MBESS::ci.reliability} are CFA-based (\code{"cfa_1factor"} or
+\code{"cfa_bifactor"} according to the fitted model).
+
+\strong{Two extraction traps worth knowing before you copy a number.}
+
+\enumerate{
+\item \strong{Do not recompute omega from a printed loadings table unless the
+residual variances are printed too.} \code{lavaan}'s \code{std.lv = TRUE}
+fixes the \emph{factor} variance to 1, not the item variances, so the
+"Estimate" column is \strong{unstandardised}. Assuming
+\eqn{\theta_j = 1 - \lambda_j^2} from such a table gives 0.7725 for the
+worked example in Flora (2020) whose published omega is 0.5999 -- an error of
++0.17 that nothing downstream can detect.
+\item \strong{On a bifactor model, the output row labelled "omega" is not
+\eqn{\omega_h}.} In \code{semTools} it is the total (0.97 in Flora's
+example) where \eqn{\omega_h} is 0.91. Copy the row you mean, and record
+which one in \code{omega_type}.
+}
+
+\strong{Heywood cases.} An estimated \eqn{\omega \ge 1} arises from an improper solution
+(a negative estimated error variance) and is not simply a transcription error. It has no
+Bonett or Hakstian-Whalen transform, so those scales return \code{NA}; \code{"raw"}
+returns the value so it stays inspectable.
 }
 \examples{
 # from a reported standard error (natural scale)

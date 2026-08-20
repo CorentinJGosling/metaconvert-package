@@ -105,6 +105,41 @@ is the same case: dense-region 1.10, but non-estimability reaching **1.000** in 
 cells where `rr × br_guess ≥ 1`. Every other route reconstructs essentially always
 (non-estimability < 0.01), which is why only these two need the caveat.
 
+**2c. Every number in studies 04 and 05 is measured at 1:1 allocation, and 1:1 is
+the FAVOURABLE end for 2b and for the split above.** Both studies hold `p_exp = 0.5`,
+so the two arms are always equal. That is not a neutral choice. P(any zero cell)
+depends on the two arms *separately* and is driven by the smaller one, so balance
+maximises the dense region — moving participants out of either arm can only shrink it:
+
+| `p_exp` | dense conditions | of 360 |
+|---|---|---|
+| 0.10 | 25 | 7% |
+| 0.25 | 65 | 18% |
+| **0.50 — the shipped grid** | **105** | **29%** |
+| 0.75 | 85 | 24% |
+| 0.90 | 45 | 13% |
+
+The same mechanism drives 2b. `metafor::conv.2x2` reconstructs **every** integer
+table and fails on roughly **half** the continuity-corrected ones (enumerating the
+whole table space at `n = 50`: 0.00 integer, 0.45–0.68 corrected, at every
+allocation), so its non-estimability is the *corrected-table share* times that
+per-corrected rate — and the share is smallest at balance too, for the same reason the
+dense region is largest there: 0.148 at 1:1 against 0.362 at 1:9 or 9:1.
+Its shipped 0.152 is therefore a best case, as is `grant`'s in study 05.
+
+**What is NOT conditional is the no-go map itself.** The point estimates in the table
+further down are allocation-free: with both margins supplied the odds ratio determines
+the 2×2 by a quadratic, and the solve recovers the table exactly (max error `0` over
+400 draws per allocation, `p_exp` = 0.10 to 0.90). The original form of this item —
+"`metaumbrella_exp`'s 0.497 is conditional on `p_exp = 0.5`" — was about the
+non-identified tie the old *search* faced at equal arms; items 1.1/1.8/1.10 replaced
+the search with the solve, so that reading is retired rather than corrected.
+
+Reproduce both halves with `dense_region_by_allocation()` and
+`corrected_table_share()` in `R/06_sparsity.R`; pinned by
+`tests/test-allocation-scope.R`, whose first assertion fails on purpose if anyone adds
+a second `p_exp` level — at which point this paragraph should be deleted, not edited.
+
 **3. Pre-post coverage is much thinner than the eight-study structure suggests.**
 Study 08 exercises all five `pre_post_to_smd` values but only **one of three kernels**:
 
@@ -647,6 +682,10 @@ On misspecification (true br = 0.15, analyst guesses 0.50), **only Grant moves**
 (bias −0.033 → −0.293); `metaumbrella_*` and `dipietrantonj` are unchanged because
 they never read `baseline_risk`. The legacy design had the same property but
 presented all lines as if they were being stress-tested.
+
+⚠️ **Read this table with 2c above.** The bias column is allocation-free — the 2×2
+solve is exact at every `p_exp` — but the coverage figures beside it are not: both
+studies run at 1:1 only, which is the allocation where zero cells are rarest.
 
 ### Reference result from study 03 (nrep = 2,000; ρ = φ = 0.5, n = 100, event rate 0.3)
 

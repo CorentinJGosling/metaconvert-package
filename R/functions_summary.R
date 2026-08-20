@@ -510,6 +510,8 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     r_def <- attr(object, "r_defaulted")
     alpha_method <- attr(object, "alpha_to_es")
     if (is.null(alpha_method)) alpha_method <- "bonett"
+    omega_method <- attr(object, "omega_to_es")
+    if (is.null(omega_method)) omega_method <- "bonett"
     icc_method <- attr(object, "icc_to_es")
     if (is.null(icc_method)) icc_method <- "bonett"
     prop_method <- attr(object, "prop_to_es")
@@ -532,20 +534,20 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
 
     if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
       res <- .flag_es_quality(res, measure, exp, "_crude", raw_data, opts, input_val,
-                              alpha_to_es = alpha_method, icc_to_es = icc_method,
+                              alpha_to_es = alpha_method, icc_to_es = icc_method, omega_to_es = omega_method,
                               prop_to_es = prop_method, pre_post_to_smd = pp_method,
                               pool_sd = pool_sd_used, r_defaulted = r_def,
                               smd_denom = smd_denom_used, es_order = ordering_crude,
                               z_transform = z_transform_used)
       res <- .flag_es_quality(res, measure, exp, "_adjusted", raw_data, opts, input_val,
-                              alpha_to_es = alpha_method, icc_to_es = icc_method,
+                              alpha_to_es = alpha_method, icc_to_es = icc_method, omega_to_es = omega_method,
                               prop_to_es = prop_method, pre_post_to_smd = pp_method,
                               pool_sd = pool_sd_used, r_defaulted = r_def,
                               smd_denom = smd_denom_used, es_order = ordering_adj,
                               z_transform = z_transform_used)
     } else {
       res <- .flag_es_quality(res, measure, exp, "", raw_data, opts, input_val,
-                              alpha_to_es = alpha_method, icc_to_es = icc_method,
+                              alpha_to_es = alpha_method, icc_to_es = icc_method, omega_to_es = omega_method,
                               prop_to_es = prop_method, pre_post_to_smd = pp_method,
                               pool_sd = pool_sd_used, r_defaulted = r_def,
                               smd_denom = smd_denom_used, es_order = ordering_tot,
