@@ -94,23 +94,7 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
   if (length(n_measurements) != length(icc)) stop("The length of the 'n_measurements' argument is incorrectly specified.")
   if (length(icc_type) != length(icc)) stop("The length of the 'icc_type' argument is incorrectly specified.")
 
-  # Same rule as omega_type: icc_type comes from a DATA COLUMN, so a single
-  # mis-cased cell ("Agreement") must not abort a whole convert_df() run.
-  icc_key <- gsub("[^a-z]", "", tolower(trimws(as.character(icc_type))))
-  icc_map <- c(agreement = "agreement", absoluteagreement = "agreement",
-               icc21 = "agreement", twowayrandom = "agreement",
-               consistency = "consistency", icc31 = "consistency",
-               twowaymixed = "consistency")
-  icc_norm <- unname(icc_map[icc_key])
-  icc_bad <- which(is.na(icc_norm) & nzchar(icc_key))
-  if (length(icc_bad)) {
-    warning(paste0("Unrecognised icc_type value(s): '",
-                   paste(unique(as.character(icc_type)[icc_bad]), collapse = "', '"),
-                   "'. Treated as 'agreement'. Recognised values are 'agreement' and ",
-                   "'consistency' (case-insensitive)."))
-  }
-  icc_norm[is.na(icc_norm)] <- "agreement"
-  icc_type <- icc_norm
+  icc_type <- .normalise_icc_type(icc_type)
 
   if (!icc_to_es %in% c("bonett", "raw")) {
     stop(paste0("'", icc_to_es, "' not in tolerated values for the 'icc_to_es' argument. ",
@@ -177,4 +161,55 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
   )
 
   return(result)
+}
+
+
+# Normalise icc_type to one of 'agreement' / 'consistency'.
+#
+# ONE definition, called from three places -- es_from_icc() (the route),
+# convert_df() (which normalises the stored column before validation) and the V31
+# check in internal_flags.R. Before this, es_from_icc() normalised while V31 used
+# bare string equality on the raw cell, so the rows that GET the anti-conservative
+# agreement SE were largely the rows that did not get warned about it: of ten
+# spellings that resolve to 'agreement', only the two already spelled exactly
+# 'agreement' fired V31. Two places independently deciding what 'agreement' means
+# is the same rot recorded for the hardcoded route list in roadmap 1.2.
+#
+# The key keeps DIGITS ([^a-z0-9], not [^a-z]). The old inline version stripped
+# them, which silently made the 'icc21' and 'icc31' map entries unreachable: every
+# ICC(2,1) / ICC(3,1) / icc21 spelling collapsed to the key 'icc', missed the map,
+# and fell through to the 'agreement' default -- so a CONSISTENCY ICC entered as
+# 'ICC(3,1)' was relabelled as agreement, with a warning that named it unrecognised.
+# The shared SE is unaffected (it is one formula for both types), so the cost was a
+# wrong estimand label and a spurious V31 on consistency rows, not a wrong number.
+#
+# Idempotent, like .normalise_omega_type(): convert_df() normalises the column and
+# es_from_icc() normalises again, so every output must also be a valid input.
+#
+# NOTE: average-measures spellings ('average', 'ICC(2,k)', 'icc2k', 'icc3k') are
+# deliberately NOT mapped here. They are a different estimand, not an alias, and
+# swallowing them into a single-measures level is reliability roadmap item 1.2 --
+# a separate decision (NA + [INVALID], or a Spearman-Brown step-down) that must not
+# be made silently as a side effect of this extraction.
+.normalise_icc_type <- function(x, warn = TRUE) {
+  raw <- as.character(x)
+  key <- gsub('[^a-z0-9]', '', tolower(trimws(raw)))
+  map <- c(
+    agreement = 'agreement', absoluteagreement = 'agreement',
+    icc21 = 'agreement', twowayrandom = 'agreement', absolute = 'agreement',
+    agree = 'agreement', icc2 = 'agreement',
+    consistency = 'consistency', icc31 = 'consistency',
+    twowaymixed = 'consistency', consistent = 'consistency', icc3 = 'consistency'
+  )
+  out <- unname(map[key])
+  bad <- which(is.na(out) & !is.na(raw) & nzchar(key))
+  if (length(bad) && isTRUE(warn)) {
+    warning(paste0(
+      "Unrecognised icc_type value(s): '", paste(unique(raw[bad]), collapse = "', '"),
+      "'. Treated as 'agreement'. Recognised values are 'agreement' and ",
+      "'consistency' (case-insensitive; 'ICC(2,1)' / 'ICC(3,1)' / 'absolute ",
+      "agreement' / 'two-way random' / 'two-way mixed' are also accepted)."))
+  }
+  out[is.na(out)] <- 'agreement'
+  out
 }

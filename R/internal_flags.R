@@ -625,10 +625,18 @@
   # V26. NULL/empty measure keeps the old behaviour for direct callers.
   icc_measure_ok <- is.null(measure) || !nzchar(measure) || identical(measure, "icc")
   if ("icc" %in% colnames(x) && icc_measure_ok) {
+    # .normalise_icc_type(), NOT bare string equality. es_from_icc() resolves ten
+    # spellings to "agreement" ("Agreement", "ICC(2,1)", "absolute agreement",
+    # "two-way random", ...); comparing the raw cell against the literal
+    # "agreement" fired V31 on only two of them, so the rows that GET the
+    # anti-conservative agreement SE were largely the rows not warned about it.
+    # convert_df() now normalises the column too, but this call is kept so direct
+    # callers of .validate_input_data() get the same answer -- one definition,
+    # three call sites. warn = FALSE: es_from_icc() owns the user-facing warning.
     icc_type_eff <- if ("icc_type" %in% colnames(x)) {
       tt <- as.character(x[["icc_type"]])
       tt[is.na(tt)] <- "agreement"
-      tt
+      .normalise_icc_type(tt, warn = FALSE)
     } else {
       rep("agreement", nrow(x))
     }

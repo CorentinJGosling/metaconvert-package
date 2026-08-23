@@ -519,6 +519,17 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     x$omega_type <- .normalise_omega_type(x$omega_type, warn = FALSE)
   if ("omega_estimator" %in% colnames(x))
     x$omega_estimator <- .normalise_omega_estimator(x$omega_estimator, warn = FALSE)
+  # icc_type too, for the same reason and one more: V31 keys on this column, and
+  # before normalisation happened here it compared the RAW cell against the literal
+  # "agreement", so 8 of the 10 spellings that es_from_icc() resolves to agreement
+  # never fired the flag. NA is left as NA -- .normalise_icc_type() would map it to
+  # "agreement", but V31 and es_from_icc() already treat an absent value as the
+  # default, and rewriting NA into the column would misreport what the user supplied.
+  if ("icc_type" %in% colnames(x)) {
+    keep_na <- is.na(x$icc_type)
+    x$icc_type <- .normalise_icc_type(x$icc_type, warn = FALSE)
+    x$icc_type[keep_na] <- NA
+  }
 
   validation <- .validate_input_data(x, max_asymmetry = max_asymmetry, verbose = verbose,
                                       enable_informational = enable_info,

@@ -568,3 +568,72 @@ test_that("V31 is scoped to measure = 'icc' and does not leak into other runs", 
   expect_false(any(grepl("ICC agreement-type", f("omega"))))
   expect_true(any(grepl("ICC agreement-type", f("icc"))))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 1.3: one definition of what icc_type means.
+#
+# es_from_icc() normalised its icc_type (case-fold + alias map + fallback) while
+# the V31 check used bare string equality against the literal 'agreement'. So of
+# the ten spellings that resolve to agreement, only the two already spelled
+# exactly 'agreement' fired V31 -- i.e. the rows that GET the anti-conservative
+# agreement SE were largely the rows that were not warned about it.
+# ---------------------------------------------------------------------------
+
+agreement_spellings <- c('agreement', 'Agreement', 'AGREEMENT', '  agreement  ',
+                         'absolute agreement', 'Absolute Agreement',
+                         'ICC(2,1)', 'icc21', 'two-way random', 'Two-Way Random')
+consistency_spellings <- c('consistency', 'Consistency', 'ICC(3,1)', 'icc31',
+                           'two-way mixed')
+
+test_that('.normalise_icc_type resolves every documented spelling', {
+  expect_equal(.normalise_icc_type(agreement_spellings),
+               rep('agreement', length(agreement_spellings)))
+  expect_equal(.normalise_icc_type(consistency_spellings),
+               rep('consistency', length(consistency_spellings)))
+})
+
+test_that('.normalise_icc_type keeps digits, so ICC(3,1) is NOT relabelled agreement', {
+  # The old inline map stripped non-letters, which made its own 'icc21'/'icc31'
+  # entries unreachable: every digit-bearing spelling collapsed to the key 'icc',
+  # missed the map and fell through to the agreement default -- so a CONSISTENCY
+  # ICC entered as 'ICC(3,1)' was silently relabelled, with a warning calling it
+  # unrecognised. This is the assertion that fails against the pre-fix tree.
+  expect_equal(.normalise_icc_type('ICC(3,1)'), 'consistency')
+  expect_equal(.normalise_icc_type('icc31'), 'consistency')
+  expect_silent(.normalise_icc_type('ICC(3,1)'))
+})
+
+test_that('.normalise_icc_type is idempotent and falls back with a warning', {
+  # convert_df() normalises the column and es_from_icc() normalises again, so
+  # every output must also be a valid input.
+  once <- .normalise_icc_type(c(agreement_spellings, consistency_spellings))
+  expect_equal(.normalise_icc_type(once), once)
+  expect_warning(out <- .normalise_icc_type('banana'), 'Unrecognised icc_type')
+  expect_equal(out, 'agreement')
+  expect_silent(.normalise_icc_type('banana', warn = FALSE))
+})
+
+test_that('V31 and es_from_icc() agree on every spelling, end to end', {
+  fires_v31 <- function(s) {
+    d <- data.frame(icc = 0.8, n_sample = 50, n_measurements = 2, icc_type = s)
+    f <- suppressWarnings(summary(convert_df(d, measure = 'icc', verbose = FALSE),
+                                  flags = TRUE))$flags_crude
+    any(grepl('agreement-type SE', f, fixed = TRUE))
+  }
+  route <- function(s) {
+    suppressWarnings(es_from_icc(icc = 0.8, n_sample = 50, n_measurements = 2,
+                                 icc_type = s))$icc_type[1]
+  }
+  for (s in c(agreement_spellings, consistency_spellings, 'banana')) {
+    expect_equal(fires_v31(s), route(s) == 'agreement', info = paste('icc_type =', s))
+  }
+})
+
+test_that('convert_df stores the normalised icc_type but leaves NA as NA', {
+  d <- data.frame(icc = c(0.8, 0.7, 0.6),
+                  n_sample = 50, n_measurements = 2,
+                  icc_type = c('ICC(3,1)', 'Absolute Agreement', NA))
+  raw <- attr(suppressWarnings(convert_df(d, measure = 'icc', verbose = FALSE)), 'raw_data')
+  expect_equal(raw$icc_type, c('consistency', 'agreement', NA))
+})
