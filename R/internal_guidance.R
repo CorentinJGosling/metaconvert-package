@@ -456,9 +456,12 @@
       specific = c("cronbach_alpha"),
       shared   = c("n_sample", "n_items")
     ),
+    # An ICC row needs a variance from somewhere: the study's own icc_se or CI,
+    # or n_sample + n_measurements for the closed-form (n, k) SE. Listing all four
+    # as "shared" makes a bare-ICC row a NEAR MISS naming every route out of it.
     icc = list(
       specific = c("icc"),
-      shared   = c("n_sample", "n_measurements")
+      shared   = c("n_sample", "n_measurements", "icc_se", "icc_ci_lo", "icc_ci_up")
     ),
     spearman_r = list(
       specific = c("spearman_r"),
@@ -589,7 +592,7 @@
 
     cronbach_alpha                  = "Cronbach's alpha (direct input)",
     omega                           = "McDonald's omega (needs omega_se on the natural scale, or omega_ci_lo + omega_ci_up)",
-    icc                             = "ICC (direct input)",
+    icc                             = "ICC (needs n_sample + n_measurements, or a reported icc_se / icc_ci_lo + icc_ci_up)",
     spearman_r                      = "Spearman correlation (converted to Pearson)"
   )
 }

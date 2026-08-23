@@ -518,11 +518,15 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "which omega: 'total' (default), 'hierarchical', 'asymptotic' or 'subscale' - character",
       "how omega was estimated: 'cfa_bifactor', 'cfa_1factor', 'efa_schmid_leiman', 'first_pc', 'first_pf' or 'unspecified' - character")
 
-    cols_icc = c("icc", "n_measurements", "icc_type")
+    cols_icc = c("icc", "icc_se", "icc_ci_lo", "icc_ci_up",
+                 "n_measurements", "icc_type")
     inf_icc = c(
       "intraclass correlation coefficient - numeric",
+      "standard error of the ICC, on the NATURAL (raw ICC) scale - numeric",
+      "lower bound of the 95% CI of the ICC (natural scale) - numeric",
+      "upper bound of the 95% CI of the ICC (natural scale) - numeric",
       "number of measurements or raters - numeric",
-      "ICC type: 'agreement' (ICC(2,1)) or 'consistency' (ICC(3,1)) - character")
+      "ICC type: 'agreement' (ICC(2,1)), 'consistency' (ICC(3,1)), or the average-measures forms 'ICC(2,k)' / 'ICC(3,k)' - character")
 
     cols_irr = c(
       # survival

@@ -9,6 +9,9 @@ es_from_icc(
   n_sample,
   n_measurements,
   icc_type = "agreement",
+  icc_se,
+  icc_ci_lo,
+  icc_ci_up,
   icc_to_es = "bonett"
 )
 }
@@ -36,6 +39,14 @@ cannot be performed, and the row is set to \code{NA} with an \code{[INVALID]} fl
 than pooled as if it were single-measures - entering an ICC(2,k) as if it were ICC(2,1)
 overstates the reliability by up to 1.9 log units (k = 10, ICC = 0.95) while leaving the
 standard error almost unchanged, so nothing downstream reveals the error.}
+
+\item{icc_se}{standard error of the ICC, \strong{on the natural (raw ICC) scale}.
+Optional. When supplied it takes precedence over the closed-form \code{(n, k)}
+standard error.}
+
+\item{icc_ci_lo}{lower bound of the 95\% confidence interval of the ICC (natural scale)}
+
+\item{icc_ci_up}{upper bound of the 95\% confidence interval of the ICC (natural scale)}
 
 \item{icc_to_es}{method used to compute the effect size from ICC.
 Must be either \code{"bonett"} or \code{"raw"}.}
@@ -67,6 +78,26 @@ variance (Bonett, 2002; Donner & Eliasziw, 1987):
 \item When \code{icc_to_es = "raw"}, the raw ICC is used and its standard error
 is obtained by the delta method (\eqn{(1 - ICC)} times the transformed-scale SE).
 }
+
+\strong{Where the standard error comes from.} Three sources, in this order
+(the same precedence \code{\link{es_from_omega}} uses):
+\enumerate{
+\item \code{icc_se}, read on the natural scale and delta-mapped onto the
+analysis scale;
+\item otherwise \code{icc_ci_lo} / \code{icc_ci_up}, transformed at the
+\strong{bounds} so an asymmetric (e.g. bootstrap) interval maps correctly
+instead of being symmetrised first;
+\item otherwise the closed-form \eqn{(n, k)} standard error above.
+}
+The ordering matters because of the coverage problem documented below: for an
+agreement-type ICC the computed standard error is a one-way approximation, so
+wherever the study reported its own uncertainty that is the better source. The
+ICC literature reports intervals routinely (\emph{"ICC 0.94, 95\\% CI 0.86 to
+0.98"}), and such a row is now usable even when no sample size is given -
+\code{n_sample} and \code{n_measurements} gate only source 3, not the point
+estimate. A row with none of the three keeps its effect size and gets
+\code{icc_se = NA}, so it stays visible and countable but is dropped from the
+pool by \code{summary()}.
 
 \strong{Scope of the SE formula.} For the two-way consistency ICC(3,1)
 (\code{icc_type = "consistency"}) this SE is exact at leading order: deriving

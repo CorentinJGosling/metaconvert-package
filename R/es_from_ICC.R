@@ -20,6 +20,11 @@
 #'   than pooled as if it were single-measures - entering an ICC(2,k) as if it were ICC(2,1)
 #'   overstates the reliability by up to 1.9 log units (k = 10, ICC = 0.95) while leaving the
 #'   standard error almost unchanged, so nothing downstream reveals the error.
+#' @param icc_se standard error of the ICC, \strong{on the natural (raw ICC) scale}.
+#'   Optional. When supplied it takes precedence over the closed-form \code{(n, k)}
+#'   standard error.
+#' @param icc_ci_lo lower bound of the 95% confidence interval of the ICC (natural scale)
+#' @param icc_ci_up upper bound of the 95% confidence interval of the ICC (natural scale)
 #' @param icc_to_es method used to compute the effect size from ICC.
 #'   Must be either \code{"bonett"} or \code{"raw"}.
 #'
@@ -35,6 +40,26 @@
 #'
 #' 2. When \code{icc_to_es = "raw"}, the raw ICC is used and its standard error
 #' is obtained by the delta method (\eqn{(1 - ICC)} times the transformed-scale SE).
+#'
+#' \strong{Where the standard error comes from.} Three sources, in this order
+#' (the same precedence \code{\link{es_from_omega}} uses):
+#' \enumerate{
+#'   \item \code{icc_se}, read on the natural scale and delta-mapped onto the
+#'     analysis scale;
+#'   \item otherwise \code{icc_ci_lo} / \code{icc_ci_up}, transformed at the
+#'     \strong{bounds} so an asymmetric (e.g. bootstrap) interval maps correctly
+#'     instead of being symmetrised first;
+#'   \item otherwise the closed-form \eqn{(n, k)} standard error above.
+#' }
+#' The ordering matters because of the coverage problem documented below: for an
+#' agreement-type ICC the computed standard error is a one-way approximation, so
+#' wherever the study reported its own uncertainty that is the better source. The
+#' ICC literature reports intervals routinely (\emph{"ICC 0.94, 95\% CI 0.86 to
+#' 0.98"}), and such a row is now usable even when no sample size is given -
+#' \code{n_sample} and \code{n_measurements} gate only source 3, not the point
+#' estimate. A row with none of the three keeps its effect size and gets
+#' \code{icc_se = NA}, so it stays visible and countable but is dropped from the
+#' pool by \code{summary()}.
 #'
 #' **Scope of the SE formula.** For the two-way consistency ICC(3,1)
 #' (\code{icc_type = "consistency"}) this SE is exact at leading order: deriving
@@ -91,23 +116,41 @@
 #'   icc = 0.80, n_sample = 50, n_measurements = 2, icc_type = "agreement"
 #' )
 es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
+                        icc_se, icc_ci_lo, icc_ci_up,
                         icc_to_es = "bonett") {
 
-  if (missing(n_sample)) n_sample <- rep(NA, length(icc))
-  if (missing(n_measurements)) n_measurements <- rep(NA, length(icc))
-  if (missing(icc_type)) icc_type <- rep("agreement", length(icc))
+  len <- length(icc)
+  if (missing(n_sample)) n_sample <- rep(NA_real_, len)
+  if (missing(n_measurements)) n_measurements <- rep(NA_real_, len)
+  if (missing(icc_type)) icc_type <- rep("agreement", len)
+  if (missing(icc_se)) icc_se <- rep(NA_real_, len)
+  if (missing(icc_ci_lo)) icc_ci_lo <- rep(NA_real_, len)
+  if (missing(icc_ci_up)) icc_ci_up <- rep(NA_real_, len)
   icc_type[is.na(icc_type)] <- "agreement"
-  if (length(icc_type) == 1) icc_type <- rep(icc_type, length(icc))
 
   # See the note in es_from_cronbach_alpha(): `icc_type` was already recycled
-  # here, but the two numeric arguments were not, so a scalar `n_sample` or
+  # here, but the numeric arguments were not, so a scalar `n_sample` or
   # `n_measurements` beside a vector of ICCs returned an NA standard error for
   # every row after the first while leaving the point estimates intact.
-  if (length(n_sample) == 1) n_sample <- rep(n_sample, length(icc))
-  if (length(n_measurements) == 1) n_measurements <- rep(n_measurements, length(icc))
-  if (length(n_sample) != length(icc)) stop("The length of the 'n_sample' argument is incorrectly specified.")
-  if (length(n_measurements) != length(icc)) stop("The length of the 'n_measurements' argument is incorrectly specified.")
-  if (length(icc_type) != length(icc)) stop("The length of the 'icc_type' argument is incorrectly specified.")
+  rec <- function(v, nm) {
+    if (length(v) == 1) return(rep(v, len))
+    if (length(v) != len) {
+      stop(paste0("The length of the '", nm, "' argument is incorrectly specified."))
+    }
+    v
+  }
+  n_sample       <- rec(n_sample, "n_sample")
+  n_measurements <- rec(n_measurements, "n_measurements")
+  icc_type       <- rec(icc_type, "icc_type")
+  icc_se         <- rec(icc_se, "icc_se")
+  icc_ci_lo      <- rec(icc_ci_lo, "icc_ci_lo")
+  icc_ci_up      <- rec(icc_ci_up, "icc_ci_up")
+
+  # A non-positive dispersion cannot be a standard error; a transposed interval is
+  # the same interval (R/internal_guards.R), as for omega.
+  icc_se <- .positive_or_na(icc_se)
+  ci_lo  <- .ci_lower(icc_ci_lo, icc_ci_up)
+  ci_up  <- .ci_upper(icc_ci_lo, icc_ci_up)
 
   icc_type <- .normalise_icc_type(icc_type)
 
@@ -122,7 +165,17 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
   can_step <- avg & !is.na(icc) & !is.na(n_measurements) &
     is.finite(n_measurements) & n_measurements >= 2 & !is.na(icc) & abs(icc) <= 1
   if (any(can_step)) {
-    icc[can_step] <- .icc_step_down(icc[can_step], n_measurements[can_step])
+    k_s   <- n_measurements[can_step]
+    rho_k <- icc[can_step]
+    # The REPORTED uncertainty is on the average-measures scale too, so it has to
+    # travel with the point estimate or the row ends up with an ICC(1) estimate
+    # carrying an ICC(k) interval. Spearman-Brown is monotone increasing
+    # (f'(x) = k / (k - (k-1)x)^2 > 0), so the CI bounds map straight through and
+    # keep their order; a reported SE maps by that same derivative.
+    icc_se[can_step] <- icc_se[can_step] * k_s / (k_s - (k_s - 1) * rho_k)^2
+    ci_lo[can_step]  <- .icc_step_down(ci_lo[can_step], k_s)
+    ci_up[can_step]  <- .icc_step_down(ci_up[can_step], k_s)
+    icc[can_step]    <- .icc_step_down(rho_k, k_s)
   }
   # Report the estimand actually computed. A row that could not be stepped down is
   # NA'd below, so no un-stepped average value ever reaches the output.
@@ -134,27 +187,53 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
                 "Possible inputs are: 'bonett', 'raw'"))
   }
 
-  # P16: per-element guards -- |icc| > 1 is impossible (V11 bounds), icc = 1
-  # has no Bonett transform (log(0)) and a degenerate raw SE, n <= 1 makes the
-  # SE denominator (n - 1) non-positive, and k < 2 leaves the ICC undefined.
-  # Direct calls degrade to NA instead of emitting Inf/NaN.
-  invalid <- (!is.na(icc) & (icc > 1 | icc < -1)) |
-    (!is.na(icc) & icc == 1) |
-    (!is.na(n_sample) & n_sample <= 1) |
-    (!is.na(n_measurements) & n_measurements < 2)
+  # Forward transform and the delta map that carries a RAW-scale reported SE onto it.
+  fwd    <- function(r) if (identical(icc_to_es, "bonett")) log(1 - r) else r
+  se_map <- function(r, s) if (identical(icc_to_es, "bonett")) s / (1 - r) else s
 
-  nn_miss <- which(!is.na(icc) & !is.na(n_sample) & !is.na(n_measurements) &
-                     !invalid)
+  # P16: per-element guards -- |icc| > 1 is impossible (V11 bounds) and icc = 1
+  # has no Bonett transform (log(0)) and a degenerate raw SE. Direct calls degrade
+  # to NA instead of emitting Inf/NaN. n_sample/n_measurements are NOT part of this
+  # test any more: they gate only the COMPUTED standard error (route 3 below), not
+  # the point estimate, so a study reporting "ICC 0.94 (95% CI 0.86-0.98)" with no
+  # sample size is now usable instead of being dropped whole.
+  valid_es <- !is.na(icc) & icc >= -1 & icc < 1
 
   n <- length(icc)
-  icc_es <- rep(NA_real_, n)
+  icc_es    <- rep(NA_real_, n)
   icc_es_se <- rep(NA_real_, n)
+  icc_es[valid_es] <- fwd(icc[valid_es])
 
-  if (length(nn_miss) != 0) {
-    rho <- icc[nn_miss]
-    ns <- n_sample[nn_miss]
-    k <- n_measurements[nn_miss]
+  # --- standard error, in order of preference -------------------------------
+  # Mirrors es_from_omega(). The ordering is deliberate: for an agreement-type
+  # ICC the computed (n, k) SE is a one-way approximation whose coverage runs
+  # 0.82 at n = 20 down to 0.14 at n = 1000 (see the @details), so wherever the
+  # study reported its own uncertainty that is the better source. For a
+  # consistency ICC the computed SE is exact at leading order and route 3 is
+  # reached whenever nothing was reported.
 
+  # 1. reported SE, interpreted on the RAW ICC scale and delta-mapped
+  from_se <- which(valid_es & !is.na(icc_se))
+  if (length(from_se)) icc_es_se[from_se] <- se_map(icc[from_se], icc_se[from_se])
+
+  # 2. otherwise the reported CI, transformed at the BOUNDS so an asymmetric
+  #    (e.g. bootstrap) interval maps correctly rather than being symmetrised
+  #    first. A bound of exactly 1 has no log(1 - .) and is excluded on the
+  #    Bonett scale only.
+  ci_usable <- if (identical(icc_to_es, "raw")) {
+    rep(TRUE, n)
+  } else {
+    ci_lo < 1 & ci_up < 1
+  }
+  ci_usable[is.na(ci_usable)] <- FALSE
+  from_ci <- which(valid_es & is.na(icc_es_se) &
+                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable)
+  if (length(from_ci)) {
+    icc_es_se[from_ci] <-
+      abs(fwd(ci_up[from_ci]) - fwd(ci_lo[from_ci])) / (2 * qnorm(0.975))
+  }
+
+  # 3. otherwise the closed-form (n, k) SE.
     # Bonett (2002) variance-stabilised SE of ln(1 - ICC) for a single-measure ICC.
     # For the two-way consistency ICC(3,1), deriving Var(ln(1 - ICC)) directly from
     # F0 = MSR / MSE (df = n - 1 and (n - 1)(k - 1)) gives
@@ -166,18 +245,23 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
     # on MSC (k - 1 df only) and this SE is anti-conservative (see the roxygen
     # details and the V31 informational flag). The exact ICC(2,1) variance needs
     # the rater-variance component, which summary data do not carry.
+  from_nk <- which(valid_es & is.na(icc_es_se) &
+                     !is.na(n_sample) & n_sample > 1 &
+                     !is.na(n_measurements) & n_measurements >= 2)
+  if (length(from_nk)) {
+    rho <- icc[from_nk]
+    ns  <- n_sample[from_nk]
+    k   <- n_measurements[from_nk]
     bonett_transformed_se <- sqrt(
       2 * (1 + (k - 1) * rho)^2 / (k * (k - 1) * (ns - 1))
     )
-
-    if (icc_to_es == "bonett") {
-      icc_es[nn_miss] <- log(1 - rho)
-      icc_es_se[nn_miss] <- bonett_transformed_se
+    icc_es_se[from_nk] <- if (identical(icc_to_es, "bonett")) {
+      bonett_transformed_se
     } else {
-      icc_es[nn_miss] <- rho
-      icc_es_se[nn_miss] <- (1 - rho) * bonett_transformed_se
+      (1 - rho) * bonett_transformed_se
     }
   }
+  icc_es_se <- .positive_or_na(icc_es_se)
 
   icc_ci_lo <- icc_es - qnorm(0.975) * icc_es_se
   icc_ci_up <- icc_es + qnorm(0.975) * icc_es_se

@@ -1003,6 +1003,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   es_icc_sg <- with(x, es_from_icc(
     icc = icc, n_sample = n_sample,
     n_measurements = n_measurements, icc_type = icc_type,
+    icc_se = icc_se, icc_ci_lo = icc_ci_lo, icc_ci_up = icc_ci_up,
     icc_to_es = icc_to_es
   ))
 

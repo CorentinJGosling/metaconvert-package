@@ -178,7 +178,7 @@
     # psychometrics
     "cronbach_alpha", "n_items",
     "omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type", "omega_estimator",
-    "icc", "n_measurements", "icc_type",
+    "icc", "icc_se", "icc_ci_lo", "icc_ci_up", "n_measurements", "icc_type",
     "discard",
     # multi-arm trial pooling
     "pool_side"

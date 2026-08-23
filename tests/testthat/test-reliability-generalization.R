@@ -746,3 +746,126 @@ test_that('a consistency average-measures row is not given the agreement SE note
   expect_true(grepl('stepped down', f[1], fixed = TRUE))
   expect_false(grepl('agreement-type SE', f[1], fixed = TRUE))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 1.4: a reported ICC standard error or interval is usable.
+#
+# icc_se / icc_ci_lo / icc_ci_up were SILENTLY IGNORED. The ICC literature reports
+# intervals routinely, and this matters twice over: it is the only uncertainty a
+# study without a sample size supplies at all, and for an agreement-type ICC the
+# package's own (n, k) SE is the one whose coverage runs 0.82 at n = 20 down to
+# 0.14 at n = 1000, so a reported interval is the better source when both exist.
+# Precedence mirrors es_from_omega(): reported SE > reported CI > computed (n, k).
+# ---------------------------------------------------------------------------
+
+test_that('the SE precedence is reported SE, then reported CI, then computed (n, k)', {
+  nk <- es_from_icc(0.80, 50, 2)
+  se <- es_from_icc(0.80, 50, 2, icc_se = 0.05)
+  ci <- es_from_icc(0.80, 50, 2, icc_ci_lo = 0.70, icc_ci_up = 0.87)
+  both <- es_from_icc(0.80, 50, 2, icc_se = 0.05, icc_ci_lo = 0.70, icc_ci_up = 0.87)
+
+  # the point estimate is the same throughout; only the variance source changes
+  expect_equal(nk$icc, log(1 - 0.80)); expect_equal(se$icc, log(1 - 0.80))
+  # a raw-scale reported SE is delta-mapped onto the Bonett scale: se / (1 - rho)
+  expect_equal(se$icc_se, 0.05 / (1 - 0.80), tolerance = 1e-10)
+  expect_false(isTRUE(all.equal(se$icc_se, nk$icc_se)))   # it really overrode (n, k)
+  expect_false(isTRUE(all.equal(ci$icc_se, nk$icc_se)))
+  expect_equal(both$icc_se, se$icc_se, tolerance = 1e-12) # SE beats CI
+})
+
+test_that('an ICC reported with a CI and NO sample size is usable', {
+  # the motivating quote from the corpus: 'ICC 0.94 (95% CI 0.86-0.98)'
+  got <- es_from_icc(icc = 0.94, icc_ci_lo = 0.86, icc_ci_up = 0.98)
+  expect_equal(got$icc, log(1 - 0.94), tolerance = 1e-10)
+  expect_false(is.na(got$icc_se))
+  # pre-fix this row was dropped whole: n_sample/n_measurements gated the ESTIMATE
+  expect_true(is.finite(got$icc_se))
+})
+
+test_that('the CI is transformed at the BOUNDS, not symmetrised first', {
+  got <- es_from_icc(0.94, icc_ci_lo = 0.86, icc_ci_up = 0.98)
+  expect_equal(got$icc_se,
+               abs(log(1 - 0.98) - log(1 - 0.86)) / (2 * qnorm(0.975)),
+               tolerance = 1e-12)
+  # a transposed interval is the same interval (.ci_lower/.ci_upper guards)
+  expect_equal(es_from_icc(0.94, icc_ci_lo = 0.98, icc_ci_up = 0.86)$icc_se,
+               got$icc_se, tolerance = 1e-12)
+})
+
+test_that('a bare ICC keeps its estimate and gets se = NA (the omega precedent)', {
+  got <- es_from_icc(icc = 0.80)
+  expect_equal(got$icc, log(1 - 0.80), tolerance = 1e-10)
+  expect_true(is.na(got$icc_se))
+})
+
+test_that('a reported CI travels with the Spearman-Brown step-down', {
+  # otherwise the row ends up with an ICC(1) point estimate and an ICC(k) interval
+  sd1 <- function(x, k) x / (k - (k - 1) * x)
+  got <- es_from_icc(icc = 0.90, n_measurements = 5, icc_type = 'ICC(2,k)',
+                     icc_ci_lo = 0.85, icc_ci_up = 0.94)
+  expect_equal(got$icc, log(1 - sd1(0.90, 5)), tolerance = 1e-10)
+  expect_equal(got$icc_se,
+               abs(log(1 - sd1(0.94, 5)) - log(1 - sd1(0.85, 5))) / (2 * qnorm(0.975)),
+               tolerance = 1e-10)
+})
+
+test_that('a reported SE travels with the step-down by the SB derivative', {
+  # d(rho_1)/d(rho_k) = k / (k - (k-1) rho_k)^2
+  sd1 <- function(x, k) x / (k - (k - 1) * x)
+  k <- 5; rho_k <- 0.90; raw_se <- 0.02
+  dfac <- k / (k - (k - 1) * rho_k)^2
+  got <- es_from_icc(icc = rho_k, n_measurements = k, icc_type = 'icc2k',
+                     icc_se = raw_se)
+  expect_equal(got$icc_se, raw_se * dfac / (1 - sd1(rho_k, k)), tolerance = 1e-10)
+})
+
+test_that('on the raw scale a reported SE passes through unchanged', {
+  got <- es_from_icc(0.80, 50, 2, icc_se = 0.05, icc_to_es = 'raw')
+  expect_equal(got$icc, 0.80)
+  expect_equal(got$icc_se, 0.05, tolerance = 1e-12)
+})
+
+test_that('a non-positive reported SE and an out-of-range CI bound degrade safely', {
+  # .positive_or_na(): a negative SE is not a standard error
+  expect_true(is.na(es_from_icc(0.80, icc_se = -0.05)$icc_se))
+  expect_true(is.na(es_from_icc(0.80, icc_se = 0)$icc_se))
+  # a bound of exactly 1 has no log(1 - .) on the Bonett scale -> fall through
+  expect_true(is.na(es_from_icc(0.90, icc_ci_lo = 0.80, icc_ci_up = 1.00)$icc_se))
+  # ...but it is fine on the raw scale, where fwd() is the identity
+  expect_false(is.na(es_from_icc(0.90, icc_ci_lo = 0.80, icc_ci_up = 1.00,
+                                 icc_to_es = 'raw')$icc_se))
+})
+
+test_that('the new arguments recycle length-1 values and reject a bad length', {
+  v <- es_from_icc(icc = c(0.7, 0.8, 0.9), n_sample = 50, n_measurements = 2,
+                   icc_se = 0.05)
+  expect_equal(length(v$icc_se), 3L)
+  expect_true(all(!is.na(v$icc_se)))
+  expect_error(es_from_icc(c(.7, .8, .9), 50, 2, icc_se = c(0.05, 0.06)), 'icc_se')
+})
+
+test_that('convert_df threads icc_se / icc_ci through the pipeline', {
+  d <- data.frame(icc = c(0.80, 0.94, 0.80),
+                  n_sample = c(50, NA, 50), n_measurements = c(2, NA, 2),
+                  icc_se = c(0.05, NA, NA),
+                  icc_ci_lo = c(NA, 0.86, NA), icc_ci_up = c(NA, 0.98, NA))
+  s <- summary(convert_df(d, measure = 'icc', verbose = FALSE))
+  expect_equal(s$se_crude[1], 0.05 / (1 - 0.80), tolerance = 1e-4)   # reported SE
+  expect_equal(s$se_crude[2],
+               abs(log(1 - 0.98) - log(1 - 0.86)) / (2 * qnorm(0.975)),
+               tolerance = 1e-4)                                     # reported CI
+  expect_equal(s$se_crude[3], sqrt(2 * (1 + 0.80)^2 / (2 * 1 * 49)), tolerance = 1e-4)
+  # the columns survive .check_data() rather than being dropped
+  raw <- attr(convert_df(d, measure = 'icc', verbose = FALSE), 'raw_data')
+  expect_true(all(c('icc_se', 'icc_ci_lo', 'icc_ci_up') %in% colnames(raw)))
+})
+
+test_that('the extraction sheet and the guidance name the new columns', {
+  sheet <- data_extraction_sheet(measure = 'icc', extension = 'data.frame',
+                                 verbose = FALSE)
+  expect_true(all(c('icc_se', 'icc_ci_lo', 'icc_ci_up') %in% colnames(sheet)))
+  g <- summary(convert_df(data.frame(icc = 0.8), measure = 'icc', verbose = FALSE),
+               guidance = TRUE)$es_guidance_crude
+  expect_true(any(grepl('icc_se|icc_ci', g)))
+})

@@ -290,7 +290,7 @@
     "mean_change_se_exp", "mean_change_se_nexp",
     "ancova_mean_se_exp", "ancova_mean_se_nexp",
     "md_se", "ancova_md_se", "logor_se", "logrr_se", "logirr_se",
-    "rd_se", "omega_se", "linreg_b_se",
+    "rd_se", "omega_se", "icc_se", "linreg_b_se",
     "user_se_crude", "user_se_adj",
     # Psychometric counts
     "n_items", "n_measurements",
@@ -340,6 +340,7 @@
     # plausible omega with a wrong SE and an empty flag string -- and .ci_lower()/
     # .ci_upper() absorb the transposition, so this is the last chance to notice.
     list(val = "omega",     lo = "omega_ci_lo",     up = "omega_ci_up",     scale = "additive"),
+    list(val = "icc",       lo = "icc_ci_lo",       up = "icc_ci_up",       scale = "additive"),
     # Regression coefficient (additive scale)
     list(val = "linreg_b",  lo = "linreg_b_ci_lo",  up = "linreg_b_ci_up",  scale = "additive"),
     # Natural-scale ratios (exp scale - inherently asymmetric CIs)
