@@ -2921,8 +2921,22 @@
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
 
-  # Only apply to standardized metrics where SE scales predictably with N
-  standardized <- c("d", "g", "dw", "gw", "r", "z", "logor", "logrr", "loghr", "logirr")
+  # Only apply to standardized metrics where SE scales predictably with N.
+  #
+  # "rp"/"zp" belong here for the same reason "r"/"z" do -- SE(rp) is
+  # (1 - rp^2)/sqrt(n - q - 3) and SE(zp) is 1/sqrt(n - q - 3), both as predictable
+  # in N as their zero-covariate counterparts. Omitting them made the WHOLE F family
+  # return early on a partial correlation, so F1 and F2 never ran on those rows at
+  # all. Measured consequence at the fall-through defaults the switches below would
+  # otherwise have given them (floor 0.1/sqrt(N), ceiling max(2, 8/sqrt(N))):
+  #   * F2 missed an SD-entered-as-SE error outright -- SE 0.85-0.97 is caught for
+  #     "r" (ceiling 0.6) and passes for "rp" (ceiling 2.0);
+  #   * F1's flat floor does not shrink with (1 - rp^2), so at N = 200, q = 2,
+  #     rp = 0.95 the floor (0.00707) sits ABOVE the true SE (0.00696) -- it would
+  #     have false-fired on a valid row had the family run.
+  # Both are fixed by giving rp/zp the r/z treatment rather than the ratio default.
+  standardized <- c("d", "g", "dw", "gw", "r", "z", "rp", "zp",
+                    "logor", "logrr", "loghr", "logirr")
   if (!measure %in% standardized) return(flags)
 
   ratio_event_measures <- c("loghr", "logirr")
@@ -2938,12 +2952,16 @@
       # F1: implausibly small SE (floors: 0.5/sqrt(N) d/g, 0.3/sqrt(N) r/z, 0.1 ratios)
       se_floor_mult <- switch(measure,
         "d" = , "g" = , "dw" = , "gw" = 0.5,
-        "r" = , "z" = 0.3,
+        "r" = , "z" = , "rp" = , "zp" = 0.3,
         0.1  # logOR, logRR, logHR, logIRR: conservative (event-rate dependent)
       )
       se_floor <- se_floor_mult / sqrt_n
-      # r: true SE ~ (1 - r^2)/sqrt(n - 1), scale the floor by (1 - r^2)
-      if (measure == "r" && !is.na(es[i]) && is.finite(es[i]) && abs(es[i]) <= 1) {
+      # r/rp: true SE ~ (1 - r^2)/sqrt(n - 1), scale the floor by (1 - r^2). The
+      # partial correlation is on the same bounded scale and its true SE is
+      # (1 - rp^2)/sqrt(n - q - 3), i.e. slightly LARGER than r's for the same
+      # value, so this floor is conservative for it. z/zp are on the unbounded
+      # Fisher scale and get no such scaling.
+      if (measure %in% c("r", "rp") && !is.na(es[i]) && is.finite(es[i]) && abs(es[i]) <= 1) {
         se_floor <- se_floor * (1 - es[i]^2)
       }
       if (se[i] < se_floor) {
@@ -2956,7 +2974,7 @@
       # ceiling: tight for d/g and r/z, permissive for event-rate dependent ratios
       se_ceiling <- switch(measure,
         "d" = , "g" = , "dw" = , "gw" = max(1.0, 8.0 / sqrt_n),
-        "r" = , "z" = max(0.6, 4.0 / sqrt_n),
+        "r" = , "z" = , "rp" = , "zp" = max(0.6, 4.0 / sqrt_n),
         max(2.0, 8.0 / sqrt_n)  # logor/logrr/loghr/logirr: event-rate dependent
       )
       if (se[i] > se_ceiling) {
@@ -3014,7 +3032,12 @@
 
   diff_max <- if (measure %in% c("d", "g", "dw", "gw", "md", "mdw")) {
     opts$diff_max_smd
-  } else if (measure == "r") {
+  } else if (measure %in% c("r", "rp")) {
+    # rp is on the same bounded [-1, 1] scale as r, so the r threshold is the right
+    # one; the SMD fallback it used before is 3.33x looser (1.00 vs 0.30), which made
+    # E3 effectively unreachable for a partial-correlation pool. "z"/"zp" deliberately
+    # stay on the fallback -- z is already there, and moving one of the Fisher-scale
+    # pair without the other would be worse than leaving both.
     opts$diff_max_r
   } else if (measure %in% c("logor", "logrr", "logirr", "loghr")) {
     opts$diff_max_logor
@@ -3024,7 +3047,7 @@
 
   dispersion_max <- if (measure %in% c("d", "g", "dw", "gw", "md", "mdw")) {
     opts$dispersion_max_smd
-  } else if (measure == "r") {
+  } else if (measure %in% c("r", "rp")) {
     opts$dispersion_max_r
   } else if (measure %in% c("logor", "logrr", "logirr", "loghr")) {
     opts$dispersion_max_logor

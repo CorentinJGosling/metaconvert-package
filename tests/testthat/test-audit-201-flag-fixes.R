@@ -158,3 +158,78 @@ test_that("a genuine majority still gets the minority/majority wording", {
   expect_true(any(fires(s$flags_crude[hit], "opposite to the pool majority")))
   expect_false(any(fires(s$flags_crude[hit], "the pool is evenly split")))
 })
+
+
+# --- rp follow-up to #42: the F family and the E1/E3 thresholds ----------------
+#
+# Same defect family as #42 (a gate that names 'r' and forgets 'rp'), found while
+# fixing it and measured before being changed. Two distinct failures:
+#
+#  * .flag_se_sample_size() gated on a `standardized` vector that omitted rp/zp, so
+#    it returned EARLY -- F1 and F2 never ran on a partial correlation at all.
+#  * had it run, the switch fall-through would have given rp the ratio-measure
+#    defaults: floor 0.1/sqrt(N) (flat, so it does not shrink with (1 - rp^2)) and
+#    ceiling max(2, 8/sqrt(N)). Measured at N = 200, q = 2, rp = 0.95: the flat
+#    floor 0.00707 sits ABOVE the true SE 0.00696, i.e. a false positive on a valid
+#    row; and an SD-entered-as-SE error at SE 0.85-0.97 passes a ceiling of 2.0.
+
+test_that('the F family runs on rp and zp at all', {
+  f <- metaConvert:::.flag_se_sample_size
+  # pre-fix this returned character(0) for every rp/zp row regardless of SE
+  expect_length(f(es = 0.4, se = 0.970, measure = 'rp', n_total = 20)[[1]], 1)
+  expect_length(f(es = 0.4, se = 0.970, measure = 'zp', n_total = 20)[[1]], 1)
+})
+
+test_that('rp and zp get the r/z SE ceiling, so an SD-as-SE error is caught', {
+  f <- metaConvert:::.flag_se_sample_size
+  for (N in c(20, 50, 200)) {
+    bad <- (1 - 0.16) / sqrt(N - 5) * sqrt(N)          # SE inflated ~sqrt(N)
+    ref <- f(es = 0.4, se = bad, measure = 'r',  n_total = N)[[1]]
+    expect_true(any(grepl('Implausibly large SE', ref)))   # r catches it...
+    for (m in c('rp', 'zp')) {
+      got <- f(es = 0.4, se = bad, measure = m, n_total = N)[[1]]
+      expect_true(any(grepl('Implausibly large SE', got)),
+                  info = paste(m, 'N =', N, 'SE =', round(bad, 3)))
+    }
+  }
+})
+
+test_that('the rp SE floor scales with (1 - rp^2), so a valid high-rp row is silent', {
+  f <- metaConvert:::.flag_se_sample_size
+  for (N in c(50, 200, 500)) {
+    se <- (1 - 0.95^2) / sqrt(N - 5)                   # the true SE(rp)
+    got <- f(es = 0.95, se = se, measure = 'rp', n_total = N)[[1]]
+    expect_length(got, 0)
+    # the unscaled ratio-default floor would have flagged this at N = 200
+    if (N == 200) expect_lt(se, 0.1 / sqrt(N))
+  }
+})
+
+test_that('zp gets no (1 - es^2) scaling: it is on the unbounded Fisher scale', {
+  f <- metaConvert:::.flag_se_sample_size
+  # a zp of 2.0 is legitimate; scaling by (1 - 4) would make the floor negative
+  expect_length(f(es = 2.0, se = 1 / sqrt(200 - 5), measure = 'zp', n_total = 200)[[1]], 0)
+})
+
+test_that('E1/E3 use the correlation thresholds for rp, not the SMD fallback', {
+  o <- metaConvert:::.default_flag_options()
+  expect_equal(o$dispersion_max_r, 0.15); expect_equal(o$diff_max_r, 0.30)
+  expect_equal(o$dispersion_max_smd, 0.50); expect_equal(o$diff_max_smd, 1.00)
+
+  # Two rp routes deliberately disagreeing: linreg_t = 2.5 against a
+  # linreg_b/linreg_b_se implying t = 15. Dispersion 0.295 and min-max diff 0.59
+  # sit BETWEEN the correlation thresholds (0.15 / 0.30) and the SMD fallback
+  # (0.50 / 1.00), so this pool fires only if rp is on the r thresholds -- which
+  # is precisely the discrimination this fix is about.
+  s <- summary(convert_df(data.frame(linreg_t = 2.5, linreg_b = 3.0,
+                                     linreg_b_se = 0.2, n_sample = 100,
+                                     n_covariates = 1),
+                          measure = 'rp', verbose = FALSE), flags = TRUE)
+  expect_equal(s$n_estimations_crude[1], 2)
+  expect_equal(round(s$diff_min_max_crude[1], 2), 0.59)
+  expect_true(fires(s$flags_crude, 'High dispersion across estimates'))
+  expect_true(fires(s$flags_crude, 'Large min-max difference'))
+  # and the observed values really are below the fallback it used to get
+  expect_lt(0.295, o$dispersion_max_smd)
+  expect_lt(s$diff_min_max_crude[1], o$diff_max_smd)
+})
