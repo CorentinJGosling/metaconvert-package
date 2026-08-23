@@ -637,3 +637,112 @@ test_that('convert_df stores the normalised icc_type but leaves NA as NA', {
   raw <- attr(suppressWarnings(convert_df(d, measure = 'icc', verbose = FALSE)), 'raw_data')
   expect_equal(raw$icc_type, c('consistency', 'agreement', NA))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 1.2: an average-measures ICC is a different estimand.
+#
+# 'average' / 'ICC(2,k)' / 'icc2k' used to be unrecognised: they warned, fell back
+# to 'agreement', and were computed as single-measures. The SE ratio stays near 1
+# (1.05-1.39x) so nothing downstream looks wrong, while the point estimate is off
+# by up to 1.9 log units. Now stepped down with Spearman-Brown where k is known,
+# and NA'd with [INVALID] where it is not.
+# ---------------------------------------------------------------------------
+
+test_that('.normalise_icc_type recognises the average-measures forms as their own level', {
+  expect_equal(.normalise_icc_type(c('average', 'Average', 'ICC(2,k)', 'icc2k',
+                                     'average measures', 'avg')),
+               rep('agreement_average', 6))
+  expect_equal(.normalise_icc_type(c('ICC(3,k)', 'icc3k', 'two-way mixed average')),
+               rep('consistency_average', 3))
+  # still idempotent with the new levels
+  once <- .normalise_icc_type(c('ICC(2,k)', 'icc3k', 'ICC(2,1)', 'consistency'))
+  expect_equal(.normalise_icc_type(once), once)
+  # and they no longer warn
+  expect_silent(.normalise_icc_type('ICC(2,k)'))
+})
+
+test_that('the Spearman-Brown step-down reproduces the roadmap 1.2 cost table', {
+  # k | ICC_avg | true single-measure ICC_1 | correct es = log(1 - ICC_1)
+  tab <- list(c(2, 0.90, 0.8181818), c(5, 0.90, 0.6428571), c(10, 0.95, 0.6551724))
+  for (r in tab) {
+    k <- r[1]; a <- r[2]; rho1 <- r[3]
+    expect_equal(.icc_step_down(a, k), rho1, tolerance = 1e-6)
+    got <- es_from_icc(icc = a, n_sample = 50, n_measurements = k, icc_type = 'average')
+    expect_equal(got$icc, log(1 - rho1), tolerance = 1e-6,
+                 info = paste('k =', k, 'ICC_avg =', a))
+  }
+  # the un-stepped value is what the pre-fix code returned; assert we moved off it
+  expect_false(isTRUE(all.equal(
+    es_from_icc(icc = 0.95, n_sample = 50, n_measurements = 10, icc_type = 'average')$icc,
+    es_from_icc(icc = 0.95, n_sample = 50, n_measurements = 10, icc_type = 'agreement')$icc)))
+})
+
+test_that('the step-down inverts Spearman-Brown exactly', {
+  # round trip: build an average-of-k ICC from a known single-measure one
+  for (k in c(2, 3, 5, 10)) {
+    for (rho1 in c(-0.2, 0.05, 0.4, 0.8, 0.99)) {
+      rho_k <- k * rho1 / (1 + (k - 1) * rho1)
+      expect_equal(.icc_step_down(rho_k, k), rho1, tolerance = 1e-10,
+                   info = paste('k =', k, 'rho1 =', rho1))
+    }
+  }
+})
+
+test_that('a stepped-down row reports the single-measures estimand it computed', {
+  for (t in c('average', 'ICC(2,k)', 'icc2k')) {
+    expect_equal(es_from_icc(0.9, 50, 5, icc_type = t)$icc_type, 'agreement')
+  }
+  for (t in c('ICC(3,k)', 'icc3k')) {
+    expect_equal(es_from_icc(0.9, 50, 5, icc_type = t)$icc_type, 'consistency')
+  }
+})
+
+test_that('without n_measurements an average-measures ICC is NA, not single-measures', {
+  got <- es_from_icc(icc = 0.9, n_sample = 50, n_measurements = NA, icc_type = 'average')
+  expect_true(is.na(got$icc))
+  expect_true(is.na(got$icc_se))
+})
+
+test_that('convert_df flags the step-down and the drop, and V31 skips the dropped row', {
+  d <- data.frame(icc = c(0.90, 0.95, 0.90, 0.80), n_sample = 50,
+                  n_measurements = c(5, 10, NA, 2),
+                  icc_type = c('ICC(2,k)', 'icc2k', 'average', 'agreement'))
+  s <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)
+  f <- s$flags_crude
+
+  expect_equal(s$es_crude[1], log(1 - .icc_step_down(0.90, 5)), tolerance = 1e-4)
+  expect_equal(s$es_crude[2], log(1 - .icc_step_down(0.95, 10)), tolerance = 1e-4)
+  expect_true(is.na(s$es_crude[3]))
+  expect_equal(s$es_crude[4], log(1 - 0.80), tolerance = 1e-4)
+
+  expect_true(grepl('stepped down to the single-measurement ICC 0.6429', f[1], fixed = TRUE))
+  expect_true(grepl('stepped down to the single-measurement ICC 0.6552', f[2], fixed = TRUE))
+  expect_true(grepl("[INVALID] Average-measures ICC needs 'n_measurements'", f[3], fixed = TRUE))
+  # the dropped row must NOT also carry the [INFO] step-down report
+  expect_false(grepl('[INFO] Average-measures ICC (', f[3], fixed = TRUE))
+  # Every '; '-separated token must be a TAGGED flag. '; ' is the merge separator,
+  # so a message that contains it internally is split into an untagged fragment --
+  # and a fragment carrying no quoted column name matches every scope, landing in
+  # BOTH crude and adjusted. That is the V23 defect (audit #41) in general form.
+  for (j in seq_along(f)) {
+    if (!nzchar(f[j])) next
+    toks <- strsplit(f[j], '; ', fixed = TRUE)[[1]]
+    expect_true(all(startsWith(toks, '[')),
+                info = paste('row', j, '- untagged token:',
+                             paste(toks[!startsWith(toks, '[')], collapse = ' | ')))
+  }
+
+  # V31 follows the step-down onto the agreement rows...
+  expect_true(grepl('agreement-type SE', f[1], fixed = TRUE))
+  expect_true(grepl('agreement-type SE', f[2], fixed = TRUE))
+  # ...but not onto the row that produced no estimate at all
+  expect_false(grepl('agreement-type SE', f[3], fixed = TRUE))
+})
+
+test_that('a consistency average-measures row is not given the agreement SE note', {
+  d <- data.frame(icc = 0.9, n_sample = 50, n_measurements = 5, icc_type = 'ICC(3,k)')
+  f <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)$flags_crude
+  expect_true(grepl('stepped down', f[1], fixed = TRUE))
+  expect_false(grepl('agreement-type SE', f[1], fixed = TRUE))
+})

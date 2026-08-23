@@ -20,7 +20,22 @@ es_from_icc(
 \item{n_measurements}{number of measurements or raters}
 
 \item{icc_type}{ICC type: \code{"agreement"} for ICC(2,1) (two-way random, absolute agreement)
-or \code{"consistency"} for ICC(3,1) (two-way mixed, consistency). Default is \code{"agreement"}.}
+or \code{"consistency"} for ICC(3,1) (two-way mixed, consistency). Default is \code{"agreement"}.
+Matching is case- and punctuation-insensitive, so \code{"ICC(2,1)"}, \code{"absolute agreement"}
+and \code{"two-way random"} are all accepted for the first, and \code{"ICC(3,1)"} /
+\code{"two-way mixed"} for the second.
+
+\strong{Average-measures ICCs} - \code{"average"}, \code{"ICC(2,k)"}, \code{"ICC(3,k)"} - are
+also recognised, and are \emph{not} the same estimand: they describe the mean of
+\code{n_measurements} measurements rather than one. Such a value is stepped down to the
+single-measurement ICC with the inverse Spearman-Brown formula
+\deqn{ICC_1 = \frac{ICC_k}{k - (k - 1) ICC_k}}
+so that it is on the same scale as the rest of the pool, and the row is flagged
+\code{[INFO]} recording both values. If \code{n_measurements} is missing the step-down
+cannot be performed, and the row is set to \code{NA} with an \code{[INVALID]} flag rather
+than pooled as if it were single-measures - entering an ICC(2,k) as if it were ICC(2,1)
+overstates the reliability by up to 1.9 log units (k = 10, ICC = 0.95) while leaving the
+standard error almost unchanged, so nothing downstream reveals the error.}
 
 \item{icc_to_es}{method used to compute the effect size from ICC.
 Must be either \code{"bonett"} or \code{"raw"}.}

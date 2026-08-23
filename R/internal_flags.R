@@ -640,7 +640,42 @@
     } else {
       rep("agreement", nrow(x))
     }
-    agr <- which(!is.na(x[["icc"]]) & icc_type_eff == "agreement")
+    # Roadmap 1.2 -- average-measures ICC. Resolved FIRST, because whether such a
+    # row survives at all decides whether the V31 SE note below is worth emitting.
+    k_col <- if ("n_measurements" %in% colnames(x)) {
+      suppressWarnings(as.numeric(x[["n_measurements"]]))
+    } else {
+      rep(NA_real_, nrow(x))
+    }
+    icc_v    <- x[["icc"]]
+    is_avg   <- !is.na(icc_v) & .icc_is_average(icc_type_eff)
+    can_step <- is_avg & !is.na(k_col) & is.finite(k_col) & k_col >= 2 &
+      abs(icc_v) <= 1
+    dropped  <- is_avg & !can_step        # es_from_icc() sets these to NA
+
+    for (i in which(can_step)) {
+      rho1 <- .icc_step_down(icc_v[i], k_col[i])
+      row_issues[[i]] <- c(row_issues[[i]], paste0(
+        "[INFO] Average-measures ICC (", round(icc_v[i], 4), ", k = ", k_col[i],
+        ") stepped down to the single-measurement ICC ", round(rho1, 4),
+        " with Spearman-Brown, so it is on the same scale as the rest of the pool"))
+    }
+    for (i in which(dropped)) {
+      # No "; " anywhere in this message: .flag_es_quality() splits the merged flag
+      # string on that sequence, and a fragment carrying no quoted column name
+      # matches every scope, so it would land in BOTH crude and adjusted (the V23
+      # defect). The leading quoted 'n_measurements' is what routes this one.
+      row_issues[[i]] <- c(row_issues[[i]], paste0(
+        "[INVALID] Average-measures ICC needs 'n_measurements' to be stepped down ",
+        "to a single-measurement ICC (Spearman-Brown) - set to NA rather than pooled ",
+        "as if it were single-measures"))
+    }
+
+    # V31. .icc_is_agreement(), not == "agreement": an ICC(2,k) row is stepped down
+    # to single-measures and then computed with the SAME one-way agreement SE, so it
+    # needs the same note. Rows dropped just above are excluded -- there is no SE to
+    # be anti-conservative about, and the [INVALID] is the only actionable message.
+    agr <- which(!is.na(icc_v) & .icc_is_agreement(icc_type_eff) & !dropped)
     for (i in agr) {
       row_issues[[i]] <- c(row_issues[[i]],
         "[INFO] ICC agreement-type SE assumes negligible between-rater variance and can be anti-conservative when raters differ systematically (see the es_from_icc documentation)")

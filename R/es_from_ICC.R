@@ -5,6 +5,21 @@
 #' @param n_measurements number of measurements or raters
 #' @param icc_type ICC type: \code{"agreement"} for ICC(2,1) (two-way random, absolute agreement)
 #'   or \code{"consistency"} for ICC(3,1) (two-way mixed, consistency). Default is \code{"agreement"}.
+#'   Matching is case- and punctuation-insensitive, so \code{"ICC(2,1)"}, \code{"absolute agreement"}
+#'   and \code{"two-way random"} are all accepted for the first, and \code{"ICC(3,1)"} /
+#'   \code{"two-way mixed"} for the second.
+#'
+#'   \strong{Average-measures ICCs} - \code{"average"}, \code{"ICC(2,k)"}, \code{"ICC(3,k)"} - are
+#'   also recognised, and are \emph{not} the same estimand: they describe the mean of
+#'   \code{n_measurements} measurements rather than one. Such a value is stepped down to the
+#'   single-measurement ICC with the inverse Spearman-Brown formula
+#'   \deqn{ICC_1 = \frac{ICC_k}{k - (k - 1) ICC_k}}
+#'   so that it is on the same scale as the rest of the pool, and the row is flagged
+#'   \code{[INFO]} recording both values. If \code{n_measurements} is missing the step-down
+#'   cannot be performed, and the row is set to \code{NA} with an \code{[INVALID]} flag rather
+#'   than pooled as if it were single-measures - entering an ICC(2,k) as if it were ICC(2,1)
+#'   overstates the reliability by up to 1.9 log units (k = 10, ICC = 0.95) while leaving the
+#'   standard error almost unchanged, so nothing downstream reveals the error.
 #' @param icc_to_es method used to compute the effect size from ICC.
 #'   Must be either \code{"bonett"} or \code{"raw"}.
 #'
@@ -96,6 +111,24 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
 
   icc_type <- .normalise_icc_type(icc_type)
 
+  # Roadmap 1.2. An average-measures ICC describes the mean of k measurements, so
+  # it is a DIFFERENT estimand from the single-measurement ICC every other row in
+  # the pool carries. Step it down with Spearman-Brown where k is known; where it
+  # is not, leave the value alone and let the n_measurements guard below set the
+  # row to NA (a step-down cannot be guessed, and pooling the un-stepped value is
+  # the silent error this exists to stop). .validate_input_data() raises [INFO] on
+  # the stepped rows and [INVALID] on the ones dropped for want of k.
+  avg <- .icc_is_average(icc_type)
+  can_step <- avg & !is.na(icc) & !is.na(n_measurements) &
+    is.finite(n_measurements) & n_measurements >= 2 & !is.na(icc) & abs(icc) <= 1
+  if (any(can_step)) {
+    icc[can_step] <- .icc_step_down(icc[can_step], n_measurements[can_step])
+  }
+  # Report the estimand actually computed. A row that could not be stepped down is
+  # NA'd below, so no un-stepped average value ever reaches the output.
+  icc_type[avg] <- sub("_average$", "", icc_type[avg])
+  if (any(avg & !can_step)) icc[avg & !can_step] <- NA_real_
+
   if (!icc_to_es %in% c("bonett", "raw")) {
     stop(paste0("'", icc_to_es, "' not in tolerated values for the 'icc_to_es' argument. ",
                 "Possible inputs are: 'bonett', 'raw'"))
@@ -186,11 +219,21 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
 # Idempotent, like .normalise_omega_type(): convert_df() normalises the column and
 # es_from_icc() normalises again, so every output must also be a valid input.
 #
-# NOTE: average-measures spellings ('average', 'ICC(2,k)', 'icc2k', 'icc3k') are
-# deliberately NOT mapped here. They are a different estimand, not an alias, and
-# swallowing them into a single-measures level is reliability roadmap item 1.2 --
-# a separate decision (NA + [INVALID], or a Spearman-Brown step-down) that must not
-# be made silently as a side effect of this extraction.
+# AVERAGE-MEASURES levels are a separate axis, not aliases. icc_type carries two
+# independent facts -- the model (absolute agreement vs consistency) and the UNIT
+# (a single measurement vs the mean of k). Before roadmap 1.2 the second was not
+# representable at all: 'average', 'ICC(2,k)' and 'icc2k' were unrecognised, warned,
+# and fell back to 'agreement', so an average-measures value was computed as if it
+# were single-measures. The SE ratio stays near 1 (1.05-1.39x), so nothing
+# downstream looks wrong, while the POINT ESTIMATE is off by up to 1.9 log units:
+#
+#   k    ICC_avg   true ICC_1   es (wrong)   es (right)   error
+#   2    0.90      0.8182       -2.3026      -1.7047      -0.598
+#   5    0.90      0.6429       -2.3026      -1.0296      -1.273
+#   10   0.95      0.6552       -2.9957      -1.0647      -1.931
+#
+# The four *_average levels are resolved by es_from_icc(), which steps them down
+# with Spearman-Brown and reports the single-measures level it actually computed.
 .normalise_icc_type <- function(x, warn = TRUE) {
   raw <- as.character(x)
   key <- gsub('[^a-z0-9]', '', tolower(trimws(raw)))
@@ -199,7 +242,17 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
     icc21 = 'agreement', twowayrandom = 'agreement', absolute = 'agreement',
     agree = 'agreement', icc2 = 'agreement',
     consistency = 'consistency', icc31 = 'consistency',
-    twowaymixed = 'consistency', consistent = 'consistency', icc3 = 'consistency'
+    twowaymixed = 'consistency', consistent = 'consistency', icc3 = 'consistency',
+    # average-measures. A bare 'average' / 'ICC(k)' does not say which model, so it
+    # takes the package default (agreement), exactly as a bare NA does.
+    average = 'agreement_average', averagemeasures = 'agreement_average',
+    averagemeasure = 'agreement_average', avg = 'agreement_average',
+    mean = 'agreement_average', icc2k = 'agreement_average',
+    agreementaverage = 'agreement_average',
+    absoluteagreementaverage = 'agreement_average',
+    twowayrandomaverage = 'agreement_average',
+    icc3k = 'consistency_average', consistencyaverage = 'consistency_average',
+    twowaymixedaverage = 'consistency_average'
   )
   out <- unname(map[key])
   bad <- which(is.na(out) & !is.na(raw) & nzchar(key))
@@ -208,8 +261,33 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
       "Unrecognised icc_type value(s): '", paste(unique(raw[bad]), collapse = "', '"),
       "'. Treated as 'agreement'. Recognised values are 'agreement' and ",
       "'consistency' (case-insensitive; 'ICC(2,1)' / 'ICC(3,1)' / 'absolute ",
-      "agreement' / 'two-way random' / 'two-way mixed' are also accepted)."))
+      "agreement' / 'two-way random' / 'two-way mixed' are also accepted), plus ",
+      "the average-measures forms 'average' / 'ICC(2,k)' / 'ICC(3,k)'."))
   }
   out[is.na(out)] <- 'agreement'
   out
+}
+
+
+# TRUE for the absolute-agreement family, single- or average-measures. V31 keys on
+# this: after a Spearman-Brown step-down an ICC(2,k) row is computed with the SAME
+# one-way agreement SE approximation, so it needs the same note.
+.icc_is_agreement <- function(type) {
+  type %in% c('agreement', 'agreement_average')
+}
+
+
+# TRUE for the average-measures forms, i.e. the value describes the mean of k
+# measurements rather than one.
+.icc_is_average <- function(type) {
+  type %in% c('agreement_average', 'consistency_average')
+}
+
+
+# Spearman-Brown, inverted: recover the single-measurement ICC from an
+# average-of-k ICC.  ICC_k = k*ICC_1 / (1 + (k-1)*ICC_1)  =>
+.icc_step_down <- function(rho_k, k) {
+  # Denominator k - (k-1)*rho_k is >= 1 for any rho_k <= 1 and k >= 2, so it cannot
+  # vanish for an in-range ICC (V11 already bounds icc to [-1, 1]).
+  rho_k / (k - (k - 1) * rho_k)
 }
