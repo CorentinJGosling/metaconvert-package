@@ -1,7 +1,7 @@
 #' Data extraction sheet generator
 #'
 #' @param name Name of the file created
-#' @param measure Target effect size measure (one of the 14 available in metaConvert). Default is "all".
+#' @param measure Target effect size measure. One of "d", "g", "md", "dw", "gw", "mdw", "r", "z", "rp", "zp", "or", "rr", "irr", "hr", "logor", "logrr", "logirr", "loghr", "logvr", "logcvr", "nnt", "rd", "prop", "alpha", "omega", "icc", or "all" to obtain every column. Default is "d".
 #' @param extension Extension of the file created. Most common are ".xlsx", ".csv" or ".txt". It is also possible to generate an R dataframe object by using the "data.frame" extension.
 #' @param type_of_measure One of "natural+converted" or "natural" (see details).
 #' @param verbose logical variable indicating whether some information should be printed (e.g., the location where the sheet is created when using ".xlsx", ".csv" or ".txt" extensions)
@@ -776,7 +776,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
 #' @param verbose logical variable indicating whether some information should be printed (e.g., the location where the sheet is created when using ".xlsx", ".csv" or ".txt" extensions)
 #'
 #' @details
-#' This function generates, on your computer on in the console,
+#' This function generates, on your computer or in the console,
 #' a dataset showing each effect size measure computed from each type of input data.
 #' The exact combination and names of input data required are available in the links.
 #'

@@ -6,14 +6,14 @@
 \alias{metaConvert-package}
 \title{metaConvert: An R Package Dedicated to Automated Effect Size Calculations}
 \description{
-The \pkg{metaConvert} package automatically estimates 21 effect size measures from a well-formatted dataframe.
+The \pkg{metaConvert} package automatically estimates 22 effect size measures from a well-formatted dataframe.
 Various other functions can help, for example, removing dependency between several effect sizes,
 or identifying differences between two dataframes.
 This package is mainly designed to assist in conducting a systematic review with a meta-analysis, but it can be
 useful to any researcher interested in estimating an effect size.
 }
 \section{Overview of the package}{
-To visualize all the types of input data that can be used to estimate the 21 effect size measures available
+To visualize all the types of input data that can be used to estimate the 22 effect size measures available
 in metaConvert, you can use the \code{\link{see_input_data}()} function.
 }
 
@@ -58,7 +58,7 @@ available at https://metaconvert.org
 }
 
 \section{Effect size measures available}{
-Twenty-one effect size measures are accepted:
+Twenty-two effect size measures are accepted:
 
 \itemize{
 \item \bold{"d"}: standardized mean difference (i.e., Cohen's d)
@@ -81,6 +81,7 @@ Twenty-one effect size measures are accepted:
 \item \bold{"logvr"}: log variability ratio
 \item \bold{"prop"}: single-group proportion
 \item \bold{"alpha"}: Cronbach's alpha
+\item \bold{"omega"}: McDonald's omega
 \item \bold{"icc"}: intraclass correlation coefficient
 }
 }

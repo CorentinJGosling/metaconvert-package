@@ -35,7 +35,7 @@ compute each effect size measure.
 Overview of effect size measures generated from each type of input data
 }
 \details{
-This function generates, on your computer on in the console,
+This function generates, on your computer or in the console,
 a dataset showing each effect size measure computed from each type of input data.
 The exact combination and names of input data required are available in the links.
 
