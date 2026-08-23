@@ -26,11 +26,47 @@ test_that(".build_group_key: NULL / absent column -> one pool; else the column v
   expect_equal(metaConvert:::.build_group_key(d, NULL, n = 3), rep("__all__", 3))
   expect_equal(metaConvert:::.build_group_key(d, "missing_col", n = 3), rep("__all__", 3))
   expect_equal(metaConvert:::.build_group_key(d, "o"), c("a", "a", "b"))
-  # multi-column interaction
-  expect_equal(metaConvert:::.build_group_key(d, c("o", "s")), c("a / x", "a / y", "b / x"))
+  # multi-column interaction. The INTERNAL separator is "\r", not the " / " the
+  # user is shown -- see the collision test below for why.
+  expect_equal(metaConvert:::.build_group_key(d, c("o", "s")),
+               c("a\rx", "a\ry", "b\rx"))
+  # ...and it still READS as " / " wherever a message prints it
+  expect_equal(metaConvert:::.group_label(
+                 metaConvert:::.build_group_key(d, c("o", "s"))),
+               c("a / x", "a / y", "b / x"))
   # NA -> shared "<NA>" bucket
   d2 <- data.frame(o = c("a", NA, NA))
   expect_equal(metaConvert:::.build_group_key(d2, "o"), c("a", "<NA>", "<NA>"))
+})
+
+test_that(".build_group_key: a value containing ' / ' cannot collide two distinct rows", {
+  # Audit 2.0.1 finding #40. Joining multi-column keys with " / " -- a sequence a
+  # grouping value can itself contain -- merged distinct rows into one pool, so
+  # D1/D2/D3, G, H, E4 and E6/E7/E8 silently compared rows that are not comparable.
+  #   (g1 = "x / y", g2 = "z")  and  (g1 = "x", g2 = "y / z")  both gave "x / y / z".
+  d <- data.frame(g1 = c("x / y", "x"), g2 = c("z", "y / z"))
+  k <- metaConvert:::.build_group_key(d, c("g1", "g2"))
+  expect_false(identical(k[1], k[2]))            # was TRUE: the whole bug
+  expect_equal(length(unique(k)), 2L)            # two pools, not one
+})
+
+test_that(".group_label: neutralises both the internal separator and the flag-merge separator", {
+  # "; " is the sequence the merged flag string is split on. A study_id or group
+  # value carrying it truncates the message and, for the re-split Tier-1 checks,
+  # mis-routes the leading fragment into BOTH the crude and adjusted scopes
+  # (it carries no quoted column name, so it matches every scope). Audit #41.
+  expect_equal(metaConvert:::.group_label("HAM-D; total score"), "HAM-D, total score")
+  expect_equal(metaConvert:::.group_label("a\rb"), "a / b")
+  expect_equal(metaConvert:::.group_label("a\rb; c"), "a / b, c")
+})
+
+test_that(".row_ref: sanitises a study_id containing '; ' (covers V23, V36 and H)", {
+  expect_equal(metaConvert:::.row_ref(1, "Huang; 2017"), "Huang, 2017 (row 1)")
+  expect_false(grepl("; ", metaConvert:::.row_ref(1, "Huang; 2017"), fixed = TRUE))
+  # unaffected when there is nothing to sanitise
+  expect_equal(metaConvert:::.row_ref(2, c("A", "Xu 2017")), "Xu 2017 (row 2)")
+  # falls back to the bare row number with no study_id
+  expect_equal(metaConvert:::.row_ref(3, NULL), "row 3")
 })
 
 test_that(".by_group: NULL-equivalent single group leaves messages untagged; multi tags them", {

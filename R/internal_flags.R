@@ -56,7 +56,15 @@
 #' When flag_group is NULL / absent / names no present column, every row gets
 #' the same key ("__all__") -- i.e. one pool, the pre-existing whole-dataset
 #' behaviour. Rows with an NA in a grouping column fall into a shared "<NA>" level.
-#' The key doubles as the human-readable group label shown in flag messages.
+#'
+#' Multi-column keys are joined with "\r", NOT with the " / " that is shown to the
+#' user: " / " is a sequence a grouping value can itself contain, so joining with it
+#' made distinct rows collide into one pool -- `(g1 = "x / y", g2 = "z")` and
+#' `(g1 = "x", g2 = "y / z")` both produced "x / y / z", silently merging their
+#' D1/D2/D3, G, H, E4 and E6/E7/E8 comparison sets. "\r" cannot occur in a value
+#' read from a spreadsheet cell, so it is collision-proof; it is the same separator
+#' `cmp_key` and `dup_key` already use. .group_label() renders it back as " / " for
+#' display, and every message that shows a key already routes through it.
 #'
 #' @param data data.frame the group column(s) are read from (the raw input data)
 #' @param flag_group NULL, or one or more column names in `data`
@@ -75,7 +83,7 @@
     v[is.na(v)] <- "<NA>"
     v
   })
-  do.call(paste, c(parts, sep = " / "))
+  do.call(paste, c(parts, sep = "\r"))
 }
 
 
@@ -116,16 +124,28 @@
 }
 
 
-#' Make a grouping-column value safe to interpolate into a flag message.
+#' Make a group key or study_id safe to interpolate into a flag message.
 #'
-#' The merged flag string is split on "; ", so a group label containing that
-#' sequence (e.g. an outcome named "HAM-D; total score") would create an untagged
-#' token downstream. Replace it with a comma.
+#' Two substitutions, in this order:
 #'
-#' @param g character scalar, the raw group key
+#' 1. "\r" -> " / ". .build_group_key() joins multi-column keys with "\r" so that
+#'    a value containing " / " cannot make two distinct rows share a pool; this
+#'    renders the key back into the form the user is meant to read.
+#' 2. "; " -> ", ". The merged flag string is split on "; ", so a value containing
+#'    that sequence (an outcome named "HAM-D; total score", a study_id like
+#'    "Huang; 2017") would create an untagged token downstream -- and for the
+#'    re-split Tier-1 messages it does worse than that, truncating the message and
+#'    mis-routing the fragment into both the crude and adjusted scopes, because a
+#'    fragment carrying no quoted column name matches every scope.
+#'
+#' Applied to grouping values at every display site and to study_id inside
+#' .row_ref(), which is what V23, V36 and Category H interpolate.
+#'
+#' @param g character vector, a raw group key or study_id
 #' @noRd
 .group_label <- function(g) {
-  gsub("; ", ", ", as.character(g), fixed = TRUE)
+  g <- gsub("\r", " / ", as.character(g), fixed = TRUE)
+  gsub("; ", ", ", g, fixed = TRUE)
 }
 
 
@@ -1743,7 +1763,12 @@
       NA_character_
     }
     if (!is.na(sid_i) && nzchar(sid_i)) {
-      sprintf("%s (row %d)", sid_i, as.integer(i))
+      # .group_label() here, not the raw study_id: a study_id containing "; "
+      # (e.g. "Huang; 2017") is split by the flag merge, which truncates the
+      # message AND mis-routes the leading fragment -- carrying no quoted column
+      # name, it matches every scope and lands in both crude and adjusted.
+      # Covers V23 (:1379), V36 (:1455) and Category H (:2767) in one place.
+      sprintf("%s (row %d)", .group_label(sid_i), as.integer(i))
     } else {
       sprintf("row %d", as.integer(i))
     }
@@ -1794,7 +1819,8 @@
                                      r_defaulted = NULL,
                                      prop_to_es = "raw",
                                      smd_denom = NULL,
-                                     n_cov_ancova = NULL) {
+                                     n_cov_ancova = NULL,
+                                     n_covariates = NULL) {
   n <- length(es)
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
@@ -1844,16 +1870,35 @@
       ci_width <- ci_up[i] - ci_lo[i]
       # package CIs: qt for d/g/md/r and dw/gw/mdw, qnorm otherwise
       # user CIs: checked against z width, t width also accepted
-      qt_measures <- c("d", "g", "dw", "gw", "md", "mdw", "r")
+      # "rp" builds its CI on the t distribution like the others, but on the
+      # REGRESSION residual df, not N - 2: es_from_linreg_t() uses
+      # df = n_sample - n_covariates - 2 (R/es_from_REGRESSION.R:249) and
+      # rp +/- qt(.975, df) * rp_se (:268-269). Omitting it from qt_measures made
+      # A6 compare every rp CI against the Wald-z width and fire a pure false
+      # [DISCORDANT] at small n -- measured firing up to N = 23 at 1 covariate,
+      # N = 27 at 3 and N = 37 at 10, i.e. the crossover scales with n_covariates,
+      # so adding "rp" WITHOUT subtracting the covariates just moves the boundary.
+      # "zp" is deliberately excluded: it is built with qnorm (:276-277).
+      qt_measures <- c("d", "g", "dw", "gw", "md", "mdw", "r", "rp")
       n_i <- if (!is.null(n_total)) n_total[i] else NA_real_
       # paired measures: df = n_pairs - 1 (n_total double counts the subjects)
       within_measures <- c("dw", "gw", "mdw")
       n_exp_i <- if (!is.null(n_exp)) n_exp[i] else NA_real_
       n_nexp_i <- if (!is.null(n_nexp)) n_nexp[i] else NA_real_
+      n_cov_i <- if (!is.null(n_covariates) && length(n_covariates) >= i) {
+        n_covariates[i]
+      } else {
+        NA_real_
+      }
       if (!is.null(measure) && measure %in% within_measures &&
           !is.na(n_exp_i) && is.finite(n_exp_i) && n_exp_i > 2) {
         t_df <- n_exp_i - 1
         n_eff <- n_exp_i
+      } else if (!is.null(measure) && identical(measure, "rp") &&
+                 !is.na(n_i) && !is.na(n_cov_i) && is.finite(n_cov_i) &&
+                 n_i - n_cov_i - 2 > 0) {
+        t_df <- n_i - n_cov_i - 2
+        n_eff <- n_i
       } else if (!is.na(n_i) && n_i > 4) {
         t_df <- n_i - 2
         n_eff <- n_i
@@ -1986,9 +2031,19 @@
     msuf <- if (!is.null(info_used)) .method_suffix(info_used[i]) else ""
 
     # B1: Correlation outside [-1, 1]
-    if (measure == "r" && is.finite(es[i]) && abs(es[i]) > 1) {
+    #
+    # "rp" is included alongside "r": a partial correlation is bounded identically
+    # and its interval is built identically (es +/- t*se on the r scale), so every
+    # correlation check below applies to it unchanged. The gates used to read
+    # `measure == "r"`, which left every rp pool silently unchecked -- e.g.
+    # linreg_t = 2.5, n_sample = 8, n_covariates = 1 gives rp = 0.745 with
+    # CI [0.234, 1.256] and no bound flag at all.
+    cor_scale <- measure %in% c("r", "rp")
+    cor_lab   <- if (identical(measure, "rp")) "partial r" else "r"
+    if (cor_scale && is.finite(es[i]) && abs(es[i]) > 1) {
       flags[[i]] <- c(flags[[i]],
-        paste0("[INVALID] r outside [-1, 1]: r = ", round(es[i], 3), msuf))
+        paste0("[INVALID] ", cor_lab, " outside [-1, 1]: ", cor_lab, " = ",
+               round(es[i], 3), msuf))
     }
 
     # B1b: raw-scale Wald CI escaping [-1, 1] while the point estimate is valid.
@@ -2011,15 +2066,23 @@
     # (96.1% -> 96.2%). B1b is retained as a backstop for the correlation routes that
     # still build a symmetric Wald interval on the r scale (the or_to_cor family,
     # pearson_r and their derivatives), where it remains reachable.
-    if (measure == "r" && is.finite(es[i]) && abs(es[i]) <= 1) {
+    if (cor_scale && is.finite(es[i]) && abs(es[i]) <= 1) {
       lo_out <- !is.na(ci_lo[i]) && is.finite(ci_lo[i]) && ci_lo[i] < -1
       up_out <- !is.na(ci_up[i]) && is.finite(ci_up[i]) && ci_up[i] > 1
       if (lo_out || up_out) {
-        bound <- if (up_out) ci_up[i] else ci_lo[i]
-        side <- if (up_out) "upper bound exceeds 1" else "lower bound is below -1"
+        # Report BOTH bounds when both escape. This used to print only the upper
+        # one, which understates a doubly-invalid interval.
+        side <- if (lo_out && up_out) {
+          paste0("lower bound is below -1 (", round(ci_lo[i], 3),
+                 ") and upper bound exceeds 1 (", round(ci_up[i], 3), ")")
+        } else if (up_out) {
+          paste0("upper bound exceeds 1 (", round(ci_up[i], 3), ")")
+        } else {
+          paste0("lower bound is below -1 (", round(ci_lo[i], 3), ")")
+        }
         flags[[i]] <- c(flags[[i]],
-          paste0("[INFO] Correlation CI ", side, " (", round(bound, 3),
-                 ") while r is valid - the symmetric Wald interval escapes the parameter space, interpret the interval with caution", msuf))
+          paste0("[INFO] Correlation CI ", side,
+                 " while ", cor_lab, " is valid - the symmetric Wald interval escapes the parameter space, interpret the interval with caution", msuf))
       }
     }
 
@@ -2218,11 +2281,14 @@
     }
 
     # C4: Correlation magnitude very high
-    if (measure == "r" &&
+    # "rp" included for the same reason as B1/B1b: a partial correlation is on the
+    # same bounded scale, so r_max means the same thing for it.
+    if (measure %in% c("r", "rp") &&
         !is.na(es[i]) && is.finite(es[i]) &&
         abs(es[i]) > opts$r_max && abs(es[i]) <= 1) {
       flags[[i]] <- c(flags[[i]],
-        paste0("[UNUSUAL] High correlation: |r| = ",
+        paste0("[UNUSUAL] High correlation: |",
+               if (identical(measure, "rp")) "partial r" else "r", "| = ",
                round(abs(es[i]), 3), " (threshold: ", opts$r_max, ")", msuf))
     }
 
@@ -2692,8 +2758,16 @@
     core <- paste0("this row is significantly ", dir_word, " (",
                    es_label, " = ", round(es[i], 3),
                    ", CI [", round(ci_lo[i], 3), ", ", round(ci_up[i], 3), "]", msuf, ")")
-    is_minority <- (majority == "tie") || (majority != dir)
-    if (is_minority) {
+    if (majority == "tie") {
+      # No majority exists, so neither side can be "opposite to" one. The old
+      # wording told BOTH rows of a 1-vs-1 split that they were the outlier
+      # opposing the majority -- a self-contradictory pair of flags. Both rows
+      # still warrant [UNUSUAL]: an evenly split pool is exactly as suspicious,
+      # and there is no basis for preferring either side.
+      paste0("[UNUSUAL] Direction conflict: ", core,
+             ", and the pool is evenly split (", n_opp,
+             " significant row(s) point each way, with no majority direction) - verify the arm/group labels and the extracted value against the primary (likely extraction error or a genuine outlier)")
+    } else if (majority != dir) {
       paste0("[UNUSUAL] Direction outlier: ", core,
              ", opposite to the pool majority (", n_opp,
              " significant row(s) favour the other direction) - verify the arm/group labels and the extracted value against the primary (likely extraction error or a genuine outlier)")
@@ -2757,7 +2831,7 @@
   # no method suffix, the duplicate is a row-level fact
   for (dk in dup_keys) {
     rows   <- which(dup_key == dk & valid)
-    dup_id <- sid[rows[1]]
+    dup_id <- .group_label(sid[rows[1]])   # see .row_ref(): "; " in a study_id
     grp_txt <- if (multi_grp) paste0(" within group '", .group_label(grp[rows[1]]), "'") else ""
     for (i in rows) {
       others <- setdiff(rows, i)
@@ -3185,6 +3259,15 @@
     NULL
   }
 
+  # Same, for the REGRESSION covariate count: a partial-correlation ("rp") row has
+  # its interval built on qt(.975, n_sample - n_covariates - 2), a DIFFERENT column
+  # from n_cov_ancova and a different df, so A6 needs it separately.
+  n_covariates_row <- if ("n_covariates" %in% colnames(raw_data)) {
+    suppressWarnings(as.numeric(raw_data$n_covariates[match(res$row_id, raw_data$row_id)]))
+  } else {
+    NULL
+  }
+
   f_a <- .flag_numeric_integrity(es, se, ci_lo, ci_up, info_used,
                                   measure = measure, exp = exp,
                                   n_total = n_total, n_exp = n_exp_vec,
@@ -3193,7 +3276,8 @@
                                   r_defaulted = r_def_row,
                                   prop_to_es = prop_to_es,
                                   smd_denom = smd_denom_row,
-                                  n_cov_ancova = n_cov_row)
+                                  n_cov_ancova = n_cov_row,
+                                  n_covariates = n_covariates_row)
   f_b <- .flag_bounds_violations(es, se, ci_lo, ci_up, measure, exp, info_used,
                                   baseline_risk = baseline_risk_vec,
                                   baseline_rate = baseline_rate_vec,
