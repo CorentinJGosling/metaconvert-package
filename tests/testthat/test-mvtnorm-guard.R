@@ -74,3 +74,48 @@ test_that("the phi and chi-squared routes report it too (they go through the 2x2
   expect_message(es_from_chisq(chisq = 24.5, n_sample = 200, n_cases = 90, n_exp = 100),
                  "mvtnorm", fixed = TRUE)
 })
+
+
+# ---------------------------------------------------------------------------
+# Regression pin for CRAN's --no-suggests flavour (2.0.1 audit finding #3).
+#
+# This rotted TWICE. The files the audit named were guarded in 4955631; commit
+# 2b6f141 (roadmap 1.3) then added tests/testthat/test-table-2x2-to-cor.R with 12
+# unguarded blocks. Measured with mvtnorm genuinely removed from the library:
+# PASS 20 / FAIL 6 before, PASS 13 / FAIL 0 / SKIP 5 after. Not an error -- a
+# silent FAIL, which is still an R CMD check ERROR on that flavour.
+#
+# Scope of this pin, stated honestly: it only re-checks the five blocks measured
+# to need mvtnorm. It CANNOT catch a newly added unguarded file, because whether
+# a block survives mvtnorm's absence is a runtime property of its assertions --
+# a static scan was tried and was unsound both ways (it flagged 4 blocks that
+# pass fine and missed the es_from_phi block whose assertion reads a message).
+# The general case is a platform property and belongs to the platform check:
+# .github/workflows/rhub.yaml now carries noSuggests in its default config, and
+# the local reproduction is _R_CHECK_DEPENDS_ONLY_=true R CMD check (see CLAUDE.md).
+# ---------------------------------------------------------------------------
+test_that("the five mvtnorm-dependent blocks of test-table-2x2-to-cor.R stay guarded", {
+  f <- "test-table-2x2-to-cor.R"
+  skip_if(!file.exists(f), paste(f, 'not visible from the test working directory'))
+  src <- readLines(f, warn = FALSE)
+
+  # Block titles measured to fail when mvtnorm is absent (r/z come back NA).
+  needs_mvtnorm <- c(
+    "the tetrachoric r CI stays inside",
+    "the r CI is the tanh back-transform of the z CI",
+    "reverse_2x2 reflects the CI rather than inverting it",
+    "es_from_phi() warns loudly when ONE call mixes both estimands",
+    "the two es_from_phi regimes really do differ")
+
+  starts <- grep("^test_that[(]", src)
+  ends   <- c(starts[-1] - 1L, length(src))
+  unguarded <- character(0)
+  for (title in needs_mvtnorm) {
+    i <- which(vapply(starts, function(s) grepl(title, src[s], fixed = TRUE), logical(1)))
+    if (length(i) != 1L) { unguarded <- c(unguarded, paste0(title, ' <block not found>')); next }
+    blk <- src[starts[i]:ends[i]]
+    if (!any(grepl('skip_if_not_installed[(]["]mvtnorm', blk)))
+      unguarded <- c(unguarded, title)
+  }
+  expect_equal(unguarded, character(0))
+})

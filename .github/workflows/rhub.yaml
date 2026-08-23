@@ -19,7 +19,10 @@ on:
           Comma-separated list of R-hub platforms to use.
           Full list: https://r-hub.github.io/containers/
         type: string
-        default: 'linux,windows,macos'
+        # noSuggests is NOT optional here: metaConvert's tetrachoric route needs
+        # mvtnorm (a Suggests), and unguarded tests against it have twice caused an
+        # R CMD check ERROR on that flavour (2.0.1 audit finding #3). Keep it in.
+        default: 'linux,windows,macos,noSuggests'
       name:
         description: 'Run name. You can leave this empty.'
         type: string

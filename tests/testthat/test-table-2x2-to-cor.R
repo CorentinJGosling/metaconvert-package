@@ -64,6 +64,7 @@ test_that("the valid value still works on both paths", {
 # --- the r-scale CI cannot escape the parameter space ----------------------
 
 test_that("the tetrachoric r CI stays inside [-1, 1]", {
+  skip_if_not_installed("mvtnorm")   # tetrachoric route; NA without it (CRAN noSuggests)
   set.seed(4)
   n_checked <- 0; escaped <- 0
   for (i in 1:300) {
@@ -83,6 +84,7 @@ test_that("the tetrachoric r CI stays inside [-1, 1]", {
 })
 
 test_that("the r CI is the tanh back-transform of the z CI", {
+  skip_if_not_installed("mvtnorm")   # tetrachoric route; NA without it (CRAN noSuggests)
   res <- es_from_2x2(30, 15, 20, 35)
   expect_equal(res$r_ci_lo, tanh(res$z_ci_lo), tolerance = 1e-10)
   expect_equal(res$r_ci_up, tanh(res$z_ci_up), tolerance = 1e-10)
@@ -92,6 +94,7 @@ test_that("the r CI is the tanh back-transform of the z CI", {
 })
 
 test_that("reverse_2x2 reflects the CI rather than inverting it", {
+  skip_if_not_installed("mvtnorm")   # tetrachoric route; NA without it (CRAN noSuggests)
   fwd <- es_from_2x2(30, 15, 20, 35)
   rev <- es_from_2x2(30, 15, 20, 35, reverse_2x2 = TRUE)
   expect_equal(rev$r, -fwd$r, tolerance = 1e-10)
@@ -156,6 +159,7 @@ test_that("es_from_phi() announces the estimand when the 2x2 cannot be rebuilt",
 })
 
 test_that("es_from_phi() warns loudly when ONE call mixes both estimands", {
+  skip_if_not_installed("mvtnorm")   # tetrachoric route; NA without it (CRAN noSuggests)
   rm(list = ls(metaConvert:::.mcv_notices), envir = metaConvert:::.mcv_notices)
   expect_message(
     es_from_phi(phi = c(0.2182, 0.2182), n_sample = c(200, 200),
@@ -165,6 +169,7 @@ test_that("es_from_phi() warns loudly when ONE call mixes both estimands", {
 })
 
 test_that("the two es_from_phi regimes really do differ, which is why it warns", {
+  skip_if_not_installed("mvtnorm")   # tetrachoric route; NA without it (CRAN noSuggests)
   with_margins <- es_from_phi(phi = 0.2182, n_sample = 200, n_cases = 60, n_exp = 100)
   without      <- suppressMessages(es_from_phi(phi = 0.2182, n_sample = 200))
   expect_equal(without$r, 0.2182, tolerance = 1e-6)      # phi itself
