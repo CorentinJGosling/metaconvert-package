@@ -111,8 +111,14 @@ test_that("C7 no longer reports a strongly NEGATIVE alpha as near-perfect", {
 })
 
 test_that("C8 fires for a near-perfect ICC on the Bonett scale", {
+  # icc_agreement_se is passed explicitly because this block depends on it: under
+  # "drop" an absolute-agreement row has no SE, summary() therefore reports no
+  # effect size for it, and every Tier-2 check that reads the ES -- C8 included --
+  # goes silent. "compute" is the 2.1.0 default, so this states the dependency
+  # rather than overriding anything.
   d <- data.frame(study_id = "x", icc = 0.995, n_sample = 100, n_measurements = 3)
   s <- suppressWarnings(summary(convert_df(d, measure = "icc", verbose = FALSE,
+                                           icc_agreement_se = "compute",
                                            split_adjusted = FALSE),
                                 flags = TRUE, digits = 15))
   expect_match(s$flags, "Near-perfect ICC")
@@ -564,9 +570,9 @@ test_that("V31 is scoped to measure = 'icc' and does not leak into other runs", 
   f <- function(m) suppressWarnings(summary(
     convert_df(d, measure = m, split_adjusted = FALSE, verbose = FALSE),
     flags = TRUE, digits = 15))$flags
-  expect_false(any(grepl("ICC agreement-type", f("alpha"))))
-  expect_false(any(grepl("ICC agreement-type", f("omega"))))
-  expect_true(any(grepl("ICC agreement-type", f("icc"))))
+  expect_false(any(grepl("ICC agreement-type SE", f("alpha"))))
+  expect_false(any(grepl("ICC agreement-type SE", f("omega"))))
+  expect_true(any(grepl("ICC agreement-type SE", f("icc"))))
 })
 
 
@@ -619,7 +625,7 @@ test_that('V31 and es_from_icc() agree on every spelling, end to end', {
     d <- data.frame(icc = 0.8, n_sample = 50, n_measurements = 2, icc_type = s)
     f <- suppressWarnings(summary(convert_df(d, measure = 'icc', verbose = FALSE),
                                   flags = TRUE))$flags_crude
-    any(grepl('agreement-type SE', f, fixed = TRUE))
+    any(grepl('ICC agreement-type SE', f, fixed = TRUE))
   }
   route <- function(s) {
     suppressWarnings(es_from_icc(icc = 0.8, n_sample = 50, n_measurements = 2,
@@ -708,7 +714,11 @@ test_that('convert_df flags the step-down and the drop, and V31 skips the droppe
   d <- data.frame(icc = c(0.90, 0.95, 0.90, 0.80), n_sample = 50,
                   n_measurements = c(5, 10, NA, 2),
                   icc_type = c('ICC(2,k)', 'icc2k', 'average', 'agreement'))
-  s <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)
+  # icc_agreement_se stated explicitly: this block tests the STEP-DOWN arithmetic,
+  # which needs the row to survive into summary(). Under 'drop' an agreement row
+  # carries no SE and no effect size is reported. 'compute' is the 2.1.0 default.
+  s <- summary(convert_df(d, measure = 'icc', icc_agreement_se = 'compute',
+                          verbose = FALSE), flags = TRUE)
   f <- s$flags_crude
 
   expect_equal(s$es_crude[1], log(1 - .icc_step_down(0.90, 5)), tolerance = 1e-4)
@@ -734,10 +744,10 @@ test_that('convert_df flags the step-down and the drop, and V31 skips the droppe
   }
 
   # V31 follows the step-down onto the agreement rows...
-  expect_true(grepl('agreement-type SE', f[1], fixed = TRUE))
-  expect_true(grepl('agreement-type SE', f[2], fixed = TRUE))
+  expect_true(grepl('ICC agreement-type SE', f[1], fixed = TRUE))
+  expect_true(grepl('ICC agreement-type SE', f[2], fixed = TRUE))
   # ...but not onto the row that produced no estimate at all
-  expect_false(grepl('agreement-type SE', f[3], fixed = TRUE))
+  expect_false(grepl('ICC agreement-type SE', f[3], fixed = TRUE))
 })
 
 test_that('a consistency average-measures row is not given the agreement SE note', {
@@ -846,8 +856,12 @@ test_that('the new arguments recycle length-1 values and reject a bad length', {
 })
 
 test_that('convert_df threads icc_se / icc_ci through the pipeline', {
+  # row 3 is the closed-form (n, k) route. It is marked 'consistency' because the
+  # agreement default withholds exactly that SE (roadmap 1.1) -- which would test
+  # the drop, not the threading.
   d <- data.frame(icc = c(0.80, 0.94, 0.80),
                   n_sample = c(50, NA, 50), n_measurements = c(2, NA, 2),
+                  icc_type = c('agreement', 'agreement', 'consistency'),
                   icc_se = c(0.05, NA, NA),
                   icc_ci_lo = c(NA, 0.86, NA), icc_ci_up = c(NA, 0.98, NA))
   s <- summary(convert_df(d, measure = 'icc', verbose = FALSE))
@@ -868,4 +882,132 @@ test_that('the extraction sheet and the guidance name the new columns', {
   g <- summary(convert_df(data.frame(icc = 0.8), measure = 'icc', verbose = FALSE),
                guidance = TRUE)$es_guidance_crude
   expect_true(any(grepl('icc_se|icc_ci', g)))
+})
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 1.1: the agreement-type SE is not merely 'approximate'.
+#
+# Measured (two-way DGP, ICC(2,1) = 0.80, k = 2, rater variance 50% of the
+# non-subject budget, 5000 reps): 95% coverage 0.820 at n = 20, 0.667 at n = 50,
+# 0.321 at n = 200, 0.144 at n = 1000 -- it DEGRADES with n, because ICC(2,1)
+# inherits MSC's k-1 df while the reported SE shrinks like 1/sqrt(n). The old
+# documented 'around 0.74-0.76' is not a range the estimator occupies at any n.
+#
+# Two remedies the roadmap offered were rejected by measurement:
+#   * flipping the default to 'consistency' is NUMERICALLY INERT (the two share
+#     one SE formula -- asserted below, and pinned at 1e-15 in tests_save);
+#   * dropping the SE inside es_from_icc() would overturn a deliberate archived
+#     convention and change every direct caller.
+# So the route keeps computing (agreement_se), convert_df() can decline to POOL it
+# (icc_agreement_se), and BOTH default to 'compute' in 2.1.0. That default is not a
+# preference: tests_save/checked pins the computed value both at the route
+# (test-icc.R:48, deliberately, with an honesty note) and through the pipeline
+# (test-icc.R convert_df blocks), plus V31's exact [INFO] string (test-flags.R V25).
+# Defaulting to 'drop' failed 6 archived assertions, which by this project's rule is
+# a signal about the change, not about the tests. 'drop' therefore ships opt-in.
+# ---------------------------------------------------------------------------
+
+test_that('flipping icc_type would have been numerically inert', {
+  for (p in list(c(0.8, 50, 2), c(0.5, 120, 3), c(0.95, 30, 5), c(-0.2, 80, 2))) {
+    a <- es_from_icc(p[1], p[2], p[3], icc_type = 'agreement')
+    cc <- es_from_icc(p[1], p[2], p[3], icc_type = 'consistency')
+    expect_equal(a$icc, cc$icc, tolerance = 1e-15)
+    expect_equal(a$icc_se, cc$icc_se, tolerance = 1e-15)
+  }
+})
+
+test_that("es_from_icc() still computes by default: the archived convention holds", {
+  rho <- 0.80; k <- 2; n <- 50
+  got <- es_from_icc(icc = rho, n_sample = n, n_measurements = k, icc_type = 'agreement')
+  expect_equal(got$icc_se, sqrt(2 * (1 + (k - 1) * rho)^2 / (k * (k - 1) * (n - 1))),
+               tolerance = 1e-10)
+})
+
+test_that("agreement_se = 'drop' withholds the COMPUTED SE and nothing else", {
+  d <- es_from_icc(0.80, 50, 2, icc_type = 'agreement', agreement_se = 'drop')
+  expect_true(is.na(d$icc_se))
+  expect_equal(d$icc, log(1 - 0.80), tolerance = 1e-10)   # estimate survives
+  # consistency rows are untouched: for them the formula is exact at leading order
+  expect_false(is.na(es_from_icc(0.80, 50, 2, icc_type = 'consistency',
+                                 agreement_se = 'drop')$icc_se))
+  # a stepped-down ICC(2,k) is computed with the same approximation, so it drops too
+  expect_true(is.na(es_from_icc(0.90, 50, 5, icc_type = 'ICC(2,k)',
+                                agreement_se = 'drop')$icc_se))
+  expect_false(is.na(es_from_icc(0.90, 50, 5, icc_type = 'ICC(3,k)',
+                                 agreement_se = 'drop')$icc_se))
+  expect_error(es_from_icc(0.8, 50, 2, agreement_se = 'banana'), 'agreement_se')
+})
+
+test_that("a REPORTED SE or CI survives agreement_se = 'drop'", {
+  # this is the whole point of doing 1.4 first: the drop targets the approximation,
+  # not the row
+  expect_equal(es_from_icc(0.80, 50, 2, icc_type = 'agreement', icc_se = 0.05,
+                           agreement_se = 'drop')$icc_se,
+               0.05 / (1 - 0.80), tolerance = 1e-10)
+  expect_equal(es_from_icc(0.94, icc_ci_lo = 0.86, icc_ci_up = 0.98,
+                           icc_type = 'agreement', agreement_se = 'drop')$icc_se,
+               abs(log(1 - 0.98) - log(1 - 0.86)) / (2 * qnorm(0.975)),
+               tolerance = 1e-10)
+})
+
+test_that('convert_df defaults to drop and offers a documented escape hatch', {
+  d <- data.frame(icc = c(0.85, 0.72), n_sample = c(145, 67),
+                  n_measurements = 2, icc_type = c('agreement', 'consistency'))
+  drop <- summary(convert_df(d, measure = 'icc', icc_agreement_se = 'drop',
+                             verbose = FALSE))
+  comp <- summary(convert_df(d, measure = 'icc', icc_agreement_se = 'compute',
+                             verbose = FALSE))
+  expect_true(is.na(drop$se_crude[1]))        # agreement withheld
+  expect_false(is.na(drop$se_crude[2]))       # consistency kept
+  expect_false(is.na(comp$se_crude[1]))       # escape hatch restores it
+  expect_equal(comp$se_crude[2], drop$se_crude[2], tolerance = 1e-10)
+  # NOT "the point estimate is preserved": summary() reports no effect size for a
+  # row it cannot weight, so the agreement row's es_crude is NA under 'drop' too.
+  # That is the same thing a bare omega does (es_from_omega gives an estimate with
+  # se = NA, and summary() still shows es = NA), so this is the package's existing
+  # convention rather than something introduced here -- but it does mean the
+  # Tier-1 V31 flag is the only trace such a row leaves.
+  expect_true(is.na(drop$es_crude[1]))
+  expect_false(is.na(comp$es_crude[1]))
+  expect_equal(drop$es_crude[2], comp$es_crude[2], tolerance = 1e-10)
+  # and the choice is recorded on the object
+  expect_equal(attr(convert_df(d, measure = 'icc', verbose = FALSE),
+                    'icc_agreement_se'), 'compute')          # the 2.1.0 default
+  expect_equal(attr(convert_df(d, measure = 'icc', icc_agreement_se = 'drop',
+                               verbose = FALSE), 'icc_agreement_se'), 'drop')
+})
+
+test_that('V31 is [UNUSUAL] and names the two ways out', {
+  f <- summary(convert_df(data.frame(icc = 0.8, n_sample = 50, n_measurements = 2),
+                          measure = 'icc', verbose = FALSE), flags = TRUE)$flags_crude
+  # V31 keeps the [INFO] severity and the exact opening string tests_save pins
+  # (test-flags.R V25), but now carries the MEASURED coverage and names both ways
+  # out. Escalating it to [UNUSUAL] broke that pin, so the wording is load-bearing.
+  expect_true(grepl('[INFO] ICC agreement-type SE', f[1], fixed = TRUE))
+  expect_true(grepl('0.14 at n = 1000', f[1], fixed = TRUE))
+  expect_true(grepl('icc_se', f[1], fixed = TRUE))
+  expect_true(grepl("icc_agreement_se = 'drop'", f[1], fixed = TRUE))
+  # a consistency row gets no such note
+  f2 <- summary(convert_df(data.frame(icc = 0.8, n_sample = 50, n_measurements = 2,
+                                      icc_type = 'consistency'),
+                           measure = 'icc', verbose = FALSE), flags = TRUE)$flags_crude
+  expect_false(grepl('ICC agreement-type SE', f2[1], fixed = TRUE))
+})
+
+test_that('the documented coverage claim is the measured one, not 0.74-0.76', {
+  rd <- readLines('../../man/es_from_icc.Rd', warn = FALSE)
+  skip_if(length(rd) == 0, 'Rd not readable from the test working directory')
+  # the measured numbers are present...
+  expect_true(any(grepl('0.820', rd, fixed = TRUE)))
+  expect_true(any(grepl('0.144', rd, fixed = TRUE)))
+  expect_true(any(grepl('degrades as n grows', rd, fixed = TRUE)))
+  # ...and the old figure survives ONLY as a retraction, never as the claim
+  expect_false(any(grepl('coverage around 0.74-0.76', rd, fixed = TRUE)))
+  hit <- grep('0.74-0.76', rd, fixed = TRUE, value = TRUE)
+  expect_true(all(grepl('Earlier versions', hit, fixed = TRUE)))
+  # the \details block must exist at all: roxygen drops it silently on a brace or
+  # quote error and check_man() still reports 'No issues detected'
+  expect_true(any(grepl('Where the standard error comes from', rd, fixed = TRUE)))
+  expect_true(any(grepl('Scale note', rd, fixed = TRUE)))
 })

@@ -12,7 +12,8 @@ es_from_icc(
   icc_se,
   icc_ci_lo,
   icc_ci_up,
-  icc_to_es = "bonett"
+  icc_to_es = "bonett",
+  agreement_se = "compute"
 )
 }
 \arguments{
@@ -50,6 +51,13 @@ standard error.}
 
 \item{icc_to_es}{method used to compute the effect size from ICC.
 Must be either \code{"bonett"} or \code{"raw"}.}
+
+\item{agreement_se}{what to do about the CLOSED-FORM standard error of an
+absolute-agreement ICC. \code{"compute"} (the default here) emits it;
+\code{"drop"} returns \code{NA} for it, keeping the effect size and any
+standard error the study itself reported. See the coverage table in the
+details. \code{\link{convert_df}} exposes the same choice as
+\code{icc_agreement_se}. Consistency ICCs are unaffected by either value.}
 }
 \value{
 This function estimates the standard error of the ICC.
@@ -110,12 +118,38 @@ between-rater variance}: when raters differ systematically
 (\eqn{\sigma^2_{rater} > 0}), the ICC(2,1) estimator depends on the
 between-rater mean square, which has only \eqn{k - 1} degrees of freedom, so
 its true sampling variance does not shrink at the \eqn{1/n} rate this formula
-assumes and the reported SE/CI can be markedly anti-conservative (simulation:
-95\% CI coverage around 0.74-0.76 with moderate rater variance, degrading as
-\eqn{n} grows). The exact ICC(2,1) variance requires the rater-variance
-component, which summary data do not report; a per-row informational flag
-(V31) marks agreement-type rows for this reason. If the raters are known to
-be exchangeable (negligible rater variance), the approximation is accurate.
+assumes and the reported SE/CI is markedly anti-conservative. Measured by
+simulation (two-way DGP, ICC(2,1) = 0.80, k = 2, rater variance 50\% of the
+non-subject budget, Shrout-Fleiss estimator, 5000 replications per cell):\tabular{rrrrr}{
+   n \tab empirical SD \tab reported SE \tab weight inflated \tab 95\% coverage \cr
+   20 \tab 0.5666 \tab 0.4133 \tab 1.9x \tab 0.820 \cr
+   50 \tab 0.4608 \tab 0.2582 \tab 3.2x \tab 0.667 \cr
+   200 \tab 0.4119 \tab 0.1285 \tab 10.3x \tab 0.321 \cr
+   1000 \tab 0.4059 \tab 0.0573 \tab 50.3x \tab 0.144 \cr
+}
+
+
+Note the direction: coverage \strong{degrades as n grows}, because the empirical SD
+barely shrinks (0.567 to 0.406) while the reported SE falls like 1/sqrt(n).
+Earlier versions of this page quoted 'around 0.74-0.76', which is not a range
+the estimator occupies at any n and reads as a bounded problem when it is an
+unbounded one.
+
+The exact ICC(2,1) variance requires the rater-variance component, which summary
+data do not report, so an agreement row can enter a pool with up to 50x too much
+weight. Two things follow. Every agreement row is flagged by V31. And the
+approximation can be refused: \code{agreement_se = "drop"} here, or
+\code{icc_agreement_se = "drop"} in \code{\link{convert_df}}, returns \code{NA}
+for it so \code{summary()} leaves the row out of the pool rather than
+over-weighting it. A standard error the study itself reported is kept either way -
+the option targets the approximation, not the row - which is why supplying
+\code{icc_se} or a CI is the better fix where the study offers one.
+
+Both default to \code{"compute"} in 2.1.0, for backward compatibility and because
+the archived reference suite pins the computed value; \code{"drop"} is expected to
+become the default in a future release. If the raters are known to be exchangeable
+the approximation is accurate and \code{"compute"} is correct. Consistency ICCs are
+unaffected throughout: for them the formula is exact at leading order.
 
 \strong{Scale note.} Under the default \code{icc_to_es = "bonett"} the returned
 \code{icc} column and its \code{icc_se} are both on the \eqn{\ln(1 - ICC)} scale:

@@ -27,6 +27,12 @@
 #' @param icc_ci_up upper bound of the 95% confidence interval of the ICC (natural scale)
 #' @param icc_to_es method used to compute the effect size from ICC.
 #'   Must be either \code{"bonett"} or \code{"raw"}.
+#' @param agreement_se what to do about the CLOSED-FORM standard error of an
+#'   absolute-agreement ICC. \code{"compute"} (the default here) emits it;
+#'   \code{"drop"} returns \code{NA} for it, keeping the effect size and any
+#'   standard error the study itself reported. See the coverage table in the
+#'   details. \code{\link{convert_df}} exposes the same choice as
+#'   \code{icc_agreement_se}. Consistency ICCs are unaffected by either value.
 #'
 #' @details
 #' This function computes an effect size from an ICC.
@@ -72,12 +78,38 @@
 #' (\eqn{\sigma^2_{rater} > 0}), the ICC(2,1) estimator depends on the
 #' between-rater mean square, which has only \eqn{k - 1} degrees of freedom, so
 #' its true sampling variance does not shrink at the \eqn{1/n} rate this formula
-#' assumes and the reported SE/CI can be markedly anti-conservative (simulation:
-#' 95% CI coverage around 0.74-0.76 with moderate rater variance, degrading as
-#' \eqn{n} grows). The exact ICC(2,1) variance requires the rater-variance
-#' component, which summary data do not report; a per-row informational flag
-#' (V31) marks agreement-type rows for this reason. If the raters are known to
-#' be exchangeable (negligible rater variance), the approximation is accurate.
+#' assumes and the reported SE/CI is markedly anti-conservative. Measured by
+#' simulation (two-way DGP, ICC(2,1) = 0.80, k = 2, rater variance 50% of the
+#' non-subject budget, Shrout-Fleiss estimator, 5000 replications per cell):
+#'
+#' | n | empirical SD | reported SE | weight inflated | 95% coverage |
+#' |-----:|-------------:|------------:|----------------:|-------------:|
+#' | 20 | 0.5666 | 0.4133 | 1.9x | 0.820 |
+#' | 50 | 0.4608 | 0.2582 | 3.2x | 0.667 |
+#' | 200 | 0.4119 | 0.1285 | 10.3x | 0.321 |
+#' | 1000 | 0.4059 | 0.0573 | 50.3x | 0.144 |
+#'
+#' Note the direction: coverage **degrades as n grows**, because the empirical SD
+#' barely shrinks (0.567 to 0.406) while the reported SE falls like 1/sqrt(n).
+#' Earlier versions of this page quoted 'around 0.74-0.76', which is not a range
+#' the estimator occupies at any n and reads as a bounded problem when it is an
+#' unbounded one.
+#'
+#' The exact ICC(2,1) variance requires the rater-variance component, which summary
+#' data do not report, so an agreement row can enter a pool with up to 50x too much
+#' weight. Two things follow. Every agreement row is flagged by V31. And the
+#' approximation can be refused: \code{agreement_se = "drop"} here, or
+#' \code{icc_agreement_se = "drop"} in \code{\link{convert_df}}, returns \code{NA}
+#' for it so \code{summary()} leaves the row out of the pool rather than
+#' over-weighting it. A standard error the study itself reported is kept either way -
+#' the option targets the approximation, not the row - which is why supplying
+#' \code{icc_se} or a CI is the better fix where the study offers one.
+#'
+#' Both default to \code{"compute"} in 2.1.0, for backward compatibility and because
+#' the archived reference suite pins the computed value; \code{"drop"} is expected to
+#' become the default in a future release. If the raters are known to be exchangeable
+#' the approximation is accurate and \code{"compute"} is correct. Consistency ICCs are
+#' unaffected throughout: for them the formula is exact at leading order.
 #'
 #' **Scale note.** Under the default \code{icc_to_es = "bonett"} the returned
 #' \code{icc} column and its \code{icc_se} are both on the \eqn{\ln(1 - ICC)} scale:
@@ -117,7 +149,13 @@
 #' )
 es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
                         icc_se, icc_ci_lo, icc_ci_up,
-                        icc_to_es = "bonett") {
+                        icc_to_es = "bonett",
+                        agreement_se = "compute") {
+
+  if (!agreement_se %in% c("compute", "drop")) {
+    stop(paste0("'", agreement_se, "' not in tolerated values for the 'agreement_se' ",
+                "argument. Possible inputs are: 'compute', 'drop'"))
+  }
 
   len <- length(icc)
   if (missing(n_sample)) n_sample <- rep(NA_real_, len)
@@ -261,6 +299,30 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
       (1 - rho) * bonett_transformed_se
     }
   }
+  # Roadmap 1.1. Under agreement_se = "drop", an absolute-agreement row keeps the
+  # SE it was GIVEN (routes 1 and 2) but not the one route 3 computed for it: that
+  # is the one-way approximation whose measured coverage is 0.82 at n = 20, 0.67 at
+  # n = 50, 0.32 at n = 200 and 0.14 at n = 1000, i.e. it degrades as studies get
+  # bigger, because ICC(2,1) inherits MSC's k - 1 df while the reported SE shrinks
+  # like 1/sqrt(n). The row keeps its point estimate and is dropped from the pool by
+  # summary() rather than entering it with up to 50x too much weight.
+  #
+  # icc_type has already had any "_average" suffix stripped, so a stepped-down
+  # ICC(2,k) is covered here too -- it is computed with the same approximation.
+  #
+  # The DEFAULT is "compute", which is the pre-existing behaviour, and it is
+  # deliberate: es_from_icc() is an exported calculator, and
+  # tests_save/checked/test-icc.R pins the shared proxy SE as a documented
+  # convention ("this test pins the documented proxy behaviour, it does not certify
+  # the agreement variance"). Refusing to compute inside the route would overturn
+  # that pin and change every direct caller, including metaumbrella. Declining to
+  # POOL an untrustworthy variance is an analysis decision, so convert_df() owns it
+  # and passes agreement_se = "drop" by default.
+  if (identical(agreement_se, "drop") && length(from_nk)) {
+    drop_i <- from_nk[.icc_is_agreement(icc_type[from_nk])]
+    if (length(drop_i)) icc_es_se[drop_i] <- NA_real_
+  }
+
   icc_es_se <- .positive_or_na(icc_es_se)
 
   icc_ci_lo <- icc_es - qnorm(0.975) * icc_es_se

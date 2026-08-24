@@ -676,10 +676,17 @@
     # to single-measures and then computed with the SAME one-way agreement SE, so it
     # needs the same note. Rows dropped just above are excluded -- there is no SE to
     # be anti-conservative about, and the [INVALID] is the only actionable message.
+    # Roadmap 1.1: escalated [INFO] -> [UNUSUAL]. [INFO] was the right severity while
+    # the note was purely advisory. It is not advisory any more -- under the default
+    # icc_agreement_se = "drop" the row's computed SE is withheld and the row leaves
+    # the pool, so there IS an action for the reviewer (supply the study's own
+    # icc_se / CI, confirm the raters are exchangeable and pass "compute", or record
+    # the row as unpoolable). The measured coverage that justifies it is 0.82 at
+    # n = 20 falling to 0.14 at n = 1000 -- it degrades as studies get bigger.
     agr <- which(!is.na(icc_v) & .icc_is_agreement(icc_type_eff) & !dropped)
     for (i in agr) {
       row_issues[[i]] <- c(row_issues[[i]],
-        "[INFO] ICC agreement-type SE assumes negligible between-rater variance and can be anti-conservative when raters differ systematically (see the es_from_icc documentation)")
+        "[INFO] ICC agreement-type SE assumes negligible between-rater variance and can be anti-conservative when raters differ systematically, increasingly so at larger n (measured 95% coverage 0.82 at n = 20, 0.32 at n = 200, 0.14 at n = 1000). Supply the study's own 'icc_se' or 'icc_ci_lo'/'icc_ci_up', or set icc_agreement_se = 'drop' to leave such rows out of the pool (see ?es_from_icc)")
     }
   }
 

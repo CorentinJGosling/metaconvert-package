@@ -34,6 +34,7 @@ convert_df(
   alpha_to_es = "bonett",
   omega_to_es = "bonett",
   icc_to_es = "bonett",
+  icc_agreement_se = "compute",
   correct_inputs = TRUE,
   flag_options = list()
 )
@@ -141,6 +142,15 @@ assumes the two arms' true standardizing SDs are equal.
 \item{omega_to_es}{method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no PUBLISHED sampling variance in (n, k). The alpha formula is numerically close under a correct unidimensional normal model but 8-26\% anti-conservative under ordinal items, mild misspecification, or a hierarchical omega, so the standard error is taken from the reported omega_se or confidence interval instead.}
 
 \item{icc_to_es}{method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).}
+
+\item{icc_agreement_se}{what to do about the closed-form standard error of an absolute-agreement ICC (ICC(2,1)) - which is the default \code{icc_type}, and therefore also what an absent one resolves to. One of:
+\itemize{
+\item \bold{"compute"} (default): emit it. This is the pre-existing behaviour and is accurate when the raters are exchangeable (negligible rater variance).
+\item \bold{"drop"}: return \code{NA} for it, so the row is left out of the pool by \code{summary()} instead of entering it over-weighted. A standard error the STUDY reported (\code{icc_se}, or \code{icc_ci_lo}/\code{icc_ci_up}) is kept either way - the option targets the approximation, not the row.
+}
+The closed-form standard error is a one-way approximation assuming negligible between-rater variance. With real rater variance its measured 95\% CI coverage is 0.82 at n = 20, 0.67 at n = 50, 0.32 at n = 200 and 0.14 at n = 1000: it degrades as studies get BIGGER, because ICC(2,1) inherits the between-rater mean square (k - 1 df) while the reported standard error shrinks like \eqn{1/\sqrt{n}}, so such a row can carry up to 50x too much weight. Agreement rows are flagged by V31 whichever option is used.
+The default is \code{"compute"} in 2.1.0 for backward compatibility and is expected to become \code{"drop"} in a future release; set it explicitly if you care which you get.
+Consistency ICCs (ICC(3,1)) are unaffected either way: for them the same formula is exact at leading order.}
 
 \item{correct_inputs}{a logical value indicating whether invalid input values (negative SDs, inverted CI bounds, etc.) should be set to NA before the calculations (default TRUE). If FALSE, invalid values are only flagged in the 'flags' column of summary() and kept in the data.}
 

@@ -1,5 +1,73 @@
 # metaConvert (development version)
 
+## ICC: average-measures values, reported uncertainty, and an honest coverage figure
+
+Four changes to the ICC path, one of which corrects a wrong number and one of which
+corrects a wrong claim in the documentation.
+
+**An average-measures ICC is no longer computed as if it were single-measures.**
+`icc_type = "average"` / `"ICC(2,k)"` / `"icc2k"` / `"ICC(3,k)"` were accepted, warned,
+and silently fell back to `"agreement"`. An ICC(2,k) describes the mean of *k*
+measurements, so this returned a different estimand from every other row in the pool.
+The standard-error ratio stays near 1 (1.05-1.39x), so nothing downstream looked wrong;
+only the point estimate moved, by up to **1.9 log units**:
+
+| k | reported ICC_avg | true single-measure ICC | es before | es now |
+|---:|---:|---:|---:|---:|
+| 2 | 0.90 | 0.8182 | -2.3026 | -1.7047 |
+| 5 | 0.90 | 0.6429 | -2.3026 | -1.0296 |
+| 10 | 0.95 | 0.6552 | -2.9957 | -1.0647 |
+
+Such a value is now stepped down with the inverse Spearman-Brown formula
+`ICC_1 = ICC_k / (k - (k-1) ICC_k)`, and any reported standard error or interval is
+stepped down with it. Where `n_measurements` is absent the step-down cannot be done, so
+the row is set to `NA` with an `[INVALID]` flag rather than pooled un-stepped.
+
+**`icc_se`, `icc_ci_lo` and `icc_ci_up` are now read.** They were silently ignored,
+although the ICC literature reports intervals routinely. Precedence mirrors
+`es_from_omega()`: reported SE (natural scale, delta-mapped), else the reported CI
+transformed at the **bounds** so an asymmetric interval maps correctly, else the
+closed-form `(n, k)` standard error. `n_sample` and `n_measurements` now gate only that
+third route, so *"ICC 0.94, 95% CI 0.86 to 0.98"* with no reported sample size is usable
+instead of being dropped whole.
+
+**`icc_type` has one definition.** `es_from_icc()` normalised it while the V31 check used
+bare string equality, so of ten spellings that resolve to agreement only the two spelled
+exactly `"agreement"` raised the flag. Worse, the key stripped digits, which made the
+map's own `icc21`/`icc31` entries unreachable: **`"ICC(3,1)"` - a consistency ICC - was
+relabelled as agreement**, with a warning calling it unrecognised. One normaliser now
+serves the route, `convert_df()` and V31.
+
+**The documented coverage figure was wrong.** `?es_from_icc` said the absolute-agreement
+standard error gives "95% CI coverage around 0.74-0.76". Measured (two-way DGP,
+ICC(2,1) = 0.80, k = 2, rater variance 50% of the non-subject budget, 5000 reps per cell):
+
+| n | empirical SD | reported SE | weight inflated | 95% coverage |
+|---:|---:|---:|---:|---:|
+| 20 | 0.5666 | 0.4133 | 1.9x | 0.820 |
+| 50 | 0.4608 | 0.2582 | 3.2x | 0.667 |
+| 200 | 0.4119 | 0.1285 | 10.3x | 0.321 |
+| 1000 | 0.4059 | 0.0573 | 50.3x | 0.144 |
+
+0.74-0.76 is not a range the estimator occupies at any n, and quoting a bounded interval
+hid the shape of the problem: coverage **degrades as n grows**, because ICC(2,1) inherits
+the between-rater mean square (k-1 df) while the reported standard error shrinks like
+1/sqrt(n). A large agreement study can therefore carry ~50x too much weight.
+
+New `convert_df(icc_agreement_se =)` and `es_from_icc(agreement_se =)` accept
+`"drop"`, which returns `NA` for that computed standard error so `summary()` leaves the
+row out of the pool. A standard error the study itself reported is kept either way - the
+option targets the approximation, not the row.
+
+> **Both default to `"compute"` in this release, and that is expected to change.**
+> `"drop"` is the honest default and will very likely become the default in a future
+> release. It is opt-in for now because it is a breaking change for anyone pooling plain
+> agreement data: absolute agreement is what an absent `icc_type` resolves to, so a sheet
+> with a bare `icc` column would go from a full pool to none. Set it explicitly if you
+> care which behaviour you get. Consistency ICCs are unaffected either way - for them the
+> same formula is exact at leading order.
+
+
 ## `omega_estimator`: record which computation produced the omega
 
 Omega is not one computation, and which one produced the number moves it further than

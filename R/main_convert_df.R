@@ -72,6 +72,14 @@
 #' @param alpha_to_es method used to compute the effect size from Cronbach's alpha. One of "bonett" (default, the variance-stabilising log(1 - alpha) transform), "raw", or "hakstian_whalen" (the cube-root transform Rodriguez & Maeda (2006) recommend and most published reliability-generalization syntheses use; stored in metafor's increasing orientation, matching measure = "AHW"). See \code{\link{es_from_cronbach_alpha}}.
 #' @param omega_to_es method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no PUBLISHED sampling variance in (n, k). The alpha formula is numerically close under a correct unidimensional normal model but 8-26% anti-conservative under ordinal items, mild misspecification, or a hierarchical omega, so the standard error is taken from the reported omega_se or confidence interval instead.
 #' @param icc_to_es method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).
+#' @param icc_agreement_se what to do about the closed-form standard error of an absolute-agreement ICC (ICC(2,1)) - which is the default \code{icc_type}, and therefore also what an absent one resolves to. One of:
+#' \itemize{
+#'  \item \bold{"compute"} (default): emit it. This is the pre-existing behaviour and is accurate when the raters are exchangeable (negligible rater variance).
+#'  \item \bold{"drop"}: return \code{NA} for it, so the row is left out of the pool by \code{summary()} instead of entering it over-weighted. A standard error the STUDY reported (\code{icc_se}, or \code{icc_ci_lo}/\code{icc_ci_up}) is kept either way - the option targets the approximation, not the row.
+#' }
+#' The closed-form standard error is a one-way approximation assuming negligible between-rater variance. With real rater variance its measured 95% CI coverage is 0.82 at n = 20, 0.67 at n = 50, 0.32 at n = 200 and 0.14 at n = 1000: it degrades as studies get BIGGER, because ICC(2,1) inherits the between-rater mean square (k - 1 df) while the reported standard error shrinks like \eqn{1/\sqrt{n}}, so such a row can carry up to 50x too much weight. Agreement rows are flagged by V31 whichever option is used.
+#' The default is \code{"compute"} in 2.1.0 for backward compatibility and is expected to become \code{"drop"} in a future release; set it explicitly if you care which you get.
+#' Consistency ICCs (ICC(3,1)) are unaffected either way: for them the same formula is exact at leading order.
 #' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).
 #' @param unit_type the type of unit for the \code{unit_increase_iv} argument. Use '"sd"' when the increase is expressed in standard deviations of the independent variable, and '"raw_scale"' when it is in the raw units of that variable. '"value"' and '"raw_data"' are accepted synonyms of '"raw_scale"'. Defaults to '"raw_scale"'. Read only by \code{cor_to_smd = "mathur"}; any other value is rejected rather than silently treated as raw units.
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds. Asymmetric CIs are only flagged, not modified (see \code{\link{summary.metaConvert}}).
@@ -342,6 +350,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                        alpha_to_es = "bonett",
                        omega_to_es = "bonett",
                        icc_to_es = "bonett",
+                       icc_agreement_se = "compute",
                        correct_inputs = TRUE,
                        flag_options = list()) {
   # @param table_2x2_to_cor formula used to obtain a correlation coefficient from the contingency table.
@@ -1004,7 +1013,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     icc = icc, n_sample = n_sample,
     n_measurements = n_measurements, icc_type = icc_type,
     icc_se = icc_se, icc_ci_lo = icc_ci_lo, icc_ci_up = icc_ci_up,
-    icc_to_es = icc_to_es
+    icc_to_es = icc_to_es, agreement_se = icc_agreement_se
   ))
 
   es_paired_t <- with(x, es_from_paired_t(
@@ -1787,6 +1796,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   attr(res, "alpha_to_es") <- alpha_to_es
   attr(res, "omega_to_es") <- omega_to_es
   attr(res, "icc_to_es") <- icc_to_es
+  attr(res, "icc_agreement_se") <- icc_agreement_se
   attr(res, "prop_to_es") <- prop_to_es
   # standardizer used by the pre/post routes (drives the E6/E7 mixing flags)
   attr(res, "pre_post_to_smd") <- pre_post_to_smd
