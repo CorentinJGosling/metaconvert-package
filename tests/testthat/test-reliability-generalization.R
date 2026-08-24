@@ -1011,3 +1011,81 @@ test_that('the documented coverage claim is the measured one, not 0.74-0.76', {
   expect_true(any(grepl('Where the standard error comes from', rd, fixed = TRUE)))
   expect_true(any(grepl('Scale note', rd, fixed = TRUE)))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 1.6 / V41: the ICC's lower bound depends on k.
+#
+# An ICC is bounded below by -1/(k-1), not by -1: with k measurements a negative
+# correlation is shared among k-1 others, so k = 3 cannot go below -0.5. V11's
+# .bounded_columns entry used the loose -1 while its own comment stated the correct
+# bound. That list holds STATIC scalar bounds and this one varies per row, so V41 is
+# a separate check -- the same shape as V32 and V34.
+#
+# It matters because the SE carries (1 + (k-1)rho), which SHRINKS as rho goes
+# negative: icc = -0.8 at k = 3 gives se = 0.0495 against 0.2144 for an ordinary
+# icc = 0.8 -- 18.8x the weight, for an arithmetically impossible value.
+# ---------------------------------------------------------------------------
+
+test_that('V41 flags an ICC below -1/(k-1) and V11 does not', {
+  d <- data.frame(icc = -0.8, n_sample = 50, n_measurements = 3,
+                  icc_type = 'consistency')
+  s <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)
+  expect_true(grepl('[INVALID] Impossible ICC for 3 measurements', s$flags_crude[1],
+                    fixed = TRUE))
+  expect_true(grepl('-1/(k-1)', s$flags_crude[1], fixed = TRUE))
+  expect_true(is.na(s$es_crude[1]))            # correct_inputs = TRUE zaps it
+})
+
+test_that('V41 does not contradict V25 on the same row', {
+  # V25 says a negative ICC is 'Mathematically possible'. For a row below the floor
+  # that is false, and emitting both would be the self-contradictory pair of flags
+  # the tied direction-conflict case (audit #43) was fixed for.
+  d <- data.frame(icc = -0.8, n_sample = 50, n_measurements = 3)
+  f <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)$flags_crude
+  expect_true(grepl('Impossible ICC', f[1], fixed = TRUE))
+  expect_false(grepl('Mathematically possible', f[1], fixed = TRUE))
+})
+
+test_that('k = 2 is unaffected: there the floor IS -1', {
+  # the common test-retest case must not change behaviour
+  d <- data.frame(icc = -0.8, n_sample = 50, n_measurements = 2)
+  s <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)
+  expect_false(grepl('Impossible ICC', s$flags_crude[1], fixed = TRUE))
+  expect_true(grepl('Negative ICC', s$flags_crude[1], fixed = TRUE))
+  expect_equal(s$es_crude[1], log(1 - (-0.8)), tolerance = 1e-4)
+})
+
+test_that('the floor scales with k, and legal negatives are left alone', {
+  d <- data.frame(icc = c(-0.4, -0.3, -0.15),
+                  n_sample = 50, n_measurements = c(3, 6, 6))
+  s <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)
+  # -0.4 at k = 3 is above the -0.5 floor -> legal
+  expect_false(grepl('Impossible ICC', s$flags_crude[1], fixed = TRUE))
+  # -0.3 at k = 6 is below the -0.2 floor -> impossible
+  expect_true(grepl('Impossible ICC', s$flags_crude[2], fixed = TRUE))
+  # -0.15 at k = 6 is above it -> legal
+  expect_false(grepl('Impossible ICC', s$flags_crude[3], fixed = TRUE))
+})
+
+test_that('V11 still owns values outside [-1, 1]; V41 does not double-report', {
+  d <- data.frame(icc = -1.5, n_sample = 50, n_measurements = 3)
+  f <- summary(convert_df(d, measure = 'icc', verbose = FALSE), flags = TRUE)$flags_crude
+  expect_true(grepl('Out-of-range ICC', f[1], fixed = TRUE))
+  expect_false(grepl('Impossible ICC', f[1], fixed = TRUE))
+})
+
+test_that('correct_inputs = FALSE preserves the value and still flags it', {
+  d <- data.frame(icc = -0.8, n_sample = 50, n_measurements = 3)
+  out <- metaConvert:::.validate_input_data(d, verbose = FALSE, correct_inputs = FALSE)
+  expect_equal(out$data$icc[1], -0.8)
+  expect_true(grepl('Impossible ICC', out$issues[1], fixed = TRUE))
+  expect_false(grepl('set to missing', out$issues[1], fixed = TRUE))
+})
+
+test_that('V41 needs n_measurements and stays silent without it', {
+  d <- data.frame(icc = -0.8, n_sample = 50)
+  out <- metaConvert:::.validate_input_data(d, verbose = FALSE)
+  expect_false(grepl('Impossible ICC', out$issues[1], fixed = TRUE))
+  expect_true(grepl('Negative ICC', out$issues[1], fixed = TRUE))
+})

@@ -600,10 +600,46 @@
     }
   }
 
+  # V41: the ICC's lower bound depends on k. An ICC is bounded below by -1/(k - 1),
+  # not by -1: with k measurements the negative correlation has to be shared among
+  # k - 1 other measurements, so k = 3 cannot go below -0.5 and k = 6 cannot go below
+  # -0.2. V11's .bounded_columns entry uses the loose -1 (its own comment states the
+  # correct bound, and the code did not implement it) because that list holds STATIC
+  # scalar bounds and this one varies per row -- so this is a separate check, exactly
+  # as V32 and V34 are for values inside the V11 range but still non-identified.
+  #
+  # It matters because the SE carries (1 + (k-1)rho), which SHRINKS as rho goes
+  # negative: icc = -0.8 at k = 3 gives se = 0.0495 against 0.2144 for an ordinary
+  # icc = 0.8, i.e. 18.8x the meta-analytic weight for an arithmetically impossible
+  # value. k = 2 is unaffected -- there -1/(k-1) is exactly -1, so the common
+  # test-retest case behaves as before.
+  icc_below_floor <- rep(FALSE, nrow(x))
+  if ("icc" %in% colnames(x) && "n_measurements" %in% colnames(x)) {
+    icc_v <- x[["icc"]]
+    k_v   <- suppressWarnings(as.numeric(x[["n_measurements"]]))
+    floor_v <- -1 / (k_v - 1)
+    icc_below_floor <- !is.na(icc_v) & !is.na(k_v) & is.finite(k_v) & k_v >= 2 &
+      icc_v >= -1 & icc_v < floor_v          # >= -1: below that is V11's job
+    for (i in which(icc_below_floor)) {
+      msg <- sprintf(
+        "[INVALID] Impossible ICC for %g measurements: 'icc' = %g is below the lower bound -1/(k-1) = %g",
+        k_v[i], icc_v[i], floor_v[i])
+      if (correct_inputs) {
+        x[["icc"]][i] <- NA_real_
+        msg <- paste0(msg, ", set to missing")
+      }
+      row_issues[[i]] <- c(row_issues[[i]], msg)
+    }
+  }
+
   # V25: negative alpha/icc kept, warn only
   for (rel in list(c("cronbach_alpha", "alpha"), c("icc", "ICC"))) {
     if (!rel[1] %in% colnames(x)) next
     neg <- which(!is.na(x[[rel[1]]]) & x[[rel[1]]] < 0)
+    # An ICC below -1/(k-1) is NOT "mathematically possible", so V25 must not say so
+    # about it -- that would be the same self-contradictory pair of flags on one row
+    # that the tied direction-conflict case was fixed for. V41 has already spoken.
+    if (identical(rel[1], "icc")) neg <- neg[!icc_below_floor[neg]]
     for (i in neg) {
       row_issues[[i]] <- c(row_issues[[i]],
         sprintf("[UNUSUAL] Negative %s: '%s' = %g. Mathematically possible but indicates serious measurement problems or an extraction error - verify against the primary report",

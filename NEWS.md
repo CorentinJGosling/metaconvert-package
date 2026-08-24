@@ -1,5 +1,23 @@
 # metaConvert (development version)
 
+## New flag V41: an ICC below its k-dependent lower bound
+
+An intraclass correlation is bounded below by `-1/(k-1)`, not by `-1`: with *k*
+measurements a negative correlation has to be shared among the other *k*-1, so k = 3
+cannot go below -0.5 and k = 6 cannot go below -0.2. The bounds check used the loose
+`-1` (its own source comment already stated the correct bound), so an ICC of -0.8 with
+3 raters passed validation and was reported as "mathematically possible".
+
+It is not, and it is expensive: the standard error carries `(1 + (k-1) rho)`, which
+*shrinks* as rho goes negative. `icc = -0.8` at k = 3 gives `se = 0.0495` against
+`0.2144` for an ordinary `icc = 0.8` - **18.8x the meta-analytic weight**, for an
+arithmetically impossible value.
+
+**k = 2 is unaffected**, since there `-1/(k-1)` is exactly `-1`; the common test-retest
+case behaves exactly as before. V41 needs `n_measurements` and is silent without it,
+and it suppresses the older "Negative ICC ... mathematically possible" note on rows it
+fires for, so a row never carries both.
+
 ## ICC: average-measures values, reported uncertainty, and an honest coverage figure
 
 Four changes to the ICC path, one of which corrects a wrong number and one of which
