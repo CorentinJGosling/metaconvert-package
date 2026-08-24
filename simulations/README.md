@@ -140,22 +140,68 @@ Reproduce both halves with `dense_region_by_allocation()` and
 `tests/test-allocation-scope.R`, whose first assertion fails on purpose if anyone adds
 a second `p_exp` level — at which point this paragraph should be deleted, not edited.
 
-**3. Pre-post coverage is much thinner than the eight-study structure suggests.**
-Study 08 exercises all five `pre_post_to_smd` values but only **one of three kernels**:
+**3. Pre-post coverage IS thinner than the eight-study structure suggests — but the
+old form of this note named the wrong kernels, and named them in prose, which is how
+it went stale unnoticed.** Study 08 does exercise all five `pre_post_to_smd` values;
+what it under-exercises is the code beneath them — and not the code the old table named.
+The two-group entry point is a DISPATCHER, not a kernel.
+Under `pool_sd = FALSE` — its default, and study 08's setting — it calls the
+single-group kernel once per arm and combines, so study 08 runs that kernel **twice on
+every row**. Measured by rebinding both kernels to counting wrappers and calling study
+08's own route, `es_from_means_sd_pre_post`:
 
-| kernel | status |
-|---|---|
-| `.pre_post_to_smd` (two-group, `pool_sd = FALSE`) | tested |
-| `.pooled_pre_post_to_smd` (`pool_sd = TRUE`) | **never run** |
-| `.single_group_pre_post_to_smd` | **never run** |
+| route call | `.single_group_pre_post_to_smd` | `.pooled_pre_post_to_smd` |
+|---|---|---|
+| `pool_sd = FALSE` (the default), 2 rows | **4** — two per row, one per arm | 0 |
+| `pool_sd = TRUE`, 1 row | 0 | **1** |
 
-19 exported functions take `pre_post_to_smd`; study 08 calls one
-(`es_from_means_sd_pre_post`). Untested: the whole single-group family, all eight
-`es_from_mean_change_*`, the five `es_from_paired_t/f*`, and the `_se`/`_ci` variants.
-Worse, `pool_sd = TRUE` is the route carrying the known docblock defect (leading
-variance term misattributed to Bonett eq 19, departing up to 38% at unequal arm
-sizes) — and it is the one never exercised. A "study 08b" reusing the same DGP and
-grid with a new `estimate()` would take this from 1 kernel to 3.
+Dispatch is at `R/internal_multiple_formulas.R:1389` (pooled) and `:1400`/`:1407` (per
+arm); the per-row `mapply` that makes the count scale with rows is at
+`R/es_from_PAIRED_MEANS.R:154`.
+
+19 exported functions take `pre_post_to_smd`, and they split across **four** code
+paths, not three. The fourth is the one no three-row table could show:
+
+| code path | exported routes | run by the simulation? | otherwise covered by |
+|---|---|---|---|
+| `.pre_post_to_smd` — the two-group dispatcher plus the `pool_sd = FALSE` combination step (difference of per-arm d/g, summed variances, CI on `n_exp + n_nexp - 2`) | the 7 two-group means / mean-change routes | **yes** — study 08, every row | study 99's deterministic cross-route identity block |
+| `.single_group_pre_post_to_smd` — the per-arm engine; all five methods | the same 7 indirectly, plus 7 of the 8 `*_single_group` routes directly | **yes, but only as the per-arm engine.** Its own entry points are unsimulated | `tests_save/checked/test-EXTERNAL-PAIRED-SINGLE-GROUP.R`, `test-PAIRED-SINGLE-GROUP-2.R`, `test-paired-cross-validation.R` |
+| `.pooled_pre_post_to_smd` — `pool_sd = TRUE`: own pooled standardizer, own variance forms, own df | the 7 two-group routes that accept `pool_sd` | **no — genuinely never run** | `tests_save/checked/test-pooled-variance-calibration.R`: 6 blocks, **78 assertions**, including bit-exact agreement with `metafor::escalc` and Monte-Carlo calibration of the one branch with no closed-form reference. Plus `test-pool-sd.R` |
+| inline paired-t/F arithmetic — calls **neither** kernel | `es_from_paired_t`, `_t_pval`, `_f`, `_f_pval`, `_t_single_group` | not by Monte Carlo; the four two-group ones are in study 99's equivalence block | cross-route equivalence pins in `tests_save/checked/test-paired-cross-validation.R` and `test-INTERNAL-FULL-LIFECYCLE.R` |
+
+**"Unsimulated" is the accurate word; "uncovered" is not.** Every path above has package
+test coverage, and the one the old table called "never run" has the most of any of them.
+What the simulation cannot currently say anything about is *calibration under a
+data-generating mechanism* for paths 3 and 4, and for path 2 reached through its own
+entry points.
+
+The fourth path is the interesting one, because it is a **duplicate implementation**: it
+reproduces the single-group kernel's arithmetic in place rather than calling it. On
+equivalent inputs the two still agree — max |difference| over d, SE, g and g's SE is
+`0` for `morris_dz` and `1.1e-16` for `morris_drm`. It offers only those two of the five
+methods and **errors** on the other three rather than silently coercing (checked: the
+allowed set is `morris_drm`/`cooper` and `morris_dz`, default `cooper`). So the exposure
+is drift between two copies of one formula, not a live defect — and drift is precisely
+what a simulation would not catch and a cross-route equivalence test would.
+
+A `pool_sd` study reusing study 08's DGP and grid with a new `estimate()` would take
+pre/post from **2 kernels to 3**. It cannot be called "study 08b": study 08 already emits
+`08a_pre_post_to_smd_d` and `08b_pre_post_to_smd_g`, both shipped in `data/aggregated/`.
+
+One retraction. `pool_sd = TRUE` used to be described here as "the route carrying the
+known docblock defect". That is stale: the misattribution of d_av's leading variance term
+to Bonett (2008) eq. 19 was corrected in `4955631` (2026-08-13), *before* this paragraph
+was first tracked. `R/internal_multiple_formulas.R:1465-1479` now states exactly which
+part of eq. 19 the code does use (the fourth-moment g^2 coefficient, reproduced to 1e-14)
+and quantifies the departure of the part it does not: ~2% at n = 50/50, ~3% at 30/30,
+~10% at 12/11, ~32% at 100/4, and ~38% at 100/10 under heteroscedasticity. That is a
+documented departure with a stated calibration range, not a defect.
+
+Pinned by `tests/test-prepost-kernel-coverage.R`, which installs the counters above and
+asserts the dispatch in both directions, the 7/8/5 route split, and which studies touch
+which path. Encoding the OLD claim in it instead — `single_group = 0`, and no fourth
+path — turns the file red. Prose is what rotted here; this is the same statement made
+executable.
 
 ### Compute budget
 
@@ -1120,7 +1166,9 @@ does not use it.
    *first*. The genre standards are nested-loop plots for bias and zip plots for
    coverage.
 0b. Regenerate study 03 (stale, see STATE OF PLAY), then diagnose the binary
-   `se_ratio > 1` pattern, then build study 08b for the two untested kernels.
+   `se_ratio > 1` pattern, then build a `pool_sd` study for the ONE unsimulated
+   kernel (not two — see THREE THINGS #3; and not "study 08b", an id study 08
+   already uses).
 0c. The app is **broken**: all 16 of its reads point at `./data_agg/`, which the
    restructure moved to `data/aggregated/`, and it still ranks on
    `abs(bias_ci - 0.95)` at two sites and reads a schema the new studies do not

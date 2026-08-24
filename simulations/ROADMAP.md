@@ -1337,13 +1337,70 @@ diagnostic in `simulations/R/`.
 > **Verified:** `simulations/tests` **548 pass / 0 fail / 0 error / 0 skip** (477 + 71).
 > No package code touched.
 
-### 4.4 ☐ README kernel table: `.single_group_pre_post_to_smd` **is** run
+### 4.4 ☑ README kernel table: `.single_group_pre_post_to_smd` **is** run — DONE
 
-`README.md:83` says "never run". It is called twice per row by study 08 (once per
-arm, `pool_sd = FALSE` path, `internal_multiple_formulas.R:1054`/`:1061`). Only
-`.pooled_pre_post_to_smd` is unsimulated — and it is pinned by
-`tests_save/checked/test-pooled-variance-calibration.R`, so "unsimulated" is the
-accurate word, not "uncovered".
+> **Confirmed by measurement, and the table was wronger than the item says.**
+> Rebinding both kernels to counting wrappers and calling study 08's own route:
+> `pool_sd = FALSE` (the default) gives **4** `.single_group_pre_post_to_smd` calls on
+> 2 rows — two per row, one per arm — and **0** pooled; `pool_sd = TRUE` gives **0**
+> and **1**. The count scales with rows because `es_from_means_sd_pre_post` wraps the
+> dispatcher in `mapply` (`R/es_from_PAIRED_MEANS.R:154`), so "twice per row" is right
+> rather than "twice per call".
+>
+> **Three corrections the item does not contain, all measured:**
+>
+> (a) **There is a FOURTH code path.** Tracing all 19 routes that take
+> `pre_post_to_smd`: 7 two-group routes reach the single-group kernel twice per row (or
+> the pooled kernel once under `pool_sd = TRUE`), 7 of the 8 `*_single_group` routes
+> reach it once — and the **5 paired-t/F routes reach neither**. They reimplement the
+> arithmetic inline (`R/es_from_PAIRED_STATISTICS.R:105-118`). No three-row table can
+> represent that, so the fix is a four-row table, not a corrected three-row one. The
+> duplicate still agrees with the kernel — max |difference| over d, SE, g, g's SE is
+> `0` (`morris_dz`) and `1.1e-16` (`morris_drm`) — and it **errors** rather than
+> silently coercing on the three methods it does not implement (checked, because a
+> silent coercion would have been a live defect rather than a drift risk).
+>
+> (b) **"the known docblock defect" was itself stale.** The misattribution of d_av's
+> leading variance term to Bonett (2008) eq. 19 was corrected in `4955631`
+> (2026-08-13), *before* the README paragraph was first tracked in `ef38361`
+> (2026-08-15). `R/internal_multiple_formulas.R:1465-1479` now states which part of
+> eq. 19 the code does use and quantifies the departure of the part it does not
+> (~2% at 50/50 → ~38% at 100/10 heteroscedastic). Retracted in the README rather
+> than repeated.
+>
+> (c) **"study 08b" is a name collision.** Study 08 already emits
+> `08a_pre_post_to_smd_d` and `08b_pre_post_to_smd_g`, both shipped in
+> `data/aggregated/`. `README.md`'s open item 0b and Phase 5.1 both propose that id
+> for the `pool_sd` study. Fixed in the README sentence; **5.1's wording still needs
+> it** when that item is picked up.
+>
+> Also corrected: every line number in the item as written had rotted — `README.md:83`
+> is really `:144-158`, and `internal_multiple_formulas.R:1054`/`:1061` are really
+> `:1400`/`:1407`. The second half of the item holds exactly:
+> `tests_save/checked/test-pooled-variance-calibration.R` is **6 blocks / 78
+> assertions** (measured by running that file alone under `NOT_CRAN=true`), so
+> "unsimulated" is the accurate word and "uncovered" is not.
+>
+> **Test unit:** `tests/test-prepost-kernel-coverage.R` (48 assertions). It installs the
+> counters, asserts the dispatch in both directions and at 1/2/3 rows, asserts the
+> 7 / 8 / 5 route split so adding a pre/post route edits a test rather than silently
+> invalidating a paragraph, and asserts which studies touch which path. Encoding the
+> OLD claim in it (`single_group = 0`, no fourth path) turns the file red — verified by
+> running it, not assumed. It rebinds through a wrapper with an `on.exit()` restore
+> rather than using `trace()`, which leaves the namespace edited if a test errors first,
+> and it records/restores each binding's lock state because `pkgload::load_all()` may
+> leave them unlocked.
+>
+> ⚠️ **A number that moved under its own measurement, caught before it shipped.** The
+> README first quoted "the old claim scores 16 failures against it". Re-running the
+> demonstration after an unrelated edit gave **9** — the tally depends on exactly how
+> the old claim is encoded (whether a replacement also rewrites the single-group
+> block), not on the package. The sentence now says the file turns red and quotes no
+> count. Assert the counts, not the failures.
+>
+> **Verified:** `simulations/tests` **642** pass / 0 fail / 0 error / 0 skip
+> (594 + 48); `tests/testthat` **3575** / 0 / 0 / 0 and `tests_save/checked` **7202** /
+> 0 / 0 / 0, both exactly the baseline — no package code was touched.
 
 ### 4.5 ☐ Strike two stale items
 
