@@ -351,7 +351,7 @@
     "mean_change_se_exp", "mean_change_se_nexp",
     "ancova_mean_se_exp", "ancova_mean_se_nexp",
     "md_se", "ancova_md_se", "logor_se", "logrr_se", "logirr_se",
-    "rd_se", "omega_se", "icc_se", "linreg_b_se",
+    "rd_se", "omega_se", "icc_se", "cronbach_alpha_se", "linreg_b_se",
     "user_se_crude", "user_se_adj",
     # Psychometric counts
     "n_items", "n_measurements",
@@ -402,6 +402,7 @@
     # .ci_upper() absorb the transposition, so this is the last chance to notice.
     list(val = "omega",     lo = "omega_ci_lo",     up = "omega_ci_up",     scale = "additive"),
     list(val = "icc",       lo = "icc_ci_lo",       up = "icc_ci_up",       scale = "additive"),
+    list(val = "cronbach_alpha", lo = "cronbach_alpha_ci_lo", up = "cronbach_alpha_ci_up", scale = "additive"),
     # Regression coefficient (additive scale)
     list(val = "linreg_b",  lo = "linreg_b_ci_lo",  up = "linreg_b_ci_up",  scale = "additive"),
     # Natural-scale ratios (exp scale - inherently asymmetric CIs)
@@ -1574,14 +1575,17 @@
   # containing at least one flag / share of ROWS flagged:
   #
   #     k    2 dp          3 dp          4 dp
-  #    10    20.2% / 4.6%  26.8% / 6.1%   2.0% / 0.4%
-  #    30    92.0% /14.5%  92.2% /15.8%  27.5% / 2.1%
-  #   100   100.0% /40.6% 100.0% /44.1%  96.2% / 6.2%
+  #    10    23.8% / 5.0%  23.0% / 5.0%   4.8% / 1.0%
+  #    30    92.0% /15.0%  95.3% /15.8%  26.5% / 1.9%
+  #   100   100.0% /41.1% 100.0% /44.1%  95.8% / 6.4%
+  #
+  # REPRODUCIBLE, NOT QUOTED: simulations/studies/10_reliability.R,
+  # v36_false_positive_rate(), at a fixed seed. Re-run it before citing these.
   #
   # Two things follow, and they decide the design.
   #
   # (1) TIGHTENING THE DECIMAL GATE DOES NOT WORK. The roadmap proposed requiring 4
-  #     decimals; at 4 decimals a 100-study pool still flags 96.2% of the time. The
+  #     decimals; at 4 decimals a 100-study pool still flags 95.8% of the time. The
   #     driver is the pool size, not the precision -- with ~150 plausible 3-decimal
   #     values in [.78, .93], a 30-study pool has C(30,2)/150 ~ 3 expected collisions,
   #     so a match is the NORM rather than the exception. The gate is therefore left
@@ -1591,7 +1595,7 @@
   #
   # (2) THE n_sample HALF OF THE GATE EARNS ITS KEEP, which was not obvious. Repeating
   #     the sweep with non-round sample sizes (runif over 50:500 rather than multiples
-  #     of 50) drops the 2-decimal rate from 20.2 / 92.0 / 100.0% to 0.5 / 6.0 / 41.0%
+  #     of 50) drops the 2-decimal rate from 23.8 / 92.0 / 100.0% to 1.8 / 5.3 / 49.3%
   #     at k = 10 / 30 / 100. So clause (b) is not the FP driver -- ROUND sample sizes
   #     are, because they collide with each other as readily as 2-decimal alphas do.
   #

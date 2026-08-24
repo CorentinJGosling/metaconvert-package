@@ -503,9 +503,13 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "standard deviation of the independent variable - numeric"
       )
 
-    cols_alpha = c("cronbach_alpha", "n_items")
+    cols_alpha = c("cronbach_alpha", "cronbach_alpha_se", "cronbach_alpha_ci_lo",
+                   "cronbach_alpha_ci_up", "n_items")
     inf_alpha = c(
       "Cronbach's alpha reliability coefficient - numeric",
+      "standard error of alpha, on the NATURAL (coefficient) scale - numeric",
+      "lower bound of the 95% CI of alpha (natural scale) - numeric",
+      "upper bound of the 95% CI of alpha (natural scale) - numeric",
       "number of items in the scale - numeric")
 
     # n_items is NOT used in omega's arithmetic -- unlike alpha, omega has no (n, k)

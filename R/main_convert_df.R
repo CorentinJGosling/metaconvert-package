@@ -1006,7 +1006,11 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   ))
   es_alpha_sg <- with(x, es_from_cronbach_alpha(
     cronbach_alpha = cronbach_alpha, n_sample = n_sample,
-    n_items = n_items, alpha_to_es = alpha_to_es
+    n_items = n_items,
+    cronbach_alpha_se = cronbach_alpha_se,
+    cronbach_alpha_ci_lo = cronbach_alpha_ci_lo,
+    cronbach_alpha_ci_up = cronbach_alpha_ci_up,
+    alpha_to_es = alpha_to_es
   ))
 
   # ICC -------------------------------------------------------

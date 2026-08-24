@@ -8,6 +8,9 @@ es_from_cronbach_alpha(
   cronbach_alpha,
   n_sample,
   n_items,
+  cronbach_alpha_se,
+  cronbach_alpha_ci_lo,
+  cronbach_alpha_ci_up,
   alpha_to_es = "bonett"
 )
 }
@@ -17,6 +20,14 @@ es_from_cronbach_alpha(
 \item{n_sample}{the total number of participants that completed the scale}
 
 \item{n_items}{number of items in the scale}
+
+\item{cronbach_alpha_se}{standard error of alpha, \strong{on the natural (coefficient)
+scale}. Optional. When supplied it takes precedence over the closed-form
+\eqn{(n, k)} standard error.}
+
+\item{cronbach_alpha_ci_lo}{lower bound of the 95\% confidence interval of alpha (natural scale)}
+
+\item{cronbach_alpha_ci_up}{upper bound of the 95\% confidence interval of alpha (natural scale)}
 
 \item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha.
 Must be one of \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}.}
@@ -37,6 +48,26 @@ This function estimates the standard error of the Cronbach's alpha.
 Convert Cronbach's alpha into an effect size measure
 }
 \details{
+\strong{Where the standard error comes from.} Three sources, in this order (the same
+precedence \code{\link{es_from_omega}} and \code{\link{es_from_icc}} use):
+\enumerate{
+\item \code{cronbach_alpha_se}, read on the natural scale and delta-mapped onto the
+analysis scale;
+\item otherwise \code{cronbach_alpha_ci_lo} / \code{cronbach_alpha_ci_up}, transformed at
+the \strong{bounds} so an asymmetric interval maps correctly instead of being
+symmetrised first;
+\item otherwise the closed-form \eqn{(n, k)} standard error below.
+}
+\code{n_sample} and \code{n_items} gate only the third route, not the point estimate, so a
+study reporting \emph{"alpha = .88, 95\% CI .85 to .91"} without an item count is usable
+rather than being dropped whole. A row with none of the three keeps its effect size and
+gets \code{alpha_se = NA}, so it stays visible and countable but is left out of the pool
+by \code{summary()}.
+
+Unlike omega, alpha does have a closed-form variance in \eqn{(n, k)}, so the third route
+is the usual one. The first two matter because a reported interval is sometimes all a
+study gives -- and because they are the only way to enter an alpha whose item count was
+never reported.
 This function computes an effect size from a Cronbach's alpha.
 \enumerate{
 \item When \code{alpha_to_es = "bonett"} (default), the Bonett (2002) transformation

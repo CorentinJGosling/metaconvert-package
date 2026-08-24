@@ -3,10 +3,36 @@
 #' @param cronbach_alpha Cronbach's alpha reliability coefficient
 #' @param n_sample the total number of participants that completed the scale
 #' @param n_items number of items in the scale
+#' @param cronbach_alpha_se standard error of alpha, \strong{on the natural (coefficient)
+#'   scale}. Optional. When supplied it takes precedence over the closed-form
+#'   \eqn{(n, k)} standard error.
+#' @param cronbach_alpha_ci_lo lower bound of the 95% confidence interval of alpha (natural scale)
+#' @param cronbach_alpha_ci_up upper bound of the 95% confidence interval of alpha (natural scale)
 #' @param alpha_to_es method used to compute the effect size from Cronbach's alpha.
 #'   Must be one of \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}.
 #'
 #' @details
+#'
+#' \strong{Where the standard error comes from.} Three sources, in this order (the same
+#' precedence \code{\link{es_from_omega}} and \code{\link{es_from_icc}} use):
+#' \enumerate{
+#'   \item \code{cronbach_alpha_se}, read on the natural scale and delta-mapped onto the
+#'     analysis scale;
+#'   \item otherwise \code{cronbach_alpha_ci_lo} / \code{cronbach_alpha_ci_up}, transformed at
+#'     the \strong{bounds} so an asymmetric interval maps correctly instead of being
+#'     symmetrised first;
+#'   \item otherwise the closed-form \eqn{(n, k)} standard error below.
+#' }
+#' \code{n_sample} and \code{n_items} gate only the third route, not the point estimate, so a
+#' study reporting \emph{"alpha = .88, 95% CI .85 to .91"} without an item count is usable
+#' rather than being dropped whole. A row with none of the three keeps its effect size and
+#' gets \code{alpha_se = NA}, so it stays visible and countable but is left out of the pool
+#' by \code{summary()}.
+#'
+#' Unlike omega, alpha does have a closed-form variance in \eqn{(n, k)}, so the third route
+#' is the usual one. The first two matter because a reported interval is sometimes all a
+#' study gives -- and because they are the only way to enter an alpha whose item count was
+#' never reported.
 #' This function computes an effect size from a Cronbach's alpha.
 #'
 #' 1. When \code{alpha_to_es = "bonett"} (default), the Bonett (2002) transformation
@@ -91,10 +117,16 @@
 #'   cronbach_alpha = 0.85, n_sample = 200, n_items = 10
 #' )
 es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
+                                   cronbach_alpha_se, cronbach_alpha_ci_lo,
+                                   cronbach_alpha_ci_up,
                                    alpha_to_es = "bonett") {
 
-  if (missing(n_sample)) n_sample <- rep(NA, length(cronbach_alpha))
-  if (missing(n_items)) n_items <- rep(NA, length(cronbach_alpha))
+  len <- length(cronbach_alpha)
+  if (missing(n_sample)) n_sample <- rep(NA, len)
+  if (missing(n_items)) n_items <- rep(NA, len)
+  if (missing(cronbach_alpha_se)) cronbach_alpha_se <- rep(NA_real_, len)
+  if (missing(cronbach_alpha_ci_lo)) cronbach_alpha_ci_lo <- rep(NA_real_, len)
+  if (missing(cronbach_alpha_ci_up)) cronbach_alpha_ci_up <- rep(NA_real_, len)
 
   # A reliability-generalization sheet fixes the instrument, so `n_items` (and
   # often `n_sample`) is naturally passed as ONE number beside a vector of
@@ -107,6 +139,22 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
   if (length(n_items) == 1) n_items <- rep(n_items, length(cronbach_alpha))
   if (length(n_sample) != length(cronbach_alpha)) stop("The length of the 'n_sample' argument is incorrectly specified.")
   if (length(n_items) != length(cronbach_alpha)) stop("The length of the 'n_items' argument is incorrectly specified.")
+  rec <- function(v, nm) {
+    if (length(v) == 1) return(rep(v, len))
+    if (length(v) != len) {
+      stop(paste0("The length of the '", nm, "' argument is incorrectly specified."))
+    }
+    v
+  }
+  cronbach_alpha_se <- rec(cronbach_alpha_se, "cronbach_alpha_se")
+  cronbach_alpha_ci_lo <- rec(cronbach_alpha_ci_lo, "cronbach_alpha_ci_lo")
+  cronbach_alpha_ci_up <- rec(cronbach_alpha_ci_up, "cronbach_alpha_ci_up")
+
+  # a non-positive dispersion cannot be a standard error; a transposed interval is the
+  # same interval (R/internal_guards.R)
+  cronbach_alpha_se <- .positive_or_na(cronbach_alpha_se)
+  ci_lo <- .ci_lower(cronbach_alpha_ci_lo, cronbach_alpha_ci_up)
+  ci_up <- .ci_upper(cronbach_alpha_ci_lo, cronbach_alpha_ci_up)
 
   if (!alpha_to_es %in% c("bonett", "raw", "hakstian_whalen")) {
     stop(paste0("'", alpha_to_es, "' not in tolerated values for the 'alpha_to_es' argument. ",
@@ -119,17 +167,57 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
   # the raw scale (es = 1, se = 0) but has no Bonett transform (log(0)).
   # Direct calls degrade to NA instead of emitting Inf/NaN (the pipeline
   # already NAs the impossible values via Tier-1 validation).
-  invalid <- (!is.na(cronbach_alpha) & cronbach_alpha > 1) |
-    (!is.na(cronbach_alpha) & cronbach_alpha == 1 & alpha_to_es == "bonett") |
-    (!is.na(n_sample) & n_sample <= 2) |
-    (!is.na(n_items) & n_items < 2)
+  # Forward transform and the delta map that carries a NATURAL-scale reported SE onto
+  # it -- the same pair es_from_omega() uses, since alpha and omega share these scales.
+  fwd <- function(a) {
+    if (identical(alpha_to_es, "bonett")) return(log(1 - a))
+    if (identical(alpha_to_es, "hakstian_whalen")) return(1 - (1 - a)^(1 / 3))
+    a
+  }
+  se_map <- function(a, se) {
+    if (identical(alpha_to_es, "bonett")) return(se / (1 - a))
+    if (identical(alpha_to_es, "hakstian_whalen")) return(se / (3 * (1 - a)^(2 / 3)))
+    se
+  }
 
-  nn_miss <- which(!is.na(cronbach_alpha) & !is.na(n_sample) & !is.na(n_items) &
-                     !invalid)
+  # alpha > 1 is impossible (V11 upper bound); alpha = 1 exactly is a valid boundary on
+  # the raw scale (es = 1, se = 0) but has no Bonett transform (log(0)). n_sample and
+  # n_items are NOT part of this test any more: they gate only the COMPUTED standard
+  # error (route 3 below), not the point estimate, so a study reporting
+  # "alpha = .88, 95% CI [.85, .91]" without an item count is now usable instead of
+  # being dropped whole -- the gap roadmap item 2.2 exists for.
+  valid_es <- !is.na(cronbach_alpha) & cronbach_alpha <= 1 &
+    !(cronbach_alpha == 1 & alpha_to_es == "bonett")
 
   n <- length(cronbach_alpha)
   alpha_es <- rep(NA_real_, n)
   alpha_es_se <- rep(NA_real_, n)
+  alpha_es[valid_es] <- fwd(cronbach_alpha[valid_es])
+
+  # --- standard error, in order of preference -------------------------------
+  # 1. reported SE, read on the NATURAL (coefficient) scale and delta-mapped
+  from_se <- which(valid_es & !is.na(cronbach_alpha_se))
+  if (length(from_se)) {
+    alpha_es_se[from_se] <- se_map(cronbach_alpha[from_se], cronbach_alpha_se[from_se])
+  }
+
+  # 2. otherwise the reported CI, transformed at the BOUNDS so an asymmetric interval
+  #    maps correctly rather than being symmetrised first. A bound of exactly 1 has no
+  #    log(1 - .) or (1 - .)^(1/3), so it is excluded on those scales only.
+  ci_usable <- if (identical(alpha_to_es, "raw")) rep(TRUE, n) else (ci_lo < 1 & ci_up < 1)
+  ci_usable[is.na(ci_usable)] <- FALSE
+  from_ci <- which(valid_es & is.na(alpha_es_se) &
+                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable)
+  if (length(from_ci)) {
+    alpha_es_se[from_ci] <-
+      abs(fwd(ci_up[from_ci]) - fwd(ci_lo[from_ci])) / (2 * qnorm(0.975))
+  }
+
+  # 3. otherwise the closed-form (n, k) SE. n <= 2 makes the denominator (n - 2)
+  #    non-positive and a single item leaves alpha undefined, so both gate this route.
+  nn_miss <- which(valid_es & is.na(alpha_es_se) &
+                     !is.na(n_sample) & n_sample > 2 &
+                     !is.na(n_items) & n_items >= 2)
 
   if (length(nn_miss) != 0) {
     a <- cronbach_alpha[nn_miss]
@@ -137,7 +225,6 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
     k <- n_items[nn_miss]
 
     if (alpha_to_es == "bonett") {
-      alpha_es[nn_miss] <- log(1 - a)
       alpha_es_se[nn_miss] <- sqrt(2 * k / ((k - 1) * (ns - 2)))
     } else if (alpha_to_es == "hakstian_whalen") {
       # Hakstian & Whalen (1976), the transform Rodriguez & Maeda (2006)
@@ -148,15 +235,17 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
       # variance untouched, so the Rodriguez & Maeda variance below applies to
       # either orientation unchanged (verified bit-exact against
       # metafor::escalc(measure = "AHW")).
-      alpha_es[nn_miss] <- 1 - (1 - a)^(1 / 3)
       alpha_es_se[nn_miss] <- sqrt(
         18 * k * (ns - 1) * (1 - a)^(2 / 3) / ((k - 1) * (9 * ns - 11)^2)
       )
     } else {
-      alpha_es[nn_miss] <- a
       alpha_es_se[nn_miss] <- (1 - a) * sqrt(2 * k / ((k - 1) * (ns - 2)))
     }
   }
+  # NO .positive_or_na() on the result. The REPORTED se is already guarded at the top,
+  # and on the raw scale alpha = 1 legitimately yields se = 0 -- a documented boundary
+  # (es = 1, se = 0) that V40 deliberately stays silent about. Guarding here NA'd it,
+  # which drops the row from summary() entirely.
 
   alpha_ci_lo <- alpha_es - qnorm(0.975) * alpha_es_se
   alpha_ci_up <- alpha_es + qnorm(0.975) * alpha_es_se

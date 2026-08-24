@@ -176,7 +176,8 @@
     # correlation (Spearman)
     "reverse_spearman_r", "spearman_r",
     # psychometrics
-    "cronbach_alpha", "n_items",
+    "cronbach_alpha", "cronbach_alpha_se", "cronbach_alpha_ci_lo",
+    "cronbach_alpha_ci_up", "n_items",
     "omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type", "omega_estimator",
     "icc", "icc_se", "icc_ci_lo", "icc_ci_up", "n_measurements", "icc_type",
     "discard",

@@ -36,9 +36,22 @@ test_that("reliability routes reject a genuinely incompatible length", {
   expect_error(es_from_icc(c(.7, .8, .9), 50, c(2, 3)), "n_measurements")
 })
 
-test_that("omitted arguments still degrade to NA rather than erroring", {
-  expect_equal(nrow(es_from_cronbach_alpha(c(0.7, 0.8))), 2L)
-  expect_true(all(is.na(es_from_cronbach_alpha(c(0.7, 0.8))$alpha)))
+test_that("omitted arguments still degrade gracefully rather than erroring", {
+  # CONTRACT CHANGED by roadmap 2.2, deliberately. n_sample and n_items now gate only
+  # the closed-form (n, k) standard error, not the point estimate -- otherwise an alpha
+  # reported with a confidence interval and no item count is dropped whole, which is
+  # the gap 2.2 exists to close. A bare alpha therefore keeps its ESTIMATE and gets
+  # se = NA, exactly as a bare omega does, and summary() leaves it out of the pool.
+  got <- es_from_cronbach_alpha(c(0.7, 0.8))
+  expect_equal(nrow(got), 2L)
+  expect_equal(got$alpha, log(1 - c(0.7, 0.8)), tolerance = 1e-10)
+  expect_true(all(is.na(got$alpha_se)))
+
+  # the still-invalid cases keep degrading to NA in BOTH columns
+  a1 <- es_from_cronbach_alpha(1, n_sample = 100, n_items = 10)     # log(0) undefined
+  expect_true(is.na(a1$alpha)); expect_true(is.na(a1$alpha_se))
+  ab <- es_from_cronbach_alpha(1.2, n_sample = 100, n_items = 10)   # above the bound
+  expect_true(is.na(ab$alpha)); expect_true(is.na(ab$alpha_se))
 })
 
 # ---------------------------------------------------------------------------

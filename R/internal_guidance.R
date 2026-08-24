@@ -452,9 +452,13 @@
       specific = c("omega"),
       shared = c("omega_se")
     ),
+    # An alpha row needs a variance from somewhere: the study's own SE or CI, or
+    # n_sample + n_items for the closed-form (n, k) SE. Listing all four as "shared"
+    # makes a bare-alpha row a near miss that names every route out of it.
     cronbach_alpha = list(
       specific = c("cronbach_alpha"),
-      shared   = c("n_sample", "n_items")
+      shared   = c("n_sample", "n_items", "cronbach_alpha_se",
+                   "cronbach_alpha_ci_lo", "cronbach_alpha_ci_up")
     ),
     # An ICC row needs a variance from somewhere: the study's own icc_se or CI,
     # or n_sample + n_measurements for the closed-form (n, k) SE. Listing all four
@@ -590,7 +594,7 @@
     prop_single_group               = "Proportion (direct input)",
     prop_single_group_counts        = "Cases + total (counts)",
 
-    cronbach_alpha                  = "Cronbach's alpha (direct input)",
+    cronbach_alpha                  = "Cronbach's alpha (needs n_sample + n_items, or a reported cronbach_alpha_se / cronbach_alpha_ci_lo + cronbach_alpha_ci_up)",
     omega                           = "McDonald's omega (needs omega_se on the natural scale, or omega_ci_lo + omega_ci_up)",
     icc                             = "ICC (needs n_sample + n_measurements, or a reported icc_se / icc_ci_lo + icc_ci_up)",
     spearman_r                      = "Spearman correlation (converted to Pearson)"
