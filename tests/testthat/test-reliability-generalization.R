@@ -1275,3 +1275,74 @@ test_that('the validator warns but never aborts, and the analysis still runs', {
   expect_equal(nrow(s), 4L)
   expect_false(any(is.na(s$es_crude)))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 2.1: V36's false-positive rate, and why the gate was NOT
+# tightened.
+#
+# Measured with alphas drawn independently from runif(.78, .93) -- no induction
+# anywhere -- 400 pools per cell (pools containing >= 1 flag / rows flagged):
+#
+#     k    2 dp          3 dp          4 dp
+#    10    20.2% / 4.6%  26.8% / 6.1%   2.0% / 0.4%
+#    30    92.0% /14.5%  92.2% /15.8%  27.5% / 2.1%
+#   100   100.0% /40.6% 100.0% /44.1%  96.2% / 6.2%
+#
+# The roadmap proposed requiring 4 decimals. That is REFUTED: a 100-study pool still
+# flags 96.2% of the time at 4 decimals. The driver is pool size, not precision --
+# ~150 plausible 3-decimal values in [.78, .93] give a 30-study pool ~3 expected
+# collisions by the birthday argument. So the gate stands and the MESSAGE changed.
+# ---------------------------------------------------------------------------
+
+test_that('V36 reads as a prompt, not as a finding', {
+  d <- data.frame(study_id = c('A', 'B', 'C'),
+                  cronbach_alpha = c(0.873, 0.873, 0.910),
+                  n_sample = c(200, 340, 150), n_items = 10)
+  f <- suppressWarnings(summary(convert_df(d, measure = 'alpha', verbose = FALSE),
+                                flags = TRUE))$flags_crude
+  expect_true(grepl('PROMPT TO CHECK THE PRIMARY SOURCES', f[1], fixed = TRUE))
+  # the old wording asserted something the measurement contradicts
+  expect_false(grepl('independent samples rarely reproduce a coefficient exactly',
+                     f[1], fixed = TRUE))
+  # it carries its own base rate, and forbids the misuse
+  expect_true(grepl('coincidental repeats are expected', f[1], fixed = TRUE))
+  expect_true(grepl('Never report the number of these flags as a count', f[1],
+                    fixed = TRUE))
+  # and it still names what is worth checking for
+  expect_true(grepl('reliability induction', f[1], fixed = TRUE))
+  # Tier-1 message rule: no '; ' inside a single flag
+  expect_false(grepl('; ', f[1], fixed = TRUE))
+})
+
+test_that('the entropy gate itself is unchanged', {
+  mk <- function(a, n) data.frame(study_id = c('A', 'B'), cronbach_alpha = a,
+                                  n_sample = n, n_items = 10)
+  fl <- function(d) suppressWarnings(
+    summary(convert_df(d, measure = 'alpha', verbose = FALSE), flags = TRUE))$flags_crude
+  hit <- function(d) any(grepl('PROMPT TO CHECK', fl(d), fixed = TRUE))
+
+  expect_true(hit(mk(c(0.873, 0.873), c(200, 340))))   # >= 3 dp alone
+  expect_true(hit(mk(c(0.87, 0.87), c(200, 200))))     # 2 dp + identical n
+  expect_false(hit(mk(c(0.87, 0.87), c(200, 340))))    # 2 dp, different n -> silent
+  expect_false(hit(mk(c(0.9, 0.9), c(200, 200))))      # 1 dp -> silent
+})
+
+test_that('a repeat WITHIN one study is not induction', {
+  # subscales or timepoints legitimately repeat; that is Category H's job
+  d <- data.frame(study_id = c('A', 'A'), cronbach_alpha = c(0.873, 0.873),
+                  n_sample = 200, n_items = 10)
+  f <- suppressWarnings(summary(convert_df(d, measure = 'alpha', verbose = FALSE),
+                                flags = TRUE))$flags_crude
+  expect_false(any(grepl('PROMPT TO CHECK', f, fixed = TRUE)))
+})
+
+test_that('the measured false-positive rate is recorded where a reader will find it', {
+  # V36 must never be reported as a count of induced values, so the rate has to be
+  # written down somewhere durable rather than living in a commit message.
+  src <- readLines('../../R/internal_flags.R', warn = FALSE)
+  skip_if(length(src) == 0, 'source not readable from the test working directory')
+  expect_true(any(grepl('MEASURED FALSE-POSITIVE RATE', src, fixed = TRUE)))
+  expect_true(any(grepl('96.2%', src, fixed = TRUE)))     # the 4-dp refutation
+  expect_true(any(grepl('TIGHTENING THE DECIMAL GATE DOES NOT WORK', src, fixed = TRUE)))
+})

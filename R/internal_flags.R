@@ -1569,6 +1569,32 @@
   # in [.70, .99], so in a 30-study pool a shared ".87" is unremarkable. Hussey et al.
   # (2025) make the same point from the other side: alphas pile up at round thresholds.
   #
+  # MEASURED FALSE-POSITIVE RATE (roadmap 2.1). Alphas drawn independently from
+  # runif(0.78, 0.93) -- no induction anywhere -- 400 pools per cell, share of pools
+  # containing at least one flag / share of ROWS flagged:
+  #
+  #     k    2 dp          3 dp          4 dp
+  #    10    20.2% / 4.6%  26.8% / 6.1%   2.0% / 0.4%
+  #    30    92.0% /14.5%  92.2% /15.8%  27.5% / 2.1%
+  #   100   100.0% /40.6% 100.0% /44.1%  96.2% / 6.2%
+  #
+  # Two things follow, and they decide the design.
+  #
+  # (1) TIGHTENING THE DECIMAL GATE DOES NOT WORK. The roadmap proposed requiring 4
+  #     decimals; at 4 decimals a 100-study pool still flags 96.2% of the time. The
+  #     driver is the pool size, not the precision -- with ~150 plausible 3-decimal
+  #     values in [.78, .93], a 30-study pool has C(30,2)/150 ~ 3 expected collisions,
+  #     so a match is the NORM rather than the exception. The gate is therefore left
+  #     as it is and the MESSAGE was rewritten instead: V36 is a prompt to check the
+  #     primary sources, not a finding, and its count must never be reported as a
+  #     number of induced values.
+  #
+  # (2) THE n_sample HALF OF THE GATE EARNS ITS KEEP, which was not obvious. Repeating
+  #     the sweep with non-round sample sizes (runif over 50:500 rather than multiples
+  #     of 50) drops the 2-decimal rate from 20.2 / 92.0 / 100.0% to 0.5 / 6.0 / 41.0%
+  #     at k = 10 / 30 / 100. So clause (b) is not the FP driver -- ROUND sample sizes
+  #     are, because they collide with each other as readily as 2-decimal alphas do.
+  #
   # Two ways to clear the gate, both keyed on genuine improbability rather than on a
   # count of decimals alone:
   #   (a) the coefficient carries >= 3 decimals -- 0.8734 shared by two independent
@@ -1614,13 +1640,17 @@
             # the crude scope only -- the rule V23 documents. Unquoted, the router cannot
             # identify the column and copies the flag into flags_adjusted, a scope with
             # no estimates at all for these measures.
-            paste0("[INFO] Same '%s' (%s) reported by %s, %s. Reliability is a property of the ",
-                   "scores in a sample, so independent samples rarely reproduce a coefficient ",
-                   "exactly - check these studies computed it in their own data rather than ",
-                   "quoting a test manual or an earlier validation study (reliability induction). ",
-                   "Induced values are not independent estimates and should not be pooled"),
+            paste0("[INFO] Same '%s' (%s) reported by %s, %s. This is a PROMPT TO CHECK ",
+                   "THE PRIMARY SOURCES, not evidence of anything: plausible coefficients ",
+                   "occupy a narrow band, so in a pool of %d studies coincidental repeats are ",
+                   "expected (measured with no induction present: at 3 decimals, 92%% of ",
+                   "30-study pools contain at least one). What it is worth checking for is ",
+                   "reliability induction - a study quoting a test manual or an earlier ",
+                   "validation paper instead of computing the coefficient in its own sample. ",
+                   "Induced values are not independent estimates and should not be pooled. ",
+                   "Never report the number of these flags as a count of induced values"),
             cc, format(key, scientific = FALSE),
-            paste(.row_ref(hit, sid_r), collapse = ", "), why))
+            paste(.row_ref(hit, sid_r), collapse = ", "), why, n))
         }
       }
     }

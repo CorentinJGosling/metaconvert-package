@@ -1,5 +1,39 @@
 # metaConvert (development version)
 
+## V36 (reliability induction) is now worded as a prompt, and its false-positive rate is documented
+
+V36 flags a reliability coefficient reported by two different studies, as a possible
+sign of **reliability induction** - a study quoting the test manual instead of computing
+the coefficient in its own sample. The check is useful, but its message asserted that
+"independent samples rarely reproduce a coefficient exactly", and that is not true at
+realistic pool sizes.
+
+Measured with alphas drawn independently from `runif(.78, .93)` - **no induction
+anywhere** - 400 pools per cell, showing pools containing at least one flag / rows
+flagged:
+
+| studies | 2 dp | 3 dp | 4 dp |
+|---:|---|---|---|
+| 10 | 20.2% / 4.6% | 26.8% / 6.1% | 2.0% / 0.4% |
+| 30 | 92.0% / 14.5% | 92.2% / 15.8% | 27.5% / 2.1% |
+| 100 | 100.0% / 40.6% | 100.0% / 44.1% | 96.2% / 6.2% |
+
+The driver is **pool size, not precision**: with roughly 150 plausible three-decimal
+values in [.78, .93], a 30-study pool has about 3 expected collisions by the birthday
+argument, so a match is the norm rather than the exception. Requiring 4 decimals - the
+obvious tightening - does not help: a 100-study pool still flags 96.2% of the time.
+
+The gate is therefore unchanged and the **message** was rewritten. V36 now states that
+it is a prompt to check the primary sources rather than evidence of anything, carries
+the base rate, reports the pool size, and says explicitly that the number of flags must
+never be reported as a count of induced values.
+
+One thing the sweep settled that was not obvious: the `n_sample` half of the entropy
+gate earns its keep. Repeating it with non-round sample sizes drops the two-decimal
+rate from 20.2 / 92.0 / 100.0% to 0.5 / 6.0 / 41.0% at 10 / 30 / 100 studies - so that
+clause is not the false-positive driver; *round* sample sizes are, because they collide
+with each other as readily as two-decimal alphas do.
+
 ## `flag_options` no longer fails silently
 
 Two ways a `flag_options` entry could be ignored without saying so, both of which left
