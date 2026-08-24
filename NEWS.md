@@ -1,5 +1,34 @@
 # metaConvert (development version)
 
+## New flags V42 and V43: mixed ICC designs, and mixed ICC estimands
+
+**V43** (`[INFO]`, always active) flags a pool containing both absolute-agreement
+ICC(2,1) and consistency ICC(3,1) values. These are different estimands - absolute
+agreement charges systematic rater differences against the reliability and consistency
+does not, so a consistency ICC is the larger of the two on the same data and their
+average estimates neither.
+
+This is the strongest case in the estimand-mixing family, because **the arithmetic is
+byte-identical**: `icc_type` has no effect on the estimate or its standard error, so no
+numeric diagnostic anywhere in the package can reveal the mix. Before V43 such a pool
+was completely silent. It compares the model axis only, so an ICC(2,1) / ICC(2,k) pool
+is not treated as mixed (that distinction is resolved by the Spearman-Brown step-down
+and reported by its own flag).
+
+The *Psychometrics* vignette previously stated that the two models "can coexist in the
+same analysis". That sentence has been replaced.
+
+**V42** (`[UNUSUAL]`) flags a study whose `n_measurements` disagrees with a pool that
+otherwise agrees - a stray k = 3 in a k = 2 test-retest review. Unlike alpha's item
+count, an ICC's rater count varies legitimately between studies, so the check fires
+only when a majority share one value, and a genuinely mixed-panel review stays silent.
+
+Also in the vignette: the ICC section now uses `reliability_backtransform()` instead of
+hand-rolling the bound swap (`1 - exp(T)` is monotone *decreasing*, so the
+transformed-scale upper bound is the ICC-scale lower bound), and the $I^2$ and
+funnel-plot cautions - previously written for alpha only - now also cover the ICC pool,
+where they apply for the same reason.
+
 ## New flag V41: an ICC below its k-dependent lower bound
 
 An intraclass correlation is bounded below by `-1/(k-1)`, not by `-1`: with *k*

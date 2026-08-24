@@ -412,7 +412,9 @@ show_table(summary_icc[, c("author", "es", "se", "es_ci_lo", "es_ci_up",
 
 <br>
 
-Note that studies using different ICC models (agreement vs. consistency) can coexist in the same analysis. Both types share the same leading-order SE formula: it is exact for consistency ICC(3,1), but for agreement ICC(2,1) it is a one-way approximation that assumes negligible between-rater variance -- when raters differ systematically, the reported SE is anti-conservative, and `summary()` marks agreement-type rows with an informational flag (see `?es_from_icc`):
+**Do not pool agreement and consistency ICCs without deciding to.** ICC(2,1) and ICC(3,1) are different estimands: absolute agreement charges systematic rater differences against the reliability, consistency does not, so a consistency ICC is the larger of the two on the same data and their average estimates neither. The arithmetic is *identical* for both --- `icc_type` has no effect on the estimate or its standard error --- so no numeric diagnostic can reveal the mix. `summary(flags = TRUE)` raises **V43** on every row of a mixed pool for exactly that reason. Split the analysis by `icc_type`, or enter it as a **moderator** and report the contrast.
+
+A second flag applies to the agreement rows themselves. Both types share one leading-order SE formula, which is exact for consistency ICC(3,1) but for agreement ICC(2,1) is a one-way approximation assuming negligible between-rater variance. When raters differ systematically it is anti-conservative, and increasingly so at larger *n*: measured 95% coverage is 0.82 at *n* = 20, 0.67 at 50, 0.32 at 200 and 0.14 at 1000, because ICC(2,1) inherits the between-rater mean square (*k* - 1 df) while the reported SE shrinks like $1/\sqrt{n}$. A large agreement study can therefore carry ~50x too much weight. Where the study reports its own `icc_se` or confidence interval, supply it --- `es_from_icc()` prefers it to the computed value. Where it does not, `convert_df(icc_agreement_se = "drop")` withholds the approximation so the row is left out of the pool rather than over-weighted (see `?es_from_icc`):
 
 ```{r}
 summary_icc[nzchar(summary_icc$flags), c("author", "icc_type")]
@@ -436,13 +438,17 @@ metafor::forest(ma_icc, slab = paste0(summary_icc$author, " (", dat_icc$year, ")
 
 ```{r}
 # Back-transform pooled estimate
-pooled_icc    <- 1 - exp(ma_icc$beta[1])
-pooled_icc_lo <- 1 - exp(ma_icc$ci.ub)
-pooled_icc_up <- 1 - exp(ma_icc$ci.lb)
+# reliability_backtransform() performs the bound swap for you: 1 - exp(T) is
+# monotone DECREASING, so the transformed-scale UPPER bound is the ICC-scale
+# LOWER bound. Doing it by hand is the most-botched step in published reliability
+# work, and it is silent -- the interval still looks like an interval.
+bt_icc <- reliability_backtransform(ma_icc)
 
 cat(sprintf("Pooled ICC = %.3f [%.3f, %.3f]\n",
-            pooled_icc, pooled_icc_lo, pooled_icc_up))
+            bt_icc$reliability, bt_icc$reliability_ci_lo, bt_icc$reliability_ci_up))
 ```
+
+The same two cautions as for alpha apply here, and for the same reason. **Do not read $I^2$ as "these ICCs disagree":** the Bonett ICC sampling variance $2(1+(k-1)\rho)^2/(k(k-1)(n-1))$ is dominated by $n$ and $k$, so $I^2$ largely tracks the sample sizes rather than any disagreement between the ICCs. Report the back-transformed **prediction interval** (`reliability_pi_lo` / `reliability_pi_up`) and the observed spread of ICCs instead. **And do not run funnel plots, trim-and-fill, or Egger's test on this pool:** those diagnostics assume the effect's expectation depends on sample size, and the expectation of an ICC does not --- only its precision does.
 
 The pooled ICC will feed into the **measurement error** derivation (next section) and **disattenuation** corrections for validity and responsiveness.
 

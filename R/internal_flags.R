@@ -1605,6 +1605,100 @@
     }
   }
 
+  # V42: the measurement/rater count is not constant across an ICC pool.
+  #
+  # The ICC analogue of V37, and the justification is DELIBERATELY WEAKER, which is why
+  # the majority guard below is load-bearing here rather than a nicety. For alpha the
+  # instrument fixes n_items, so any disagreement is a short form or a slip. For an ICC
+  # the number of raters legitimately varies between studies, and for a SINGLE-measures
+  # ICC that is not an estimand problem at all -- k enters the sampling variance, which
+  # is exactly where it belongs, so a varying k is correctly handled by the SE.
+  #
+  # What this catches is the transcription error: a k that disagrees with a pool which
+  # otherwise agrees. In a test-retest review (k = 2 throughout) a stray k = 3 is
+  # suspicious; in an inter-rater review with genuinely mixed panels there is no
+  # majority and the check stays silent by construction.
+  #
+  # Nothing else can see it. n_measurements is otherwise only sign-checked, and the SE
+  # consequence is well under D2's 3x gate while being far larger than the case V37 was
+  # written for: measured at n = 100, the ICC SE moves 1.26x-2.36x across k = 2..10
+  # depending on rho (1.394x at rho = 0.80, k = 2..6), against 1.039x for an 8-vs-18
+  # item-count mix-up on alpha.
+  if (isTRUE(enable_cross_row) && n >= 3 &&
+      "n_measurements" %in% colnames(x) && "icc" %in% colnames(x)) {
+    km_v <- suppressWarnings(as.numeric(x[["n_measurements"]]))
+    icc_p <- suppressWarnings(as.numeric(x[["icc"]]))
+    ok <- which(is.finite(km_v) & km_v >= 2 & is.finite(icc_p))
+    if (length(ok) >= 3) {
+      tab <- table(km_v[ok])
+      modal_k <- as.numeric(names(tab)[which.max(tab)])
+      if (max(tab) > length(ok) / 2 && length(tab) > 1) {
+        for (i in ok[km_v[ok] != modal_k]) {
+          row_issues[[i]] <- c(row_issues[[i]], sprintf(
+            paste0("[UNUSUAL] Measurement count differs from the rest of the pool: ",
+                   "'n_measurements' = %s where %d of %d studies report %s. k enters the ",
+                   "ICC sampling variance directly, so verify it before pooling - and if the ",
+                   "designs really do differ, check that the reported ICCs are all ",
+                   "single-measurement rather than a mix with average-measures values"),
+            format(km_v[i], scientific = FALSE), max(tab), length(ok),
+            format(modal_k, scientific = FALSE)))
+        }
+      }
+    }
+  }
+
+  # V43: a pool mixing absolute-agreement and consistency ICCs.
+  #
+  # The ICC analogue of V38, and the strongest member of that family, because here the
+  # arithmetic is BYTE-IDENTICAL: icc_type has no computational effect on the estimate
+  # or the standard error (asserted to 1e-15 in tests_save/checked/test-icc.R), so no
+  # numeric check anywhere in the package can reveal the mix. Without this flag such a
+  # pool is completely silent.
+  #
+  # ICC(2,1) and ICC(3,1) are different estimands. Absolute agreement charges systematic
+  # rater differences against the reliability; consistency does not, so a consistency ICC
+  # is >= the agreement ICC on the same data and averaging them estimates neither.
+  #
+  # [INFO] and always active, both for V38's reasons: nothing is mis-extracted (each
+  # value is correct for what its study reported), so there is nothing to "verify" and
+  # [UNUSUAL] would misdescribe it -- what is wrong is POOLING them, which is an analyst
+  # choice. And two different types in one pool are different estimands by definition,
+  # so it cannot false-fire.
+  #
+  # Compares the MODEL axis only: the "_average" suffix is stripped first, because the
+  # single-vs-average distinction is resolved by the Spearman-Brown step-down (and
+  # reported by its own flag), so an ICC(2,1)/ICC(2,k) pool is not a mixed estimand.
+  # An absent or NA icc_type resolves to "agreement", the documented default, so a pool
+  # of blanks plus explicit "consistency" rows IS a mix and correctly fires.
+  if (n >= 2 && "icc" %in% colnames(x)) {
+    icc_p <- suppressWarnings(as.numeric(x[["icc"]]))
+    it <- if ("icc_type" %in% colnames(x)) {
+      tt <- as.character(x[["icc_type"]])
+      tt[is.na(tt)] <- "agreement"
+      sub("_average$", "", .normalise_icc_type(tt, warn = FALSE))
+    } else {
+      rep("agreement", nrow(x))
+    }
+    it_known <- is.finite(icc_p) & !is.na(it)
+    present <- unique(it[it_known])
+    if (length(present) > 1) {
+      lbl <- c(agreement = "absolute agreement, ICC(2,1)",
+               consistency = "consistency, ICC(3,1)")
+      for (i in which(it_known)) {
+        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+          paste0("[INFO] Pool mixes ICC estimands: this row is '%s' (%s) while the pool ",
+                 "also contains '%s'. Consistency ignores systematic rater differences and ",
+                 "absolute agreement charges them against the reliability, so a consistency ",
+                 "ICC is the larger of the two on the same data and their average estimates ",
+                 "neither. Note the arithmetic is identical for both, so nothing else in the ",
+                 "output reveals this - split the analysis by icc_type, or enter it as a ",
+                 "moderator and report the contrast"),
+          it[i], unname(lbl[it[i]]),
+          paste(setdiff(present, it[i]), collapse = "', '")))
+      }
+    }
+  }
+
   # V38: a pool mixing different omegas.
   #
   # omega_type is an ESTIMAND, not a label. omega_total is the proportion of total

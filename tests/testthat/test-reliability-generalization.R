@@ -1089,3 +1089,111 @@ test_that('V41 needs n_measurements and stays silent without it', {
   expect_false(grepl('Impossible ICC', out$issues[1], fixed = TRUE))
   expect_true(grepl('Negative ICC', out$issues[1], fixed = TRUE))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 1.7: the ICC analogues of V37 and V38.
+# ---------------------------------------------------------------------------
+
+icc_flags <- function(d) {
+  suppressWarnings(summary(convert_df(d, measure = 'icc', verbose = FALSE),
+                           flags = TRUE))$flags_crude
+}
+has <- function(f, p) vapply(f, function(x) grepl(p, x, fixed = TRUE), logical(1))
+
+test_that('V43 flags a pool mixing agreement and consistency ICCs', {
+  # The strongest member of the estimand-mixing family: icc_type has NO effect on the
+  # estimate or the SE (1e-15 in tests_save), so no numeric check can reveal the mix.
+  d <- data.frame(icc = c(0.85, 0.78, 0.91), n_sample = c(145, 82, 198),
+                  n_measurements = 2,
+                  icc_type = c('agreement', 'consistency', 'agreement'))
+  f <- icc_flags(d)
+  expect_true(all(has(f, 'Pool mixes ICC estimands')))     # every row, like V38
+  expect_true(grepl("is 'consistency'", f[2], fixed = TRUE))
+  expect_true(grepl('ICC(3,1)', f[2], fixed = TRUE))
+  expect_true(grepl('[INFO]', f[1], fixed = TRUE))         # analyst choice, not an error
+})
+
+test_that('V43 stays silent when there is nothing to mix', {
+  base <- data.frame(icc = c(0.85, 0.78, 0.91), n_sample = 100, n_measurements = 2)
+  # homogeneous
+  expect_false(any(has(icc_flags(cbind(base, icc_type = 'agreement')),
+                       'Pool mixes ICC')))
+  expect_false(any(has(icc_flags(cbind(base, icc_type = 'consistency')),
+                       'Pool mixes ICC')))
+  # no icc_type column at all -> everything is the default, so no mix
+  expect_false(any(has(icc_flags(base), 'Pool mixes ICC')))
+  # single row
+  expect_false(any(has(icc_flags(data.frame(icc = 0.8, n_sample = 100,
+                                            n_measurements = 2)), 'Pool mixes ICC')))
+})
+
+test_that('a blank icc_type counts as agreement, so blanks + consistency IS a mix', {
+  # 'agreement' is the documented default for an absent value, so this really is a
+  # mixed pool rather than a pool with unknowns.
+  d <- data.frame(icc = c(0.85, 0.78, 0.91), n_sample = 100, n_measurements = 2,
+                  icc_type = c(NA, 'consistency', NA))
+  expect_true(any(has(icc_flags(d), 'Pool mixes ICC estimands')))
+})
+
+test_that('V43 compares the MODEL axis only: ICC(2,1) + ICC(2,k) is not a mix', {
+  # the single-vs-average distinction is resolved by the Spearman-Brown step-down and
+  # reported by its own flag, so it must not also be called a mixed estimand
+  d <- data.frame(icc = c(0.85, 0.78, 0.91), n_sample = 100, n_measurements = 3,
+                  icc_type = c('ICC(2,1)', 'ICC(2,k)', 'agreement'))
+  expect_false(any(has(icc_flags(d), 'Pool mixes ICC')))
+  # but ICC(2,k) against ICC(3,1) still differs on the model axis
+  d2 <- data.frame(icc = c(0.85, 0.78, 0.91), n_sample = 100, n_measurements = 3,
+                   icc_type = c('ICC(2,k)', 'ICC(3,1)', 'agreement'))
+  expect_true(any(has(icc_flags(d2), 'Pool mixes ICC estimands')))
+})
+
+test_that('V42 flags a dissenting measurement count, and only that row', {
+  d <- data.frame(icc = c(.85, .78, .91, .80), n_sample = 100,
+                  n_measurements = c(2, 2, 3, 2))
+  f <- icc_flags(d)
+  expect_true(has(f, 'Measurement count differs')[3])
+  expect_false(any(has(f, 'Measurement count differs')[c(1, 2, 4)]))
+  expect_true(grepl('3 of 4 studies report 2', f[3], fixed = TRUE))
+})
+
+test_that('V42 stays silent without a majority k -- the multi-panel review', {
+  # ICC k varies far more legitimately than alpha's item count (different studies
+  # really do use different numbers of raters), so the majority guard is load-bearing
+  # here rather than a nicety.
+  d <- data.frame(icc = c(.85, .78, .91, .80), n_sample = 100,
+                  n_measurements = c(2, 3, 4, 5))
+  expect_false(any(has(icc_flags(d), 'Measurement count differs')))
+})
+
+test_that('V42 needs at least 3 usable rows and the cross-row toggle', {
+  d2 <- data.frame(icc = c(.85, .78), n_sample = 100, n_measurements = c(2, 3))
+  expect_false(any(has(icc_flags(d2), 'Measurement count differs')))
+  d4 <- data.frame(icc = c(.85, .78, .91, .80), n_sample = 100,
+                   n_measurements = c(2, 2, 3, 2))
+  # NOTE the routing: V42 is a Tier-1 check, and Tier-1 flag_options are read from
+  # convert_df(), NOT from summary(). Passing enable_cross_row to summary() is
+  # silently ignored -- reproduced here, and it is reliability roadmap item 2.5, still
+  # open. Pinned in both directions so the asymmetry is visible rather than rediscovered.
+  off <- suppressWarnings(summary(
+    convert_df(d4, measure = 'icc', verbose = FALSE,
+               flag_options = list(enable_cross_row = FALSE)), flags = TRUE))$flags_crude
+  expect_false(any(has(off, 'Measurement count differs')))
+
+  ignored <- suppressWarnings(summary(convert_df(d4, measure = 'icc', verbose = FALSE),
+                                      flags = TRUE,
+                                      flag_options = list(enable_cross_row = FALSE)))$flags_crude
+  expect_true(any(has(ignored, 'Measurement count differs')))   # roadmap 2.5: dropped
+})
+
+test_that('the vignette no longer endorses pooling the two ICC models', {
+  v <- readLines('../../vignettes/Psychometrics.Rmd', warn = FALSE)
+  skip_if(length(v) == 0, 'vignette not readable from the test working directory')
+  expect_false(any(grepl('can coexist in the same analysis', v, fixed = TRUE)))
+  expect_true(any(grepl('Do not pool agreement and consistency ICCs', v, fixed = TRUE)))
+  # it uses the helper rather than hand-rolling the bound swap
+  expect_true(any(grepl('reliability_backtransform(ma_icc)', v, fixed = TRUE)))
+  expect_false(any(grepl('pooled_icc_lo <- 1 - exp(', v, fixed = TRUE)))
+  # and the I2 / funnel cautions are no longer alpha-only
+  expect_true(any(grepl('these ICCs disagree', v, fixed = TRUE)))
+})
