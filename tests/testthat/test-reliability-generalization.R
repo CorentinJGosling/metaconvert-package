@@ -1346,3 +1346,70 @@ test_that('the measured false-positive rate is recorded where a reader will find
   expect_true(any(grepl('96.2%', src, fixed = TRUE)))     # the 4-dp refutation
   expect_true(any(grepl('TIGHTENING THE DECIMAL GATE DOES NOT WORK', src, fixed = TRUE)))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 2.3 and 2.6, plus 2.0.1 audit #25.
+# ---------------------------------------------------------------------------
+
+test_that('es_summary names the analysis scale instead of mislabelling it (2.3)', {
+  d <- data.frame(cronbach_alpha = c(0.85, 0.78), n_sample = c(200, 150),
+                  n_items = 10)
+  # the default Bonett scale printed `alpha = -1.897 [...]` -- an impossible alpha,
+  # labelled 'alpha', with the bounds in transformed order. Pasted into a supplement
+  # that is simply wrong.
+  b <- summary(convert_df(d, measure = 'alpha', verbose = FALSE))$es_summary_crude[1]
+  expect_true(grepl('alpha [ln(1 - alpha)] =', b, fixed = TRUE))
+
+  # ...and no spurious label where the value really is on the coefficient scale
+  r <- summary(convert_df(d, measure = 'alpha', alpha_to_es = 'raw',
+                          verbose = FALSE))$es_summary_crude[1]
+  expect_true(grepl('alpha = 0.85', r, fixed = TRUE))
+  expect_false(grepl('[', r, fixed = TRUE) && grepl('ln(1', r, fixed = TRUE))
+
+  hw <- summary(convert_df(d, measure = 'alpha', alpha_to_es = 'hakstian_whalen',
+                           verbose = FALSE))$es_summary_crude[1]
+  expect_true(grepl('1 - (1 - alpha)^(1/3)', hw, fixed = TRUE))
+})
+
+test_that('the scale label follows icc and prop too, and leaves other measures alone', {
+  di <- data.frame(icc = 0.85, n_sample = 145, n_measurements = 2,
+                   icc_type = 'consistency')
+  expect_true(grepl('ICC [ln(1 - ICC)] =',
+                    summary(convert_df(di, measure = 'icc', verbose = FALSE))$es_summary_crude[1],
+                    fixed = TRUE))
+  expect_true(grepl('ICC = 0.85',
+                    summary(convert_df(di, measure = 'icc', icc_to_es = 'raw',
+                                       verbose = FALSE))$es_summary_crude[1], fixed = TRUE))
+  # an unrelated measure is untouched
+  dg <- data.frame(mean_exp = 1, mean_sd_exp = 1, mean_nexp = 0, mean_sd_nexp = 1,
+                   n_exp = 40, n_nexp = 40)
+  g <- summary(convert_df(dg, measure = 'g', verbose = FALSE))$es_summary_crude[1]
+  expect_true(grepl('g = ', g, fixed = TRUE))
+  expect_false(grepl('ln(1', g, fixed = TRUE))
+})
+
+test_that('the omega extraction sheet offers n_items (2.6)', {
+  # omega does not USE n_items in its variance -- its SE comes from the study -- but
+  # V37 reads the column, so without it here that check is unreachable for an omega
+  # review.
+  sh <- data_extraction_sheet(measure = 'omega', extension = 'data.frame',
+                              verbose = FALSE)
+  expect_true('n_items' %in% colnames(sh))
+})
+
+test_that('no extraction sheet emits a duplicate column name (audit #25)', {
+  # A duplicate is not cosmetic: the sheet is meant to be filled in and re-imported,
+  # and on re-import only one copy is read -- so a user who fills in the second gets
+  # silence. measure = 'all' carried duplicate reverse_prop and n_cases; adding
+  # n_items to the omega block would have made a third.
+  for (m in c('all', 'omega', 'alpha', 'icc', 'prop', 'd', 'g', 'or', 'rr', 'r')) {
+    sh <- data_extraction_sheet(measure = m, extension = 'data.frame', verbose = FALSE)
+    expect_equal(sum(duplicated(colnames(sh))), 0L, info = paste('measure =', m))
+  }
+  sh <- data_extraction_sheet(measure = 'all', extension = 'data.frame', verbose = FALSE)
+  expect_equal(sum(colnames(sh) == 'reverse_prop'), 1L)
+  expect_equal(sum(colnames(sh) == 'n_cases'), 1L)
+  expect_equal(sum(colnames(sh) == 'n_items'), 1L)
+  expect_equal(nrow(sh), 1L)          # still one row of hints, nothing dropped
+})

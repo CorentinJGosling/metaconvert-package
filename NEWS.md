@@ -1,5 +1,29 @@
 # metaConvert (development version)
 
+## `es_summary` names its scale, and no extraction sheet repeats a column
+
+**`es_summary` said "alpha" for a number that is not one.** Under the default
+`alpha_to_es = "bonett"` the compact summary string read
+`alpha = -1.897 [-2.105, -1.689]` - an impossible alpha, labelled `alpha`, with the
+bounds in transformed order. Pasted into a supplement that is simply wrong. The string
+now names the analysis scale: `alpha [ln(1 - alpha)] = -1.897 [-2.105, -1.689]`, and
+likewise for the Hakstian-Whalen scale, for `icc` under Bonett, and for `prop` under
+the logit and Freeman-Tukey transforms. Where the value really is on the coefficient
+scale (`*_to_es = "raw"`) there is no added label, and other measures are untouched.
+
+**`data_extraction_sheet(measure = "omega")` now offers `n_items`.** Omega does not use
+it - unlike alpha, omega has no `(n, k)` sampling variance and its standard error comes
+from the study - but the item-count check reads that column, so without it the check was
+unreachable from the omega template.
+
+**No extraction sheet emits a duplicate column name any more.** A column belonging to
+more than one measure block appeared once per block, so `measure = "all"` carried two
+`reverse_prop` and two `n_cases` columns. That is not cosmetic: the sheet exists to be
+filled in and re-imported, and on re-import only one copy is read, so a user who fills
+in the second gets silence rather than an error. The assembled sheet is now
+deduplicated on the way out, keeping the first occurrence, which also means a block can
+list every column it needs without the blocks having to know about each other.
+
 ## V36 (reliability induction) is now worded as a prompt, and its false-positive rate is documented
 
 V36 flags a reliability coefficient reported by two different studies, as a possible

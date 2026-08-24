@@ -508,15 +508,20 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "Cronbach's alpha reliability coefficient - numeric",
       "number of items in the scale - numeric")
 
+    # n_items is NOT used in omega's arithmetic -- unlike alpha, omega has no (n, k)
+    # sampling variance and its SE comes from the study. It is here because V37 (item
+    # count constant across a pool sharing one instrument) reads the column, and
+    # without it in this template that check is simply unreachable for an omega review.
     cols_omega = c("omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type",
-                   "omega_estimator")
+                   "omega_estimator", "n_items")
     inf_omega = c(
       "McDonald's omega reliability coefficient (natural scale) - numeric",
       "standard error of omega, ON THE NATURAL SCALE - numeric",
       "lower bound of the 95% CI of omega (natural scale) - numeric",
       "upper bound of the 95% CI of omega (natural scale) - numeric",
       "which omega: 'total' (default), 'hierarchical', 'asymptotic' or 'subscale' - character",
-      "how omega was estimated: 'cfa_bifactor', 'cfa_1factor', 'efa_schmid_leiman', 'first_pc', 'first_pf' or 'unspecified' - character")
+      "how omega was estimated: 'cfa_bifactor', 'cfa_1factor', 'efa_schmid_leiman', 'first_pc', 'first_pf' or 'unspecified' - character",
+      "number of items in the scale - numeric (not used in omega's variance; enables the item-count check)")
 
     cols_icc = c("icc", "icc_se", "icc_ci_lo", "icc_ci_up",
                  "n_measurements", "icc_type")
@@ -748,6 +753,18 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
                          cols_input_crude, cols_input_adjusted)
 
     }
+
+  # A column that belongs to more than one measure block appears once per block, so the
+  # assembled sheet carries duplicate names: `reverse_prop` and `n_cases` under
+  # measure = "all" (2.0.1 audit #25), joined by `n_items` once it was added to the
+  # omega block as well as alpha. A duplicate is not harmless -- the sheet is meant to
+  # be filled in and re-imported, and on re-import only ONE of the copies is read, so a
+  # user who fills in the second gets silence rather than an error.
+  #
+  # Deduplicate on the way out, keeping the first occurrence, so every block can list
+  # every column it genuinely needs without the blocks having to know about each other.
+  dup <- duplicated(colnames(dat))
+  if (any(dup)) dat <- dat[, !dup, drop = FALSE]
 
   if (missing(name)) name = "data_extract_metaConvert"
   if (extension == "data.frame") {

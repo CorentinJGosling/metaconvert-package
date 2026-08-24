@@ -18,7 +18,7 @@
 }
 
 #' @noRd
-.compact_measure_label <- function(measure, exp) {
+.compact_measure_label <- function(measure, exp, rel_method = NULL) {
   if (exp && measure == "logor") return("OR")
   if (exp && measure == "logrr") return("RR")
   if (exp && measure == "logirr") return("IRR")
@@ -30,15 +30,33 @@
               nnt = "NNT", rd = "RD", dw = "d_w", gw = "g_w", mdw = "MD_w",
               rp = "r_p", zp = "z_p",
               prop = "prop", alpha = "alpha", omega = "omega", icc = "ICC")
-  if (measure %in% names(labels)) labels[measure] else measure
+  base <- if (measure %in% names(labels)) unname(labels[measure]) else measure
+
+  # Roadmap 2.3: the reliability and proportion measures are reported on an ANALYSIS
+  # scale, not on the coefficient scale, and the string did not say so. Under the
+  # default alpha_to_es = "bonett" it printed `alpha = -1.204 [-1.385, -1.023]` -- an
+  # impossible alpha, labelled "alpha", with the bounds in transformed order. Pasted
+  # into a supplement that is simply wrong. Name the scale instead.
+  scale_txt <- switch(measure,
+    alpha = switch(as.character(rel_method),
+                   bonett = "ln(1 - alpha)",
+                   hakstian_whalen = "1 - (1 - alpha)^(1/3)", NULL),
+    omega = switch(as.character(rel_method),
+                   bonett = "ln(1 - omega)",
+                   hakstian_whalen = "1 - (1 - omega)^(1/3)", NULL),
+    icc   = switch(as.character(rel_method), bonett = "ln(1 - ICC)", NULL),
+    prop  = switch(as.character(rel_method),
+                   logit = "logit", freeman_tukey = "Freeman-Tukey", NULL),
+    NULL)
+  if (!is.null(scale_txt)) paste0(base, " [", scale_txt, "]") else base
 }
 
-.make_es_summary <- function(res, measure, exp, digits, suffix) {
+.make_es_summary <- function(res, measure, exp, digits, suffix, rel_method = NULL) {
   es_col <- paste0("es", suffix)
   ci_lo_col <- paste0("es_ci_lo", suffix)
   ci_up_col <- paste0("es_ci_up", suffix)
   out_col <- paste0("es_summary", suffix)
-  label <- .compact_measure_label(measure, exp)
+  label <- .compact_measure_label(measure, exp, rel_method)
 
   res[[out_col]] <- ifelse(
     is.na(res[[es_col]]), NA_character_,
@@ -489,14 +507,24 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
     stop("The combination of 'main_es', 'format_adjusted' and 'split_adjusted' is incorrect. Check documentation for more info.")
   }
 
-  # compact summary columns
+  # compact summary columns. The transform is measure-specific and lives on the object;
+  # without it the string cannot say which scale it is on (roadmap 2.3).
+  rel_method <- switch(measure,
+    alpha = attr(object, "alpha_to_es"),
+    omega = attr(object, "omega_to_es"),
+    icc   = attr(object, "icc_to_es"),
+    prop  = attr(object, "prop_to_es"),
+    NULL)
+  if (is.null(rel_method)) {
+    rel_method <- switch(measure, alpha = , omega = , icc = "bonett", prop = "raw", NULL)
+  }
   if (split_adjusted == TRUE & format == "wide" & main_es == TRUE) {
-    res <- .make_es_summary(res, measure, exp, digits, "_crude")
+    res <- .make_es_summary(res, measure, exp, digits, "_crude", rel_method)
     res <- .make_es_consistency(res, digits, "_crude")
-    res <- .make_es_summary(res, measure, exp, digits, "_adjusted")
+    res <- .make_es_summary(res, measure, exp, digits, "_adjusted", rel_method)
     res <- .make_es_consistency(res, digits, "_adjusted")
   } else {
-    res <- .make_es_summary(res, measure, exp, digits, "")
+    res <- .make_es_summary(res, measure, exp, digits, "", rel_method)
     res <- .make_es_consistency(res, digits, "")
   }
 
