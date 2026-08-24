@@ -998,10 +998,16 @@ test_that('V31 is [UNUSUAL] and names the two ways out', {
 test_that('the documented coverage claim is the measured one, not 0.74-0.76', {
   rd <- readLines('../../man/es_from_icc.Rd', warn = FALSE)
   skip_if(length(rd) == 0, 'Rd not readable from the test working directory')
-  # the measured numbers are present...
-  expect_true(any(grepl('0.820', rd, fixed = TRUE)))
-  expect_true(any(grepl('0.144', rd, fixed = TRUE)))
+  # the measured numbers are present, and they are the STUDY's, not a one-off run's
+  expect_true(any(grepl('0.825', rd, fixed = TRUE)))
+  expect_true(any(grepl('0.142', rd, fixed = TRUE)))
   expect_true(any(grepl('degrades as n grows', rd, fixed = TRUE)))
+  # ...and they name where they come from, so they can be re-run rather than trusted
+  expect_true(any(grepl('10_reliability.R', rd, fixed = TRUE)))
+  expect_true(any(grepl('10a_icc_agreement_coverage', rd, fixed = TRUE)))
+  # the rater_share = 0 control belongs in the docs too: it is what makes the
+  # degradation attributable to rater variance rather than to a coding error
+  expect_true(any(grepl('0.939', rd, fixed = TRUE)))
   # ...and the old figure survives ONLY as a retraction, never as the claim
   expect_false(any(grepl('coverage around 0.74-0.76', rd, fixed = TRUE)))
   hit <- grep('0.74-0.76', rd, fixed = TRUE, value = TRUE)
@@ -1285,12 +1291,12 @@ test_that('the validator warns but never aborts, and the analysis still runs', {
 # anywhere -- 400 pools per cell (pools containing >= 1 flag / rows flagged):
 #
 #     k    2 dp          3 dp          4 dp
-#    10    20.2% / 4.6%  26.8% / 6.1%   2.0% / 0.4%
-#    30    92.0% /14.5%  92.2% /15.8%  27.5% / 2.1%
-#   100   100.0% /40.6% 100.0% /44.1%  96.2% / 6.2%
+#    10    23.8% / 5.0%  23.0% / 5.0%   4.8% / 1.0%
+#    30    92.0% /15.0%  95.3% /15.8%  26.5% / 1.9%
+#   100   100.0% /41.1% 100.0% /44.1%  95.8% / 6.4%
 #
 # The roadmap proposed requiring 4 decimals. That is REFUTED: a 100-study pool still
-# flags 96.2% of the time at 4 decimals. The driver is pool size, not precision --
+# flags 95.8% of the time at 4 decimals. The driver is pool size, not precision --
 # ~150 plausible 3-decimal values in [.78, .93] give a 30-study pool ~3 expected
 # collisions by the birthday argument. So the gate stands and the MESSAGE changed.
 # ---------------------------------------------------------------------------
@@ -1343,7 +1349,9 @@ test_that('the measured false-positive rate is recorded where a reader will find
   src <- readLines('../../R/internal_flags.R', warn = FALSE)
   skip_if(length(src) == 0, 'source not readable from the test working directory')
   expect_true(any(grepl('MEASURED FALSE-POSITIVE RATE', src, fixed = TRUE)))
-  expect_true(any(grepl('96.2%', src, fixed = TRUE)))     # the 4-dp refutation
+  expect_true(any(grepl('95.8%', src, fixed = TRUE)))     # the 4-dp refutation
+  # and the figures must name where they come from, or they rot again
+  expect_true(any(grepl('10_reliability.R', src, fixed = TRUE)))
   expect_true(any(grepl('TIGHTENING THE DECIMAL GATE DOES NOT WORK', src, fixed = TRUE)))
 })
 
@@ -1467,4 +1475,117 @@ test_that('the vignette documents the retest interval and the aggregation contra
   expect_true(any(grepl('## Several ICCs from one study', v, fixed = TRUE)))
   expect_true(any(grepl('returns four columns and drops everything else', v,
                         fixed = TRUE)))
+})
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 2.2: a reported alpha standard error or interval is usable.
+#
+# The same gap 1.4 closed for ICC. A study reporting 'alpha = .88, 95% CI [.85, .91]'
+# with no item count could not be entered at all -- es = NA, row lost, and the guidance
+# said 'only add n_items' while a perfectly good interval sat unused in the row.
+# Precedence mirrors es_from_omega()/es_from_icc(): reported SE > reported CI >
+# closed-form (n, k).
+# ---------------------------------------------------------------------------
+
+test_that('the alpha SE precedence is reported SE, then CI, then computed (n, k)', {
+  nk <- es_from_cronbach_alpha(0.85, 200, 10)
+  se <- es_from_cronbach_alpha(0.85, 200, 10, cronbach_alpha_se = 0.02)
+  ci <- es_from_cronbach_alpha(0.85, 200, 10, cronbach_alpha_ci_lo = 0.81,
+                               cronbach_alpha_ci_up = 0.88)
+  both <- es_from_cronbach_alpha(0.85, 200, 10, cronbach_alpha_se = 0.02,
+                                 cronbach_alpha_ci_lo = 0.81,
+                                 cronbach_alpha_ci_up = 0.88)
+  # the point estimate never moves; only the variance source changes
+  for (r in list(nk, se, ci, both)) expect_equal(r$alpha, log(1 - 0.85), tolerance = 1e-10)
+  expect_equal(se$alpha_se, 0.02 / (1 - 0.85), tolerance = 1e-10)   # delta-mapped
+  expect_false(isTRUE(all.equal(se$alpha_se, nk$alpha_se)))          # really overrode
+  expect_false(isTRUE(all.equal(ci$alpha_se, nk$alpha_se)))
+  expect_equal(both$alpha_se, se$alpha_se, tolerance = 1e-12)        # SE beats CI
+  # the closed-form route is unchanged
+  expect_equal(nk$alpha_se, sqrt(2 * 10 / ((10 - 1) * (200 - 2))), tolerance = 1e-10)
+})
+
+test_that('an alpha reported with a CI and NO item count is usable', {
+  got <- es_from_cronbach_alpha(0.88, n_sample = 300,
+                                cronbach_alpha_ci_lo = 0.85,
+                                cronbach_alpha_ci_up = 0.91)
+  expect_equal(got$alpha, log(1 - 0.88), tolerance = 1e-10)
+  expect_equal(got$alpha_se,
+               abs(log(1 - 0.91) - log(1 - 0.85)) / (2 * qnorm(0.975)),
+               tolerance = 1e-12)
+  # pre-fix n_items gated the ESTIMATE, so this row was dropped whole
+  expect_false(is.na(got$alpha))
+})
+
+test_that('a bare alpha keeps its estimate with se = NA', {
+  got <- es_from_cronbach_alpha(0.85)
+  expect_equal(got$alpha, log(1 - 0.85), tolerance = 1e-10)
+  expect_true(is.na(got$alpha_se))
+})
+
+test_that('the delta map follows alpha_to_es', {
+  # hakstian_whalen: d/dalpha of 1-(1-a)^(1/3) is (1/3)(1-a)^(-2/3)
+  hw <- es_from_cronbach_alpha(0.85, cronbach_alpha_se = 0.02,
+                               alpha_to_es = 'hakstian_whalen')
+  expect_equal(hw$alpha_se, 0.02 / (3 * (1 - 0.85)^(2 / 3)), tolerance = 1e-10)
+  # raw: passes through untouched
+  rw <- es_from_cronbach_alpha(0.85, cronbach_alpha_se = 0.02, alpha_to_es = 'raw')
+  expect_equal(rw$alpha, 0.85); expect_equal(rw$alpha_se, 0.02, tolerance = 1e-12)
+})
+
+test_that('the alpha CI is read at the bounds and degrades safely', {
+  got <- es_from_cronbach_alpha(0.88, cronbach_alpha_ci_lo = 0.85,
+                                cronbach_alpha_ci_up = 0.91)
+  # a transposed interval is the same interval
+  expect_equal(es_from_cronbach_alpha(0.88, cronbach_alpha_ci_lo = 0.91,
+                                      cronbach_alpha_ci_up = 0.85)$alpha_se,
+               got$alpha_se, tolerance = 1e-12)
+  # a non-positive reported SE is not a standard error
+  expect_true(is.na(es_from_cronbach_alpha(0.85, cronbach_alpha_se = -0.02)$alpha_se))
+  expect_true(is.na(es_from_cronbach_alpha(0.85, cronbach_alpha_se = 0)$alpha_se))
+  # a bound of exactly 1 has no log(1 - .) on the Bonett scale -> fall through
+  expect_true(is.na(es_from_cronbach_alpha(0.90, cronbach_alpha_ci_lo = 0.80,
+                                           cronbach_alpha_ci_up = 1.00)$alpha_se))
+  # ...but is fine on the raw scale, where fwd() is the identity
+  expect_false(is.na(es_from_cronbach_alpha(0.90, cronbach_alpha_ci_lo = 0.80,
+                                            cronbach_alpha_ci_up = 1.00,
+                                            alpha_to_es = 'raw')$alpha_se))
+})
+
+test_that('the new alpha arguments recycle and reject a bad length', {
+  v <- es_from_cronbach_alpha(c(0.7, 0.8, 0.9), 200, 10, cronbach_alpha_se = 0.02)
+  expect_equal(length(v$alpha_se), 3L)
+  expect_true(all(!is.na(v$alpha_se)))
+  expect_error(es_from_cronbach_alpha(c(.7, .8, .9), 200, 10,
+                                      cronbach_alpha_se = c(0.02, 0.03)),
+               'cronbach_alpha_se')
+})
+
+test_that('convert_df threads the alpha SE/CI through, and guidance names them', {
+  d <- data.frame(cronbach_alpha = c(0.85, 0.88, 0.90),
+                  n_sample = c(200, 300, NA), n_items = c(10, NA, NA),
+                  cronbach_alpha_se = c(0.02, NA, NA),
+                  cronbach_alpha_ci_lo = c(NA, 0.85, NA),
+                  cronbach_alpha_ci_up = c(NA, 0.91, NA))
+  s <- suppressWarnings(summary(convert_df(d, measure = 'alpha', verbose = FALSE),
+                                guidance = TRUE))
+  expect_equal(s$se_crude[1], 0.02 / (1 - 0.85), tolerance = 1e-4)
+  expect_equal(s$se_crude[2],
+               abs(log(1 - 0.91) - log(1 - 0.85)) / (2 * qnorm(0.975)),
+               tolerance = 1e-4)
+  expect_true(is.na(s$se_crude[3]))
+  expect_true(grepl('cronbach_alpha_se|cronbach_alpha_ci', s$es_guidance_crude[3]))
+  raw <- attr(suppressWarnings(convert_df(d, measure = 'alpha', verbose = FALSE)),
+              'raw_data')
+  expect_true(all(c('cronbach_alpha_se', 'cronbach_alpha_ci_lo',
+                    'cronbach_alpha_ci_up') %in% colnames(raw)))
+})
+
+test_that('the alpha extraction sheet offers the new columns', {
+  sh <- data_extraction_sheet(measure = 'alpha', extension = 'data.frame',
+                              verbose = FALSE)
+  expect_true(all(c('cronbach_alpha_se', 'cronbach_alpha_ci_lo',
+                    'cronbach_alpha_ci_up') %in% colnames(sh)))
+  expect_equal(sum(duplicated(colnames(sh))), 0L)
 })

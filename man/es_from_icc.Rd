@@ -120,20 +120,27 @@ between-rater mean square, which has only \eqn{k - 1} degrees of freedom, so
 its true sampling variance does not shrink at the \eqn{1/n} rate this formula
 assumes and the reported SE/CI is markedly anti-conservative. Measured by
 simulation (two-way DGP, ICC(2,1) = 0.80, k = 2, rater variance 50\% of the
-non-subject budget, Shrout-Fleiss estimator, 5000 replications per cell):\tabular{rrrrr}{
-   n \tab empirical SD \tab reported SE \tab weight inflated \tab 95\% coverage \cr
-   20 \tab 0.5666 \tab 0.4133 \tab 1.9x \tab 0.820 \cr
-   50 \tab 0.4608 \tab 0.2582 \tab 3.2x \tab 0.667 \cr
-   200 \tab 0.4119 \tab 0.1285 \tab 10.3x \tab 0.321 \cr
-   1000 \tab 0.4059 \tab 0.0573 \tab 50.3x \tab 0.144 \cr
+non-subject budget, Shrout-Fleiss estimator, 1000 replications per cell):\tabular{rrrr}{
+   n \tab empirical SD \tab 95\% coverage \tab weight inflated \cr
+   20 \tab 0.573 \tab 0.825 \tab 1.9x \cr
+   50 \tab 0.459 \tab 0.654 \tab 3.2x \cr
+   200 \tab 0.421 \tab 0.295 \tab 10.7x \cr
+   1000 \tab 0.393 \tab 0.142 \tab 46.9x \cr
 }
 
 
 Note the direction: coverage \strong{degrades as n grows}, because the empirical SD
-barely shrinks (0.567 to 0.406) while the reported SE falls like 1/sqrt(n).
+barely shrinks (0.573 to 0.393) while the reported SE falls like 1/sqrt(n).
 Earlier versions of this page quoted 'around 0.74-0.76', which is not a range
 the estimator occupies at any n and reads as a bounded problem when it is an
 unbounded one.
+
+These figures are REPRODUCIBLE rather than quoted: they come from
+\verb{simulations/studies/10_reliability.R}, study \verb{10a_icc_agreement_coverage}, at a
+fixed seed. The same grid includes \code{rater_share = 0}, where the formula's own
+assumption holds and coverage returns to nominal (0.939 / 0.953 / 0.944 / 0.959),
+so the degradation above is attributable to rater variance rather than to an
+implementation error.
 
 The exact ICC(2,1) variance requires the rater-variance component, which summary
 data do not report, so an agreement row can enter a pool with up to 50x too much

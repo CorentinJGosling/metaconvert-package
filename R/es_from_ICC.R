@@ -80,20 +80,27 @@
 #' its true sampling variance does not shrink at the \eqn{1/n} rate this formula
 #' assumes and the reported SE/CI is markedly anti-conservative. Measured by
 #' simulation (two-way DGP, ICC(2,1) = 0.80, k = 2, rater variance 50% of the
-#' non-subject budget, Shrout-Fleiss estimator, 5000 replications per cell):
+#' non-subject budget, Shrout-Fleiss estimator, 1000 replications per cell):
 #'
-#' | n | empirical SD | reported SE | weight inflated | 95% coverage |
-#' |-----:|-------------:|------------:|----------------:|-------------:|
-#' | 20 | 0.5666 | 0.4133 | 1.9x | 0.820 |
-#' | 50 | 0.4608 | 0.2582 | 3.2x | 0.667 |
-#' | 200 | 0.4119 | 0.1285 | 10.3x | 0.321 |
-#' | 1000 | 0.4059 | 0.0573 | 50.3x | 0.144 |
+#' | n | empirical SD | 95% coverage | weight inflated |
+#' |-----:|-------------:|-------------:|----------------:|
+#' | 20 | 0.573 | 0.825 | 1.9x |
+#' | 50 | 0.459 | 0.654 | 3.2x |
+#' | 200 | 0.421 | 0.295 | 10.7x |
+#' | 1000 | 0.393 | 0.142 | 46.9x |
 #'
 #' Note the direction: coverage **degrades as n grows**, because the empirical SD
-#' barely shrinks (0.567 to 0.406) while the reported SE falls like 1/sqrt(n).
+#' barely shrinks (0.573 to 0.393) while the reported SE falls like 1/sqrt(n).
 #' Earlier versions of this page quoted 'around 0.74-0.76', which is not a range
 #' the estimator occupies at any n and reads as a bounded problem when it is an
 #' unbounded one.
+#'
+#' These figures are REPRODUCIBLE rather than quoted: they come from
+#' `simulations/studies/10_reliability.R`, study `10a_icc_agreement_coverage`, at a
+#' fixed seed. The same grid includes `rater_share = 0`, where the formula's own
+#' assumption holds and coverage returns to nominal (0.939 / 0.953 / 0.944 / 0.959),
+#' so the degradation above is attributable to rater variance rather than to an
+#' implementation error.
 #'
 #' The exact ICC(2,1) variance requires the rater-variance component, which summary
 #' data do not report, so an agreement row can enter a pool with up to 50x too much
