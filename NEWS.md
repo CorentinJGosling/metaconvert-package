@@ -1,5 +1,29 @@
 # metaConvert (development version)
 
+## `flag_options` no longer fails silently
+
+Two ways a `flag_options` entry could be ignored without saying so, both of which left
+the user believing a threshold had been tuned.
+
+**A misspelled name.** `flag_options` is a list merged by name, so
+`flag_options = list(alpha_maxx = 0.5)` was accepted by both `convert_df()` and
+`summary()` and simply never read. Unrecognised names now warn.
+
+**A Tier-1 option passed to `summary()`.** The input-data checks run inside
+`convert_df()`, before `summary()` is called, so an option only they consume arrives
+too late. Six options are affected this way and had *no* effect at all:
+`sd_ratio_max`, `sd_ratio_bl_ep_min`, `baseline_imbalance_max`, `templated_min_match`,
+`paired_as_indep_tol`, `margin_range_min`. They now warn, naming `convert_df()`.
+
+`enable_cross_row` and `enable_informational` are read by **both** tiers, so passing
+them to `summary()` half-works: it retunes the post-computation checks while the
+input-data ones already ran on the old value. That partial effect is more confusing
+than no effect, so it gets its own distinct warning rather than being lumped in.
+
+Both are warnings, not errors, matching the package's convention for user input: one
+mistyped option must not abort an analysis. Options passed where they genuinely work
+stay silent.
+
 ## New flags V42 and V43: mixed ICC designs, and mixed ICC estimands
 
 **V43** (`[INFO]`, always active) flags a pool containing both absolute-agreement

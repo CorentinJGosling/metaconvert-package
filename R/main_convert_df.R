@@ -479,6 +479,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   }
 
   # input validation
+  .validate_flag_options(flag_options, context = "convert_df")   # roadmap 2.5
   enable_info <- if (!is.null(flag_options$enable_informational)) {
     flag_options$enable_informational
   } else {

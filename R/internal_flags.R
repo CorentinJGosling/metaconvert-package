@@ -48,6 +48,67 @@
 }
 
 
+#' Warn about flag_options entries that will not do what the caller expects.
+#'
+#' Two silent failures, both of which leave the user believing they tuned something:
+#'
+#'  1. A MISSPELLED name. `flag_options` is a plain list merged by name, so
+#'     `alpha_maxx = 0.5` was accepted everywhere and simply never read.
+#'  2. A TIER-1 option passed to `summary()`. The input-data checks run inside
+#'     `convert_df()`, before `summary()` is ever called, so an option only they
+#'     consume arrives too late. Six options are Tier-1 ONLY and have no effect at
+#'     all this way; `enable_cross_row` and `enable_informational` are read by both
+#'     tiers, so passing them to `summary()` half-works -- it retunes the
+#'     post-computation checks while the input-data ones already ran on the old
+#'     value. That partial effect is the more confusing of the two, so it is named
+#'     separately rather than lumped in.
+#'
+#' Warns rather than errors, matching the package convention for user input: one
+#' mistyped option must not abort an analysis.
+#'
+#' @param flag_options the user's list
+#' @param context "convert_df" or "summary"
+#' @noRd
+.validate_flag_options <- function(flag_options, context = "summary") {
+  if (is.null(flag_options) || length(flag_options) == 0) return(invisible(NULL))
+  nms <- names(flag_options)
+  if (is.null(nms)) nms <- rep("", length(flag_options))
+
+  known <- names(.default_flag_options())
+  unknown <- setdiff(nms[nzchar(nms)], known)
+  if (length(unknown)) {
+    warning(paste0(
+      "Unrecognised flag_options name(s): '", paste(unknown, collapse = "', '"),
+      "'. They are ignored. See ?convert_df for the available options."), call. = FALSE)
+  }
+
+  if (identical(context, "summary")) {
+    # read by convert_df() only -- passing them to summary() does nothing
+    tier1_only <- c("sd_ratio_max", "sd_ratio_bl_ep_min", "baseline_imbalance_max",
+                    "templated_min_match", "paired_as_indep_tol", "margin_range_min")
+    # read by BOTH tiers -- passing them to summary() retunes only the second
+    both_tiers <- c("enable_cross_row", "enable_informational")
+
+    late <- intersect(nms, tier1_only)
+    if (length(late)) {
+      warning(paste0(
+        "flag_options passed to summary() cannot reach the input-data checks, which ",
+        "already ran inside convert_df(): '", paste(late, collapse = "', '"),
+        "' had no effect. Pass them to convert_df() instead."), call. = FALSE)
+    }
+    partial <- intersect(nms, both_tiers)
+    if (length(partial)) {
+      warning(paste0(
+        "'", paste(partial, collapse = "', '"), "' is read by both the input-data and ",
+        "the post-computation checks. Passing it to summary() retunes only the latter; ",
+        "the input-data checks already ran inside convert_df(). Pass it to convert_df() ",
+        "to change both."), call. = FALSE)
+    }
+  }
+  invisible(NULL)
+}
+
+
 #' Build a per-row grouping key for the CROSS-ROW checks from opts$flag_group.
 #'
 #' Returns a length-n character vector used to scope D1/D2/D3, G, H and E4/E6/E7.

@@ -1197,3 +1197,81 @@ test_that('the vignette no longer endorses pooling the two ICC models', {
   # and the I2 / funnel cautions are no longer alpha-only
   expect_true(any(grepl('these ICCs disagree', v, fixed = TRUE)))
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 2.5: flag_options failed silently in two ways.
+#
+#  1. A MISSPELLED name was accepted everywhere and never read.
+#  2. A TIER-1 option passed to summary() arrived after the input-data checks had
+#     already run inside convert_df(). Six options are Tier-1 ONLY (no effect at all
+#     that way); enable_cross_row and enable_informational are read by BOTH tiers, so
+#     passing them to summary() half-works -- which is the more confusing case, and is
+#     warned about separately.
+#
+# Warns rather than errors: one mistyped option must not abort an analysis.
+# ---------------------------------------------------------------------------
+
+fo_dat <- function() {
+  data.frame(icc = c(.85, .78, .91, .80), n_sample = 100,
+             n_measurements = c(2, 2, 3, 2))
+}
+
+test_that('a misspelled flag_options name warns in both functions', {
+  d <- fo_dat()
+  expect_warning(convert_df(d, measure = 'icc', verbose = FALSE,
+                            flag_options = list(alpha_maxx = 0.5)),
+                 'Unrecognised flag_options')
+  expect_warning(summary(convert_df(d, measure = 'icc', verbose = FALSE),
+                         flags = TRUE, flag_options = list(alpha_maxx = 0.5)),
+                 'Unrecognised flag_options')
+  # the message names the offender
+  expect_warning(convert_df(d, measure = 'icc', verbose = FALSE,
+                            flag_options = list(smd_maxx = 3)), 'smd_maxx')
+})
+
+test_that('a Tier-1-only option passed to summary() warns that it did nothing', {
+  d <- fo_dat()
+  o <- convert_df(d, measure = 'icc', verbose = FALSE)
+  for (opt in c('sd_ratio_max', 'sd_ratio_bl_ep_min', 'baseline_imbalance_max',
+                'templated_min_match', 'paired_as_indep_tol', 'margin_range_min')) {
+    expect_warning(summary(o, flags = TRUE, flag_options = setNames(list(3), opt)),
+                   'cannot reach the input-data checks', info = opt)
+  }
+})
+
+test_that('a both-tiers option passed to summary() gets its own, different warning', {
+  # this one HALF-works, which is more confusing than not working at all, so it must
+  # not share the 'had no effect' wording
+  o <- convert_df(fo_dat(), measure = 'icc', verbose = FALSE)
+  for (opt in c('enable_cross_row', 'enable_informational')) {
+    expect_warning(summary(o, flags = TRUE, flag_options = setNames(list(FALSE), opt)),
+                   'read by both the input-data and the post-computation checks',
+                   info = opt)
+  }
+})
+
+test_that('options that genuinely work stay silent', {
+  d <- fo_dat()
+  # Tier-1 option at its own function
+  expect_silent(convert_df(d, measure = 'icc', verbose = FALSE,
+                           flag_options = list(sd_ratio_max = 3)))
+  expect_silent(convert_df(d, measure = 'icc', verbose = FALSE,
+                           flag_options = list(enable_cross_row = FALSE)))
+  # Tier-2 option at summary()
+  o <- convert_df(d, measure = 'icc', verbose = FALSE)
+  expect_no_warning(summary(o, flags = TRUE, flag_options = list(icc_max = 0.9)))
+  # and an empty / absent list
+  expect_no_warning(summary(o, flags = TRUE))
+  expect_no_warning(summary(o, flags = TRUE, flag_options = list()))
+})
+
+test_that('the validator warns but never aborts, and the analysis still runs', {
+  d <- fo_dat()
+  s <- suppressWarnings(summary(convert_df(d, measure = 'icc', verbose = FALSE),
+                                flags = TRUE,
+                                flag_options = list(alpha_maxx = 0.5,
+                                                    sd_ratio_max = 3)))
+  expect_equal(nrow(s), 4L)
+  expect_false(any(is.na(s$es_crude)))
+})

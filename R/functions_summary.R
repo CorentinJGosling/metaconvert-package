@@ -502,6 +502,9 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
 
   # quality flags
   if (flags) {
+    # Roadmap 2.5: a mistyped option name, or a Tier-1 option arriving here after the
+    # input-data checks already ran inside convert_df(), used to be accepted in silence.
+    .validate_flag_options(flag_options, context = "summary")
     stored_opts <- attr(object, "flag_options")
     if (is.null(stored_opts)) stored_opts <- .default_flag_options()
     opts <- stored_opts
