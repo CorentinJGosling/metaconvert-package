@@ -20,14 +20,32 @@
 #' 2. In the \code{dependence} argument, you should indicate "times" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced from the same participants at the different time-points (e.g., an RCT with several follow-up waves). This option requires a \code{time_agg} column (the time-point of each effect size) and a \code{cor_unit} column giving the within-cluster correlation (constant within each cluster; falls back to the \code{cor_unit} argument if the column is absent).
 #' 3. In the \code{dependence} argument, you should indicate "subgroups" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced by independent subgroups (e.g., one effect size for boys, and one for girls).
 #'
+#' **Which columns survive.** `aggregate_df()` returns the aggregating factor, the
+#' aggregated effect size and its standard error, and *nothing else*. Every other
+#' column of the input is dropped, including the moderators a meta-regression will
+#' need. This is deliberate - there is no defined value for a column that varies
+#' within a cluster, so the function refuses to guess one - but it is silent, so it is
+#' worth stating: a 40-column `summary()` frame comes back with four columns.
+#'
+#' Two ways to keep a moderator, and the choice depends on the column, not on taste:
+#'
+#' - name it in `col_mean` / `col_weighted_mean` / `col_sum` / `col_min` / `col_max`
+#'   (numeric, summarised across the cluster) or `col_fact` (categorical, and it must
+#'   be constant within the cluster);
+#' - or merge it back afterwards on the aggregating factor, which is the simpler route
+#'   for study-level variables that cannot vary within a study anyway (publication
+#'   year, country, risk-of-bias rating).
+#'
 #' If you are working with ratio measures, make sure that the information on
 #' the effect size estimates (i.e., the column passed to the es argument of the function)
 #' is presented on the log scale.
 #'
 #' @return
-#' The \code{aggregate_df()} function returns a dataframe containing, at a minimum, the aggregating factor
-#' and the aggregated effect size values and standard errors. All columns indicated in the \code{col_*} arguments
-#' are also included in this dataframe.
+#' A dataframe containing the aggregating factor, the aggregated effect size and its
+#' standard error, plus any columns named in the \code{col_*} arguments -- and
+#' \strong{no other column of the input}. See the note in the details: everything not
+#' listed below is dropped, so a moderator must either be named in a \code{col_*}
+#' argument or merged back afterwards on the aggregating factor.
 #' \tabular{ll}{
 #'  \code{row_index} \tab the row number in the original dataset.\cr
 #'  \tab \cr

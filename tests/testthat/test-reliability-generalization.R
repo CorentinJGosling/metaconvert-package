@@ -1413,3 +1413,58 @@ test_that('no extraction sheet emits a duplicate column name (audit #25)', {
   expect_equal(sum(colnames(sh) == 'n_items'), 1L)
   expect_equal(nrow(sh), 1L)          # still one row of hints, nothing dropped
 })
+
+
+# ---------------------------------------------------------------------------
+# Reliability roadmap 2.4 and 1.9 -- both documentation, both pinned to behaviour
+# so the documentation cannot drift away from what the code does.
+# ---------------------------------------------------------------------------
+
+test_that('aggregate_df() really does drop everything but four columns (2.4)', {
+  d <- data.frame(study_id = c('A', 'A', 'B', 'B'), es = c(0.5, 0.7, 0.3, 0.4),
+                  se = 0.2, year = c(2010, 2010, 2015, 2015),
+                  country = c('FR', 'FR', 'UK', 'UK'))
+  ag <- aggregate_df(d, dependence = 'outcomes', agg_fact = 'study_id')
+  expect_equal(sort(colnames(ag)), sort(c('row_index', 'study_id', 'es', 'se')))
+  expect_false(any(c('year', 'country') %in% colnames(ag)))
+
+  # ...and the documented escape hatch works
+  ag2 <- aggregate_df(d, dependence = 'outcomes', agg_fact = 'study_id',
+                      col_mean = 'year', col_fact = 'country')
+  expect_true(all(c('year', 'country') %in% colnames(ag2)))
+})
+
+test_that('the aggregate_df help page states the drop rather than implying otherwise', {
+  rd <- readLines('../../man/aggregate_df.Rd', warn = FALSE)
+  skip_if(length(rd) == 0, 'Rd not readable from the test working directory')
+  expect_true(any(grepl('no other column of the input', rd, fixed = TRUE)))
+  expect_true(any(grepl('Which columns survive', rd, fixed = TRUE)))
+  # the old wording said 'at a minimum', which implies MORE may survive
+  expect_false(any(grepl('containing, at a minimum, the aggregating factor', rd,
+                         fixed = TRUE)))
+})
+
+test_that('an unregistered moderator column passes through convert_df intact (1.9)', {
+  # This is why retest_interval_days is NOT registered: registering it as numeric
+  # would coerce a character interval like '1 week' to NA. The passthrough already
+  # works for both types, so adding the column would remove a capability.
+  for (v in list(c(7, 14, 30), c('1 week', '2 weeks', '1 month'))) {
+    d <- data.frame(icc = c(0.85, 0.78, 0.91), n_sample = c(145, 82, 198),
+                    n_measurements = 2, icc_type = 'consistency',
+                    retest_interval_days = v)
+    raw <- attr(suppressWarnings(convert_df(d, measure = 'icc', verbose = FALSE)),
+                'raw_data')
+    expect_true('retest_interval_days' %in% colnames(raw))
+    expect_equal(raw$retest_interval_days, v)
+    expect_false(any(is.na(raw$retest_interval_days)))
+  }
+})
+
+test_that('the vignette documents the retest interval and the aggregation contract', {
+  v <- readLines('../../vignettes/Psychometrics.Rmd', warn = FALSE)
+  skip_if(length(v) == 0, 'vignette not readable from the test working directory')
+  expect_true(any(grepl('## Record the retest interval', v, fixed = TRUE)))
+  expect_true(any(grepl('## Several ICCs from one study', v, fixed = TRUE)))
+  expect_true(any(grepl('returns four columns and drops everything else', v,
+                        fixed = TRUE)))
+})

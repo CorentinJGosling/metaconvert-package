@@ -383,6 +383,32 @@ where $k$ is the number of measurement occasions and $\rho$ is the ICC value. De
 
 **Technical note on the ICC(2,1) formula**: The SE formula labelled "ICC(2,1)" above is technically the analytical variance for the **one-way random ICC(1,1)** model (Shrout & Fleiss, 1979), as derived by Bonett (2002). The exact two-way random ICC(2,1) variance formula involves separate between-rater and residual variance components that are typically unavailable without the raw ANOVA mean squares. Using the one-way formula as a proxy for ICC(2,1) is standard practice in psychometric meta-analysis (see e.g., Bonett, 2002; Donner & Eliasziw, 1987) and provides a reasonable approximation.
 
+## Record the retest interval
+
+A test-retest ICC is not a property of the instrument alone: it depends on **how long
+the gap was**. Reliability decays with the interval, and the primary moderator in
+published test-retest syntheses is usually the interval itself (Gnambs, 2014; Scharfen
+et al., 2018). Polit (2014) treats reporting it as a core recommendation. A pool that
+mixes one-week and one-year retests and reports a single number is answering a question
+nobody asked.
+
+`metaConvert` does not need a registered column for this, and deliberately does not have
+one: any extra column you add to the input survives `convert_df()` unchanged and can be
+used as a moderator directly. That includes character values, so `"1 week"` stays
+`"1 week"` --- registering the column as numeric would silently coerce it to `NA`.
+
+```{r, eval = FALSE}
+# retest_interval_days is YOUR column: nothing in the package reads it, and it
+# passes through untouched.
+dat_icc$retest_interval_days <- c(7, 14, 30, 30, 90, 180, 365)
+
+ma_int <- metafor::rma(yi = es, sei = se, mods = ~ log(retest_interval_days),
+                       data = summary_icc, method = 'REML')
+```
+
+Prefer `log(interval)` to the raw interval: decay is closer to linear on the log scale,
+and retest gaps in a real corpus span orders of magnitude.
+
 ## Effect size computation
 
 ```{r}
@@ -449,6 +475,33 @@ cat(sprintf("Pooled ICC = %.3f [%.3f, %.3f]\n",
 ```
 
 The same two cautions as for alpha apply here, and for the same reason. **Do not read $I^2$ as "these ICCs disagree":** the Bonett ICC sampling variance $2(1+(k-1)\rho)^2/(k(k-1)(n-1))$ is dominated by $n$ and $k$, so $I^2$ largely tracks the sample sizes rather than any disagreement between the ICCs. Report the back-transformed **prediction interval** (`reliability_pi_lo` / `reliability_pi_up`) and the observed spread of ICCs instead. **And do not run funnel plots, trim-and-fill, or Egger's test on this pool:** those diagnostics assume the effect's expectation depends on sample size, and the expectation of an ICC does not --- only its precision does.
+
+## Several ICCs from one study
+
+A study reporting several subscales, or several retest gaps, contributes several
+non-independent rows. `aggregate_df()` combines them into one effect size per study
+before pooling.
+
+**It returns four columns and drops everything else.** The aggregating factor, the
+aggregated effect size and its standard error --- and none of your moderators. A
+40-column `summary()` frame comes back with four. This is deliberate (there is no
+defined value for a column that varies within a cluster, so the function refuses to
+invent one), but it is silent, so it is worth knowing before you wonder where
+`year` went.
+
+```{r, eval = FALSE}
+# name the moderators you want kept: col_fact for categorical (must be constant
+# within the cluster), col_mean and friends for numeric
+agg <- aggregate_df(summary_icc, dependence = 'outcomes', agg_fact = 'study_id',
+                    es = 'es', se = 'se',
+                    col_fact = c('instrument', 'population'),
+                    col_mean = 'retest_interval_days')
+
+# or merge them back afterwards, which is simpler for study-level variables that
+# cannot vary within a study anyway
+agg <- merge(agg, unique(summary_icc[, c('study_id', 'year', 'country')]),
+             by = 'study_id')
+```
 
 The pooled ICC will feed into the **measurement error** derivation (next section) and **disattenuation** corrections for validity and responsiveness.
 

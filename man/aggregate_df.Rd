@@ -51,9 +51,11 @@ aggregate_df(
 \item{na.rm}{a logical vector indicating whether missing values should be ignored in the calculations for the \code{col_mean}, \code{col_weighted_mean}, \code{col_sum}, \code{col_min} and \code{col_max} arguments.}
 }
 \value{
-The \code{aggregate_df()} function returns a dataframe containing, at a minimum, the aggregating factor
-and the aggregated effect size values and standard errors. All columns indicated in the \code{col_*} arguments
-are also included in this dataframe.
+A dataframe containing the aggregating factor, the aggregated effect size and its
+standard error, plus any columns named in the \code{col_*} arguments -- and
+\strong{no other column of the input}. See the note in the details: everything not
+listed below is dropped, so a moderator must either be named in a \code{col_*}
+argument or merged back afterwards on the aggregating factor.
 \tabular{ll}{
 \code{row_index} \tab the row number in the original dataset.\cr
 \tab \cr
@@ -73,6 +75,23 @@ Aggregate a dataframe containing dependent effect sizes
 \item In the \code{dependence} argument, you should indicate "outcomes" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced from the same participants at the same time-point (e.g., multiple outcome measures)
 \item In the \code{dependence} argument, you should indicate "times" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced from the same participants at the different time-points (e.g., an RCT with several follow-up waves). This option requires a \code{time_agg} column (the time-point of each effect size) and a \code{cor_unit} column giving the within-cluster correlation (constant within each cluster; falls back to the \code{cor_unit} argument if the column is absent).
 \item In the \code{dependence} argument, you should indicate "subgroups" if the dependence within the same clustering unit (e.g., study) is due to the presence of multiple effect sizes produced by independent subgroups (e.g., one effect size for boys, and one for girls).
+}
+
+\strong{Which columns survive.} \code{aggregate_df()} returns the aggregating factor, the
+aggregated effect size and its standard error, and \emph{nothing else}. Every other
+column of the input is dropped, including the moderators a meta-regression will
+need. This is deliberate - there is no defined value for a column that varies
+within a cluster, so the function refuses to guess one - but it is silent, so it is
+worth stating: a 40-column \code{summary()} frame comes back with four columns.
+
+Two ways to keep a moderator, and the choice depends on the column, not on taste:
+\itemize{
+\item name it in \code{col_mean} / \code{col_weighted_mean} / \code{col_sum} / \code{col_min} / \code{col_max}
+(numeric, summarised across the cluster) or \code{col_fact} (categorical, and it must
+be constant within the cluster);
+\item or merge it back afterwards on the aggregating factor, which is the simpler route
+for study-level variables that cannot vary within a study anyway (publication
+year, country, risk-of-bias rating).
 }
 
 If you are working with ratio measures, make sure that the information on
