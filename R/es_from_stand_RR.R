@@ -410,9 +410,17 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
 
   rr <- ifelse(is.na(rr) & !is.na(logrr), exp(logrr), rr)
   # Mirror es_from_or_pval: take the positive critical value and the absolute
-  # magnitude, so rr == 1 (log(rr) = 0) gives logrr_se = 0 (finite) rather than the
-  # 0/0 = NaN produced by the earlier sign(log(rr)) denominator. The direction of the
-  # effect is carried by rr itself, so the SE only needs its magnitude.
+  # magnitude, so rr == 1 (log(rr) = 0) evaluates to 0 HERE rather than to the 0/0 =
+  # NaN the earlier sign(log(rr)) denominator produced. The direction of the effect is
+  # carried by rr itself, so the SE only needs its magnitude.
+  #
+  # What this function RETURNS at rr == 1 is NA, not 0 -- an earlier version of this
+  # comment said 0 and was describing the intermediate. es_from_rr_se() passes the
+  # value through .positive_or_na(), and a zero SE is non-positive: it would be an
+  # infinite inverse-variance weight. NA is the intended outcome, since rr = 1 beside
+  # a large p-value carries no information about the standard error at all.
+  # Measured and pinned in tests/testthat/test-unverified-routes-external.R, which
+  # also checks that es_from_or_pval behaves identically, as "mirror" claims.
   z_rr <- qnorm(rr_pval / 2, lower.tail = FALSE)
   logrr_se <- abs(log(rr) / z_rr)
 

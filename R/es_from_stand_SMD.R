@@ -163,8 +163,16 @@ es_from_cohen_d <- function(cohen_d, n_exp, n_nexp, smd_to_cor = "viechtbauer", 
 #'  \code{r_se} and \code{z_se} reflect the precision the covariate adjustment actually
 #'  bought. The correlation POINT estimates are unchanged by \code{n_cov_ancova}: the
 #'  supplied \code{cohen_d_adj} is on the marginal SD scale, so it maps to the marginal
-#'  correlation a two-group study would report, via the point-biserial identity at
-#'  \code{n_exp + n_nexp - 2}.
+#'  correlation a two-group study would report. Under
+#'  \code{smd_to_cor = "lipsey_cooper"} that mapping is Cooper's
+#'  \eqn{r = d / \sqrt{d^2 + a}} with \eqn{a = (n\_exp+n\_nexp)^2 / (n\_exp*n\_nexp)},
+#'  which uses the TOTAL sample size and is algebraically \eqn{t / \sqrt{t^2 + N}}. It is
+#'  NOT the sample point-biserial identity \eqn{t / \sqrt{t^2 + N - 2}} -- the
+#'  \code{n_exp + n_nexp - 2 - n_cov_ancova} degrees of freedom named above set the
+#'  confidence INTERVAL, not the point estimate. The default
+#'  \code{smd_to_cor = "viechtbauer"} targets the biserial correlation instead, so it
+#'  does not follow this identity at all: at \code{n_exp = n_nexp = 30} and
+#'  \code{cohen_d_adj = 0.6} the two options return 0.3658 and 0.2873 respectively.
 #'
 #' @references
 #' Cooper, H., Hedges, L.V., & Valentine, J.C. (Eds.). (2019). The handbook of research synthesis and meta-analysis. Russell Sage Foundation.
