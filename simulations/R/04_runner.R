@@ -122,6 +122,12 @@ run_study <- function(name, grid, generate, estimate,
   fa <- dir_agg(sprintf("%s_nrep%d.csv", name, nrep))
   utils::write.csv(agg, fa, row.names = FALSE)
 
+  # Record WHICH CODE produced this file (see R/07_provenance.R). This is what makes a
+  # re-run able to clear the freshness flag: the record changes even when the CSV comes
+  # back byte-identical, so there is something to commit. Under the old commit-date
+  # scheme an inert code change left the test red with no way to clear it.
+  write_provenance(basename(fa))
+
   if (verbose) {
     message(sprintf("  [%s] %d conditions x %d reps in %.1f min -> %s",
                     name, nrow(grid), nrep,
