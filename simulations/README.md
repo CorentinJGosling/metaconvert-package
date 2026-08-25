@@ -562,15 +562,34 @@ estimand (so the numbers below are computational error, not estimand mismatch):
 
 | method | mean \|bias\| | worst \|bias\| | coverage | SE ratio |
 |---|---|---|---|---|
-| `2x2_tetrachoric` (full table) | 0.0163 | 0.2701 | 0.928 | 1.042 |
-| **`bonett`** | **0.0185** | 0.2571 | 0.964 | 1.051 |
+| `2x2_tetrachoric` (full table) | 0.0163 | 0.2701 | 0.961 | 1.042 |
+| **`bonett`** | **0.0195** | 0.2848 | 0.964 | 1.061 |
 | `digby` | 0.0201 | 0.2103 | 0.966 | 1.062 |
 | `pearson` | 0.0223 | 0.1865 | 0.965 | 1.062 |
 | `lipsey_cooper` | 0.0231 | 0.1937 | 0.946 | 1.060 |
 
 `bonett` is the best of the four OR-only options, which supports its promotion to
 the default. The full-2×2 route still wins, so the advice is unchanged: **convert
-the table, not the odds ratio, whenever the table is reported.**
+the table, not the odds ratio, whenever the table is reported.** Note the margin over
+`digby` is thin — 0.0195 against 0.0201 — so the case for the default rests on the
+margin-dependence result below, not on this average.
+
+> **Two of these cells moved, for two different reasons, and both are worth stating.**
+>
+> The `bonett` row changed with the `or_to_cor` fallback (roadmap 2.7). Its
+> replications are not all bonett: where the sampled 2×2 is degenerate, bonett cannot
+> run and the row takes a stand-in — which used to be `lipsey_cooper` and is now
+> `digby`. So this row has always been a MIXTURE, and it is now a closer one: mean
+> \|bias\| 0.0197 → 0.0195 here, 0.0183 → 0.0181 in 09b. Every other method is
+> bit-identical across that change (delta exactly 0 on bias and coverage), which is the
+> control showing the change stayed inside the fallback.
+>
+> The `2x2_tetrachoric` coverage was simply STALE: this table published 0.928 while
+> the shipped aggregate said 0.961, and had done since the item 3.5 regeneration. The
+> `bonett` figures were stale too (0.0185 / 0.2571 / 1.051 against 0.0197 / 0.2868 /
+> 1.053). Nothing detected it, because nothing tied the prose to the CSV — which is
+> what `data/aggregated/PROVENANCE.csv` now does for the code, and does not yet do for
+> numbers quoted in the text.
 
 The averages understate the case, because Bonett's correction is a *margin*
 correction and averaging over balanced and unbalanced conditions dilutes it. At
@@ -1024,13 +1043,20 @@ inverse-variance weight. **Coverage is the only ADEMP measure that degrades unde
 either failure**, so it is the app's default.
 
 The two orderings genuinely disagree in these data. In study 09a, scored on
-`own`, the best method on bias is the *worst* on coverage:
+`own`, the *worst* method on bias is the best on coverage:
 
 | method | rank by \|bias\| | coverage | rank by coverage |
 |---|---|---|---|
-| `2x2_tetrachoric` | 1st | 0.928 (worst 0.849) | 5th |
-| `bonett` | 2nd | 0.964 | 2nd |
+| `2x2_tetrachoric` | 1st | 0.961 (worst 0.939) | 2nd |
+| `bonett` | 2nd | 0.964 | 3rd |
 | `lipsey_cooper` | 5th | 0.946 | 1st |
+
+> This table previously read "the best method on bias is the *worst* on coverage",
+> with `2x2_tetrachoric` at 0.928 (worst 0.849) and ranked 5th. Those figures matched
+> no slice of the shipped aggregate — not `own`, not `population`, not `sample` — and
+> the claim they supported was false on the data as shipped. The disagreement between
+> the two orderings is real and is why the panel prints both; it simply runs the other
+> way round. Ranking is by \|coverage − 0.95\|.
 
 Across the shipped studies the Spearman correlation between mean |bias| and
 |coverage − 0.95| is weak and sometimes negative (08a: −0.59, 09a: −0.23,

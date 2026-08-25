@@ -479,11 +479,30 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
     asked <- unique(as.character(dat_cor$or_to_cor[fallback]))
     message("or_to_cor = '", paste(asked, collapse = "' / '"), "': row(s) ",
             paste(fallback, collapse = ", "), " do not carry the inputs this conversion ",
-            "requires, so their R and Z were obtained with 'lipsey_cooper' instead. ",
+            "requires, so their R and Z were obtained with 'digby' instead. ",
             "'bonett' needs 'n_sample' together with one of ('n_exp', 'n_nexp') and one ",
             "of ('n_cases', 'n_controls'): its coefficient reads all three margins, and ",
             "'small_margin_prop' is DERIVED from them, so supplying it on its own does ",
             "not make the row eligible. 'digby' and 'pearson' need no margins at all.")
+  }
+
+  # Both the eligible rows and the fallback rows assign the same eight columns, so the
+  # assignment is written once. On reverse: negate AND swap each CI (new_lo = -old_up,
+  # new_up = -old_lo). For r, tanh is odd so negate-and-swap of the r bounds is correct
+  # even for the asymmetric, z-back-transformed r interval. Swapping alone left
+  # inverted, wrong-signed bounds.
+  .assign_cor <- function(es, idx, res) {
+    v <- lapply(1:8, function(j) .mapply_col(res, j))
+    rv <- reverse_or[idx]
+    es$r[idx]       <- ifelse(rv, -v[[1]], v[[1]])
+    es$r_se[idx]    <- v[[2]]
+    es$r_ci_lo[idx] <- ifelse(rv, -v[[4]], v[[3]])
+    es$r_ci_up[idx] <- ifelse(rv, -v[[3]], v[[4]])
+    es$z[idx]       <- ifelse(rv, -v[[5]], v[[5]])
+    es$z_se[idx]    <- v[[6]]
+    es$z_ci_lo[idx] <- ifelse(rv, -v[[8]], v[[7]])
+    es$z_ci_up[idx] <- ifelse(rv, -v[[7]], v[[8]])
+    es
   }
 
   if (length(nn_miss) != 0) {
@@ -496,19 +515,38 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
       small_margin_prop = dat_cor$small_margin_prop[nn_miss],
       or_to_cor = dat_cor$or_to_cor[nn_miss]
     )
+    es <- .assign_cor(es, nn_miss, res_cor)
+  }
 
-    # On reverse: negate AND swap each CI (new_lo = -old_up, new_up = -old_lo). For r,
-    # tanh is odd so negate-and-swap of the r bounds is correct even for the asymmetric,
-    # z-back-transformed r interval. Swapping alone left inverted, wrong-signed bounds.
-    cor_v <- lapply(1:8, function(j) .mapply_col(res_cor, j))
-    es$r[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[1]], cor_v[[1]])
-    es$r_se[nn_miss] <- cor_v[[2]]
-    es$r_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[4]], cor_v[[3]])
-    es$r_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[3]], cor_v[[4]])
-    es$z[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[5]], cor_v[[5]])
-    es$z_se[nn_miss] <- cor_v[[6]]
-    es$z_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[8]], cor_v[[7]])
-    es$z_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -cor_v[[7]], cor_v[[8]])
+  # A row that cannot use the conversion it asked for still gets ONE, and WHICH one is a
+  # real choice rather than a leftover. It used to keep the "lipsey_cooper" R/Z that
+  # .es_from_d() had already computed, purely because that value happened to be sitting
+  # there. Measured against the tetrachoric correlation of the underlying table over 1176
+  # coherent 2x2 tables (OR 1.25-8, N 80-1000, 49 margin splits), that is the WORST of the
+  # four options: mean |error| 0.0950, against digby 0.0169, pearson 0.0271, bonett
+  # 0.0084. digby is closer in 1160 of the 1176 cells (98.6%) and wins at every OR and
+  # every N on average; the 16 cells it loses are all at OR >= 5 and it loses by little.
+  #
+  # digby also needs STRICTLY LESS than what it replaces. Its coefficient c = 3/4 is a
+  # constant, so it reads no margins at all, whereas lipsey_cooper needs the arm sizes and
+  # returns NA without them. Measured on `or` + `logor_se` alone: digby 0.2542,
+  # lipsey_cooper NA. So this widens what a margin-poor row can produce instead of
+  # narrowing it -- rows that used to come back empty now carry an estimate.
+  #
+  # A user who explicitly asks for "lipsey_cooper" is untouched: such rows are excluded
+  # from `fallback` by construction, so the rule "do not remove what the user asked for"
+  # (roadmap 1.1) still holds.
+  if (length(fallback) != 0) {
+    res_fb <- .mapply_memo(.or_to_cor,
+      or = dat_cor$or[fallback],
+      logor_se = dat_cor$logor_se[fallback],
+      n_cases = dat_cor$n_cases[fallback],
+      n_exp = dat_cor$n_exp[fallback],
+      n_sample = dat_cor$n_sample[fallback],
+      small_margin_prop = dat_cor$small_margin_prop[fallback],
+      or_to_cor = rep("digby", length(fallback))
+    )
+    es <- .assign_cor(es, fallback, res_fb)
   }
 
   # Risk difference from OR + baseline_risk (Grant 2014)

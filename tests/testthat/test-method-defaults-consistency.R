@@ -258,22 +258,35 @@ test_that("aligning or_to_cor makes the entry points agree with convert_df()", {
   expect_equal(direct$r, via_df$es_crude, tolerance = 1e-8)
 })
 
-test_that("the documented consequence: the minimal input now yields NA, both ways", {
-  # bonett cannot be computed from (or, logor_se) alone, and the lipsey_cooper
-  # fallback needs n_sample, so the minimal row has no correlation by the default
-  # method. That is a REAL change for direct callers -- es_from_or_se() used to
-  # return 0.3463 here via pearson -- and it is exactly what convert_df() has
-  # always done with the same row. Pinned so the trade-off cannot be reversed by
-  # accident.
+test_that("the minimal input yields digby, both ways -- the NA was undone by roadmap 2.7", {
+  # THIS TEST PREVIOUSLY PINNED THE OPPOSITE, AND THE REVERSAL IS DELIBERATE.
+  #
+  # Aligning es_from_or_se()'s default to "bonett" cost output on the minimal input:
+  # bonett needs the margins, and the lipsey_cooper stand-in needed n_sample, so the
+  # row came back NA. That loss was accepted and pinned here "so the trade-off cannot
+  # be reversed by accident".
+  #
+  # Roadmap 2.7 reversed it ON PURPOSE, with measurement. The stand-in is now digby,
+  # whose coefficient c = 3/4 is a constant and reads no margins at all -- so the
+  # reason for the NA (the stand-in's own input requirement) is gone. Scored against
+  # the tetrachoric over 1176 tables, digby's mean |error| is 0.0169 where
+  # lipsey_cooper's is 0.0950, so the row now gets a good estimate instead of nothing,
+  # and the message says which method produced it.
+  #
+  # What has NOT changed: bonett still does not run without margins.
   direct <- suppressMessages(es_from_or_se(or = 2.5, logor_se = 0.3))
-  expect_true(is.na(direct$r))
+  dig    <- es_from_or_se(or = 2.5, logor_se = 0.3, or_to_cor = "digby")
+  expect_false(is.na(direct$r))
+  expect_equal(direct$r, dig$r, tolerance = 1e-12)
+
   via_df <- suppressMessages(summary(suppressMessages(
     convert_df(data.frame(or = 2.5, logor_se = 0.3), measure = "r"))))
-  expect_true(is.na(via_df$es_crude))
-  # the capability is still one explicit argument away
+  expect_false(is.na(via_df$es_crude))
+  expect_equal(via_df$es_crude, dig$r, tolerance = 1e-8)
+
+  # and naming a method explicitly still overrides the fallback entirely
   explicit <- suppressMessages(es_from_or_se(or = 2.5, logor_se = 0.3,
                                              or_to_cor = "pearson"))
-  expect_false(is.na(explicit$r))
   expect_equal(round(explicit$r, 4), 0.3463)
 })
 

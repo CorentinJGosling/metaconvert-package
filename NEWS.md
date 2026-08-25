@@ -1,5 +1,39 @@
 # metaConvert (development version)
 
+## An `or_to_cor` row that cannot use the method it asked for now falls back to `"digby"`
+
+When a row requests `or_to_cor = "bonett"` (the `convert_df()` default) but does not carry
+the margins that method needs, it still gets a correlation. **Which** conversion it got was
+never a decision: it kept the `"lipsey_cooper"` R/Z that had already been computed from the
+Cohen's d, simply because that value was sitting there.
+
+Scored against the tetrachoric correlation of the underlying table over **1176 coherent
+2x2 tables** (odds ratios 1.25-8, N 80-1000, 49 margin splits), that is the worst of the
+four available options:
+
+| `or_to_cor` | mean absolute error |
+|---|---|
+| `bonett` | 0.0084 |
+| **`digby`** | **0.0169** |
+| `pearson` | 0.0271 |
+| `lipsey_cooper` (the old fallback) | **0.0950** |
+
+`digby` is closer in **1160 of the 1176 cells (98.6%)** and wins on average at every odds
+ratio and every N. The 16 cells where it loses are all at OR >= 5, and it loses by little.
+
+**It also needs strictly less information.** `digby`'s coefficient is the constant
+`c = 3/4`, so it reads no margins at all, whereas `lipsey_cooper` needs the arm sizes and
+returns `NA` without them. A row carrying only `or` and `logor_se` used to produce no
+correlation; it now produces one. So this **widens** what a margin-poor row can yield.
+
+**Unchanged:** a row whose `or_to_cor` *is* `"lipsey_cooper"` keeps it -- those rows are
+excluded from the fallback set by construction. Rows that were eligible for the method they
+asked for are untouched.
+
+**This moves numbers** for rows that were falling back: the R and Z they receive change.
+The substitution message now names `digby`, as it always should have named whatever was
+actually used.
+
 ## The `or_to_cor = "bonett"` fallback message named an input that cannot work alone
 
 When a row requests `or_to_cor = "bonett"` but does not carry the inputs it needs, the
@@ -482,14 +516,17 @@ in**. All three now default to `"bonett"`, matching `convert_df()`.
 `or_to_cor`.** On a common-outcome table (OR 2.5, 60 cases / 140 controls,
 n = 200) the old default gave *r* = 0.3463 and the new one gives 0.3205.
 
-**One consequence is a loss of output, and it is deliberate.** `bonett` needs the
-table margins: `n_sample` together with one of (`n_exp`, `n_nexp`) and one of
-(`n_cases`, `n_controls`). `pearson` and `digby` need only `or` and `logor_se`. So
-on the minimal input, where `pearson` returned a number, the new default returns
-`NA`:
+**One consequence was a loss of output — since undone, see the `"digby"` fallback
+entry above.** `bonett` needs the table margins: `n_sample` together with one of
+(`n_exp`, `n_nexp`) and one of (`n_cases`, `n_controls`). `pearson` and `digby` need
+only `or` and `logor_se`. So on the minimal input the new default could not run, and
+because the stand-in at the time (`lipsey_cooper`) *also* needed the arm sizes, the row
+came back `NA`. Changing the stand-in to `digby`, which reads no margins, removed that
+consequence later in this same development cycle:
 
 ```r
-es_from_or_se(or = 2.5, logor_se = 0.3)              # was r = 0.3463, now NA
+es_from_or_se(or = 2.5, logor_se = 0.3)              # was 0.3463, briefly NA,
+                                                     # now digby's value
 es_from_or_se(or = 2.5, logor_se = 0.3,
               or_to_cor = "pearson")                  # still r = 0.3463
 ```

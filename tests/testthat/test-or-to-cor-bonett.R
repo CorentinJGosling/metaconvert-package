@@ -97,10 +97,13 @@ test_that("an incoherent or degenerate table does not get a derived pmin", {
   incoherent <- es_from_or_se(or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
                               n_cases = 30, n_controls = 60, n_sample = 100,
                               or_to_cor = "bonett")$r
-  lc <- es_from_or_se(or = 2.5, logor_se = 0.2, or_to_cor = "lipsey_cooper",
-                      n_exp = 40, n_nexp = 60, n_cases = 30, n_controls = 60,
-                      n_sample = 100)$r
-  expect_equal(incoherent, lc, tolerance = 1e-12)
+  # The fallback target changed from lipsey_cooper to digby (roadmap 2.7); what this
+  # test is about -- an incoherent table must not get a derived pmin, so bonett must
+  # not run -- is unchanged.
+  dig <- es_from_or_se(or = 2.5, logor_se = 0.2, or_to_cor = "digby",
+                       n_exp = 40, n_nexp = 60, n_cases = 30, n_controls = 60,
+                       n_sample = 100)$r
+  expect_equal(incoherent, dig, tolerance = 1e-12)
 
   # a zero margin is degenerate: c can go negative and flip the sign of r
   degenerate <- es_from_or_se(or = 2.5, logor_se = 0.2, n_exp = 100, n_nexp = 0,
@@ -142,7 +145,7 @@ test_that("the row's result does not depend on other rows in the same call", {
 ## which reads n_exp, n_cases AND n_sample as well, so the eligibility gate is a
 ## CONJUNCTION and the message was describing a disjunction. A user who followed it
 ## got no bonett estimate and no further explanation -- the row silently kept the
-## lipsey_cooper value computed earlier.
+## stand-in computed earlier (lipsey_cooper before roadmap 2.7, digby since).
 ## ---------------------------------------------------------------------------
 
 test_that("small_margin_prop alone does NOT make a row eligible for bonett", {
@@ -150,17 +153,18 @@ test_that("small_margin_prop alone does NOT make a row eligible for bonett", {
   got <- suppressMessages(es_from_or_se(
     or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
     small_margin_prop = 0.40, or_to_cor = "bonett")$r)
-  lc <- es_from_or_se(or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
-                      or_to_cor = "lipsey_cooper")$r
-  # It fell back: the requested method did not run.
-  expect_equal(got, lc, tolerance = 1e-12)
+  dig <- es_from_or_se(or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
+                       or_to_cor = "digby")$r
+  # It fell back: the requested method did not run. (The fallback target became digby
+  # in roadmap 2.7; the point here is that bonett did not run, not which stand-in ran.)
+  expect_equal(got, dig, tolerance = 1e-12)
 
   # Completing the margin set is what actually enables it, and it moves the answer.
   ok <- suppressMessages(es_from_or_se(
     or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
     n_cases = 30, n_controls = 70, n_sample = 100,
     small_margin_prop = 0.40, or_to_cor = "bonett")$r)
-  expect_false(isTRUE(all.equal(ok, lc, tolerance = 1e-8)))
+  expect_false(isTRUE(all.equal(ok, dig, tolerance = 1e-8)))
 })
 
 
@@ -187,4 +191,63 @@ test_that("the fallback message does not offer small_margin_prop as a substitute
   # otherwise a reader re-derives the same wrong conclusion from its presence.
   expect_true(grepl("small_margin_prop", msg, fixed = TRUE))
   expect_true(grepl("on its own", msg, fixed = TRUE))
+})
+
+
+## ---------------------------------------------------------------------------
+## WHICH conversion an ineligible row falls back to (roadmap 2.7).
+##
+## It used to keep the "lipsey_cooper" R/Z that .es_from_d() had already computed --
+## not a choice, just the value that happened to be there. Scored against the
+## tetrachoric over 1176 coherent 2x2 tables that is the WORST of the four options
+## (mean |error| 0.0950 vs digby 0.0169), and it needs MORE information than digby,
+## which reads no margins at all.
+## ---------------------------------------------------------------------------
+
+test_that("an ineligible bonett row falls back to digby, not to lipsey_cooper", {
+  got <- suppressMessages(es_from_or_se(or = 2, logor_se = 0.2, n_exp = 50, n_nexp = 50,
+                                        or_to_cor = "bonett"))
+  dig <- es_from_or_se(or = 2, logor_se = 0.2, n_exp = 50, n_nexp = 50,
+                       or_to_cor = "digby")
+  lc  <- es_from_or_se(or = 2, logor_se = 0.2, n_exp = 50, n_nexp = 50,
+                       or_to_cor = "lipsey_cooper")
+  expect_equal(got$r, dig$r, tolerance = 1e-12)
+  expect_equal(got$z, dig$z, tolerance = 1e-12)
+  expect_equal(got$r_se, dig$r_se, tolerance = 1e-12)
+  # and it is genuinely a different number from the old fallback
+  expect_false(isTRUE(all.equal(got$r, lc$r, tolerance = 1e-8)))
+})
+
+
+test_that("the fallback now works on rows that used to come back empty", {
+  # digby's coefficient c = 3/4 is a constant, so it reads no margins. lipsey_cooper
+  # needs the arm sizes and returned NA without them, so a row carrying only an odds
+  # ratio and its SE produced no correlation at all. This WIDENS coverage.
+  got <- suppressMessages(es_from_or_se(or = 2, logor_se = 0.2, or_to_cor = "bonett"))
+  expect_false(is.na(got$r))
+  expect_equal(got$r, es_from_or_se(or = 2, logor_se = 0.2, or_to_cor = "digby")$r,
+               tolerance = 1e-12)
+})
+
+
+test_that("a user who explicitly asks for lipsey_cooper still gets lipsey_cooper", {
+  # "Do not remove what the user explicitly asked for" (roadmap 1.1). Rows whose
+  # or_to_cor IS lipsey_cooper are excluded from the fallback set by construction.
+  lc <- es_from_or_se(or = 2, logor_se = 0.2, n_exp = 50, n_nexp = 50,
+                      or_to_cor = "lipsey_cooper")
+  expect_equal(round(lc$r, 8), 0.18768063)
+  expect_silent(es_from_or_se(or = 2, logor_se = 0.2, n_exp = 50, n_nexp = 50,
+                              or_to_cor = "lipsey_cooper"))
+})
+
+
+test_that("the substitution message names the method actually used", {
+  msg <- NULL
+  withCallingHandlers(
+    invisible(es_from_or_se(or = 2, logor_se = 0.2, n_exp = 50, n_nexp = 50,
+                            or_to_cor = "bonett")),
+    message = function(m) { msg <<- c(msg, conditionMessage(m)); invokeRestart("muffleMessage") })
+  msg <- paste(msg, collapse = " ")
+  expect_true(grepl("obtained with 'digby' instead", msg, fixed = TRUE))
+  expect_false(grepl("obtained with 'lipsey_cooper' instead", msg, fixed = TRUE))
 })
