@@ -1,5 +1,26 @@
 # metaConvert (development version)
 
+## The `or_to_cor = "bonett"` fallback message named an input that cannot work alone
+
+When a row requests `or_to_cor = "bonett"` but does not carry the inputs it needs, the
+row keeps the `"lipsey_cooper"` R/Z computed from the Cohen's d and a message reports the
+substitution. That message read *"For 'bonett', supply `small_margin_prop`, **or**
+`n_sample` together with one of ..."* -- an either/or. It is not one. Bonett's coefficient
+is
+
+    c = (1 - |n_exp/n_sample - n_cases/n_sample| / 5 - (1/2 - small_margin_prop)^2) / 2
+
+which reads `n_exp`, `n_cases` and `n_sample` as well, so the eligibility test is a
+**conjunction** and `small_margin_prop` on its own cannot satisfy it. A reader who
+followed the message got no Bonett estimate and no further explanation.
+
+The message now states the real requirement -- `n_sample` plus one member of each margin
+pair -- says that `small_margin_prop` is *derived* from those margins rather than a
+substitute for them, and notes that `"digby"` and `"pearson"` need no margins at all.
+
+**No effect size changes.** The `@details` block was already correct; only the runtime
+message was wrong.
+
 ## Cronbach's alpha accepts a reported standard error or confidence interval
 
 `cronbach_alpha_se`, `cronbach_alpha_ci_lo` and `cronbach_alpha_ci_up` are new input

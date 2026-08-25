@@ -480,8 +480,10 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
     message("or_to_cor = '", paste(asked, collapse = "' / '"), "': row(s) ",
             paste(fallback, collapse = ", "), " do not carry the inputs this conversion ",
             "requires, so their R and Z were obtained with 'lipsey_cooper' instead. ",
-            "For 'bonett', supply 'small_margin_prop', or 'n_sample' together with one of ",
-            "('n_exp', 'n_nexp') and one of ('n_cases', 'n_controls').")
+            "'bonett' needs 'n_sample' together with one of ('n_exp', 'n_nexp') and one ",
+            "of ('n_cases', 'n_controls'): its coefficient reads all three margins, and ",
+            "'small_margin_prop' is DERIVED from them, so supplying it on its own does ",
+            "not make the row eligible. 'digby' and 'pearson' need no margins at all.")
   }
 
   if (length(nn_miss) != 0) {

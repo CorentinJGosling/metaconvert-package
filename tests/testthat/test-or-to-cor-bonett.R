@@ -133,3 +133,58 @@ test_that("the row's result does not depend on other rows in the same call", {
   )
   expect_equal(scal$r, two$r, tolerance = 1e-12)
 })
+
+
+## ---------------------------------------------------------------------------
+## The fallback message used to offer 'small_margin_prop' as an alternative to the
+## margins. It is not one: bonett's coefficient is
+##   c = (1 - |n_exp/n_sample - n_cases/n_sample|/5 - (1/2 - small_margin_prop)^2) / 2
+## which reads n_exp, n_cases AND n_sample as well, so the eligibility gate is a
+## CONJUNCTION and the message was describing a disjunction. A user who followed it
+## got no bonett estimate and no further explanation -- the row silently kept the
+## lipsey_cooper value computed earlier.
+## ---------------------------------------------------------------------------
+
+test_that("small_margin_prop alone does NOT make a row eligible for bonett", {
+  # Everything bonett needs except n_sample and the case margin.
+  got <- suppressMessages(es_from_or_se(
+    or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
+    small_margin_prop = 0.40, or_to_cor = "bonett")$r)
+  lc <- es_from_or_se(or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
+                      or_to_cor = "lipsey_cooper")$r
+  # It fell back: the requested method did not run.
+  expect_equal(got, lc, tolerance = 1e-12)
+
+  # Completing the margin set is what actually enables it, and it moves the answer.
+  ok <- suppressMessages(es_from_or_se(
+    or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
+    n_cases = 30, n_controls = 70, n_sample = 100,
+    small_margin_prop = 0.40, or_to_cor = "bonett")$r)
+  expect_false(isTRUE(all.equal(ok, lc, tolerance = 1e-8)))
+})
+
+
+test_that("the fallback message does not offer small_margin_prop as a substitute", {
+  msg <- NULL
+  withCallingHandlers(
+    invisible(es_from_or_se(or = 2.5, logor_se = 0.2, n_exp = 40, n_nexp = 60,
+                            small_margin_prop = 0.40, or_to_cor = "bonett")),
+    message = function(m) { msg <<- c(msg, conditionMessage(m)); invokeRestart("muffleMessage") })
+  msg <- paste(msg, collapse = " ")
+  expect_true(nzchar(msg))
+
+  # The defect, stated exactly: the message used to read
+  #   "For 'bonett', supply 'small_margin_prop', or 'n_sample' together with ..."
+  # i.e. it named as sufficient the one input that cannot work on its own.
+  expect_false(grepl("supply 'small_margin_prop'", msg, fixed = TRUE))
+
+  # What it must name instead -- the conjunction the gate really tests.
+  expect_true(grepl("n_sample", msg, fixed = TRUE))
+  expect_true(grepl("n_exp", msg, fixed = TRUE))
+  expect_true(grepl("n_cases", msg, fixed = TRUE))
+
+  # And it must say plainly that small_margin_prop on its own is not enough,
+  # otherwise a reader re-derives the same wrong conclusion from its presence.
+  expect_true(grepl("small_margin_prop", msg, fixed = TRUE))
+  expect_true(grepl("on its own", msg, fixed = TRUE))
+})
