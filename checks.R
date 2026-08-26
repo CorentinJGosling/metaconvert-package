@@ -158,6 +158,18 @@ check_mac <- function() devtools::check_mac_release(PKG_ROOT)
 #' imposee aux utilisateurs pour rien. Il ne dit pas non plus si un Suggests manque
 #' SUR CETTE MACHINE -- or un Suggests absent fait sauter des tests en silence.
 check_deps <- function() {
+  ## D'ABORD : QUELLE R, QUELLE BIBLIOTHEQUE ?
+  ##
+  ## Un Suggests "manquant" est presque toujours un probleme de bibliotheque, pas
+  ## d'installation. Cas vu le 2026-08-26 : Rscript (R 4.5.1) voyait les 16 Suggests,
+  ## la session RStudio n'en voyait que 10 -- les six autres etaient installes dans
+  ## win-library/4.5 tandis que la session tournait sous une autre R, donc sur
+  ## win-library/4.6. Rien n'echoue dans ce cas : des tests SAUTENT, le total
+  ## d'assertions baisse, et la suite reste verte. D'ou l'affichage systematique.
+  cat(R.version.string, "\n")
+  cat("Bibliotheques (.libPaths) :\n"); for (p in .libPaths()) cat("  ", p, "\n")
+  cat("\n")
+
   d <- read.dcf(file.path(PKG_ROOT, "DESCRIPTION"))
   field <- function(f) {
     if (!f %in% colnames(d)) return(character(0))
@@ -189,8 +201,15 @@ check_deps <- function() {
   cat("Suggests declares :", length(suggests), "\n")
   cat("  NON installes sur cette machine :",
       if (length(miss)) paste(miss, collapse = ", ") else "aucun", "\n")
-  if (length(miss))
-    cat("  -> des tests vont sauter en silence. Installe-les avant de conclure.\n")
+  if (length(miss)) {
+    cat("  -> des tests vont SAUTER EN SILENCE. Le total d'assertions baisse et la\n")
+    cat("     suite reste verte : c'est le pire des deux mondes. Installe d'abord :\n")
+    cat(sprintf('     install.packages(c(%s))\n',
+                paste(sprintf('"%s"', miss), collapse = ", ")))
+    cat("     Si ces paquets existent deja pour une AUTRE version de R, c'est une\n")
+    cat("     question de bibliotheque, pas d'installation -- compare .libPaths()\n")
+    cat("     ci-dessus avec win-library/<version>.\n")
+  }
   invisible(list(unused_imports = unused, missing_suggests = miss))
 }
 
