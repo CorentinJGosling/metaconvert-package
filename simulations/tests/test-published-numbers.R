@@ -69,13 +69,17 @@ test_that("a drifted README figure is actually detected", {
   # pass on any README at all -- which is how the figures rotted in the first place.
   skip_if(!file.exists(file.path(.sim_root, "README.md")), "no README")
   p <- file.path(.sim_root, "README.md")
-  backup <- readLines(p, warn = FALSE)
-  on.exit({ writeLines(backup, p, useBytes = TRUE) }, add = TRUE)
+  # RAW BYTES, not lines. A readLines/writeLines round-trip re-encodes the line
+  # endings on Windows, and silently rewrote this LF document as CRLF -- a test
+  # quietly mutating the tree it inspects, and invisible to git because
+  # core.autocrlf normalises on comparison. Caught only by checking the bytes.
+  backup <- readBin(p, "raw", file.info(p)$size)
+  on.exit({ writeBin(backup, p) }, add = TRUE)
 
   # Find the row by its KEY and perturb whatever number is in it. Locating it by the
   # current value would have put a hardcoded 0.0195 in this file -- the same copied
   # number this whole mechanism exists to eliminate, just moved somewhere new.
-  l <- backup
+  l <- readLines(p, warn = FALSE)      # lines to edit; `backup` holds the bytes to restore
   i <- grep("^\\|\\s*\\*\\*`bonett`\\*\\*\\s*\\|", l)
   expect_equal(length(i), 1L)
   l[i] <- sub("([0-9])\\.([0-9]{3})([0-9])", "\\1.\\2\\3\\3", l[i])   # append a digit
@@ -110,8 +114,12 @@ test_that("the recipes read the aggregate, not a stored copy of the numbers", {
   # If a recipe returned hardcoded values it would pass the comparison above while
   # verifying nothing. Point it at a perturbed copy of the CSV and it must move.
   f <- dir_agg("09a_or_to_cor_CONT_nrep1000.csv")
-  backup <- readLines(f, warn = FALSE)
-  on.exit({ writeLines(backup, f, useBytes = TRUE) }, add = TRUE)
+  # RAW BYTES, not lines. A readLines/writeLines round-trip re-encodes the line
+  # endings on Windows, and silently rewrote this LF document as CRLF -- a test
+  # quietly mutating the tree it inspects, and invisible to git because
+  # core.autocrlf normalises on comparison. Caught only by checking the bytes.
+  backup <- readBin(f, "raw", file.info(f)$size)
+  on.exit({ writeBin(backup, f) }, add = TRUE)
 
   before <- published_table("study09a-result")
   d <- utils::read.csv(f, stringsAsFactors = FALSE)

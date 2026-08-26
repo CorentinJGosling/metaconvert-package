@@ -75,8 +75,10 @@ test_that("a changed dependency is actually detected", {
 
   # Corrupt one recorded hash in a COPY of the record, point the module at it, and
   # confirm it is reported. The real file is restored on exit whatever happens.
-  backup <- readLines(f, warn = FALSE)
-  on.exit({ writeLines(backup, f) }, add = TRUE)
+  # raw bytes: writeLines() re-encodes line endings (see the note in
+  # test-published-numbers.R -- a test must not mutate the tree it inspects)
+  backup <- readBin(f, "raw", file.info(f)$size)
+  on.exit({ writeBin(backup, f) }, add = TRUE)
   rec$md5[1] <- paste0(rep("0", 32), collapse = "")
   utils::write.csv(rec, f, row.names = FALSE)
 
@@ -93,8 +95,10 @@ test_that("a record describing a file that is gone is reported, not ignored", {
   # a clean bill. write_provenance() now prunes them and check_provenance() names them.
   f <- file.path(.sim_root, "data", "aggregated", PROVENANCE_FILE)
   skip_if(!file.exists(f), "no PROVENANCE.csv yet")
-  backup <- readLines(f, warn = FALSE)
-  on.exit({ writeLines(backup, f) }, add = TRUE)
+  # raw bytes: writeLines() re-encodes line endings (see the note in
+  # test-published-numbers.R -- a test must not mutate the tree it inspects)
+  backup <- readBin(f, "raw", file.info(f)$size)
+  on.exit({ writeBin(backup, f) }, add = TRUE)
 
   rec <- utils::read.csv(f, stringsAsFactors = FALSE)
   ghost <- rec[1, , drop = FALSE]

@@ -94,10 +94,27 @@ PROVENANCE_FILE <- "PROVENANCE.csv"
 }
 
 
-#' The package files a study exercises, derived from the es_from_*() calls in it
+#' The package files a study exercises, TRANSITIVELY
 #'
 #' Derived, never declared: a hand-written map would rot exactly as the column list in
 #' roadmap 1.2 did.
+#'
+#' FOLLOWING INTERNAL CALLS IS NOT OPTIONAL, and the first version of this module got it
+#' wrong. Mapping a study's es_from_*() calls to the file DEFINING each route caught only
+#' the nine entry-point files. It did not catch R/internal_multiple_formulas.R, which is
+#' where the pre/post kernels, the d-to-r conversions and the dispatchers actually live --
+#' so a change to the arithmetic itself left every aggregate reported as fresh. That was
+#' demonstrated by accident: the paired-t routes were restructured, that file changed, and
+#' check_provenance() returned zero mismatches.
+#'
+#' So the set is closed under "calls a function defined in another R/ file", to a fixed
+#' point. MEASURED, because the alternative the original design rejected was depending on
+#' the whole of R/ ("it would mark every aggregate stale on any package commit, so the
+#' test would be permanently red and would be ignored"): the closure over all studies is
+#' **16 of 50** files, not 50. Per study it is 2 to 6. It adds exactly
+#' internal_multiple_formulas.R, internal_es_from_d.R and internal_guards.R -- the three
+#' that carry arithmetic -- and leaves the other 34 out, so an unrelated package commit
+#' still flags nothing.
 #'
 #' @param study_file absolute path to a studies/*.R file
 #' @return character vector of absolute paths under the package's R/
@@ -106,14 +123,36 @@ PROVENANCE_FILE <- "PROVENANCE.csv"
   txt <- readLines(study_file, warn = FALSE)
   calls <- unique(unlist(regmatches(txt, gregexpr("es_from_[A-Za-z0-9_]+", txt))))
   if (!length(calls)) return(character(0))
+
   pkg_root <- normalizePath(sim_path(".."), winslash = "/", mustWork = FALSE)
   r_files <- list.files(file.path(pkg_root, "R"), pattern = "[.]R$", full.names = TRUE)
+
+  ## which file defines which function (internal helpers included -- that is the point)
   defs <- lapply(r_files, function(f) {
     l <- readLines(f, warn = FALSE)
-    unlist(regmatches(l, regexpr("^es_from_[A-Za-z0-9_]+(?= *<- *function)", l, perl = TRUE)))
+    unlist(regmatches(l, regexpr("^[.]?[A-Za-z][A-Za-z0-9_.]*(?= *<- *function)",
+                                 l, perl = TRUE)))
   })
   names(defs) <- r_files
-  unname(names(defs)[vapply(defs, function(d) any(calls %in% d), logical(1))])
+  owner <- stats::setNames(rep(names(defs), lengths(defs)), unlist(defs))
+
+  seed <- unname(names(defs)[vapply(defs, function(d) any(calls %in% d), logical(1))])
+  if (!length(seed)) return(character(0))
+
+  ## close under the call graph
+  have <- seed
+  repeat {
+    called <- unique(unlist(lapply(have, function(f) {
+      l <- readLines(f, warn = FALSE)
+      l <- l[!grepl("^\\s*#", l)]
+      unique(unlist(regmatches(l, gregexpr("[.]?[A-Za-z][A-Za-z0-9_.]*(?= *\\()",
+                                           l, perl = TRUE))))
+    })))
+    add <- setdiff(unique(unname(owner[intersect(called, names(owner))])), have)
+    if (!length(add)) break
+    have <- c(have, add)
+  }
+  sort(have)
 }
 
 
