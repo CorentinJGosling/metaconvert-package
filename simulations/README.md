@@ -560,6 +560,7 @@ convert the OR at all?" is answerable from the same output.
 `CONT` mechanism, nrep = 1000, 120 conditions, scored on each method's **own**
 estimand (so the numbers below are computational error, not estimand mismatch):
 
+<!-- pinned: study09a-result -->
 | method | mean \|bias\| | worst \|bias\| | coverage | SE ratio |
 |---|---|---|---|---|
 | `2x2_tetrachoric` (full table) | 0.0163 | 0.2701 | 0.961 | 1.042 |
@@ -1045,6 +1046,7 @@ either failure**, so it is the app's default.
 The two orderings genuinely disagree in these data. In study 09a, scored on
 `own`, the *worst* method on bias is the best on coverage:
 
+<!-- pinned: study09a-ranking -->
 | method | rank by \|bias\| | coverage | rank by coverage |
 |---|---|---|---|
 | `2x2_tetrachoric` | 1st | 0.961 (worst 0.939) | 2nd |
