@@ -33,3 +33,4 @@
 ^.*\.stackdump$
 ^scratchpad.*$
 ^tests/testthat/_problems$
+^checks\.R$
