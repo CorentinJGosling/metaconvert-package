@@ -93,47 +93,19 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
   r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
   r_pre_post_nexp <- .guard_r_pre_post(r_pre_post_nexp)
 
-  J_exp <- .d_j(n_exp - 1)
-  J_nexp <- .d_j(n_nexp - 1)
+  # DELEGATED, not reimplemented. This function used to write out the morris_dz and
+  # morris_drm arithmetic inline -- a second copy of what .single_group_pre_post_to_smd
+  # already computes, agreeing with it only by everybody remembering to change both.
+  # The comment on the old copy said as much ("matching .single_group_pre_post_to_smd
+  # so the paired-t and mean-change routes return identical SEs"), which is a
+  # maintenance promise rather than a mechanism.
+  res_exp  <- .paired_t_to_smd(paired_t_exp,  n_exp,  r_pre_post_exp,  pre_post_to_smd)
+  res_nexp <- .paired_t_to_smd(paired_t_nexp, n_nexp, r_pre_post_nexp, pre_post_to_smd)
 
-  # per-row method selection: a vector mixing "morris_dz" and "morris_drm" rows
-  # previously fell wholesale into the drm branch (all(...) is a single logical).
-  # Recycled to the input length so a scalar method still yields one value per row.
-  dz <- rep(pre_post_to_smd == "morris_dz", length.out = length(paired_t_exp))
-
-  # morris dz. metafor SMCC convention (variance built from the corrected g),
-  # matching .single_group_pre_post_to_smd so the paired-t and mean-change
-  # routes return identical SEs on equivalent inputs
-  d_exp_dz <- paired_t_exp / sqrt(n_exp)
-  d_nexp_dz <- paired_t_nexp / sqrt(n_nexp)
-  d_var_exp_dz <- (1 / n_exp + (J_exp * d_exp_dz)^2 / (2 * n_exp)) / J_exp^2
-  d_var_nexp_dz <- (1 / n_nexp + (J_nexp * d_nexp_dz)^2 / (2 * n_nexp)) / J_nexp^2
-
-  # morris drm
-  d_exp_drm <- paired_t_exp * sqrt((2 * (1 - r_pre_post_exp)) / n_exp)
-  d_nexp_drm <- paired_t_nexp * sqrt((2 * (1 - r_pre_post_nexp)) / n_nexp)
-  d_var_exp_drm <- 2 * (1 - r_pre_post_exp) / n_exp + d_exp_drm^2 / (2 * n_exp)
-  d_var_nexp_drm <- 2 * (1 - r_pre_post_nexp) / n_nexp + d_nexp_drm^2 / (2 * n_nexp)
-
-  d_exp <- ifelse(dz, d_exp_dz, d_exp_drm)
-  d_nexp <- ifelse(dz, d_nexp_dz, d_nexp_drm)
-  d_var_exp <- ifelse(dz, d_var_exp_dz, d_var_exp_drm)
-  d_var_nexp <- ifelse(dz, d_var_nexp_dz, d_var_nexp_drm)
-
-  # A within-subject arm needs n >= 2 to have any estimable variance. The morris_drm
-  # branch carries no J(n-1) factor, so unlike morris_dz it stays finite at n = 1 (and
-  # blows up to Inf at n = 0), leaking a spurious d/g/logOR/r downstream. NA such arms
-  # so this route matches the mean-change route (which NAs via the n >= 2 kernel guard).
-  bad_exp <- !(is.finite(n_exp) & n_exp >= 2)
-  bad_nexp <- !(is.finite(n_nexp) & n_nexp >= 2)
-  d_exp[bad_exp] <- NA_real_; d_var_exp[bad_exp] <- NA_real_
-  d_nexp[bad_nexp] <- NA_real_; d_var_nexp[bad_nexp] <- NA_real_
-
-  g_exp <- J_exp * d_exp
-  g_nexp <- J_nexp * d_nexp
-
-  g_var_exp <- J_exp^2 * d_var_exp
-  g_var_nexp <- J_nexp^2 * d_var_nexp
+  d_exp <- res_exp[, "d"];   d_var_exp <- res_exp[, "var_d"]
+  d_nexp <- res_nexp[, "d"]; d_var_nexp <- res_nexp[, "var_d"]
+  g_exp <- res_exp[, "g"];   g_var_exp <- res_exp[, "var_g"]
+  g_nexp <- res_nexp[, "g"]; g_var_nexp <- res_nexp[, "var_g"]
 
   d <- d_exp - d_nexp
   d_se <- sqrt(d_var_exp + d_var_nexp)

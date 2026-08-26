@@ -835,42 +835,24 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
 
   r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
 
-  J <- .d_j(n_exp - 1)
+  # DELEGATED, not reimplemented. This block used to hold a second copy of the
+  # morris_dz / morris_drm arithmetic that .single_group_pre_post_to_smd already
+  # computes -- its own comment said it was "matching" the kernel, which is a promise
+  # to keep two copies in step rather than a mechanism for doing so. The n >= 2 guard
+  # and the qt(.975, n - 1) intervals come from the kernel too, so nothing about the
+  # estimator is restated here. See .paired_t_to_smd() for how a paired t, which
+  # carries no pre/post SDs, is expressed as an equivalent single-group problem.
+  res <- .paired_t_to_smd(paired_t_exp, n_exp, r_pre_post_exp, pre_post_to_smd)
 
-  # per-row method selection (a mixed vector previously fell wholesale into drm).
-  # Recycled to the input length so a scalar method still yields one value per row.
-  dz <- rep(pre_post_to_smd == "morris_dz", length.out = length(paired_t_exp))
-
-  # d_z. metafor SMCC convention (variance built from the corrected g), matching
-  # .single_group_pre_post_to_smd so the paired-t and mean-change routes return
-  # identical SEs on equivalent inputs
-  d_dz <- paired_t_exp / sqrt(n_exp)
-  d_var_dz <- (1 / n_exp + (J * d_dz)^2 / (2 * n_exp)) / J^2
-
-  # d_rm
-  d_drm <- paired_t_exp * sqrt(2 * (1 - r_pre_post_exp) / n_exp)
-  d_var_drm <- 2 * (1 - r_pre_post_exp) / n_exp + d_drm^2 / (2 * n_exp)
-
-  d <- ifelse(dz, d_dz, d_drm)
-  d_var <- ifelse(dz, d_var_dz, d_var_drm)
-
-  # A single paired observation (n < 2) has no estimable within-subject variance. The
-  # morris_drm branch carries no J(n-1) factor, so it stays finite at n = 1 (and Inf at
-  # n = 0), leaking a spurious d/g/logOR/r (and an impossible |r| > 1) downstream. NA
-  # such rows so this route matches the mean-change route (which NAs via its n >= 2
-  # kernel guard); the qt(.975, n-1) CI is already NaN there.
-  bad_n <- !(is.finite(n_exp) & n_exp >= 2)
-  d[bad_n] <- NA_real_; d_var[bad_n] <- NA_real_
-
-  d_se <- sqrt(d_var)
-
-  d_ci_lo <- d - qt(0.975, n_exp - 1) * d_se
-  d_ci_up <- d + qt(0.975, n_exp - 1) * d_se
-
-  g <- d * J
-  g_se <- d_se * J
-  g_ci_lo <- d_ci_lo * J
-  g_ci_up <- d_ci_up * J
+  d       <- res[, "d"]
+  d_var   <- res[, "var_d"]
+  d_se    <- sqrt(d_var)
+  d_ci_lo <- res[, "d_ci_lo"]
+  d_ci_up <- res[, "d_ci_up"]
+  g       <- res[, "g"]
+  g_se    <- sqrt(res[, "var_g"])
+  g_ci_lo <- res[, "g_ci_lo"]
+  g_ci_up <- res[, "g_ci_up"]
 
   # md not recoverable from the t statistic alone
   md <- rep(NA_real_, length(paired_t_exp))

@@ -159,15 +159,18 @@ Dispatch is at `R/internal_multiple_formulas.R:1389` (pooled) and `:1400`/`:1407
 arm); the per-row `mapply` that makes the count scale with rows is at
 `R/es_from_PAIRED_MEANS.R:154`.
 
-19 exported functions take `pre_post_to_smd`, and they split across **four** code
-paths, not three. The fourth is the one no three-row table could show:
+19 exported functions take `pre_post_to_smd`. They used to split across **four** code
+paths: the fourth was the paired-t/F family, which called neither kernel and
+reimplemented the arithmetic inline. **That path has since been removed** — those five
+routes now delegate through `.paired_t_to_smd()`, so there are three kernels and one
+implementation of each. Where they land now:
 
 | code path | exported routes | run by the simulation? | otherwise covered by |
 |---|---|---|---|
 | `.pre_post_to_smd` — the two-group dispatcher plus the `pool_sd = FALSE` combination step (difference of per-arm d/g, summed variances, CI on `n_exp + n_nexp - 2`) | the 7 two-group means / mean-change routes | **yes** — study 08, every row | study 99's deterministic cross-route identity block |
 | `.single_group_pre_post_to_smd` — the per-arm engine; all five methods | the same 7 indirectly, plus 7 of the 8 `*_single_group` routes directly | **yes, but only as the per-arm engine.** Its own entry points are unsimulated | `tests_save/checked/test-EXTERNAL-PAIRED-SINGLE-GROUP.R`, `test-PAIRED-SINGLE-GROUP-2.R`, `test-paired-cross-validation.R` |
 | `.pooled_pre_post_to_smd` — `pool_sd = TRUE`: own pooled standardizer, own variance forms, own df | the 7 two-group routes that accept `pool_sd` | **no — genuinely never run** | `tests_save/checked/test-pooled-variance-calibration.R`: 6 blocks, **78 assertions**, including bit-exact agreement with `metafor::escalc` and Monte-Carlo calibration of the one branch with no closed-form reference. Plus `test-pool-sd.R` |
-| inline paired-t/F arithmetic — calls **neither** kernel | `es_from_paired_t`, `_t_pval`, `_f`, `_f_pval`, `_t_single_group` | not by Monte Carlo; the four two-group ones are in study 99's equivalence block | cross-route equivalence pins in `tests_save/checked/test-paired-cross-validation.R` and `test-INTERNAL-FULL-LIFECYCLE.R` |
+| the paired-t/F family — **delegates** to the single-group kernel since the duplication was removed | `es_from_paired_t`, `_t_pval`, `_f`, `_f_pval`, `_t_single_group` | not by Monte Carlo; the four two-group ones are in study 99's equivalence block | `tests/testthat/test-paired-t-delegation.R` (what the delegation must preserve), plus the cross-route pins in `tests_save/checked/test-paired-cross-validation.R` and `test-INTERNAL-FULL-LIFECYCLE.R` |
 
 **"Unsimulated" is the accurate word; "uncovered" is not.** Every path above has package
 test coverage, and the one the old table called "never run" has the most of any of them.
@@ -175,14 +178,20 @@ What the simulation cannot currently say anything about is *calibration under a
 data-generating mechanism* for paths 3 and 4, and for path 2 reached through its own
 entry points.
 
-The fourth path is the interesting one, because it is a **duplicate implementation**: it
-reproduces the single-group kernel's arithmetic in place rather than calling it. On
-equivalent inputs the two still agree — max |difference| over d, SE, g and g's SE is
-`0` for `morris_dz` and `1.1e-16` for `morris_drm`. It offers only those two of the five
-methods and **errors** on the other three rather than silently coercing (checked: the
-allowed set is `morris_drm`/`cooper` and `morris_dz`, default `cooper`). So the exposure
-is drift between two copies of one formula, not a live defect — and drift is precisely
-what a simulation would not catch and a cross-route equivalence test would.
+The fourth path **was** a duplicate implementation: it reproduced the single-group
+kernel's arithmetic in place rather than calling it. The two agreed — max |difference|
+over d, SE, g and g's SE was `0` for `morris_dz` and `1.1e-16` for `morris_drm` — but
+only because both were maintained in step, which is a promise rather than a mechanism.
+The duplication has been removed and the drift risk with it; the delegation moves no
+number a user can see (max |difference| `3.55e-15` over a 576-row grid). Those routes
+still offer only two of the five methods and still **error** on the other three rather
+than silently coercing, because a paired t does not identify the separate pre/post SDs
+the other three need.
+
+The removal was **detected by the test above**, not planned alongside it: that test
+asserted "calls neither kernel", the refactor made it false, and it failed. That is what
+item 4.4 bought — the claim had been made executable, so restructuring the dispatch
+could not silently invalidate the paragraph describing it.
 
 A `pool_sd` study reusing study 08's DGP and grid with a new `estimate()` would take
 pre/post from **2 kernels to 3**. It cannot be called "study 08b": study 08 already emits

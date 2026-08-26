@@ -1375,6 +1375,75 @@
   ifelse(is.finite(r) & abs(r) < 1, r, NA_real_)
 }
 
+
+#' One paired-t arm, through the single-group kernel rather than beside it
+#'
+#' The paired-t and paired-F routes used to reimplement the morris_dz and morris_drm
+#' arithmetic inline, as a second copy of what .single_group_pre_post_to_smd already
+#' does. The two agreed -- measured at 0 for morris_dz and 1.1e-16 for morris_drm -- but
+#' only because both were maintained in step, which is a promise rather than a
+#' mechanism. This routes them through the one implementation.
+#'
+#' A paired t carries no pre/post SDs, so the kernel is handed an EQUIVALENT synthetic
+#' problem: a change score of t/sqrt(n) on a change SD of 1, with the pre slot zeroed
+#' exactly as the mean-change wrappers already do. The kernel's sd_diff then reduces to
+#' 1, giving d = t/sqrt(n) for morris_dz and d = t*sqrt(2(1-r)/n) for morris_drm -- the
+#' two expressions the inline copy wrote by hand. The variances follow from the same
+#' branch, so nothing about the estimator is being restated here.
+#'
+#' Called per row via mapply because the kernel dispatches on a SCALAR
+#' pre_post_to_smd, while these routes accept a vector of methods (one per row) --
+#' a capability that a straight vectorised call would silently drop into whichever
+#' branch the first element selected.
+#'
+#' @param paired_t vector of paired t values
+#' @param n vector of per-arm sample sizes
+#' @param r_pre_post vector of pre-post correlations
+#' @param pre_post_to_smd scalar or vector of method names
+#' @return a matrix with the kernel's eight columns, one row per input row
+#' @noRd
+.paired_t_to_smd <- function(paired_t, n, r_pre_post, pre_post_to_smd) {
+  k <- max(length(paired_t), length(n), length(r_pre_post), length(pre_post_to_smd))
+  rec <- function(x) rep_len(x, k)
+  nn <- rec(n)
+
+  # An arm with n < 2 has no estimable variance and the kernel returns NA for it -- but
+  # it reaches that answer through qt(.975, n - 1) and .d_j(n - 1), which emit "NaNs
+  # produced" on the way. The inline version this replaced was silent there, because it
+  # NA'd such arms before computing anything. Skipping them keeps the OUTPUT identical
+  # and the OUTPUT STREAM identical too; suppressWarnings() around the kernel would hide
+  # genuine warnings from the other rows as well.
+  # .d_j() is where the "Hedges' J correction is undefined for df <= 1" warning comes
+  # from, and this route emitted it before delegation. It is informative -- it tells the
+  # caller g will be NA on those rows -- so it must survive. Skipping the n < 2 rows
+  # below means the kernel never reaches .d_j() for them, so it is called here on
+  # exactly the df the inline version passed (n - 1, per arm). Pure apart from the
+  # warning, so nothing else changes.
+  invisible(.d_j(nn - 1))
+
+  ok <- is.finite(nn) & nn >= 2
+  out <- matrix(NA_real_, nrow = k, ncol = 8L)
+  if (!any(ok)) {
+    colnames(out) <- c("d", "var_d", "d_ci_lo", "d_ci_up",
+                       "g", "var_g", "g_ci_lo", "g_ci_up")
+    return(out)
+  }
+  res <- t(mapply(.single_group_pre_post_to_smd,
+    mean_pre        = 0,
+    mean_post       = (rec(paired_t) / sqrt(nn))[ok],
+    mean_pre_sd     = 0,
+    mean_post_sd    = 1,
+    n               = nn[ok],
+    r_pre_post      = rec(r_pre_post)[ok],
+    pre_post_to_smd = rec(pre_post_to_smd)[ok]))
+  if (is.null(dim(res))) res <- matrix(res, nrow = sum(ok), byrow = FALSE)
+  out[ok, ] <- res
+  storage.mode(out) <- "double"
+  colnames(out) <- c("d", "var_d", "d_ci_lo", "d_ci_up",
+                     "g", "var_g", "g_ci_lo", "g_ci_up")
+  out
+}
+
 ################# PRE POST to SMD ##############
 .pre_post_to_smd <- function(mean_pre_exp, mean_pre_sd_exp,
                              mean_exp, mean_sd_exp,
