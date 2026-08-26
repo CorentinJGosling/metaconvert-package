@@ -22,8 +22,10 @@
 test_that("every pinned README table matches the aggregate it was computed from", {
   skip_if(!file.exists(file.path(.sim_root, "README.md")), "no README")
 
-  for (id in published_table_ids()) {
-    published <- read_pinned_table(id)
+  ids <- published_table_ids()          # named: id -> document it lives in
+  for (i in seq_along(ids)) {
+    id <- names(ids)[i]
+    published <- read_pinned_table(id, sim_path(ids[[i]]))
     recomputed <- published_table(id)
 
     expect_equal(nrow(published), nrow(recomputed),
@@ -34,9 +36,9 @@ test_that("every pinned README table matches the aggregate it was computed from"
     for (r in seq_len(nrow(published))) {
       pub_key <- .pub_clean(published[[1]][r])
       rec_key <- .pub_clean(as.character(recomputed[[1]][r]))
-      # the README labels one row "2x2_tetrachoric (full table)"; the parenthetical is
-      # prose, not part of the method name
-      pub_key <- trimws(sub("\\(full table\\)", "", pub_key))
+      # the documents label rows "2x2_tetrachoric (full table)", "(reference)",
+      # "(default)" -- all prose, none of it part of the method name
+      pub_key <- trimws(sub("\\((full table|reference|default)\\)", "", pub_key))
       expect_equal(pub_key, rec_key,
                    info = sprintf("%s - row %d key", id, r))
 
@@ -91,8 +93,9 @@ test_that("a drifted README figure is actually detected", {
 
 test_that("the marker parser finds exactly one table per id, and reads its shape", {
   skip_if(!file.exists(file.path(.sim_root, "README.md")), "no README")
-  for (id in published_table_ids()) {
-    t <- read_pinned_table(id)
+  ids <- published_table_ids()
+  for (i in seq_along(ids)) {
+    t <- read_pinned_table(names(ids)[i], sim_path(ids[[i]]))
     expect_gt(nrow(t), 0L)
     expect_gt(ncol(t), 1L)
     # the ---- separator row must not survive as data

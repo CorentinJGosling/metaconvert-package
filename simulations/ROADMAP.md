@@ -537,16 +537,38 @@ The phi decision (1.3) rests on margin dependence. That principle applies to thr
 the four `or_to_cor` options too, so the position needs stating rather than leaving
 implicit. Measured from `09a_or_to_cor_CONT_nrep1000.csv`:
 
+<!-- pinned: roadmap26-or-to-cor -->
 | option | mean \|bias\| vs **own** | vs **population tetrachoric** | worst coverage | margin drift* |
 |---|---|---|---|---|
-| `2x2_tetrachoric` (reference) | 0.0163 | 0.0163 | 0.849 | **0.0109** |
-| **`bonett`** (default) | 0.0185 | 0.0185 | **0.940** | **0.0212** |
+| `2x2_tetrachoric` (reference) | 0.0163 | 0.0163 | 0.939 | **0.0109** |
+| **`bonett`** (default) | 0.0195 | 0.0195 | **0.940** | **0.0212** |
 | `digby` | 0.0201 | 0.0201 | 0.906 | 0.1205 |
 | `pearson` | 0.0223 | 0.0223 | 0.902 | 0.1245 |
 | `lipsey_cooper` | 0.0231 | **0.0870** | **0.000** | 0.1127 |
 
-\* range of bias across the margin grid at ρ = 0.5, n = 300 — i.e. how much the answer
-moves when only the margins change, at a fixed true correlation.
+\* range of bias across the margin grid at ρ = 0.5, n = 300, on the **population**
+target — i.e. how much the answer moves when only the margins change, at a fixed true
+correlation. "Worst coverage" is the minimum across all three targets, which is why
+`lipsey_cooper` shows 0.000: it is fine against its own estimand (0.872) and collapses
+against the population tetrachoric.
+
+> **Three cells here were stale; the headline figures were not.** Recomputed from the
+> shipped aggregate: `bonett`'s two bias cells were 0.0185 and are 0.0195 (partly the
+> same rot as README's copy of the same number, partly roadmap 2.7 moving bonett's
+> fallback rows), and `2x2_tetrachoric`'s worst coverage was 0.849 against an actual
+> 0.939 — that figure matched no target at all.
+>
+> **The margin-drift column, which carries this item's whole argument, reproduces
+> EXACTLY — all five values.** So does the "~6×" claim below (measured 5.7× for `digby`,
+> 5.9× for `pearson`). An earlier note in the handoff guessed 0.0212 was stale too; it
+> was not, and the guess came from measuring a different quantity on a different grid.
+>
+> One conclusion needs softening rather than correcting: `bonett` still has the best
+> worst-case coverage, but by 0.940 against 0.939, not against 0.849. The margin-drift
+> argument is what carries the default, not the coverage margin.
+>
+> Pinned by `tests/test-published-numbers.R`, so this table is now recomputed from the
+> CSV on every run rather than trusted.
 
 **Three conclusions.**
 

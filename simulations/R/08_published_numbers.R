@@ -38,15 +38,23 @@
 #'   at published precision, and whose first column is the row key
 published_table <- function(id) {
   f <- switch(id,
-    "study09a-result"  = .pub_09a_result,
-    "study09a-ranking" = .pub_09a_ranking,
+    "study09a-result"       = .pub_09a_result,
+    "study09a-ranking"      = .pub_09a_ranking,
+    "roadmap26-or-to-cor"   = .pub_roadmap26,
     stop("no recipe for pinned table '", id, "'"))
   f()
 }
 
 
-#' Every id this module can recompute
-published_table_ids <- function() c("study09a-result", "study09a-ranking")
+#' Every id this module can recompute, and the document each one lives in
+#'
+#' Not every published table is in README.md: ROADMAP.md carries the argument tables for
+#' the items themselves, and one of those had gone stale in the same way.
+published_table_ids <- function() {
+  c("study09a-result"     = "README.md",
+    "study09a-ranking"    = "README.md",
+    "roadmap26-or-to-cor" = "ROADMAP.md")
+}
 
 
 ## The (r)-scale rows of 09a scored on each method's own estimand -- "computational
@@ -95,6 +103,41 @@ published_table_ids <- function() c("study09a-result", "study09a-ranking")
                        sprintf("%.3f", o$coverage)),
     rank_cov  = .pub_ordinal(o$rank_cov),
     stringsAsFactors = FALSE)
+}
+
+
+## Roadmap item 2.6's argument table. Three of its columns are ordinary slices; two are
+## not, and both definitions were only recoverable by measurement because the table did
+## not state them:
+##
+##   * "worst coverage" is the minimum across ALL THREE targets, not just `own` -- which
+##     is why lipsey_cooper reads 0.000 (fine against its own estimand at 0.872, and it
+##     collapses against the population tetrachoric);
+##   * "margin drift" is computed on the POPULATION target, not `own`. For four of the
+##     five methods the two coincide, so only lipsey_cooper distinguishes them -- 0.1127
+##     against 0.0984. Reading it as `own` is what led to a wrong guess that this
+##     column was stale. It is not: all five values reproduce exactly.
+##
+## Both definitions are now written into the table's footnote as well as encoded here.
+.pub_roadmap26 <- function() {
+  d <- utils::read.csv(dir_agg("09a_or_to_cor_CONT_nrep1000.csv"), stringsAsFactors = FALSE)
+  d <- d[grepl("[(]r[)]", d$method), , drop = FALSE]
+  d$m <- sub(" [(]r[)]", "", d$method)
+
+  meths <- c("2x2_tetrachoric", "bonett", "digby", "pearson", "lipsey_cooper")
+  do.call(rbind, lapply(meths, function(mm) {
+    k <- d[d$m == mm, , drop = FALSE]
+    own <- k[k$target == "own", ]
+    pop <- k[k$target == "population", ]
+    dr  <- pop[abs(pop$rho - 0.5) < 1e-9 & pop$n == 300, ]
+    data.frame(
+      option       = mm,
+      bias_own     = sprintf("%.4f", round(mean(abs(own$bias), na.rm = TRUE), 4)),
+      bias_pop     = sprintf("%.4f", round(mean(abs(pop$bias), na.rm = TRUE), 4)),
+      worst_cov    = sprintf("%.3f", round(min(k$coverage, na.rm = TRUE), 3)),
+      margin_drift = sprintf("%.4f", round(diff(range(dr$bias, na.rm = TRUE)), 4)),
+      stringsAsFactors = FALSE)
+  }))
 }
 
 
