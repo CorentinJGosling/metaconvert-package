@@ -88,8 +88,8 @@ Note that this conversion assumes that responses within the two groups follow lo
 \deqn{R\_ci\_up = \frac{1}{a} * tanh(\frac{Z\_up}{a})}
 
 Note: this \eqn{Z} is Jacobs & Viechtbauer's (2017) variance-stabilizing transform of the
-biserial correlation (with variance \eqn{1/(n-1)}), which is analogous to -- but NOT the
-same as -- Fisher's \eqn{atanh(R)} z-transform for a Pearson correlation (the two coincide
+biserial correlation (with variance \eqn{1/(n-1)}), which is analogous to, but not the
+same as, Fisher's \eqn{atanh(R)} z-transform for a Pearson correlation (the two coincide
 only as the effect approaches 0). It is intended for constructing the confidence interval
 of a single coefficient. For a meta-analysis that mixes standardized-mean-difference and
 genuine-correlation studies, pool on the correlation (\eqn{R}) scale, where biserial and

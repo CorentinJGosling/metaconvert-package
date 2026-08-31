@@ -11,7 +11,8 @@ es_from_cronbach_alpha(
   cronbach_alpha_se,
   cronbach_alpha_ci_lo,
   cronbach_alpha_ci_up,
-  alpha_to_es = "bonett"
+  alpha_to_es = "bonett",
+  alpha_se_source = "closed_form"
 )
 }
 \arguments{
@@ -31,6 +32,21 @@ scale}. Optional. When supplied it takes precedence over the closed-form
 
 \item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha.
 Must be one of \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}.}
+
+\item{alpha_se_source}{where the standard error comes from when the study reported
+neither \code{cronbach_alpha_se} nor a confidence interval. \code{"closed_form"}
+(default, the pre-existing behaviour) uses the \eqn{(n, k)} formula belonging to the
+selected \code{alpha_to_es} scale; \code{"reported"} refuses it and leaves
+\code{alpha_se = NA}, so the row stays visible but unpooled.
+
+The closed form inherits Bonett's multivariate-\strong{normality} assumption, which this
+help page did not previously state. Measured
+(\code{simulations/studies/11_reliability_se.R}): on ordinary Likert items it is well
+calibrated (SE ratio 0.95-1.06, 95\% coverage .94-.96), but under a severe floor effect
+it is about 22\% too small (coverage .89) and on dichotomous items about 37\% too small
+(coverage .78, reproducing Maydeu-Olivares et al. (2007) Table 5, and \emph{not}
+improving with \eqn{n}). Flag V44 identifies the affected rows from \code{scale_mean},
+\code{n_response_categories} and \code{scale_min}.}
 }
 \value{
 This function estimates the standard error of the Cronbach's alpha.
@@ -66,7 +82,7 @@ by \code{summary()}.
 
 Unlike omega, alpha does have a closed-form variance in \eqn{(n, k)}, so the third route
 is the usual one. The first two matter because a reported interval is sometimes all a
-study gives -- and because they are the only way to enter an alpha whose item count was
+study gives, and because they are the only way to enter an alpha whose item count was
 never reported.
 This function computes an effect size from a Cronbach's alpha.
 \enumerate{

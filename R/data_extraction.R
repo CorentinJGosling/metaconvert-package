@@ -43,9 +43,12 @@
 #' @examples
 #' data_extraction_sheet(measure = "md", extension = "data.frame")
 data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
-                                              "or", "rr", "nnt", "rd",
-                                              "r", "z", "logvr", "logcvr", "irr",
-                                              "prop"),
+                                              "r", "z", "rp", "zp",
+                                              "or", "rr", "irr", "hr",
+                                              "logor", "logrr", "logirr", "loghr",
+                                              "logvr", "logcvr", "nnt", "rd",
+                                              "prop", "alpha", "omega", "icc",
+                                              "all"),
                                   type_of_measure = c("natural", "natural+converted"),
                                   name = "mcv_data_extraction",
                                   extension = c("data.frame", ".txt", ".csv", ".xlsx"),
@@ -54,13 +57,28 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
   type_of_measure = type_of_measure[1]
   extension = extension[1]
   measure = measure[1]
-  # NB the sixth name is "info_expected", NOT "all_info_expected". This line used to
-  # emit "all_info_expected", a string that appeared nowhere else in the
-  # package: .check_data() (R/internal_check_data.R:47) and summary() (
-  # R/functions_summary.R:598) both read "info_expected". A user who filled the sheet
-  # exactly as generated therefore had the value silently discarded -- .check_data()
-  # manufactured info_expected all-NA and functions_summary.R dropped it, so the
-  # documented column (man/summary.metaConvert.Rd) never populated for anyone using
+
+  # The supported set is read off the argument's own choices vector rather than
+  # re-typed, so the guard at the end of the dispatch chain cannot drift away from
+  # what the help page promises (the way see_input_data()'s hard-coded exclusion
+  # list did).
+  supported_measures = eval(formals(data_extraction_sheet)$measure)
+
+  # "logor"/"logrr"/"logirr"/"loghr" are convert_df()'s own names for the four ratio
+  # measures, so a user who starts from that vocabulary asks for them here too. They
+  # take exactly the same input columns as "or"/"rr"/"irr"/"hr", so they are aliased
+  # onto those blocks rather than duplicated in the chain below.
+  measure = switch(measure,
+                   logor = "or", logrr = "rr", logirr = "irr", loghr = "hr",
+                   measure)
+
+  # The sixth name is "info_expected", not "all_info_expected". .check_data()
+  # (R/internal_check_data.R:47) and summary() (R/functions_summary.R:598) both read
+  # "info_expected", and that string appears nowhere else in the package. Emitting
+  # "all_info_expected" here would mean a user who filled the sheet exactly as
+  # generated had the value discarded without a message: .check_data() would
+  # manufacture an all-NA info_expected and functions_summary.R would drop it, so the
+  # documented column (man/summary.metaConvert.Rd) would never populate for anyone using
   # the generated sheet. Pinned by tests/testthat/test-extraction-sheet-column-names.R.
   cols_req = c("study_id", "author", "year", "predictor", "outcome", "info_expected")
   inf_req = c("unique ID for each study - numeric/character",
@@ -503,21 +521,31 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "standard deviation of the independent variable - numeric"
       )
 
+    # n_response_categories + scale_mean feed V44's floor-effect check. They are
+    # These are dedicated columns rather than a reuse of mean_exp/mean_sd_exp, because
+    # a measurement-properties review legitimately carries a known-groups validity
+    # contrast on the same row. mean_exp and mean_nexp are already spoken for there,
+    # so overloading them would make the two analyses collide.
     cols_alpha = c("cronbach_alpha", "cronbach_alpha_se", "cronbach_alpha_ci_lo",
-                   "cronbach_alpha_ci_up", "n_items")
+                   "cronbach_alpha_ci_up", "n_items",
+                   "n_response_categories", "scale_mean", "scale_min")
     inf_alpha = c(
       "Cronbach's alpha reliability coefficient - numeric",
       "standard error of alpha, on the NATURAL (coefficient) scale - numeric",
       "lower bound of the 95% CI of alpha (natural scale) - numeric",
       "upper bound of the 95% CI of alpha (natural scale) - numeric",
-      "number of items in the scale - numeric")
+      "number of items in the scale - numeric",
+      "number of response categories per item (e.g. 5 for a 5-point Likert) - numeric",
+      "mean of the TOTAL scale score in the sample (not the item mean) - numeric",
+      "lowest score a SINGLE item can take (0 or 1; e.g. 1 for a 1-5 Likert, 0 for PHQ-9) - numeric")
 
-    # n_items is NOT used in omega's arithmetic -- unlike alpha, omega has no (n, k)
-    # sampling variance and its SE comes from the study. It is here because V37 (item
-    # count constant across a pool sharing one instrument) reads the column, and
-    # without it in this template that check is simply unreachable for an omega review.
+    # n_items is not used in omega's arithmetic: unlike alpha, omega has no (n, k)
+    # sampling variance, and its SE comes from the study. It is here because V37, the
+    # item-count-constant check, reads the column, and without it in this template that
+    # check is unreachable for an omega review.
     cols_omega = c("omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type",
-                   "omega_estimator", "n_items")
+                   "omega_estimator", "n_items",
+                   "n_response_categories", "scale_mean", "scale_min")
     inf_omega = c(
       "McDonald's omega reliability coefficient (natural scale) - numeric",
       "standard error of omega, ON THE NATURAL SCALE - numeric",
@@ -525,7 +553,10 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "upper bound of the 95% CI of omega (natural scale) - numeric",
       "which omega: 'total' (default), 'hierarchical', 'asymptotic' or 'subscale' - character",
       "how omega was estimated: 'cfa_bifactor', 'cfa_1factor', 'efa_schmid_leiman', 'first_pc', 'first_pf' or 'unspecified' - character",
-      "number of items in the scale - numeric (not used in omega's variance; enables the item-count check)")
+      "number of items in the scale - numeric (not used in omega's variance; enables the item-count check)",
+      "number of response categories per item (e.g. 5 for a 5-point Likert) - numeric",
+      "mean of the TOTAL scale score in the sample (not the item mean) - numeric",
+      "lowest score a SINGLE item can take (0 or 1; e.g. 1 for a 1-5 Likert, 0 for PHQ-9) - numeric")
 
     cols_icc = c("icc", "icc_se", "icc_ci_lo", "icc_ci_up",
                  "n_measurements", "icc_type")
@@ -756,14 +787,24 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
                          cols_alpha, cols_omega, cols_icc,
                          cols_input_crude, cols_input_adjusted)
 
+    } else {
+      # The chain had no terminal `else`, so an unmatched value left `dat` unassigned
+      # and the function died a dozen lines below on `duplicated(colnames(dat))` with
+      # the internal "object 'dat' not found" -- for a plain typo, and (before the
+      # aliasing above) for the four log-scale names the @param text documents.
+      # Reject by name instead, as see_input_data() does.
+      stop("data_extraction_sheet(): unsupported 'measure' value \"", measure, "\". ",
+           "Supported values are ",
+           paste0("\"", supported_measures, "\"", collapse = ", "), ".",
+           call. = FALSE)
     }
 
   # A column that belongs to more than one measure block appears once per block, so the
   # assembled sheet carries duplicate names: `reverse_prop` and `n_cases` under
   # measure = "all" (2.0.1 audit #25), joined by `n_items` once it was added to the
-  # omega block as well as alpha. A duplicate is not harmless -- the sheet is meant to
-  # be filled in and re-imported, and on re-import only ONE of the copies is read, so a
-  # user who fills in the second gets silence rather than an error.
+  # omega block as well as alpha. A duplicate is not harmless: the sheet is meant to be
+  # filled in and re-imported, and on re-import only one of the copies is read, so a
+  # user who fills in the second gets no value and no error.
   #
   # Deduplicate on the way out, keeping the first occurrence, so every block can list
   # every column it genuinely needs without the blocks having to know about each other.
@@ -793,9 +834,11 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
 #'
 #' @param name Name of the file created
 #' @param measure Target effect size measure. One of "all", "d", "g", "md", "or", "rr",
-#'   "nnt", "r", "z", "irr", "logvr" or "logcvr". Default is "all". The risk difference and
-#'   the psychometric measures (rd, alpha, icc, prop, hr) are not covered by this table;
-#'   use \code{\link{data_extraction_sheet}()} for those.
+#'   "nnt", "r", "z", "irr", "logvr" or "logcvr". Default is "all". This table is built
+#'   from the measure = "d" hierarchy, so the eleven remaining metaConvert measures - the
+#'   within-group family (dw, gw, mdw), the partial-correlation family (rp, zp), the
+#'   hazard ratio, the risk difference and the psychometric measures (prop, alpha, omega,
+#'   icc) - are not covered by it; use \code{\link{data_extraction_sheet}()} for those.
 #' @param extension Extension of the file created. Most common are ".xlsx", ".csv" or ".txt". It is also possible to generate an R dataframe object by using the "data.frame" extension.
 #' @param type_of_measure One of "natural+converted" or "natural" (see details).
 #' @param verbose logical variable indicating whether some information should be printed (e.g., the location where the sheet is created when using ".xlsx", ".csv" or ".txt" extensions)
@@ -851,11 +894,18 @@ see_input_data <- function(measure = c("all", "d", "g", "md", "or", "rr", "nnt",
   supported_measures = c("all", "d", "g", "md", "or", "rr", "nnt",
                          "r", "z", "Z", "logvr", "logcvr", "irr")
   if (!measure %in% supported_measures) {
+    # The message used to enumerate the uncovered measures by name, and the
+    # enumeration was already wrong: it listed five of the eleven, omitting the
+    # within-group family, the partial-correlation family and omega. A hard-coded
+    # exclusion list goes stale every time a measure is added, so the message now
+    # states the positive set (which is the guard's own vector) and describes the
+    # remainder rather than naming it.
     stop("see_input_data(): unsupported 'measure' value \"", measure, "\". Supported ",
          "values are ", paste0("\"", setdiff(supported_measures, "Z"), "\"", collapse = ", "),
-         ". The risk difference and the psychometric measures (\"rd\", \"alpha\", \"icc\", ",
-         "\"prop\", \"hr\") are not covered by this table; use data_extraction_sheet() ",
-         "for those.", call. = FALSE)
+         ". This table is built from the measure = d hierarchy, so the remaining ",
+         "metaConvert measures - the within-group and partial-correlation families, ",
+         "the hazard ratio, the risk difference and the psychometric measures - are ",
+         "not covered by it; use data_extraction_sheet() for those.", call. = FALSE)
   }
 
   hier_list = convert_df(df.haza[1, ], measure = "d", verbose=FALSE)

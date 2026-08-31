@@ -1,3 +1,67 @@
+# Shared fallback for the phi family, called by es_from_phi() and es_from_chisq(). It
+# lives in one place because the two entry points already drifted once: commit 2b6f141
+# added the estimand disclosure below to the phi route only, leaving the byte-identical
+# chisq copy silent for a release.
+#
+# `miss` names the rows whose 2x2 table could NOT be reconstructed, and `r_vec` holds the
+# phi coefficient for those rows -- supplied directly by es_from_phi(), and as
+# phi = sqrt(chisq / n_sample) by es_from_chisq(). A phi coefficient is the Pearson
+# correlation of two binary variables, so R/Z/D/G are delivered by delegating to the
+# es_from_pearson_r() engine. That gives the standard sampling variances
+# (z_se = 1/sqrt(n-3), r_se = (1-r^2)/sqrt(n-1), matching metafor) rather than an ad hoc
+# formula, which would inflate the SE by up to about 22% at large phi, so a phi-only row
+# yields the same R/Z/D/G as an equivalent pearson_r row. Note that the R -> D step
+# assumes balanced groups; OR/RR/NNT require the 2x2 margins and remain NA.
+#
+# `fn` is the calling entry point (it names itself in the notice), `quantity` is how that
+# entry point should describe the correlation it substitutes, and `info` is the info_used
+# label the rows carry.
+.phi_family_fallback <- function(es, r_vec, n_sample, reverse, miss, fn, quantity, info) {
+  if (length(miss) == 0) return(es)
+
+  pr <- es_from_pearson_r(
+    pearson_r = r_vec[miss], n_sample = n_sample[miss],
+    reverse_pearson_r = reverse[miss]
+  )
+  fb_cols <- intersect(
+    c("d", "d_se", "d_ci_lo", "d_ci_up", "g", "g_se", "g_ci_lo", "g_ci_up",
+      "r", "r_se", "r_ci_lo", "r_ci_up", "z", "z_se", "z_ci_lo", "z_ci_up"),
+    intersect(colnames(es), colnames(pr))
+  )
+  es[miss, fb_cols] <- pr[, fb_cols]
+
+  # The estimand changes here, so the message says so. The reconstructed path returns the
+  # tetrachoric correlation of the two latent continua, typically 1.5x-3.2x the supplied
+  # phi, whereas this fallback returns phi itself. Which one a row receives depends only
+  # on whether the user happened to record n_cases and n_exp, and both rows carry the
+  # same info_used. A single call producing both therefore mixes two different
+  # correlations in one column, and phi is additionally not comparable across studies
+  # with different margins (see ?convert_df).
+  .mixed <- any(!is.na(es$r[-miss]))
+  .notify_once(
+    paste0(if (.mixed) "phi_estimand_mixed" else "phi_estimand_fallback", "_", fn),
+    if (.mixed) {
+      paste0(
+        fn, "(): this call returned TWO DIFFERENT correlation estimands. ",
+        length(miss), " row(s) lack n_cases / n_exp, so their 2x2 table could not be ",
+        "reconstructed and R/Z are ", quantity, "; the remaining rows ",
+        "have R/Z as the TETRACHORIC correlation derived from the reconstructed ",
+        "table, which is typically 1.5-3x larger. Both are reported as ",
+        "info_used = '", info, "'. Do NOT pool them together: supply n_cases and n_exp ",
+        "for every row, or analyse the two groups separately. See ?", fn, ".")
+    } else {
+      paste0(
+        fn, "(): n_cases / n_exp are missing, so the 2x2 table could not be ",
+        "reconstructed. R and Z are ", quantity, ", NOT the tetrachoric ",
+        "correlation returned when the table is available. phi is bounded by the ",
+        "margins and is not comparable across studies with different event rates ",
+        "(see ?convert_df). OR, RR and NNT need the margins and are NA. Supply ",
+        "n_cases and n_exp to obtain the tetrachoric instead.")
+    })
+
+  es
+}
+
 #' Convert a phi value to several effect size measures
 #'
 #' @param phi phi value
@@ -23,7 +87,7 @@
 #'
 #' **To estimate D, G and the correlation coefficients (R/Z) when the 2x2 table cannot be
 #' reconstructed** (e.g., the number of cases or exposed participants is missing), the phi
-#' coefficient -- which is the Pearson correlation of the two binary variables -- is
+#' coefficient, which is the Pearson correlation of the two binary variables, is
 #' treated directly as a correlation coefficient and passed to
 #' \code{\link{es_from_pearson_r}()}. This yields R and Z with their standard large-sample
 #' sampling variances,
@@ -71,7 +135,7 @@ es_from_phi <- function(phi, n_cases, n_exp,
   if (length(reverse_phi) != length(phi)) stop("The length of the 'reverse_phi' argument is incorrectly specified.")
 
   # A phi coefficient is a correlation and must lie in [-1, 1]; metafor::conv.2x2()
-  # raises a HARD ERROR (not a warning) on |phi| > 1, which would abort an entire
+  # raises an error rather than a warning on |phi| > 1, which would abort an entire
   # convert_df() run over the other (valid) rows. Guard here so a single out-of-range
   # value degrades to an all-NA row (the package's one-bad-cell-cannot-abort contract).
   # convert_df()'s Tier-1 validation already NA's such values under correct_inputs =
@@ -93,58 +157,23 @@ es_from_phi <- function(phi, n_cases, n_exp,
     reverse_2x2 = reverse_phi
   )
 
-  # Fallback for rows where the 2x2 table could NOT be reconstructed (n_cases / n_exp
-  # missing, so conv.2x2 returns NA cells and OR/RR/NNT are NA): a phi coefficient IS the
-  # Pearson correlation of two binary variables, so deliver R/Z/D/G by treating phi as a
-  # Pearson r and delegating to the vetted es_from_pearson_r() engine. This gives the
-  # STANDARD sampling variances (z_se = 1/sqrt(n-3), r_se = (1-r^2)/sqrt(n-1), matching
-  # metafor) rather than the earlier ad hoc formula that inflated the SE by up to ~22% at
-  # large phi. A phi-only row therefore yields the SAME R/Z/D/G as an equivalent
-  # pearson_r row (internal consistency). NB: the R -> D step assumes balanced groups;
-  # OR/RR/NNT require the 2x2 margins and remain NA when they are missing.
-  miss <- which(is.na(es$r) & !is.na(phi) & !is.na(n_sample) & abs(phi) < 1)
-  if (length(miss) > 0) {
-    pr <- es_from_pearson_r(
-      pearson_r = phi[miss], n_sample = n_sample[miss],
-      reverse_pearson_r = reverse_phi[miss]
-    )
-    fb_cols <- intersect(
-      c("d", "d_se", "d_ci_lo", "d_ci_up", "g", "g_se", "g_ci_lo", "g_ci_up",
-        "r", "r_se", "r_ci_lo", "r_ci_up", "z", "z_se", "z_ci_lo", "z_ci_up"),
-      intersect(colnames(es), colnames(pr))
-    )
-    es[miss, fb_cols] <- pr[, fb_cols]
-
-    # THE ESTIMAND SWITCHES HERE, so say so. The reconstructed path returns the
-    # TETRACHORIC correlation of the two latent continua (typically 1.5x-3.2x the
-    # supplied phi); this fallback returns phi itself. Which one a row receives depends
-    # only on whether the user happened to record n_cases / n_exp, and both are labelled
-    # info_used = "phi". A single call that produces both is therefore mixing two
-    # different correlations in one column -- and phi is additionally not comparable
-    # across studies with different margins (see ?convert_df). Silence here was the
-    # package's own version of the defect this release documents elsewhere.
-    .mixed <- any(!is.na(es$r[-miss]))
-    .notify_once(
-      if (.mixed) "phi_estimand_mixed" else "phi_estimand_fallback",
-      if (.mixed) {
-        paste0(
-          "es_from_phi(): this call returned TWO DIFFERENT correlation estimands. ",
-          length(miss), " row(s) lack n_cases / n_exp, so their 2x2 table could not be ",
-          "reconstructed and R/Z are the phi coefficient itself; the remaining rows ",
-          "have R/Z as the TETRACHORIC correlation derived from the reconstructed ",
-          "table, which is typically 1.5-3x larger. Both are reported as ",
-          "info_used = 'phi'. Do NOT pool them together: supply n_cases and n_exp for ",
-          "every row, or analyse the two groups separately. See ?es_from_phi.")
-      } else {
-        paste0(
-          "es_from_phi(): n_cases / n_exp are missing, so the 2x2 table could not be ",
-          "reconstructed. R and Z are the phi coefficient itself, NOT the tetrachoric ",
-          "correlation returned when the table is available. phi is bounded by the ",
-          "margins and is not comparable across studies with different event rates ",
-          "(see ?convert_df). OR, RR and NNT need the margins and are NA. Supply ",
-          "n_cases and n_exp to obtain the tetrachoric instead.")
-      })
-  }
+  # Rows where the 2x2 table could not be reconstructed, because n_cases or n_exp is
+  # missing, so conv.2x2() returns NA cells and OR/RR/NNT are NA. The gate keys on the
+  # CAUSE (no rebuilt table), not on the symptom (es$r is NA): es$r is also NA when the
+  # tetrachoric solve is unavailable for an unrelated reason -- notably a missing
+  # 'mvtnorm', which is CRAN's noSuggests flavour and any plain
+  # install.packages("metafor"), since mvtnorm is a Suggests of metafor rather than an
+  # Imports. On the old symptom gate such a row fell back even though its margins WERE
+  # supplied, overwriting the d/g that came correctly from the reconstructed table's log
+  # OR and never needed mvtnorm at all (d fell 0.8897 -> 0.4962, -44%), under a message
+  # asserting a cause that was false. A rebuilt row now keeps its 2x2-derived estimates
+  # and leaves r/z as NA, with .tet_r()'s mvtnorm notice standing alone.
+  rebuilt <- !is.na(cont_table$ai)
+  miss <- which(!rebuilt & !is.na(phi) & !is.na(n_sample) & abs(phi) < 1)
+  es <- .phi_family_fallback(
+    es, r_vec = phi, n_sample = n_sample, reverse = reverse_phi, miss = miss,
+    fn = "es_from_phi", quantity = "the phi coefficient itself", info = "phi"
+  )
 
   es$info_used <- "phi"
 
@@ -231,27 +260,20 @@ es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
     reverse_2x2 = reverse_chisq
   )
 
-  # Fallback for rows where the 2x2 table could NOT be reconstructed (n_cases / n_exp
-  # missing). For a 1-df chi-square, phi = sqrt(chisq / n) is the Pearson correlation of
-  # the two binary variables (its sign is not identified by chisq alone, so it is taken
-  # positive and flipped by reverse_chisq). Deliver R/Z/D/G by treating phi as a Pearson
-  # r via the vetted es_from_pearson_r() engine, giving the STANDARD SEs (matching
-  # metafor) rather than the earlier ad hoc, SE-inflating formula. OR/RR/NNT require the
-  # 2x2 margins and remain NA; the R -> D step assumes balanced groups.
+  # Rows where the 2x2 table could not be reconstructed, because n_cases or n_exp is
+  # missing. For a 1-df chi-square, phi = sqrt(chisq / n) is the Pearson correlation of
+  # the two binary variables; its sign is not identified by chisq alone, so it is taken
+  # positive and flipped by reverse_chisq. Same cause-based gate as es_from_phi() (see
+  # the note there), and now the same disclosure: the estimand switch is identical, and
+  # this entry point was silent about it for a release.
   r_chi <- suppressWarnings(sqrt(chisq / n_sample))
-  miss <- which(is.na(es$r) & !is.na(r_chi) & is.finite(r_chi) & r_chi < 1 & !is.na(n_sample))
-  if (length(miss) > 0) {
-    pr <- es_from_pearson_r(
-      pearson_r = r_chi[miss], n_sample = n_sample[miss],
-      reverse_pearson_r = reverse_chisq[miss]
-    )
-    fb_cols <- intersect(
-      c("d", "d_se", "d_ci_lo", "d_ci_up", "g", "g_se", "g_ci_lo", "g_ci_up",
-        "r", "r_se", "r_ci_lo", "r_ci_up", "z", "z_se", "z_ci_lo", "z_ci_up"),
-      intersect(colnames(es), colnames(pr))
-    )
-    es[miss, fb_cols] <- pr[, fb_cols]
-  }
+  rebuilt <- !is.na(cont_table$ai)
+  miss <- which(!rebuilt & !is.na(r_chi) & is.finite(r_chi) & r_chi < 1 &
+                  !is.na(n_sample))
+  es <- .phi_family_fallback(
+    es, r_vec = r_chi, n_sample = n_sample, reverse = reverse_chisq, miss = miss,
+    fn = "es_from_chisq", quantity = "phi = sqrt(chisq/n) itself", info = "chisq"
+  )
 
   es$info_used <- "chisq"
 

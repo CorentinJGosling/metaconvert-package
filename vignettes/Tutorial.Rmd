@@ -58,9 +58,9 @@ library(metaConvert)
 # DT is a Suggests-only dependency, so it is absent on the check flavour that
 # installs hard dependencies only. Fall back to a static table there.
 show_table <- function(x, ..., digits = 3) {
-  # summary() returns es/se/CI at FULL precision on purpose (se becomes an
+  # summary() returns es/se/CI at full precision on purpose: se becomes an
   # inverse-variance weight downstream, so rounding it in the data would bias
-  # every pooled estimate). Rounding is therefore a display-time job, done here.
+  # every pooled estimate. Rounding is therefore a display-time job, done here.
   if (is.data.frame(x)) {
     num <- vapply(x, is.numeric, logical(1))
     x[num] <- lapply(x[num], round, digits)
@@ -247,7 +247,7 @@ sdc_res
 # I do not like R
 
 If you prefer having a graphical user interface (GUI) when performing data analysis, 
-we are pleased to introduce you to our web app, which enables you to perform ALL calculations of this
+we are pleased to introduce you to our web app, which enables you to perform all calculations of this
 package using an interactive GUI <a href="https://metaconvert.org/" target="_blank">https://metaconvert.org/</a>
 
 ---

@@ -80,7 +80,7 @@ The resulting Cohen's d is the average increase in the dependent variable associ
 
 \strong{C.} Cooper converts a point-biserial correlation to Cohen's d with the fixed
 per-2-SD transformation (Formula 12.38 & 12.39 in Cooper, \code{cor_to_smd = "cooper"}).
-Unlike the \code{"mathur"} option, this branch does NOT use \code{unit_increase_iv},
+Unlike the \code{"mathur"} option, this branch does not use \code{unit_increase_iv},
 \code{unit_type} or \code{sd_iv}; it always returns the standardized mean difference
 between two groups lying two predictor standard deviations apart:
 \deqn{d = \frac{2 * r}{\sqrt{1 - r^2}}}

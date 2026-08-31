@@ -42,7 +42,7 @@
 #'
 #' @return
 #' A dataframe containing the aggregating factor, the aggregated effect size and its
-#' standard error, plus any columns named in the \code{col_*} arguments -- and
+#' standard error, plus any columns named in the \code{col_*} arguments, and
 #' \strong{no other column of the input}. See the note in the details: everything not
 #' listed below is dropped, so a moderator must either be named in a \code{col_*}
 #' argument or merged back afterwards on the aggregating factor.
@@ -185,8 +185,8 @@ aggregate_df <- function(x, dependence = "outcomes", cor_unit = 0.8,
     sum_N <- aggregate.data.frame(x[, weights], by = list(agg = x[, agg_fact]),
                                   FUN = .sum_na, na.rm = na.rm)
 
-    # Carry the aggregate-produced (sorted) key alongside its own values -
-    # unique(x[, agg_fact]) is in APPEARANCE order and would mis-pair labels
+    # Carry the aggregate-produced (sorted) key alongside its own values, because
+    # unique(x[, agg_fact]) is in appearance order and would mis-pair labels
     # with values whenever the input is not pre-sorted. Indexing by name (not
     # $x) also supports multi-column col_weighted_mean.
     df_w_mean <- data.frame(agg = sum_x_pond$agg,
@@ -414,7 +414,7 @@ aggregate_df <- function(x, dependence = "outcomes", cor_unit = 0.8,
   }
 
   # dependence = "times" needs a per-row time index and a within-cluster
-  # correlation. Require the time column, and fall back to the cor_unit ARGUMENT
+  # correlation. Require the time column, and fall back to the cor_unit argument
   # when the data carries no cor_unit column (a cor_unit column takes precedence
   # when present).
   if (!"time_agg" %in% colnames(x)) {
@@ -507,8 +507,8 @@ aggregate_df <- function(x, dependence = "outcomes", cor_unit = 0.8,
   }
   # A non-positive or non-finite SE cannot enter inverse-variance weighting: 1/se^2
   # becomes Inf/NaN, which turns the combined estimate into Inf/Inf = NaN paired with
-  # se = 0 (an incoherent result). Drop such rows -- se = 0 is itself pathological and
-  # is flagged upstream by the Tier-2 'SE is zero' check -- and warn so it is visible.
+  # se = 0, which is incoherent. Drop such rows and warn so the loss is visible; se = 0
+  # is itself pathological and is flagged upstream by the Tier-2 'SE is zero' check.
   bad_se <- !is.finite(x$se) | x$se <= 0
   if (any(bad_se)) {
     warning(sprintf(

@@ -27,7 +27,7 @@ es_from_or_se(
 
 \item{logor_se}{the standard error of the log odds ratio}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group}
+\item{baseline_risk}{proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument, and for the risk difference and the NNT). It is never derived from other columns.}
 
 \item{small_margin_prop}{smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])}
 
@@ -112,15 +112,15 @@ The RR value and its standard are obtained from this estimated contingency table
 than searched.} All four margins together determine the table exactly: the odds ratio
 fixes it through a quadratic, and the reported standard error is not consulted at all.
 So supplying \code{n_cases} (or \code{n_controls}, or \code{baseline_risk}) alongside
-\code{n_exp}/\code{n_nexp} -- or \code{n_exp}/\code{n_nexp} alongside
-\code{n_cases}/\code{n_controls} -- makes the reconstruction exact instead of
+\code{n_exp}/\code{n_nexp}, or \code{n_exp}/\code{n_nexp} alongside
+\code{n_cases}/\code{n_controls}, makes the reconstruction exact instead of
 approximate, and is worth doing whenever the source reports it.
 
-\emph{(ii) When the two supplied margins are EQUAL, that second margin is required, not
-merely helpful.} Rotating a 2x2 table 180 degrees leaves the odds ratio and its
+\emph{(ii) When the two supplied margins are equal, that second margin is required rather
+than merely helpful.} Rotating a 2x2 table 180 degrees leaves the odds ratio and its
 standard error unchanged while swapping the two margins, so at
 \code{n_exp == n_nexp} (respectively \code{n_cases == n_controls}) the rotated table
-is equally compatible with everything reported -- yet it implies a different risk
+is equally compatible with everything reported, yet it implies a different risk
 ratio. The search is then exactly tied, and the winner is decided by enumeration
 order rather than by the data. In that configuration, and only there, these two
 methods now return \code{NA} for the RR with a warning naming the column that would

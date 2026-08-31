@@ -1,0 +1,224 @@
+<title>Simulation Viewer Direction B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* =============================================================================
+   Direction B, second pass.
+
+   Palette is metaconvert.org: rose accent, indigo for data, warm neutrals, no
+   green. One rule governs colour: IT ENCODES DATA. Rose marks the current
+   selection or a value that failed a stated test, never a heading or a divider.
+   ========================================================================== */
+:root{
+  --paper:#fbfaf7; --white:#ffffff;
+  --ink:#1c1a2e; --ink2:#2c2a47; --soft:#56556a; --faint:#83828f;
+  --rule:#e2e2dc; --hair:#eeeee9;
+  --rose:#c0474e; --rose-d:#8f2f36; --t1:#f6e7e7; --t2:#eec9ca;
+  --sans:"Work Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"Cascadia Code","Cascadia Mono","IBM Plex Mono",ui-monospace,Consolas,Menlo,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;}
+.num,table td,table th,.mono,code{font-variant-numeric:tabular-nums lining-nums;
+  font-feature-settings:"tnum" 1,"lnum" 1;}
+code,.mono{font-family:var(--mono);}
+a{color:var(--rose-d);}
+:focus-visible{outline:2px solid var(--rose);outline-offset:2px;}
+@media (prefers-reduced-motion:no-preference){
+  a,button,.sel{transition:color .14s ease,border-color .14s ease,background-color .14s ease;}}
+
+/* ---------- the covering note ------------------------------------------- */
+.sheet{max-width:1180px;margin:0 auto;padding:0 40px 90px;}
+.doc-mast{display:flex;align-items:baseline;gap:11px;padding:20px 0 13px;
+  border-bottom:1px solid var(--ink);}
+.doc-mast .wm{font-size:15px;font-weight:600;letter-spacing:-.01em;}
+.doc-mast .em{color:var(--faint);font-weight:400;}
+.doc-mast .rt{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--faint);}
+h1.doc{font-size:32px;font-weight:600;letter-spacing:-.024em;line-height:1.12;
+  margin:36px 0 12px;max-width:22ch;}
+p.lede{font-size:17px;line-height:1.5;color:var(--soft);margin:0 0 30px;max-width:66ch;}
+h2.doc{font-size:13px;font-weight:600;margin:36px 0 12px;padding-bottom:7px;
+  border-bottom:1px solid var(--rule);}
+.sheet>p{margin:0 0 13px;max-width:74ch;color:var(--soft);}
+.sheet>p b{color:var(--ink);font-weight:600;}
+.sheet code{font-size:.9em;color:var(--ink2);}
+.chg{border-top:1px solid var(--rule);margin:4px 0 0;}
+.chg .r{display:grid;grid-template-columns:34px minmax(0,26ch) minmax(0,1fr);
+  gap:0 22px;padding:13px 0;border-bottom:1px solid var(--hair);align-items:baseline;}
+.chg .r .k{font-family:var(--mono);font-size:12px;color:var(--rose-d);}
+.chg .r .a{font-size:13px;color:var(--faint);font-style:italic;}
+.chg .r .b{font-size:13.5px;color:var(--soft);line-height:1.5;}
+.chg .r .b b{color:var(--ink);font-weight:600;}
+@media(max-width:760px){.chg .r{grid-template-columns:26px minmax(0,1fr);}
+  .chg .r .b{grid-column:2;}}
+.foot{margin-top:40px;padding-top:12px;border-top:1px solid var(--rule);
+  font-size:12px;color:var(--faint);line-height:1.7;}
+.foot b{color:var(--soft);font-weight:500;}
+
+/* ---------- the mockup --------------------------------------------------- */
+.mock{background:var(--white);border:1px solid var(--rule);margin-top:26px;}
+.mast{display:flex;align-items:center;gap:10px;padding:11px 24px;
+  border-bottom:1px solid var(--ink);}
+.mast .wm{font-size:13.5px;font-weight:600;letter-spacing:-.01em;}
+.mast .wm em{font-style:normal;color:var(--faint);font-weight:400;}
+.mast .rt{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--faint);}
+.mast .rt a{color:var(--faint);text-decoration:none;border-bottom:1px solid var(--rule);}
+.body{padding:20px 24px 26px;}
+
+/* the study picker: the one control that changes everything below it, so it is
+   the only one drawn as a field rather than as a token */
+.pick{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding-bottom:16px;border-bottom:1px solid var(--rule);}
+.pick .lb{font-size:11.5px;color:var(--faint);letter-spacing:0;}
+.pick .sel{display:flex;align-items:center;gap:12px;cursor:pointer;
+  border:1px solid var(--ink);background:var(--white);padding:8px 14px 8px 12px;
+  min-width:420px;}
+.pick .sel:hover{border-color:var(--rose);}
+.pick .sel .ix{font-family:var(--mono);font-size:12.5px;color:var(--rose-d);}
+.pick .sel .tt{font-size:19px;font-weight:600;letter-spacing:-.015em;line-height:1.2;}
+.pick .sel .cv{margin-left:auto;color:var(--faint);font-size:12px;}
+.pick .nav{display:flex;gap:0;}
+.pick .nav button{appearance:none;background:var(--white);cursor:pointer;
+  border:1px solid var(--rule);width:30px;height:35px;color:var(--soft);
+  font-size:14px;line-height:1;font-family:var(--sans);}
+.pick .nav button+button{border-left:0;}
+.pick .nav button:hover{color:var(--ink);border-color:var(--ink);}
+.pick .ct{font-family:var(--mono);font-size:12px;color:var(--faint);}
+.pick .arg{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--faint);}
+
+.q{font-size:15px;color:var(--soft);margin:15px 0 5px;max-width:80ch;}
+.q code{font-size:.9em;}
+.slice{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:0 0 22px;}
+.slice b{color:var(--soft);font-weight:400;}
+
+h3.s{font-size:12.5px;font-weight:600;margin:26px 0 0;padding-bottom:6px;
+  border-bottom:1px solid var(--ink);display:flex;align-items:baseline;gap:12px;}
+h3.s .n{margin-left:auto;font-family:var(--mono);font-size:11px;
+  color:var(--faint);font-weight:400;}
+
+/* routes and their estimands: the block doubles as the route selector, so the
+   tick, the colour key and the definition are one row instead of three places */
+table.routes{border-collapse:collapse;width:100%;font-size:13px;margin-top:2px;}
+table.routes td{padding:11px 0 11px 20px;border-bottom:1px solid var(--hair);
+  vertical-align:baseline;}
+table.routes tr:last-child td{border-bottom:0;}
+table.routes td.tk{padding-left:0;width:26px;}
+table.routes td.nm{font-family:var(--mono);color:var(--ink);white-space:nowrap;
+  padding-left:0;}
+table.routes td.nm i{width:9px;height:9px;display:inline-block;margin-right:9px;
+  vertical-align:middle;position:relative;top:-1px;}
+table.routes td.es{color:var(--ink);font-weight:600;white-space:nowrap;}
+table.routes td.ref{color:var(--faint);font-size:12px;text-align:right;
+  line-height:1.5;}
+input[type=checkbox]{accent-color:var(--rose);width:14px;height:14px;margin:0;}
+
+/* scored against: the choice that decides the answer, so it navigates the page */
+.estr{margin-top:22px;border-top:1px solid var(--ink);}
+.estr .lb{display:flex;align-items:baseline;gap:14px;padding:7px 0 0;
+  font-size:11.5px;color:var(--faint);}
+.estr .lb .as{margin-left:auto;}
+.estr .row{display:flex;flex-wrap:nowrap;overflow-x:auto;
+  border-bottom:1px solid var(--rule);}
+.estr button{appearance:none;background:none;border:0;cursor:pointer;
+  font-family:var(--mono);font-size:12.5px;color:var(--soft);white-space:nowrap;
+  padding:9px 16px 10px;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.estr button:first-child{padding-left:0;}
+.estr button:hover{color:var(--ink);}
+.estr button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--rose);}
+
+/* the ledger: routes down, reference quantities across */
+table.ledger{border-collapse:collapse;font-size:12.5px;width:100%;
+  max-width:760px;margin-top:20px;}
+table.ledger th{font-weight:400;font-size:11.5px;color:var(--soft);
+  padding:0 0 8px 14px;text-align:right;white-space:nowrap;
+  border-bottom:1px solid var(--ink);}
+table.ledger th.l{text-align:left;padding-left:0;color:var(--faint);}
+/* the selected column is tinted head to foot so it reads as one block rather
+   than as two shaded cells under an unshaded label */
+table.ledger th.on{color:var(--rose-d);font-weight:600;background:var(--t1);
+  padding-top:6px;}
+table.ledger td{font-family:var(--mono);text-align:right;padding:9px 0 9px 14px;
+  color:var(--ink2);white-space:nowrap;border-bottom:1px solid var(--hair);}
+table.ledger td.l{text-align:left;padding-left:0;color:var(--ink);}
+table.ledger td.l i{width:9px;height:9px;display:inline-block;margin-right:9px;
+  vertical-align:middle;position:relative;top:-1px;}
+table.ledger td.on{background:var(--t1);}
+table.ledger td.bad{color:var(--rose-d);}
+table.ledger td .sm{display:block;font-size:11px;color:var(--faint);margin-top:2px;}
+table.ledger tbody tr:last-child td{border-bottom:1.4px solid var(--ink);}
+.lednote{font-size:12.5px;color:var(--soft);margin:11px 0 0;max-width:82ch;
+  line-height:1.55;}
+.lednote b{color:var(--ink);font-weight:600;}
+.lednote .fn{color:var(--faint);}
+
+/* the plot section carries its own controls, because a control whose object is
+   two screens away reads as belonging to something else */
+.plot{display:grid;grid-template-columns:186px minmax(0,1fr);gap:0;
+  margin-top:14px;}
+.plot .rail{border-right:1px solid var(--rule);padding:14px 20px 14px 0;}
+.plot .rail h4{font-size:11px;font-weight:600;color:var(--faint);margin:0 0 7px;}
+.plot .rail h4+h4,.plot .rail .fld+h4,.plot .rail label+h4{margin-top:16px;}
+.plot .rail .fld{font-family:var(--mono);font-size:12px;color:var(--ink2);
+  border-bottom:1px solid var(--rule);padding:3px 0 5px;display:flex;
+  align-items:center;cursor:pointer;}
+.plot .rail .fld::after{content:"\2304";margin-left:auto;color:var(--faint);
+  font-family:var(--sans);font-size:10px;position:relative;top:-2px;}
+.plot .rail .fld:hover{color:var(--rose-d);border-bottom-color:var(--rose);}
+.plot .rail .fld+.fld{margin-top:5px;}
+.plot .rail label{display:flex;align-items:center;gap:8px;font-size:12px;
+  color:var(--soft);cursor:pointer;}
+.plot .rail .dl{font-family:var(--mono);font-size:11.5px;color:var(--rose-d);
+  text-decoration:none;border-bottom:1px solid var(--t2);}
+.plot .fig{padding:14px 0 0 26px;min-width:0;}
+.plot .fig .key{font-family:var(--mono);font-size:11.5px;color:var(--soft);
+  display:flex;gap:18px;margin:0 0 10px;}
+.plot .fig .key i{width:9px;height:9px;display:inline-block;margin-right:7px;
+  vertical-align:middle;position:relative;top:-1px;}
+figure{margin:0;}
+figure svg{display:block;width:100%;height:auto;}
+figcaption{font-size:11.5px;color:var(--faint);margin-top:9px;line-height:1.6;
+  max-width:86ch;}
+@media(max-width:820px){.plot{grid-template-columns:1fr;}
+  .plot .rail{border-right:0;border-bottom:1px solid var(--rule);padding:14px 0;}
+  .plot .fig{padding-left:0;}
+  .pick .sel{min-width:0;flex:1;}}
+</style>
+
+<div class="sheet">
+
+<header class="doc-mast">
+  <span class="wm">metaConvert <span class="em">&middot; simulation programme</span></span>
+  <span class="rt">direction B, second pass &middot; 2026-08-25</span>
+</header>
+
+<h1 class="doc">Two questions, without the questions</h1>
+<p class="lede">Direction B revised against four notes: the study picker had to be a
+control, the plot options had to sit with the plot, the prose had to name estimands
+rather than ask rhetorical questions, and there had to be less of it.</p>
+
+<h2 class="doc">What changed</h2>
+<div class="chg">
+  <div class="r"><span class="k">1</span>
+    <span class="a">the top filter was not visible</span>
+    <span class="b">The study is now the only <b>field</b> on the page &mdash; boxed,
+    with the index, the title, a chevron and prev/next beside a position counter.
+    Every other control is a token or a tick, so the one that changes everything
+    below it is the one that looks changeable.</span></div>
+  <div class="r"><span class="k">2</span>
+    <span class="a">plot options at the top, plot not visible</span>
+    <span class="b">The full-height rail is gone. Axis, panels and scale now sit
+    <b>inside the plot section</b>, beside the figure they redraw. Route selection
+    moved into the routes table, where the colour key already was.</span></div>
+  <div class="r"><span class="k">3</span>
+    <span class="a">the sentences were not academic</span>
+    <span class="b">The two rhetorical questions are replaced by a table stating
+    <b>what each route estimates, with its reference</b>: point-biserial
+    (Cooper et al., 2019) and biserial (Jacobs &amp; Viechtbauer, 2017).</span></div>
+  <div class="r"><span class="k">4</span>
+    <span class="a">too much text</span>
+    <span class="b">Body copy is down by about two thirds. The ledger and the
+    routes table carry what four paragraphs used to.</span></div>
+</div>

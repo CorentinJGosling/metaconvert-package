@@ -1,0 +1,190 @@
+<div class="sheet">
+
+<header class="doc-mast">
+  <span class="wm">metaConvert <span class="em">&middot; simulation programme</span></span>
+  <span class="rt">design proposal &middot; 2026-08-25</span>
+</header>
+
+<h1 class="doc">Three directions for the results viewer</h1>
+<p class="lede">Static mockups, not the running app. All three show the same view of
+the same study &mdash; 01a, interval coverage against the biserial correlation &mdash;
+so they can be compared on structure and register rather than on content.</p>
+
+<h2 class="doc">What each one has to fix</h2>
+<div class="fixes">
+  <div class="fix">
+    <p class="said">&ldquo;the cards are very obscure&rdquo;</p>
+    <h3>A number needs a claim attached</h3>
+    <p>Three headline cards currently report a mean deviation, a worst cell and a
+    spread, in that order, and none of them says what to do. All three directions
+    open with a recommendation in a sentence and put the arithmetic under it.</p>
+  </div>
+  <div class="fix">
+    <p class="said">&ldquo;the left panel mixes design for forest with key scientific questions&rdquo;</p>
+    <h3>Two kinds of control, two places</h3>
+    <p>Choosing the reference quantity changes the result. Choosing the horizontal
+    axis changes the drawing. They sit in one 340&nbsp;px scroll today. Each
+    direction separates them, and they differ in where the scientific choices go.</p>
+  </div>
+  <div class="fix">
+    <p class="said">&ldquo;no users understand the estimand check tab&rdquo;</p>
+    <h3>It is the study, not a tab</h3>
+    <p>For study 01a the estimand gap is the entire finding: both routes are
+    near-exact, they just estimate different correlations. Buried in tab three,
+    that reads as a diagnostic. Promoted, it is the answer.</p>
+  </div>
+</div>
+
+<h2 class="doc">Every number below is measured</h2>
+<p>All figures come from <code>data/aggregated/01a_smd_to_cor_r_nrep1000.csv</code>
+for the view the app opens on: target = biserial population parameter,
+<code>p_exp</code> = 0.30, 20 conditions (5&nbsp;&rho; &times; 4&nbsp;n), 1,000
+replications each. The figure is rendered from that same slice by
+<code>make-figures.R</code>. Nothing was invented to fill a layout, so every claim
+in the copy can be checked.</p>
+
+<h2 class="doc">Writing them turned up something the current design hides</h2>
+<p>The headline card names <code>viechtbauer</code> the leader on coverage. Change
+the <b>Scored against</b> dropdown to the point-biserial parameter and the ranking
+reverses exactly: mean coverage goes from 0.940 / 0.764 to 0.803 / 0.940. Scored
+against its own estimand each route is near-exact &mdash; mean absolute bias 0.004
+and 0.005. <b>Neither route is better. They estimate different correlations</b>,
+and which one you want is a property of the review, not of the package. A layout
+that promotes a leaderboard above the reference quantity that produced it is
+reporting a dropdown setting as a finding. All three directions below are built so
+that cannot happen.</p>
+
+<div class="switch" role="tablist" aria-label="Design directions">
+  <b>Direction</b>
+  <button role="tab" aria-selected="true" aria-controls="p-v1" id="t-v1"><span class="k">A</span>Verdict first</button>
+  <button role="tab" aria-selected="false" aria-controls="p-v2" id="t-v2"><span class="k">B</span>Two questions</button>
+  <button role="tab" aria-selected="false" aria-controls="p-v3" id="t-v3"><span class="k">C</span>Results listing</button>
+</div>
+
+<!-- ===================== A ===================================== -->
+<section class="panel" id="p-v1" role="tabpanel" aria-labelledby="t-v1">
+  <p class="panel-note"><b>No rail at all.</b> The scientific choices become one
+  sentence across the top, so what you are asking is always legible as a sentence.
+  The plotting controls move down beside the figure they redraw. The page reads
+  recommendation &rarr; where it stops holding &rarr; why &rarr; evidence, and the
+  signature is the boundary grid: every cell is a measured coverage value, tinted
+  by its distance from nominal.</p>
+
+  <div class="mock v1">
+    <div class="mast">
+      <span class="wm">metaConvert <em>simulations</em></span>
+      <span class="rt">study 01a of 16 &nbsp;&middot;&nbsp; <a href="#">how to read this</a></span>
+    </div>
+
+    <div class="ask">
+      <p class="cap">The question</p>
+      <p class="sent">Study <span class="tok">01a &mdash; SMD to correlation (r)</span>
+      asks which conversion <code>convert_df()</code> should take. Score the routes against
+      the <span class="tok">biserial correlation, population</span> and read
+      <span class="tok">confidence interval coverage</span>.</p>
+    </div>
+
+    <div class="body">
+      <div class="verdict">
+        <h2>Use <code>viechtbauer</code>.</h2>
+        <p>Over the 20 conditions in this view its intervals cover the biserial
+        correlation <b>94.0%</b> of the time against a nominal 95%.
+        <code>lipsey_cooper</code> covers <b>76.4%</b>.</p>
+        <p>The 0.176 gap between them is <b>11&times; the resolution limit</b> of
+        0.016, the point below which 1,000 replications cannot separate two routes.
+        It is a real difference, not simulation noise.</p>
+      </div>
+
+      <div class="sec">
+        <div class="h">
+          <h3>Where that advice stops holding</h3>
+          <span class="sub">coverage per condition &middot; nominal 0.95</span>
+        </div>
+        <div class="grids">
+          <div class="gwrap">
+            <p class="gname"><i style="background:#c0474e"></i>lipsey_cooper</p>
+            <table class="grid">
+              <tr><th class="rh"></th><th>0</th><th>.10</th><th>.25</th><th>.50</th><th>.75</th></tr>
+              <tr><th class="rh">n&nbsp;=&nbsp;25</th><td class="t1">.923</td><td>.940</td><td class="t1">.930</td><td>.937</td><td class="t2">.845</td></tr>
+              <tr><th class="rh">50</th><td class="t1">.927</td><td>.938</td><td class="t1">.934</td><td class="t2">.872</td><td class="t4">.457</td></tr>
+              <tr><th class="rh">100</th><td>.955</td><td>.942</td><td class="t1">.908</td><td class="t3">.711</td><td class="t4">.085</td></tr>
+              <tr><th class="rh">300</th><td>.939</td><td class="t1">.919</td><td class="t2">.841</td><td class="t4">.270</td><td class="t4">.000</td></tr>
+            </table>
+            <p class="axname">true correlation &rho;</p>
+          </div>
+          <div class="gwrap">
+            <p class="gname"><i style="background:#2c2a47"></i>viechtbauer</p>
+            <table class="grid">
+              <tr><th class="rh"></th><th>0</th><th>.10</th><th>.25</th><th>.50</th><th>.75</th></tr>
+              <tr><th class="rh">n&nbsp;=&nbsp;25</th><td class="t1">.931</td><td>.943</td><td>.935</td><td class="t1">.926</td><td class="t1">.916</td></tr>
+              <tr><th class="rh">50</th><td class="t1">.932</td><td>.943</td><td>.946</td><td class="t1">.934</td><td>.941</td></tr>
+              <tr><th class="rh">100</th><td>.955</td><td>.944</td><td>.948</td><td>.952</td><td class="t1">.931</td></tr>
+              <tr><th class="rh">300</th><td>.941</td><td>.937</td><td>.940</td><td>.949</td><td>.951</td></tr>
+            </table>
+            <p class="axname">true correlation &rho;</p>
+          </div>
+          <div class="reading">
+            <p><b>Read the rows, not the average.</b> <code>lipsey_cooper</code> holds
+            to about &rho;&nbsp;=&nbsp;0.25 and then degrades.</p>
+            <p>It degrades <b>faster as the sample grows</b>: at &rho;&nbsp;=&nbsp;0.75
+            coverage falls 0.845 &rarr; 0.457 &rarr; 0.085 &rarr; 0.000 across
+            n&nbsp;=&nbsp;25 to 300. A larger study is not a safer one here.</p>
+            <p>That direction is the signature of bias rather than variance, which
+            the next section confirms.</p>
+          </div>
+        </div>
+        <div class="ramp">
+          <i style="background:#eeeee9"></i><i style="background:#f6e7e7"></i><i style="background:#eec9ca"></i><i style="background:#d98f92"></i><i style="background:#b8474e"></i>
+          <span class="lb">shortfall below nominal: within the 0.016 resolution limit &rarr; total</span>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="h"><h3>Why</h3>
+        <span class="sub">mean over the same 20 conditions</span></div>
+        <div class="why">
+          <div>
+            <p class="q">Is each route computing its own quantity correctly?</p>
+            <p class="a">Yes, both, to three decimal places. Scored against the
+            estimand it was built to return, each route is near-exact and its
+            intervals are calibrated.</p>
+            <table class="evt">
+              <thead><tr><th class="l"></th><th>lipsey_cooper</th><th>viechtbauer</th></tr></thead>
+              <tbody>
+                <tr><th>mean |bias|</th><td>0.005</td><td>0.004</td></tr>
+                <tr><th>coverage</th><td>0.940</td><td>0.940</td></tr>
+              </tbody>
+            </table>
+            <p class="evcap">Scored against the estimand each route returns.</p>
+          </div>
+          <div>
+            <p class="q">Is that quantity the one you asked for?</p>
+            <p class="a">For one of them, no. <code>lipsey_cooper</code> returns the
+            <b>point-biserial</b> correlation and this view asks for the
+            <b>biserial</b>. The whole shortfall above is that difference, and a
+            larger n narrows the interval around a centre that was never the
+            target.</p>
+            <table class="evt">
+              <thead><tr><th class="l"></th><th>lipsey_cooper</th><th>viechtbauer</th></tr></thead>
+              <tbody>
+                <tr><th>vs biserial</th><td class="bad">0.082</td><td>0.004</td></tr>
+                <tr><th>vs point-biserial</th><td>0.005</td><td class="bad">0.080</td></tr>
+              </tbody>
+            </table>
+            <p class="evcap">Mean absolute bias. The tinted cell is the route
+            answering a question it was not asked.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="view">
+        <span class="lb">View</span>
+        <span class="it"><b>axis</b>rho</span>
+        <span class="it"><b>panels</b>n</span>
+        <span class="it"><b>routes</b>both</span>
+        <span class="it"><b>held at</b>p_exp 0.30</span>
+        <span class="it"><b>scale</b>shared</span>
+        <span class="rt">20 cells &middot; 1,000 reps each</span>
+      </div>
+
+      <figure>

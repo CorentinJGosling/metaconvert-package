@@ -8,6 +8,20 @@
 #'   \eqn{(n, k)} standard error.
 #' @param cronbach_alpha_ci_lo lower bound of the 95% confidence interval of alpha (natural scale)
 #' @param cronbach_alpha_ci_up upper bound of the 95% confidence interval of alpha (natural scale)
+#' @param alpha_se_source where the standard error comes from when the study reported
+#'   neither \code{cronbach_alpha_se} nor a confidence interval. \code{"closed_form"}
+#'   (default, the pre-existing behaviour) uses the \eqn{(n, k)} formula belonging to the
+#'   selected \code{alpha_to_es} scale; \code{"reported"} refuses it and leaves
+#'   \code{alpha_se = NA}, so the row stays visible but unpooled.
+#'
+#'   The closed form inherits Bonett's multivariate-\strong{normality} assumption, which this
+#'   help page did not previously state. Measured
+#'   (\code{simulations/studies/11_reliability_se.R}): on ordinary Likert items it is well
+#'   calibrated (SE ratio 0.95-1.06, 95% coverage .94-.96), but under a severe floor effect
+#'   it is about 22% too small (coverage .89) and on dichotomous items about 37% too small
+#'   (coverage .78, reproducing Maydeu-Olivares et al. (2007) Table 5, and \emph{not}
+#'   improving with \eqn{n}). Flag V44 identifies the affected rows from \code{scale_mean},
+#'   \code{n_response_categories} and \code{scale_min}.
 #' @param alpha_to_es method used to compute the effect size from Cronbach's alpha.
 #'   Must be one of \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}.
 #'
@@ -31,7 +45,7 @@
 #'
 #' Unlike omega, alpha does have a closed-form variance in \eqn{(n, k)}, so the third route
 #' is the usual one. The first two matter because a reported interval is sometimes all a
-#' study gives -- and because they are the only way to enter an alpha whose item count was
+#' study gives, and because they are the only way to enter an alpha whose item count was
 #' never reported.
 #' This function computes an effect size from a Cronbach's alpha.
 #'
@@ -119,7 +133,10 @@
 es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
                                    cronbach_alpha_se, cronbach_alpha_ci_lo,
                                    cronbach_alpha_ci_up,
-                                   alpha_to_es = "bonett") {
+                                   alpha_to_es = "bonett",
+                                   alpha_se_source = "closed_form") {
+
+  alpha_se_source <- match.arg(alpha_se_source, c("closed_form", "reported"))
 
   len <- length(cronbach_alpha)
   if (missing(n_sample)) n_sample <- rep(NA, len)
@@ -128,13 +145,13 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
   if (missing(cronbach_alpha_ci_lo)) cronbach_alpha_ci_lo <- rep(NA_real_, len)
   if (missing(cronbach_alpha_ci_up)) cronbach_alpha_ci_up <- rep(NA_real_, len)
 
-  # A reliability-generalization sheet fixes the instrument, so `n_items` (and
-  # often `n_sample`) is naturally passed as ONE number beside a vector of
-  # coefficients. Without this recycling the subsetting below
-  # (`n_sample[nn_miss]`) indexes a length-1 vector at positions 2..k and
-  # returns NA, so every row after the first got an NA standard error while its
-  # point estimate stayed correct -- a fully populated `alpha` column hiding a
-  # pool that rma() then silently drops. Same idiom as es_from_pearson_r().
+  # A reliability-generalization sheet fixes the instrument, so `n_items` (and often
+  # `n_sample`) is naturally passed as one number beside a vector of coefficients.
+  # Without this recycling the subsetting below (`n_sample[nn_miss]`) indexes a
+  # length-1 vector at positions 2..k and returns NA, so every row after the first
+  # gets an NA standard error while its point estimate stays correct: a fully
+  # populated `alpha` column hiding a pool that rma() then drops without comment.
+  # Same idiom as es_from_pearson_r().
   if (length(n_sample) == 1) n_sample <- rep(n_sample, length(cronbach_alpha))
   if (length(n_items) == 1) n_items <- rep(n_items, length(cronbach_alpha))
   if (length(n_sample) != length(cronbach_alpha)) stop("The length of the 'n_sample' argument is incorrectly specified.")
@@ -161,14 +178,16 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
                 "Possible inputs are: 'bonett', 'raw', 'hakstian_whalen'"))
   }
 
-  # P16: per-element guards -- alpha > 1 is impossible (V11 upper bound),
-  # n <= 2 makes the SE denominator (n - 2) non-positive, and a single item
-  # (k < 2) leaves alpha undefined. alpha = 1 exactly is a valid boundary on
-  # the raw scale (es = 1, se = 0) but has no Bonett transform (log(0)).
-  # Direct calls degrade to NA instead of emitting Inf/NaN (the pipeline
-  # already NAs the impossible values via Tier-1 validation).
-  # Forward transform and the delta map that carries a NATURAL-scale reported SE onto
-  # it -- the same pair es_from_omega() uses, since alpha and omega share these scales.
+  # P16: per-element guards. alpha > 1 is impossible (V11 upper bound), n <= 2 makes
+  # the SE denominator (n - 2) non-positive, and a single item (k < 2) leaves alpha
+  # undefined. alpha = 1 exactly is a valid boundary on the raw scale (es = 1,
+  # se = 0); on the two transformed scales the point estimate and the standard error
+  # part company, so they are gated separately below (valid_es and se_defined). Direct
+  # calls degrade to NA instead of emitting Inf or NaN; the pipeline already NAs the
+  # impossible values via Tier-1 validation.
+  # Forward transform, and the delta map that carries a natural-scale reported SE
+  # onto it. The same pair es_from_omega() uses, since alpha and omega share these
+  # scales.
   fwd <- function(a) {
     if (identical(alpha_to_es, "bonett")) return(log(1 - a))
     if (identical(alpha_to_es, "hakstian_whalen")) return(1 - (1 - a)^(1 / 3))
@@ -180,14 +199,37 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
     se
   }
 
-  # alpha > 1 is impossible (V11 upper bound); alpha = 1 exactly is a valid boundary on
-  # the raw scale (es = 1, se = 0) but has no Bonett transform (log(0)). n_sample and
-  # n_items are NOT part of this test any more: they gate only the COMPUTED standard
-  # error (route 3 below), not the point estimate, so a study reporting
-  # "alpha = .88, 95% CI [.85, .91]" without an item count is now usable instead of
-  # being dropped whole -- the gap roadmap item 2.2 exists for.
+  # alpha > 1 is impossible (V11 upper bound); alpha = 1 exactly has no Bonett
+  # transform (log(0)) and is refused there, but IS a valid boundary elsewhere - the
+  # documented es = 1, se = 0 on the raw scale, and es = 1 on hakstian_whalen, which
+  # matches metafor::escalc(measure = "AHW", ai = 1) returning yi = 1. n_sample
+  # and n_items are not part of this test: they gate only the computed standard error
+  # (route 3 below), not the point estimate, so a study reporting
+  # "alpha = .88, 95% CI [.85, .91]" without an item count is usable rather than
+  # dropped whole.
   valid_es <- !is.na(cronbach_alpha) & cronbach_alpha <= 1 &
     !(cronbach_alpha == 1 & alpha_to_es == "bonett")
+
+  # ... but no scale that transforms alpha has a usable standard error AT that boundary.
+  # Bonett has already refused the row above; Hakstian-Whalen keeps a perfectly
+  # well-defined point estimate (1 - (1 - 1)^(1/3) = 1, no logarithm anywhere) while its
+  # variance degenerates in two opposite directions: the reported-SE delta map
+  # se / (3 (1 - a)^(2/3)) divides by zero and returns Inf, and the closed form
+  # 18k(n-1)(1-a)^(2/3) / ((k-1)(9n-11)^2) collapses to exactly 0. Those two failures are
+  # not equally harmless - Inf merely gives the row zero weight and is caught by Category
+  # A, whereas 0 is an infinite inverse-variance weight and metafor::rma() aborts on it
+  # ("Division by zero when computing the inverse variance weights") - which is why the
+  # repair cannot be a patch on whichever route happened to be taken: excluding only the
+  # reported-SE map would hand the row to the closed form and turn the benign failure
+  # into the fatal one. The CI route is refused with them, though its arithmetic is
+  # finite, because es = 1 sits at the very top of the Hakstian-Whalen parameter space
+  # (T <= 1), so the symmetric Wald interval rebuilt from any SE escapes it. One boundary
+  # rule for the three routes: the row leaves at es = 1 with se = NA, visible and
+  # countable but not pooled, exactly where a bare omega lands. The raw scale is
+  # untouched - there the map is the identity and se = 0 is the documented boundary V40
+  # stays silent about.
+  se_defined <- !(!is.na(cronbach_alpha) & cronbach_alpha == 1 &
+                    !identical(alpha_to_es, "raw"))
 
   n <- length(cronbach_alpha)
   alpha_es <- rep(NA_real_, n)
@@ -196,7 +238,7 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
 
   # --- standard error, in order of preference -------------------------------
   # 1. reported SE, read on the NATURAL (coefficient) scale and delta-mapped
-  from_se <- which(valid_es & !is.na(cronbach_alpha_se))
+  from_se <- which(valid_es & se_defined & !is.na(cronbach_alpha_se))
   if (length(from_se)) {
     alpha_es_se[from_se] <- se_map(cronbach_alpha[from_se], cronbach_alpha_se[from_se])
   }
@@ -206,7 +248,7 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
   #    log(1 - .) or (1 - .)^(1/3), so it is excluded on those scales only.
   ci_usable <- if (identical(alpha_to_es, "raw")) rep(TRUE, n) else (ci_lo < 1 & ci_up < 1)
   ci_usable[is.na(ci_usable)] <- FALSE
-  from_ci <- which(valid_es & is.na(alpha_es_se) &
+  from_ci <- which(valid_es & se_defined & is.na(alpha_es_se) &
                      !is.na(ci_lo) & !is.na(ci_up) & ci_usable)
   if (length(from_ci)) {
     alpha_es_se[from_ci] <-
@@ -215,9 +257,26 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
 
   # 3. otherwise the closed-form (n, k) SE. n <= 2 makes the denominator (n - 2)
   #    non-positive and a single item leaves alpha undefined, so both gate this route.
-  nn_miss <- which(valid_es & is.na(alpha_es_se) &
-                     !is.na(n_sample) & n_sample > 2 &
-                     !is.na(n_items) & n_items >= 2)
+  #
+  #    alpha_se_source = "reported" turns this route off, leaving se = NA for any
+  #    study that did not report its own SE or CI. That is the more consequential
+  #    half of this pair of switches: unlike omega's, alpha's closed form is on by
+  #    default, and it inherits Bonett's multivariate-normality assumption, which the
+  #    shipped documentation did not previously state. Measured in
+  #    simulations/studies/11_reliability_se.R, blocks 11a and 11e: on ordinary
+  #    Likert items the closed form is fine (se_ratio 0.95-1.06, coverage .94-.96),
+  #    but under a severe floor it is 22% too small (coverage .89) and on binary
+  #    items 37% too small (coverage .78, reproducing Maydeu-Olivares et al. 2007
+  #    Table 5, and not improving with n). A reviewer synthesising a dichotomous-item
+  #    instrument has a real reason to refuse it; V44 flags the rows where that
+  #    applies.
+  nn_miss <- if (identical(alpha_se_source, "reported")) {
+    integer(0)
+  } else {
+    which(valid_es & se_defined & is.na(alpha_es_se) &
+            !is.na(n_sample) & n_sample > 2 &
+            !is.na(n_items) & n_items >= 2)
+  }
 
   if (length(nn_miss) != 0) {
     a <- cronbach_alpha[nn_miss]
@@ -242,10 +301,10 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
       alpha_es_se[nn_miss] <- (1 - a) * sqrt(2 * k / ((k - 1) * (ns - 2)))
     }
   }
-  # NO .positive_or_na() on the result. The REPORTED se is already guarded at the top,
-  # and on the raw scale alpha = 1 legitimately yields se = 0 -- a documented boundary
-  # (es = 1, se = 0) that V40 deliberately stays silent about. Guarding here NA'd it,
-  # which drops the row from summary() entirely.
+  # No .positive_or_na() on the result. The reported se is already guarded at the top,
+  # and on the raw scale alpha = 1 legitimately yields se = 0, a documented boundary
+  # (es = 1, se = 0) that V40 stays silent about. Guarding here would NA it, which
+  # drops the row from summary() entirely.
 
   alpha_ci_lo <- alpha_es - qnorm(0.975) * alpha_es_se
   alpha_ci_up <- alpha_es + qnorm(0.975) * alpha_es_se

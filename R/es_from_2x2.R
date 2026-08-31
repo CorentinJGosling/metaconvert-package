@@ -10,8 +10,12 @@
 #' @details
 #' This function first computes (log) odds ratio (OR), (log) risk ratio (RR) and number needed to treat (NNT)
 #' from the 2x2 table. Note that if a cell is equal to 0, we applied the typical adjustment (add 0.5) to all cells.
-#' This adjustment is used for the OR/RR only; the RD and NNT are obtained from the raw cell counts.
-#' Cohen's d (D), Hedges' g (G) and correlation coefficients (R/Z) are then estimated from the OR.
+#' This adjustment feeds the OR, the RR, the SMD (D/G) converted from the OR, **and the correlation
+#' coefficients (R/Z)**, which are solved from the corrected table; only the RD and the NNT are
+#' obtained from the raw cell counts.
+#' Cohen's d (D) and Hedges' g (G) are then estimated from the OR. The correlation coefficients
+#' (R/Z) are **not** obtained from the OR: they come from the tetrachoric solve on the 2x2 table
+#' itself (see below), which is a different route and returns a different value.
 #'
 #' **To estimate an OR**, the formulas used (Box 6.4.a in the Cochrane Handbook) are:
 #' \deqn{logor = log(\frac{n\_cases\_exp / n\_cases\_nexp}{n\_controls\_exp / n\_controls\_nexp})}
@@ -32,8 +36,8 @@
 #' (discontinuous CI; Altman, 1998).
 #'
 #' **Direction convention.** The risk difference is defined as \eqn{rd = pc - pt}
-#' (control risk minus exposed risk), so a POSITIVE RD means the control group has the
-#' higher risk. This is the OPPOSITE direction to the OR and RR produced from the same
+#' (control risk minus exposed risk), so a positive RD means the control group has the
+#' higher risk. This is the opposite direction to the OR and RR produced from the same
 #' 2x2 table, which are exposed-over-non-exposed (an OR/RR \eqn{> 1} means the exposed
 #' group has the higher risk). Consequently, for the same table, a protective exposure
 #' yields \eqn{OR < 1}, \eqn{RR < 1} but \eqn{RD > 0}; keep this in mind when pooling RD
@@ -51,6 +55,20 @@
 #' we relied on the implementation of the formulas of the 'metafor' package. More
 #' information can be retrieved here
 #' (https://wviechtb.github.io/metafor/reference/escalc.html#-b-measures-for-two-dichotomous-variables).
+#'
+#' That parity holds **on a table with no zero cell**. On a table with a zero cell it does not, and
+#' the difference is large. 'metafor' deliberately does not apply its \code{add}/\code{to} continuity
+#' correction to \code{"RTET"}, so it returns the boundary maximum-likelihood estimate
+#' (\eqn{r = \pm 1}) with an enormous variance -- its way of reporting that the correlation is not
+#' identified. \emph{metaConvert} solves the +0.5-corrected table instead, so it returns an interior
+#' estimate with an ordinary-looking, finite standard error. That standard error is the sampling SE
+#' \emph{of the shrunk table} and does not account for the shrinkage, so it is anti-conservative for
+#' the value actually reported: on \eqn{a/b/c/d = 0/20/10/10} \emph{metaConvert} gives
+#' \eqn{r = -0.856} with \eqn{SE = 0.113}, against \eqn{r = -1} with \eqn{SE = 149} from 'metafor' --
+#' an inverse-variance weight about 1300 times larger. This is a deliberate choice, not an oversight:
+#' the boundary estimate cannot be pooled. But treat the correlation from any zero-cell table as a
+#' shrunk value whose precision is overstated, and consider excluding such rows or handling them in a
+#' sensitivity analysis.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -107,13 +125,63 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
     ), call. = FALSE)
   }
 
+  # A cell count cannot be negative. The containment lives here rather than in the two
+  # wrappers because es_from_2x2() is itself exported and equally exposed, and because
+  # es_from_2x2_sum() (n_controls_exp = n_exp - n_cases_exp) and es_from_2x2_prop()
+  # (the same after round(prop * n)) manufacture the impossible cell inside the route,
+  # where no column-keyed Tier-1 check in convert_df() can see it. Guarding the parent
+  # covers all three from the single audited place R/internal_guards.R calls for.
+  #
+  # Nothing else declines the row: the OR arm divides by the negative cell and goes
+  # NaN, but the RR arm reads only the row margins -- rr = (a/n_exp)/(c/n_nexp) -- so it
+  # emits a finite, correctly-signed, plausible-looking log risk ratio with a finite SE
+  # and CI from a table that cannot exist, and the RD/NNT arm survives every mild
+  # overshoot (41 cases of 40 -> rd = -0.525 with se 0.0749, inside B6 bound). The
+  # whole table is neutralised, not just the offending cell: at least one of the four
+  # is wrong and which one cannot be inferred, exactly as V7 treats an inconsistent
+  # additive triple.
+  bad_cell <- (!is.na(n_cases_exp) & n_cases_exp < 0) |
+    (!is.na(n_cases_nexp) & n_cases_nexp < 0) |
+    (!is.na(n_controls_exp) & n_controls_exp < 0) |
+    (!is.na(n_controls_nexp) & n_controls_nexp < 0)
+  n_cases_exp <- ifelse(bad_cell, NA_real_, n_cases_exp)
+  n_cases_nexp <- ifelse(bad_cell, NA_real_, n_cases_nexp)
+  n_controls_exp <- ifelse(bad_cell, NA_real_, n_controls_exp)
+  n_controls_nexp <- ifelse(bad_cell, NA_real_, n_controls_nexp)
+
   # rd from raw counts
   n_exp_raw <- n_cases_exp + n_controls_exp
   n_nexp_raw <- n_cases_nexp + n_controls_nexp
   pc_raw <- n_cases_nexp / n_nexp_raw
   pt_raw <- n_cases_exp / n_exp_raw
   rd <- pc_raw - pt_raw
-  rd_se <- sqrt(pt_raw * (1 - pt_raw) / n_exp_raw + pc_raw * (1 - pc_raw) / n_nexp_raw)
+  rd_se <- suppressWarnings(sqrt(pt_raw * (1 - pt_raw) / n_exp_raw + pc_raw * (1 - pc_raw) / n_nexp_raw))
+
+  # A risk-difference SE of exactly 0 is a zero sampling variance -- an infinite
+  # inverse-variance weight, or an rma() abort. On a 2x2 it means a double-zero (or
+  # double-full) table, where both arm variances vanish. metafor never emits such a row
+  # either: escalc(measure = "RD") continuity-corrects it, or returns NA under
+  # drop00 = TRUE. Keyed on the SE and never on rd itself -- a balanced 10/50 vs 10/50
+  # table has rd = 0 with a perfectly good SE and must survive. See R/internal_guards.R.
+  degenerate_rd <- !is.na(rd_se) & rd_se <= 0
+  rd_se <- .positive_or_na(rd_se)
+  rd <- ifelse(degenerate_rd, NA_real_, rd)
+
+  # The tetrachoric solve below must see the RAW table, so keep a copy before the cells
+  # are corrected in place. The +0.5 is a ratio-measure device: it exists because a zero
+  # cell makes the odds ratio and the risk ratio undefined, and @details documents it as
+  # applying to the OR/RR only. metafor deliberately does NOT apply it to measure =
+  # "RTET" (not even under to = "all"), because the tetrachoric is not undefined on such
+  # a table -- its ML lands on the boundary r = +-1 with an enormous variance, which is
+  # how the estimator says the correlation is not identified by these counts. Shrinking
+  # the table first replaces that honest refusal with an interior estimate carrying an
+  # ordinary-looking SE that does not account for the shrinkage: on 0/20/10/10 it
+  # reported r = -0.856 with se = 0.113 against metafor's -1 with se = 149.0, i.e. a
+  # 1313x inverse-variance weight on a study whose correlation the data cannot pin down.
+  raw_cases_exp     <- n_cases_exp
+  raw_controls_exp  <- n_controls_exp
+  raw_cases_nexp    <- n_cases_nexp
+  raw_controls_nexp <- n_controls_nexp
 
   # 0.5 correction for or/rr
   zero <- which(n_cases_exp == 0 | n_cases_nexp == 0 | n_controls_exp == 0 | n_controls_nexp == 0)
@@ -153,10 +221,12 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
   es$logrr_ci_lo <- es$logrr - qnorm(.975) * es$logrr_se
   es$logrr_ci_up <- es$logrr + qnorm(.975) * es$logrr_se
 
+  # Raw cells, not the +0.5-corrected ones -- see the note beside the correction above.
   dat2x2 <- data.frame(
-    n_cases_exp = n_cases_exp, n_controls_exp = n_controls_exp,
-    n_cases_nexp = n_cases_nexp, n_controls_nexp = n_controls_nexp,
-    n_exp = n_exp, n_nexp = n_nexp,
+    n_cases_exp = raw_cases_exp, n_controls_exp = raw_controls_exp,
+    n_cases_nexp = raw_cases_nexp, n_controls_nexp = raw_controls_nexp,
+    n_exp = raw_cases_exp + raw_controls_exp,
+    n_nexp = raw_cases_nexp + raw_controls_nexp,
     table_2x2_to_cor = table_2x2_to_cor, reverse_2x2 = reverse_2x2
   )
 
@@ -204,10 +274,13 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
   es$nnt_se <- ifelse(rd == 0, NA, rd_se / rd^2)
   rd_ci_lo_raw <- rd - qnorm(.975) * rd_se
   rd_ci_up_raw <- rd + qnorm(.975) * rd_se
-  crosses_zero <- (rd_ci_lo_raw < 0 & rd_ci_up_raw > 0)
-  es$nnt_ci_lo <- ifelse(crosses_zero | rd == 0, NA,
+  # Non-strict, with the rd == 0 clause folded in as on the four sibling routes: a
+  # bound landing exactly on 0 is still the Altman discontinuity, and the reciprocal of
+  # +0 is a literal Inf where the neighbouring input returns NA.
+  crosses_zero <- (rd_ci_lo_raw <= 0 & rd_ci_up_raw >= 0) | rd == 0
+  es$nnt_ci_lo <- ifelse(crosses_zero, NA,
                           ifelse(reverse_2x2, -1 / rd_ci_lo_raw, 1 / rd_ci_up_raw))
-  es$nnt_ci_up <- ifelse(crosses_zero | rd == 0, NA,
+  es$nnt_ci_up <- ifelse(crosses_zero, NA,
                           ifelse(reverse_2x2, -1 / rd_ci_up_raw, 1 / rd_ci_lo_raw))
 
   es$info_used <- "2x2"
@@ -319,6 +392,27 @@ es_from_2x2_prop <- function(prop_cases_exp, prop_cases_nexp, n_exp, n_nexp,
   if (missing(reverse_prop)) reverse_prop <- rep(FALSE, length(prop_cases_exp))
   reverse_prop[is.na(reverse_prop)] <- FALSE
 
+
+  # A proportion outside [0, 1] is neutralised per row, following the convention of
+  # es_from_prop_single_group(): a warning rather than a silent NA or a hard stop, since
+  # one bad cell must never abort a whole convert_df() run. The @param already says
+  # "ranging from 0 to 1"; until now that was documented and unenforced, and the trigger
+  # is the same percentage mix-up baseline_risk is already guarded for. Left unchecked,
+  # round(1.2 * 100) = 120 cases out of 100 manufactures a negative control cell that
+  # only es_from_2x2() own guard would see, and the row would reach the pool as
+  # es_crude = 24 with no flag.
+  bad_prop <- (!is.na(prop_cases_exp) & (prop_cases_exp < 0 | prop_cases_exp > 1)) |
+    (!is.na(prop_cases_nexp) & (prop_cases_nexp < 0 | prop_cases_nexp > 1))
+  if (any(bad_prop)) {
+    warning(
+      "Proportions outside [0, 1] were passed to es_from_2x2_prop() (row(s) ",
+      paste(which(bad_prop), collapse = ", "),
+      "). A proportion is not a percentage: these rows are set to NA.",
+      call. = FALSE
+    )
+    prop_cases_exp <- ifelse(bad_prop, NA_real_, prop_cases_exp)
+    prop_cases_nexp <- ifelse(bad_prop, NA_real_, prop_cases_nexp)
+  }
 
   n_cases_exp <- round(prop_cases_exp * n_exp)
   n_cases_nexp <- round(prop_cases_nexp * n_nexp)

@@ -99,9 +99,9 @@ es_from_rd_se <- function(rd, rd_se,
   }
 
   # OR -------
-  # A risk difference converts to the ratio family (OR + RR + NNT) only. It is
-  # deliberately NOT converted to a standardized mean difference or correlation:
-  # RD -> SMD/r/z is not identified without an assumed baseline_risk, and treating
+  # A risk difference converts to the ratio family (OR + RR + NNT) only. It is not
+  # converted to a standardized mean difference or correlation, because RD -> SMD/r/z
+  # is not identified without an assumed baseline_risk, and treating
   # baseline_risk as a fixed known constant yields anti-conservative SEs. The
   # standardized families are reached in metaConvert only through the odds ratio
   # or a raw 2x2 table (the Cox transform); see es_from_or_se() / es_from_2x2().
@@ -155,7 +155,9 @@ es_from_rd_se <- function(rd, rd_se,
   es$nnt_se <- ifelse(rd == 0, NA, rd_se / rd^2)
   rd_ci_lo_raw <- rd - qnorm(.975) * rd_se
   rd_ci_up_raw <- rd + qnorm(.975) * rd_se
-  crosses_zero <- (rd_ci_lo_raw < 0 & rd_ci_up_raw > 0) | rd == 0
+  # Non-strict: a bound landing exactly on 0 is still the Altman discontinuity, and
+  # the reciprocal of +0 is a literal Inf where the neighbouring input returns NA.
+  crosses_zero <- (rd_ci_lo_raw <= 0 & rd_ci_up_raw >= 0) | rd == 0
   es$nnt_ci_lo <- ifelse(crosses_zero, NA,
                           ifelse(reverse_rd, -1 / rd_ci_lo_raw, 1 / rd_ci_up_raw))
   es$nnt_ci_up <- ifelse(crosses_zero, NA,

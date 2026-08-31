@@ -45,3 +45,4 @@ metaConvert.Rcheck/
 metaConvert_*.tar.gz
 # Windows crash artifacts
 *.stackdump
+Rplots.pdf

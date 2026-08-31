@@ -51,6 +51,12 @@ es_from_beta_std <- function(beta_std, sd_dv, n_exp, n_nexp,
   beta_std <- ifelse(reverse_beta_std, -beta_std, beta_std)
 
 
+  # unstd_beta = beta_std * sd_dv / sd_dummy, so a non-positive SD of the dependent
+  # variable negates the coefficient while es_from_beta_unstd() reads sd_dv squared:
+  # the pooled SD stays positive and d/g come back exactly sign-reversed with a
+  # healthy positive d_se and a correctly ordered CI. See R/internal_guards.R.
+  sd_dv <- .positive_or_na(sd_dv)
+
   sd_dummy <- sqrt((n_exp - (n_exp^2 / (n_exp + n_nexp))) / (n_exp + n_nexp - 1))
 
   unstd_beta <- beta_std * (sd_dv / sd_dummy)
@@ -116,6 +122,10 @@ es_from_beta_unstd <- function(beta_unstd, sd_dv, n_exp, n_nexp,
   if (missing(reverse_beta_unstd)) reverse_beta_unstd <- rep(FALSE, length(beta_unstd))
   reverse_beta_unstd[is.na(reverse_beta_unstd)] <- FALSE
 
+
+  # Same guard as es_from_beta_std(): sd_dv only enters squared here, so a negative
+  # value is harmless, but sd_dv = 0 makes the pooled SD zero and d = 0/0 = NaN.
+  sd_dv <- .positive_or_na(sd_dv)
 
   # Within-group variance from the ANOVA SS decomposition
   # SS_total = SS_between + SS_within, with SS_between = beta_unstd^2 * n_exp*n_nexp/N.
@@ -236,8 +246,7 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
   if (missing(n_nexp)) n_nexp <- rep(NA, length(linreg_t))
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_t))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_t))
-  if (missing(unit_type)) unit_type <- rep(NA, length(linreg_t))
-  .validate_unit_type(unit_type)
+  unit_type <- .unit_type_or_raw(unit_type, length(linreg_t))
 
   if (!all(cor_to_smd %in% c("cooper", "mathur", "viechtbauer"))) {
     stop(paste0("'",
@@ -248,11 +257,11 @@ es_from_linreg_t <- function(linreg_t, n_sample, n_covariates,
 
   df <- n_sample - n_covariates - 2
 
-  # A non-positive residual df makes the partial correlation undefined for THAT row.
+  # A non-positive residual df makes the partial correlation undefined for that row.
   # convert_df() calls this function on the whole column, so a hard stop() would abort
-  # the entire run because of one bad cell (violating the package's "one bad cell cannot
-  # abort a convert_df() run" convention). NA the offending rows and warn instead, so the
-  # valid rows still compute -- mirroring the sibling es_from_beta_unstd().
+  # the entire run because of one bad cell, against the package's convention that one
+  # bad cell cannot abort a convert_df() run. NA the offending rows and warn instead, so
+  # the valid rows still compute, as the sibling es_from_beta_unstd() does.
   n_bad <- sum(df <= 0, na.rm = TRUE)
   if (n_bad > 0) {
     warning(sprintf(
@@ -397,11 +406,10 @@ es_from_linreg_b_se <- function(linreg_b, linreg_b_se, n_sample, n_covariates,
   if (missing(n_nexp)) n_nexp <- rep(NA, length(linreg_b))
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_b))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
-  if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
-  .validate_unit_type(unit_type)
+  unit_type <- .unit_type_or_raw(unit_type, length(linreg_b))
 
   # A non-positive standard error negates the t statistic and hence every effect
-  # size derived from it, while linreg_b keeps its own sign -- and d_se stays
+  # size derived from it, while linreg_b keeps its own sign and d_se stays
   # positive, so the row looks healthy. See R/internal_guards.R.
   linreg_b_se <- .positive_or_na(linreg_b_se)
 
@@ -480,8 +488,7 @@ es_from_linreg_b_ci <- function(linreg_b, linreg_b_ci_lo, linreg_b_ci_up,
   if (missing(n_nexp)) n_nexp <- rep(NA, length(linreg_b))
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_b))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
-  if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
-  .validate_unit_type(unit_type)
+  unit_type <- .unit_type_or_raw(unit_type, length(linreg_b))
 
   df <- n_sample - n_covariates - 2
   linreg_b_se <- .ci_width(linreg_b_ci_lo, linreg_b_ci_up) / (2 * qt(.975, df))
@@ -561,8 +568,7 @@ es_from_linreg_b_pval <- function(linreg_b, linreg_b_pval,
   if (missing(n_nexp)) n_nexp <- rep(NA, length(linreg_b))
   if (missing(sd_iv)) sd_iv <- rep(NA, length(linreg_b))
   if (missing(unit_increase_iv)) unit_increase_iv <- rep(NA, length(linreg_b))
-  if (missing(unit_type)) unit_type <- rep(NA, length(linreg_b))
-  .validate_unit_type(unit_type)
+  unit_type <- .unit_type_or_raw(unit_type, length(linreg_b))
 
   df <- n_sample - n_covariates - 2
   linreg_t <- qt(1 - linreg_b_pval / 2, df) * sign(linreg_b)

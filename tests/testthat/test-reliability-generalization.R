@@ -996,8 +996,9 @@ test_that('V31 is [UNUSUAL] and names the two ways out', {
 })
 
 test_that('the documented coverage claim is the measured one, not 0.74-0.76', {
-  rd <- readLines('../../man/es_from_icc.Rd', warn = FALSE)
-  skip_if(length(rd) == 0, 'Rd not readable from the test working directory')
+  f <- '../../man/es_from_icc.Rd'
+  skip_if_not(file.exists(f), 'not a source checkout')
+  rd <- readLines(f, warn = FALSE)
   # the measured numbers are present, and they are the STUDY's, not a one-off run's
   expect_true(any(grepl('0.825', rd, fixed = TRUE)))
   expect_true(any(grepl('0.142', rd, fixed = TRUE)))
@@ -1193,8 +1194,9 @@ test_that('V42 needs at least 3 usable rows and the cross-row toggle', {
 })
 
 test_that('the vignette no longer endorses pooling the two ICC models', {
-  v <- readLines('../../vignettes/Psychometrics.Rmd', warn = FALSE)
-  skip_if(length(v) == 0, 'vignette not readable from the test working directory')
+  f <- '../../vignettes/Psychometrics.Rmd'
+  skip_if_not(file.exists(f), 'not a source checkout')
+  v <- readLines(f, warn = FALSE)
   expect_false(any(grepl('can coexist in the same analysis', v, fixed = TRUE)))
   expect_true(any(grepl('Do not pool agreement and consistency ICCs', v, fixed = TRUE)))
   # it uses the helper rather than hand-rolling the bound swap
@@ -1346,13 +1348,15 @@ test_that('a repeat WITHIN one study is not induction', {
 test_that('the measured false-positive rate is recorded where a reader will find it', {
   # V36 must never be reported as a count of induced values, so the rate has to be
   # written down somewhere durable rather than living in a commit message.
-  src <- readLines('../../R/internal_flags.R', warn = FALSE)
-  skip_if(length(src) == 0, 'source not readable from the test working directory')
-  expect_true(any(grepl('MEASURED FALSE-POSITIVE RATE', src, fixed = TRUE)))
+  f <- '../../R/internal_flags.R'
+  skip_if_not(file.exists(f), 'not a source checkout')
+  src <- readLines(f, warn = FALSE)
+  # matched case-insensitively: what must survive is the content, not its formatting
+  expect_true(any(grepl('measured false-positive rate', src, ignore.case = TRUE)))
   expect_true(any(grepl('95.8%', src, fixed = TRUE)))     # the 4-dp refutation
   # and the figures must name where they come from, or they rot again
   expect_true(any(grepl('10_reliability.R', src, fixed = TRUE)))
-  expect_true(any(grepl('TIGHTENING THE DECIMAL GATE DOES NOT WORK', src, fixed = TRUE)))
+  expect_true(any(grepl('tightening the decimal gate does not work', src, ignore.case = TRUE)))
 })
 
 
@@ -1443,8 +1447,9 @@ test_that('aggregate_df() really does drop everything but four columns (2.4)', {
 })
 
 test_that('the aggregate_df help page states the drop rather than implying otherwise', {
-  rd <- readLines('../../man/aggregate_df.Rd', warn = FALSE)
-  skip_if(length(rd) == 0, 'Rd not readable from the test working directory')
+  f <- '../../man/aggregate_df.Rd'
+  skip_if_not(file.exists(f), 'not a source checkout')
+  rd <- readLines(f, warn = FALSE)
   expect_true(any(grepl('no other column of the input', rd, fixed = TRUE)))
   expect_true(any(grepl('Which columns survive', rd, fixed = TRUE)))
   # the old wording said 'at a minimum', which implies MORE may survive
@@ -1469,8 +1474,9 @@ test_that('an unregistered moderator column passes through convert_df intact (1.
 })
 
 test_that('the vignette documents the retest interval and the aggregation contract', {
-  v <- readLines('../../vignettes/Psychometrics.Rmd', warn = FALSE)
-  skip_if(length(v) == 0, 'vignette not readable from the test working directory')
+  f <- '../../vignettes/Psychometrics.Rmd'
+  skip_if_not(file.exists(f), 'not a source checkout')
+  v <- readLines(f, warn = FALSE)
   expect_true(any(grepl('## Record the retest interval', v, fixed = TRUE)))
   expect_true(any(grepl('## Several ICCs from one study', v, fixed = TRUE)))
   expect_true(any(grepl('returns four columns and drops everything else', v,

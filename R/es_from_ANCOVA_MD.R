@@ -4,9 +4,9 @@
 #' @param ancova_md_sd covariate-adjusted pooled within-group standard deviation
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
@@ -111,9 +111,9 @@ es_from_ancova_md_sd <- function(ancova_md, ancova_md_sd,
 #' @param ancova_md_se covariate-adjusted standard error of the mean difference
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
@@ -193,9 +193,9 @@ es_from_ancova_md_se <- function(ancova_md, ancova_md_se,
 #' @param ancova_md_ci_up upper bound of the covariate-adjusted 95% CI of the mean difference
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
@@ -252,10 +252,10 @@ es_from_ancova_md_ci <- function(ancova_md, ancova_md_ci_lo, ancova_md_ci_up,
   if (length(reverse_ancova_md) == 1) reverse_ancova_md = c(rep(reverse_ancova_md, length(ancova_md)))
   if (length(reverse_ancova_md) != length(ancova_md)) stop("The length of the 'reverse_ancova_md' argument is incorrectly specified.")
 
-  # A transposed CI (ci_lo > ci_up) describes the same interval, so its WIDTH is the
+  # A transposed CI (ci_lo > ci_up) describes the same interval, so its width is the
   # same. Taken as ci_up - ci_lo the width is negative, which flows into a negative SE,
-  # a negative SD and finally a SIGN-FLIPPED d while md keeps its original sign -- an
-  # effect size pointing the opposite way to the mean difference it came from. See
+  # then a negative SD, and finally a sign-flipped d while md keeps its original sign:
+  # an effect size pointing the opposite way to the mean difference it came from. See
   # R/internal_guards.R.
   ancova_md_se <- .ci_width(ancova_md_ci_lo, ancova_md_ci_up) / (2 * qt(0.975, n_exp + n_nexp - 2 - n_cov_ancova))
 
@@ -277,9 +277,9 @@ es_from_ancova_md_ci <- function(ancova_md, ancova_md_ci_lo, ancova_md_ci_up,
 #' @param ancova_md_pval p-value (two-tailed) of the adjusted mean difference
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.

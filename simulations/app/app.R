@@ -70,8 +70,18 @@ STUDY_LABELS <- c(
   "08a_pre_post_to_smd_d" = "Pre-post to SMD (Cohen's d)",
   "08b_pre_post_to_smd_g" = "Pre-post to SMD (Hedges' g)",
   "09a_or_to_cor_CONT"    = "Odds ratio to correlation (continuous latent)",
-  "09b_or_to_cor_CAT"     = "Odds ratio to correlation (categorical latent)"
+  "09b_or_to_cor_CAT"     = "Odds ratio to correlation (categorical latent)",
+  "10a_icc_agreement_coverage" = "ICC agreement-type interval coverage"
 )
+
+## Every lookup into the STUDY_* maps goes through this. `x[["absent"]]` on a
+## named vector is an ERROR, not NULL, so a study that appears in
+## data/aggregated before its prose is written used to abort the page with
+## "subscript out of bounds" -- which is what 10a did the moment it shipped.
+.lookup <- function(map, key) {
+  if (is.null(key) || !length(key) || !key %in% names(map)) return(NULL)
+  unname(map[[key]])
+}
 
 ## Which target this study should OPEN on, where the generic ordering below gets it
 ## wrong. A study missing from this list falls back to the ordering rule in
@@ -137,7 +147,8 @@ STUDY_ARG <- c(
   "06_or_se_imputation" = "es_from_or", "07a_ancova_to_smd_d" = "cov_outcome_r",
   "07b_ancova_to_smd_g" = "cov_outcome_r", "08a_pre_post_to_smd_d" = "pre_post_to_smd",
   "08b_pre_post_to_smd_g" = "pre_post_to_smd",
-  "09a_or_to_cor_CONT" = "or_to_cor", "09b_or_to_cor_CAT" = "or_to_cor"
+  "09a_or_to_cor_CONT" = "or_to_cor", "09b_or_to_cor_CAT" = "or_to_cor",
+  "10a_icc_agreement_coverage" = "icc_type"
 )
 
 ## One line saying what the study is for. A reader who has never opened the
@@ -158,8 +169,217 @@ STUDY_Q <- c(
   "08a_pre_post_to_smd_d" = "Five ways to standardise a pre-post design, which do not estimate the same quantity. What is the price of picking one?",
   "08b_pre_post_to_smd_g" = "The same five routes after the small-sample correction, where the standardiser and the correction interact.",
   "09a_or_to_cor_CONT"    = "An odds ratio becomes a correlation, with a genuinely continuous latent variable behind the dichotomy.",
-  "09b_or_to_cor_CAT"     = "The same conversion when the latent variable is categorical, so every route is estimating something it was not designed for."
+  "09b_or_to_cor_CAT"     = "The same conversion when the latent variable is categorical, so every route is estimating something it was not designed for.",
+  "10a_icc_agreement_coverage" = "<code>icc_type</code> changes which ICC is being estimated but not the standard error metaConvert computes for it. What does the shared formula cost the agreement-type interval?"
 )
+
+## ---- what each route estimates -----------------------------------------------
+## The block that replaced the two rhetorical questions of the previous design.
+##
+## IT IS DECLARED, NOT DERIVED, AND IT HAS TO BE. Nothing in an aggregate file
+## says what a method targets: `method` is a bare string and `target` names the
+## benchmark, not the estimand the route was built to return. The distinction is
+## the whole subject of studies 01, 02, 03, 08 and 09 -- and it is settled in the
+## QUESTION header of each studies/*.R, which is the authority these entries are
+## transcribed from. Every line below can be checked against that header; nothing
+## here is inferred from the numbers.
+##
+## `kind` separates what metaConvert SHIPS from what the study added as a
+## comparator. A reader choosing an argument value needs to know that
+## `metafor_rtod_np` is not one, and the aggregates do not record it (run_study()
+## carries a `route` column that aggregate_df() drops).
+##
+## A study missing from ROUTES still works: the block degrades to the plain route
+## selector, which is what the previous design had. Adding a study means adding a
+## header line here, not touching any code.
+
+.rt <- function(...) {
+  a <- list(...)
+  data.frame(method = names(a),
+             what   = vapply(a, `[`, "", 1),
+             ref    = vapply(a, `[`, "", 2),
+             kind   = vapply(a, `[`, "", 3),
+             row.names = NULL, stringsAsFactors = FALSE)
+}
+
+PKG <- "shipped"      ## a value convert_df() accepts for this argument
+CND <- "comparator"   ## added by the study; NOT reachable from the package
+OTH <- "other route"  ## shipped, but through a different argument
+
+## The heading over the block. It states the relation between the routes, which
+## is different in kind from study to study: 01/02/03/08/09 are estimand splits,
+## 04/05/06 are competing approximations of one quantity, 07 is a choice of
+## standardiser, 10 is a choice of ICC model.
+ROUTE_HEAD <- c(
+  "01a_smd_to_cor_r"      = "The two routes estimate different correlations",
+  "01b_smd_to_cor_z"      = "The two routes estimate different correlations",
+  "02a_cor_to_smd_GROUPS" = "Each route presupposes a different dichotomisation",
+  "02b_cor_to_smd_CONT"   = "Each route presupposes a different dichotomisation",
+  "03a_2x2_to_cor_CAT"    = "Two estimands, each reported on two scales",
+  "03b_2x2_to_cor_CONT"   = "Two estimands, each reported on two scales",
+  "04_or_to_rr"           = "Approximations of one risk ratio, differing in what they need",
+  "05_rr_to_or"           = "Approximations of one odds ratio, differing in what they need",
+  "06_or_se_imputation"   = "Five ways to recover the same standard error",
+  "07a_ancova_to_smd_d"   = "Three ANCOVA denominators, and the fallback that needs no guess",
+  "07b_ancova_to_smd_g"   = "Three ANCOVA denominators, and the fallback that needs no guess",
+  "08a_pre_post_to_smd_d" = "One numerator, five standardisers",
+  "08b_pre_post_to_smd_g" = "One numerator, five standardisers",
+  "09a_or_to_cor_CONT"    = "Two estimands, each reported on two scales",
+  "09b_or_to_cor_CAT"     = "Two estimands, each reported on two scales",
+  "10a_icc_agreement_coverage" = "Two ICC models, one shared standard-error formula"
+)
+
+## studies/01_smd_to_cor.R, QUESTION block.
+.r01 <- .rt(
+  lipsey_cooper = c("point-biserial correlation",
+                    "Cooper et al. (2019), eq. 12.40-12.42; Borenstein et al. (2021), eq. 54-56", PKG),
+  viechtbauer   = c("biserial correlation",
+                    "Jacobs & Viechtbauer (2017), eq. 5, 8, 13, 17-19", PKG))
+
+## studies/02_cor_to_smd.R. The nine labels are one two-parameter family
+## (k = correlation-scale multiplier, p = assumed group proportion); the three
+## SHIPPED values of cor_to_smd are cooper, viechtbauer and mathur.
+.r02 <- .rt(
+  cooper           = c("d of a balanced split, treating r as point-biserial",
+                       "Cooper et al. (2019), eq. 12.38-12.39; Mathur & VanderWeele (2020), eq. 1.1", PKG),
+  cooper_g         = c("the same, Hedges-corrected", "as cooper, with J", PKG),
+  viechtbauer      = c("d of a MEDIAN split, treating r as biserial",
+                       "metafor::transf.rtod (conv.delta)", PKG),
+  viechtbauer_g    = c("the same, Hedges-corrected", "as viechtbauer, with J", PKG),
+  mathur_2sd       = c("d per 2 SD of a continuous exposure",
+                       "Mathur & VanderWeele (2020), eq. 1.2", PKG),
+  mathur_raw_1unit = c("d per 1 raw unit of the exposure",
+                       "Mathur & VanderWeele (2020), eq. 1.2", PKG),
+  pb_exact_p       = c("exact point-biserial inverse at the OBSERVED p",
+                       "study comparator: cooper without the balanced-arm assumption", CND),
+  biserial_split_p = c("exact biserial inverse at the observed p",
+                       "study comparator: viechtbauer without the median-split assumption", CND),
+  metafor_rtod_np  = c("biserial inverse with metafor arm sizes",
+                       "study comparator: metafor::transf.rtod with n1i/n2i supplied", CND))
+
+## studies/03_2x2_to_cor.R. The (r)/(z) suffix is the reported scale, not a
+## different estimand; the app offers it as a scale switch.
+.r03 <- .rt(
+  "phi (r)"         = c("phi, the binary-binary correlation",
+                        "study comparator: table_2x2_to_cor accepts only 'tetrachoric'", CND),
+  "phi (z)"         = c("the same, on the Fisher z scale", "atanh(phi)", CND),
+  "tetrachoric (r)" = c("tetrachoric correlation of the two latent normals",
+                        "table_2x2_to_cor = 'tetrachoric' (mvtnorm)", PKG),
+  "tetrachoric (z)" = c("the same, on the Fisher z scale", "atanh(tetrachoric)", PKG))
+
+## studies/04_or_to_rr.R, "NOTE ON grant AND ZHANG-YU" and the input-need list.
+.r04 <- .rt(
+  metaumbrella_cases  = c("RR from the reconstructed table, cases margin",
+                          "or_to_rr = 'metaumbrella_cases' (package default)", PKG),
+  metaumbrella_exp    = c("RR from the reconstructed table, exposed margin",
+                          "or_to_rr = 'metaumbrella_exp'", PKG),
+  grant               = c("RR = OR / (1 - p0 + p0*OR); needs the baseline risk",
+                          "Zhang & Yu (1998), restated by Grant (2014); or_to_rr = 'grant'", PKG),
+  dipietrantonj       = c("the same transform applied through the interval",
+                          "Di Pietrantonj (2006), Stat Med 25(13); or_to_rr = 'dipietrantonj'", PKG),
+  transpose           = c("the OR used unchanged as an RR", "or_to_rr = 'transpose'", PKG),
+  vanderweele_sqrt_or = c("RR ~ sqrt(OR), minimax over p in [0.2, 0.8]",
+                          "study comparator: VanderWeele (2020), Biometrics 76(3):746-752", CND),
+  metafor_conv2x2     = c("RR from metafor's table reconstruction",
+                          "study comparator: metafor::conv.2x2", CND))
+
+## studies/05_rr_to_or.R. Grant's inverse is undefined when RR * p0 >= 1; the
+## rate of that is the nonest_rate column, and it is a result rather than a gap.
+.r05 <- .rt(
+  metaumbrella           = c("OR from the reconstructed table",
+                             "rr_to_or = 'metaumbrella' (package default)", PKG),
+  grant                  = c("OR = RR(1 - p0) / (1 - RR*p0); non-estimable when RR*p0 >= 1",
+                             "Zhang & Yu (1998), restated by Grant (2014); rr_to_or = 'grant'", PKG),
+  dipietrantonj          = c("the same transform applied through the interval",
+                             "Di Pietrantonj (2006), Stat Med 25(13); rr_to_or = 'dipietrantonj'", PKG),
+  transpose              = c("the RR used unchanged as an OR", "rr_to_or = 'transpose'", PKG),
+  vanderweele_rr_squared = c("OR ~ RR^2, the inverse minimax conversion",
+                             "study comparator: VanderWeele (2020), Biometrics 76(3):746-752", CND))
+
+## studies/06_or_se_imputation.R. All five recover the same scalar,
+## sqrt(1/a + 1/b + 1/c + 1/d) for the table behind the reported OR.
+.r06 <- .rt(
+  package_mean_var         = c("mean Woolf variance over every compatible 2x2",
+                               ".se_from_or(); es_from_or(or, n_cases, n_controls)", PKG),
+  median_var               = c("median of that same variance set",
+                               "study comparator: one-line change to .se_from_or", CND),
+  metafor_conv2x2_oracle   = c("reconstruction given the true exposed margin",
+                               "study comparator: metafor::conv.2x2 (upper bound, not feasible)", CND),
+  metafor_conv2x2_balanced = c("reconstruction assuming balanced arms",
+                               "study comparator: metafor::conv.2x2 at n/2", CND),
+  balanced_4_over_sqrtN    = c("4 / sqrt(N), the Woolf SE of an all-equal table",
+                               "study comparator; the constant the D2 flag divides by", CND))
+
+## studies/07_ancova_to_smd.R, "STANDARDISER CHOICES INCLUDED".
+.r07 <- .rt(
+  ancova_means_sd     = c("per-arm adjusted SDs, df-pooled, back-transformed with the guess",
+                          "Cooper et al. (2019), eq. 12.24, table 12.3", PKG),
+  ancova_md_sd        = c("ANCOVA root MSE as one pooled residual SD, back-transformed with the guess",
+                          "Cooper et al. (2019), eq. 12.24, table 12.3", PKG),
+  ancova_pooled_crude = c("adjusted means over the CRUDE pooled SD; the guess enters only the variance",
+                          "Cooper et al. (2019), eq. 12.26", PKG),
+  crude_means_sd      = c("the ANCOVA ignored; unadjusted endpoint means and SDs",
+                          "es_from_means_sd(); no nuisance parameter", PKG))
+
+## studies/08_pre_post_to_smd.R. Same numerator, five denominators.
+.r08 <- .rt(
+  bonett            = c("difference in mean change over the pooled BASELINE SD",
+                        "Bonett (2008), Psych Methods 13(2); pre_post_to_smd = 'bonett' (default)", PKG),
+  morris_dav        = c("over the quadratic mean of baseline and endpoint SD",
+                        "Morris (2008), d_av; variance from Bonett (2008), eq. 10/19", PKG),
+  morris_dz         = c("over the pooled CHANGE-SCORE SD", "Morris & DeShon (2002), d_z", PKG),
+  morris_drm        = c("change SD rescaled by sqrt(2(1 - r))",
+                        "Cooper et al. (2019); Morris & DeShon (2002), d_rm", PKG),
+  cooper            = c("documented alias of morris_drm",
+                        "same formula; ?es_from_means_sd_pre_post lists the two together", PKG),
+  endpoint_means_sd = c("baseline discarded; endpoint means and SDs only",
+                        "es_from_means_sd()", PKG))
+
+## studies/09_or_to_cor.R, QUESTION block. Three approximations of one estimand
+## plus one route targeting a different quantity, each on two scales.
+.r09 <- .rt(
+  "bonett (r)"           = c("tetrachoric, cosine exponent adjusted for the margins",
+                             "Bonett & Price (2005); or_to_cor = 'bonett' (default)", PKG),
+  "bonett (z)"           = c("the same, Fisher z scale", "atanh", PKG),
+  "pearson (r)"          = c("tetrachoric, r = cos(pi / (1 + OR^0.5))", "or_to_cor = 'pearson'", PKG),
+  "pearson (z)"          = c("the same, Fisher z scale", "atanh", PKG),
+  "digby (r)"            = c("tetrachoric, r = (OR^0.75 - 1)/(OR^0.75 + 1)", "or_to_cor = 'digby'", PKG),
+  "digby (z)"            = c("the same, Fisher z scale", "atanh", PKG),
+  "lipsey_cooper (r)"    = c("point-biserial, via the Cox logit d = log(OR) sqrt(3)/pi",
+                             "or_to_cor = 'lipsey_cooper'", PKG),
+  "lipsey_cooper (z)"    = c("the same, Fisher z scale", "atanh", PKG),
+  "2x2_tetrachoric (r)"  = c("tetrachoric from the FULL 2x2, never passing through the OR",
+                             "es_from_2x2(table_2x2_to_cor = 'tetrachoric'); the reference route", OTH),
+  "2x2_tetrachoric (z)"  = c("the same, Fisher z scale", "atanh", OTH))
+
+## studies/10_reliability.R. icc_type changes the estimand and NOT the arithmetic:
+## the two share one SE formula, which is the point 10a measures.
+.r10 <- .rt(
+  agreement   = c("ICC(2,1), absolute agreement; charges rater differences against reliability",
+                  "icc_type = 'agreement' (package default)", PKG),
+  consistency = c("ICC(3,1), consistency; does not", "icc_type = 'consistency'", PKG))
+
+ROUTES <- list(
+  "01a_smd_to_cor_r" = .r01, "01b_smd_to_cor_z" = .r01,
+  "02a_cor_to_smd_GROUPS" = .r02, "02b_cor_to_smd_CONT" = .r02,
+  "03a_2x2_to_cor_CAT" = .r03, "03b_2x2_to_cor_CONT" = .r03,
+  "04_or_to_rr" = .r04, "05_rr_to_or" = .r05, "06_or_se_imputation" = .r06,
+  "07a_ancova_to_smd_d" = .r07, "07b_ancova_to_smd_g" = .r07,
+  "08a_pre_post_to_smd_d" = .r08, "08b_pre_post_to_smd_g" = .r08,
+  "09a_or_to_cor_CONT" = .r09, "09b_or_to_cor_CAT" = .r09,
+  "10a_icc_agreement_coverage" = .r10
+)
+
+## One row of the block, for a method that may or may not be declared. An
+## undeclared method still gets its swatch and its tick, so a study added to
+## data/aggregated before its header is transcribed here is usable immediately.
+route_note <- function(study, method) {
+  r <- ROUTES[[study]]
+  if (is.null(r)) return(NULL)
+  i <- match(method, r$method)
+  if (is.na(i)) return(NULL)
+  as.list(r[i, ])
+}
 
 ## ---- performance measures ----------------------------------------------------
 METRICS <- list(
@@ -283,22 +503,51 @@ default_target <- function(targets, study = NULL) {
 ## the replication's own draw -- can never equal it, and the test would fire on all 12
 ## studies while saying nothing: a method DOES estimate that statistic, it is simply
 ## random rather than fixed. The app already carries a dedicated warning for them.
-unattained_targets <- function(agg) {
+## Which shared target, if any, each route is ALREADY estimating.
+##
+## Exact and threshold-free, and it is the same test the app has always used to
+## label an unattained target: run_study() writes one row per (condition, method,
+## target), so a route whose own estimand IS a named shared target produces the
+## identical bias column against both. Comparing the two ordered vectors answers
+## "is this column the quantity that route was built to return?" with no tolerance
+## to choose.
+##
+## SAME-SAMPLE AND own-LIKE TARGETS ARE EXCLUDED. `own` is a population quantity in
+## every study, so a `*sample*` target -- the same statistic recomputed on the
+## replication draw -- can never equal it; and a match against another own-like
+## column (study 08 own_true_r) says something about r-misspecification rather than
+## about which shared quantity the route targets.
+own_matches <- function(agg) {
   tg <- unique(agg$target)
-  if (!"own" %in% tg) return(character(0))
+  if (!"own" %in% tg || !"bias" %in% names(agg)) return(character(0))
   shared <- setdiff(tg, grep("^own", tg, value = TRUE))
   shared <- shared[!grepl("sample", shared)]
-  if (!length(shared) || !"bias" %in% names(agg)) return(character(0))
   k <- condition_cols(agg)
-  if (!length(k)) return(character(0))
+  if (!length(shared) || !length(k)) return(character(0))
   vec <- function(m, t) {
     d <- agg[agg$method == m & agg$target == t, , drop = FALSE]
     d[do.call(order, d[k]), "bias"]
   }
   ms <- unique(agg$method)
-  shared[!vapply(shared, function(t)
-    any(vapply(ms, function(m) isTRUE(all.equal(vec(m, t), vec(m, "own"))), logical(1))),
-    logical(1))]
+  stats::setNames(vapply(ms, function(m) {
+    hit <- shared[vapply(shared, function(t)
+      isTRUE(all.equal(vec(m, t), vec(m, "own"))), logical(1))]
+    if (length(hit)) hit[1] else NA_character_
+  }, character(1)), ms)
+}
+
+## Shared targets that NO route in this study estimates.
+##
+## The answer is worth showing either way, and the label is deliberately neutral. In
+## 01b it says `fisherz_biserial` is an artefact of the target naming; in 08 and 09b it
+## says no route recovers the quantity the review wants, which is those studies result.
+unattained_targets <- function(agg) {
+  tg <- unique(agg$target)
+  if (!"own" %in% tg) return(character(0))
+  shared <- setdiff(tg, grep("^own", tg, value = TRUE))
+  shared <- shared[!grepl("sample", shared)]
+  hit <- own_matches(agg)
+  setdiff(shared, stats::na.omit(unname(hit)))
 }
 
 ## ---- plot theme --------------------------------------------------------------
@@ -345,290 +594,269 @@ CSS_VARS <- list(paper = MC$paper, ink = MC$ink, ink2 = MC$ink2, soft = MC$soft,
 app_css <- paste0(
 ":root{",
 paste0("--", names(CSS_VARS), ":", unlist(CSS_VARS), ";", collapse = ""),
-'--rule2:#f0f0ea;--rose-l:#fdf3f3;--amber-l:#fbf6e9;--red-l:#fdf0f0;
+'--rule2:#eeeee9;--rose-l:#f6e7e7;--rose-m:#eec9ca;--amber-l:#fbf6e9;--red-l:#fdf0f0;
 --mono:"Cascadia Code","Cascadia Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
 
 body{background:var(--paper);color:var(--ink);font-size:14px;}
-::selection{background:rgba(214,98,104,.18);}
+::selection{background:rgba(192,71,78,.16);}
+.num,table td,table th,.mono,code{
+  font-variant-numeric:tabular-nums lining-nums;
+  font-feature-settings:"tnum" 1,"lnum" 1;}
+code,.mono{font-family:var(--mono);}
+:focus-visible{outline:2px solid var(--rose);outline-offset:2px;}
 
 /* =========================================================== masthead ===== */
-.navbar{
-  background:#fff !important;border-bottom:1px solid var(--rule);
-  box-shadow:none;min-height:56px;padding:0 22px;
+.mast{
+  display:flex;align-items:center;gap:10px;background:#fff;
+  border-bottom:1px solid var(--ink);padding:11px 26px;
 }
-.navbar>.container-fluid{padding:0;}
-.navbar .navbar-brand{flex:1 1 auto;width:100%;margin:0;padding:0;}
-.mast{display:flex;align-items:center;gap:13px;width:100%;min-height:56px;}
-.mast .wm{font-weight:700;font-size:17px;letter-spacing:-.015em;color:var(--ink);}
-.mast .bar{width:1px;height:17px;background:var(--rule);}
-.mast .sub{font-size:13px;color:var(--soft);font-weight:400;}
-.mast .right{margin-left:auto;display:flex;align-items:center;gap:14px;}
-.mast .prov{font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.01em;}
-.mast .prov b{color:var(--soft);font-weight:600;}
+.mast .wm{font-size:13.5px;font-weight:600;letter-spacing:-.01em;}
+.mast .wm em{font-style:normal;color:var(--faint);font-weight:400;}
+.mast .rt{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--faint);
+  display:flex;align-items:center;gap:14px;}
 .helpbtn{
-  border:1px solid var(--rule);background:#fff;border-radius:8px;
-  padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--ink);
-  cursor:pointer;line-height:1.2;
+  background:none;border:0;border-bottom:1px solid var(--rule);padding:0 0 1px;
+  font-family:var(--mono);font-size:11.5px;color:var(--faint);cursor:pointer;
 }
-.helpbtn:hover{border-color:var(--rose);color:var(--rose-d);background:var(--rose-l);}
-.helpbtn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(214,98,104,.2);}
+.helpbtn:hover{color:var(--ink);border-bottom-color:var(--ink);}
 
-/* ========================================================== sidebar ======= */
-.bslib-sidebar-layout>.sidebar{background:#fff;border-right:1px solid var(--rule);}
-.bslib-sidebar-layout>.sidebar>.sidebar-content{padding:16px 20px 48px;gap:0;}
-.bslib-sidebar-layout>.main{padding:22px 26px 8px;}
+.wrap{max-width:1220px;margin:0 auto;padding:20px 26px 70px;background:#fff;
+  min-height:calc(100vh - 46px);}
 
-.sec{display:flex;align-items:center;gap:9px;margin:24px 0 11px;}
-/* the sidebar collapse chevron floats over the top-right corner, so the first
-   rule has to stop short of it */
-.sec:first-child{margin-top:2px;padding-right:26px;}
-.sec .t{
-  font-size:10.5px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
-  color:var(--soft);white-space:nowrap;
+/* ====================================================== study picker ====== */
+/* The only control on the page drawn as a FIELD. It is the one that changes
+   every number below it, so it is the one that has to look changeable; every
+   other control is a token, a tick or a tab. */
+.pick{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding-bottom:15px;border-bottom:1px solid var(--rule);}
+.pick .lb{font-size:11.5px;color:var(--faint);}
+.pick .fld{min-width:430px;flex:0 1 auto;}
+.pick .fld .form-group{margin:0;}
+.pick .fld .form-select,.pick .fld select{
+  border:1px solid var(--ink) !important;border-radius:0 !important;
+  font-size:18px;font-weight:600;letter-spacing:-.015em;color:var(--ink);
+  padding:7px 34px 7px 12px;height:auto;box-shadow:none !important;background-color:#fff;
 }
-.sec .r{flex:1 1 auto;height:1px;background:var(--rule);}
+.pick .fld .form-select:hover{border-color:var(--rose) !important;}
+.pick .fld .form-select:focus{border-color:var(--rose) !important;}
+.pick .ct{font-family:var(--mono);font-size:12px;color:var(--faint);}
+.pick .arg{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--faint);}
+.pick .reps{font-family:var(--mono);font-size:11.5px;color:var(--faint);}
 
-.sidebar label,.sidebar .form-label,.sidebar .control-label{
-  font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:5px;
-}
-.form-select,.form-control{
-  border-color:var(--rule);border-radius:8px;font-size:13.5px;color:var(--ink);
-  padding:7px 11px;background-color:#fff;
-}
-.form-select:focus,.form-control:focus{
-  border-color:var(--rose);box-shadow:0 0 0 3px rgba(214,98,104,.16);
-}
-.shiny-input-container{margin-bottom:11px;width:100%;}
-.shiny-input-container:last-child{margin-bottom:0;}
+.qline{font-size:15px;color:var(--soft);margin:15px 0 5px;max-width:88ch;line-height:1.55;}
+.qline code{font-size:.9em;color:var(--ink2);}
+.slice{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:0 0 6px;}
+.slice b{color:var(--soft);font-weight:400;}
 
-/* the study picker is the primary axis of the whole app, so it is the one
-   control that gets weight */
-.pick .form-select{font-weight:600;font-size:14px;padding:9px 11px;}
-.nrep-chip{
-  display:inline-flex;align-items:baseline;gap:7px;font-family:var(--mono);
-  font-size:12.5px;color:var(--ink2);background:var(--paper);
-  border:1px solid var(--rule);border-radius:7px;padding:6px 10px;
+/* ======================================================== section rule ==== */
+.sec-h{
+  display:flex;align-items:baseline;gap:12px;margin:26px 0 0;padding-bottom:6px;
+  border-bottom:1px solid var(--ink);font-size:12.5px;font-weight:600;color:var(--ink);
 }
-.nrep-chip span{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);}
+.sec-h .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);
+  font-weight:400;}
+.sec-h .form-group{margin:0;}
+.sec-h .form-select{
+  border:0;border-bottom:1px solid var(--rule);border-radius:0;background-color:#fff;
+  font-family:var(--mono);font-size:12.5px;font-weight:400;color:var(--ink);
+  padding:2px 24px 3px 0;height:auto;box-shadow:none !important;
+}
+.sec-h .form-select:hover{border-bottom-color:var(--rose);color:var(--rose-d);}
 
-/* radio + checkbox groups, given room to be clicked (44px targets are not
-   achievable in a dense control rail, but 34px with generous hit padding is) */
-.opts .form-check{
-  padding:7px 10px 7px 31px;border-radius:8px;margin:0 0 1px;min-height:34px;
-  display:flex;align-items:center;
+/* ============================================ routes and their estimands == */
+/* The block that replaced the two rhetorical questions, and it doubles as the
+   route selector: the tick, the colour key and the definition are one row
+   instead of three places that have to be kept in step. */
+.routes .form-group{margin:0;}
+.routes .control-label{display:none;}
+/* Shiny gives every non-inline input container a fixed 300px width. Left alone
+   it squeezed the whole routes table into a third of the page and the estimand
+   overprinted its reference. */
+.routes .shiny-input-container{width:100%;max-width:none;}
+.routes .checkbox{margin:0;border-bottom:1px solid var(--rule2);}
+.routes .checkbox:last-child{border-bottom:0;}
+.routes .checkbox>label{
+  display:grid;grid-template-columns:20px minmax(0,1fr);gap:0 8px;
+  align-items:baseline;margin:0;padding:10px 0;width:100%;cursor:pointer;font-weight:400;
 }
-.opts .form-check:hover{background:var(--paper);}
-.opts .form-check-input{margin-left:-23px;margin-top:0;float:none;flex:none;}
-.opts .form-check-label{font-size:13px;font-weight:500;color:var(--ink);cursor:pointer;}
-.form-check-input{border-color:#c9c9c2;cursor:pointer;}
-.form-check-input:checked{background-color:var(--rose);border-color:var(--rose);}
-.form-check-input:focus{box-shadow:0 0 0 3px rgba(214,98,104,.18);border-color:var(--rose);}
+.routes .checkbox>label>input{margin:0;position:relative;top:2px;accent-color:var(--rose);
+  width:14px;height:14px;}
+/* Shiny renders choiceNames inside a <span> of its own. That span is the second
+   grid cell, and being inline it collapsed the .rw grid inside it onto itself --
+   which is what made the estimand and the reference overprint each other. */
+.routes .checkbox>label>span{display:block;min-width:0;}
+.routes .checkbox>label:hover .wt{color:var(--rose-d);}
+.rw{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) minmax(0,30ch);
+  gap:0 26px;align-items:baseline;}
+.rw .nm{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap;}
+.rw .nm i{width:9px;height:9px;display:inline-block;margin-right:9px;
+  vertical-align:middle;position:relative;top:-1px;}
+.rw .wt{font-size:13px;color:var(--ink);font-weight:600;line-height:1.45;}
+.rw .rf{font-size:11.5px;color:var(--faint);text-align:right;line-height:1.5;}
+.rw .kd{display:block;color:var(--rose-d);}
+@media(max-width:900px){
+  .rw{grid-template-columns:1fr;gap:3px;}
+  .rw .rf{text-align:left;}
+}
+.qa{font-size:11.5px;color:var(--faint);padding:8px 0 0;}
+.qa a{color:var(--rose-d);text-decoration:none;border-bottom:1px solid var(--rose-m);
+  cursor:pointer;}
+.qa em{font-style:normal;padding:0 5px;}
 
-/* method list doubles as the persistent legend */
-.opts.methods .form-check{padding:5px 8px 5px 29px;min-height:30px;}
-.mk{display:inline-flex;align-items:center;gap:8px;}
-.mk i{width:9px;height:9px;border-radius:2px;flex:none;}
-.mk span{font-family:var(--mono);font-size:12.5px;color:var(--ink2);}
-.qa{display:flex;align-items:center;gap:7px;margin:0 0 6px 2px;}
-.qa a{
-  font-size:11.5px;font-weight:600;color:var(--rose-d);cursor:pointer;
-  text-decoration:none;border-bottom:1px dashed rgba(162,60,66,.35);
+/* ============================================== scored against, as tabs === */
+/* The choice that decides the answer, so it navigates the page rather than
+   sitting in a rail beside it. Shiny renders label>input+span, so the SPAN is
+   the tab and the checked state is read off its sibling input. */
+.estr{margin-top:22px;border-top:1px solid var(--ink);}
+.estr .lb{display:flex;align-items:baseline;gap:14px;padding:7px 0 2px;
+  font-size:11.5px;color:var(--faint);}
+.estr .lb .as{margin-left:auto;}
+.estr .form-group{margin:0;}
+.estr .control-label{display:none;}
+.estr .shiny-options-group{display:flex;flex-wrap:nowrap;overflow-x:auto;
+  border-bottom:1px solid var(--rule);}
+.estr .radio-inline{margin:0 !important;padding:0 !important;font-weight:400;
+  display:block;flex:0 0 auto;}
+.estr .radio-inline input{position:absolute;opacity:0;width:0;height:0;}
+.estr .radio-inline span{
+  display:block;font-family:var(--mono);font-size:12.5px;color:var(--soft);
+  white-space:nowrap;padding:9px 16px 10px;border-bottom:2px solid transparent;
+  margin-bottom:-1px;cursor:pointer;
 }
-.qa a:hover{color:var(--rose);}
-.qa em{color:var(--rule);font-style:normal;}
+.estr .radio-inline:first-child span{padding-left:0;}
+.estr .radio-inline span:hover{color:var(--ink);}
+.estr .radio-inline input:checked+span{color:var(--ink);border-bottom-color:var(--rose);}
+.estr .radio-inline input:focus-visible+span{outline:2px solid var(--rose);outline-offset:-2px;}
+.estr .unatt{color:var(--amber);}
 
-.hint{font-size:12px;line-height:1.5;color:var(--soft);margin:2px 0 4px;}
-.hint b{color:var(--ink2);font-weight:600;}
-.hint a{color:var(--rose-d);cursor:pointer;font-weight:600;text-decoration:none;
-  border-bottom:1px dashed rgba(162,60,66,.35);}
+/* ================================================================ ledger == */
+/* Routes down, reference quantities across. Where a study records more than one
+   shared benchmark this table IS the result, and it needs no sentence. */
+table.ledger{border-collapse:collapse;font-size:12.5px;width:auto;max-width:100%;
+  margin-top:20px;table-layout:auto;}
+table.ledger th{font-weight:400;font-size:11.5px;color:var(--soft);
+  padding:0 7px 8px 16px;text-align:right;white-space:nowrap;
+  border-bottom:1px solid var(--ink);vertical-align:bottom;}
+table.ledger th.l,table.ledger td.l{min-width:210px;padding-right:26px;}
+table.ledger th.l{text-align:left;padding-left:0;color:var(--faint);}
+table.ledger th.on{color:var(--rose-d);font-weight:600;background:var(--rose-l);
+  padding-top:6px;}
+table.ledger td{font-family:var(--mono);text-align:right;padding:9px 7px 9px 16px;
+  color:var(--ink2);white-space:nowrap;border-bottom:1px solid var(--rule2);}
+table.ledger td.l{text-align:left;padding-left:0;color:var(--ink);}
+table.ledger td.l i{width:9px;height:9px;display:inline-block;margin-right:9px;
+  vertical-align:middle;position:relative;top:-1px;}
+table.ledger td.on{background:var(--rose-l);}
+table.ledger td.ownc,.lednote .mk{box-shadow:inset 0 0 0 1.5px var(--ink2);}
+.lednote .mk{display:inline-block;width:13px;height:13px;position:relative;
+  top:2px;margin:0 5px 0 1px;}
+table.ledger td.bad{color:var(--rose-d);}
+table.ledger td .sm{display:block;font-size:11px;color:var(--faint);margin-top:2px;}
+table.ledger tbody tr:last-child td{border-bottom:1.4px solid var(--ink);}
+.lednote{font-size:12.5px;color:var(--soft);margin:11px 0 0;max-width:92ch;line-height:1.55;}
+.lednote b{color:var(--ink);font-weight:600;}
+.lednote .fn{color:var(--faint);}
 
-/* filters subset the data rather than mapping it, so they read differently */
-.held{background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:11px 12px 3px;}
-.held .form-select{background-color:#fff;font-family:var(--mono);font-size:12.5px;}
-.held label{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--soft);}
+/* ========================================================= plot section === */
+/* The controls sit with the figure they redraw. In the previous design they
+   were 340px of rail at the top of the page and the plot was two screens down,
+   so a control whose object is off screen read as belonging to something else. */
+.plot{display:grid;grid-template-columns:200px minmax(0,1fr);gap:0;margin-top:14px;}
+.plot .rail{border-right:1px solid var(--rule);padding:14px 22px 16px 0;}
+.plot .rail .form-group{margin:0 0 14px;}
+.plot .rail label.control-label{font-size:11px;font-weight:600;color:var(--faint);
+  margin:0 0 5px;}
+.plot .rail .form-select,.plot .rail select{
+  border:0;border-bottom:1px solid var(--rule);border-radius:0;background-color:#fff;
+  font-family:var(--mono);font-size:12px;color:var(--ink2);padding:2px 20px 4px 0;
+  height:auto;box-shadow:none !important;
+}
+.plot .rail .form-select:hover{border-bottom-color:var(--rose);color:var(--rose-d);}
+.plot .rail .checkbox label{font-size:12px;color:var(--soft);font-weight:400;}
+.plot .rail .checkbox input{accent-color:var(--rose);margin-right:6px;}
+.plot .rail .radio-inline{font-size:12px;color:var(--soft);margin-right:12px;}
+.plot .rail .radio-inline input{accent-color:var(--rose);margin-right:5px;}
+.plot .rail .hint{font-size:11px;color:var(--faint);line-height:1.5;margin:-8px 0 14px;}
+.plot .rail .btn{
+  background:#fff;border:1px solid var(--rule);border-radius:0;color:var(--rose-d);
+  font-family:var(--mono);font-size:11.5px;padding:5px 10px;align-self:flex-start;
+  width:auto;display:inline-block;
+}
+.plot .rail .btn:hover{border-color:var(--rose);color:var(--rose-d);}
+.plot .fig{padding:14px 0 0 26px;min-width:0;}
+.key{font-family:var(--mono);font-size:11.5px;color:var(--soft);display:flex;
+  flex-wrap:wrap;gap:6px 18px;margin:0 0 12px;align-items:center;}
+.key .m i{width:9px;height:9px;display:inline-block;margin-right:7px;
+  vertical-align:middle;position:relative;top:-1px;}
+.key .band i{width:16px;height:9px;display:inline-block;margin-right:7px;
+  background:rgba(44,42,71,.12);vertical-align:middle;position:relative;top:-1px;}
+.key .band{color:var(--faint);}
+.figcap{font-size:11.5px;color:var(--faint);margin-top:10px;line-height:1.6;
+  max-width:96ch;}
+.figcap b{color:var(--soft);font-weight:500;}
+@media(max-width:820px){
+  .plot{grid-template-columns:1fr;}
+  .plot .rail{border-right:0;border-bottom:1px solid var(--rule);padding:14px 0;}
+  .plot .fig{padding-left:0;}
+  .pick .fld{min-width:0;flex:1 1 100%;}
+}
 
-/* ==================================================== study header ======== */
-.hdr{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin:0 0 18px;}
-.hdr .txt{flex:1 1 380px;min-width:0;}
-.hdr .line{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
-.ix{
-  font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--rose-d);
-  background:var(--rose-l);border:1px solid rgba(214,98,104,.24);border-radius:6px;
-  padding:4px 8px;letter-spacing:.05em;flex:none;
-}
-.hdr h1{
-  font-size:26px;font-weight:700;letter-spacing:-.022em;margin:0;
-  color:var(--ink);line-height:1.14;
-}
-.arg{
-  font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--paper);
-  border:1px solid var(--rule);border-radius:6px;padding:3px 8px;
-}
-.hdr .q{font-size:13.5px;color:var(--soft);margin:8px 0 0;max-width:76ch;line-height:1.55;}
-
-.facts{display:flex;flex:none;}
-.facts .f{padding:2px 0 2px 18px;margin-left:18px;border-left:1px solid var(--rule);}
-.facts .f:first-child{border-left:0;margin-left:0;padding-left:0;}
-.facts .v{font-family:var(--mono);font-size:17px;font-weight:600;color:var(--ink);line-height:1.1;}
-.facts .k{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-top:4px;}
-
-/* ========================================================= headline ======= */
-.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 18px;}
-.kpi{
-  background:#fff;border:1px solid var(--rule);border-radius:12px;
-  padding:14px 16px 15px;position:relative;overflow:hidden;
-}
-.kpi.lead{border-color:rgba(214,98,104,.32);}
-.kpi.lead:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--rose);}
-.kpi .k{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
-.kpi .v{
-  font-family:var(--mono);font-size:23px;font-weight:600;color:var(--ink);
-  margin-top:7px;line-height:1.15;letter-spacing:-.01em;word-break:break-word;
-}
-.kpi.lead .v{color:var(--rose-d);}
-.kpi .v u{font-size:13px;color:var(--soft);font-weight:400;text-decoration:none;}
-.kpi .n{font-size:12.5px;color:var(--soft);margin-top:6px;line-height:1.45;}
-.kpi .n b{color:var(--ink2);font-weight:600;font-family:var(--mono);}
-.chip{
-  display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
-  border-radius:20px;padding:3px 9px;border:1px solid;letter-spacing:.02em;
-  text-transform:uppercase;margin-top:8px;
-}
-.chip.solid{color:var(--ink2);background:rgba(44,42,71,.055);border-color:rgba(44,42,71,.16);}
-.chip.warn{color:var(--amber);background:var(--amber-l);border-color:rgba(138,103,18,.22);}
-.chip.bad{color:var(--red);background:var(--red-l);border-color:rgba(156,43,43,.2);}
-
-/* ============================================================= tabs ======= */
-.card{
-  border:1px solid var(--rule);border-radius:14px;background:#fff;
-  box-shadow:0 1px 2px rgba(33,31,56,.04);
-}
-.card>.card-header{background:#fff;border-bottom:1px solid var(--rule);padding:0 8px;}
-.nav-tabs{border-bottom:0;gap:2px;}
-.nav-tabs .nav-link{
-  border:0;border-radius:0;color:var(--soft);font-weight:600;font-size:13.5px;
-  padding:13px 14px;border-bottom:2px solid transparent;
-}
-.nav-tabs .nav-link:hover{color:var(--ink);background:transparent;}
-.nav-tabs .nav-link.active{
-  color:var(--ink) !important;background:transparent !important;
-  border-bottom:2px solid var(--rose) !important;
-}
-.nav-tabs .nav-link:focus-visible{outline:none;box-shadow:inset 0 0 0 2px rgba(214,98,104,.3);}
-.card-body{padding:20px 22px 22px;}
-
-/* ============================================== key row above the plot ==== */
-.key{
-  display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
-  padding:0 0 13px;margin:0 0 16px;border-bottom:1px solid var(--rule);
-}
-.key .lbl{
-  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--faint);
-}
-.key .m{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);
-  font-size:12.5px;color:var(--ink2);}
-.key .m i{width:10px;height:10px;border-radius:3px;flex:none;}
-.key .band{margin-left:auto;display:inline-flex;align-items:center;gap:8px;
-  font-size:12px;color:var(--soft);cursor:help;}
-.key .band i{
-  width:26px;height:12px;border-radius:3px;flex:none;
-  background:rgba(44,42,71,.09);
-  border-top:1px dashed rgba(44,42,71,.42);border-bottom:1px dashed rgba(44,42,71,.42);
-}
-.measline{font-size:13px;color:var(--soft);margin:-6px 0 14px;}
-.measline b{color:var(--ink);font-weight:600;}
-
-/* ============================================================ prose ======= */
-.lede{font-size:13.5px;line-height:1.62;color:var(--soft);max-width:78ch;margin:0 0 16px;}
+/* ============================================================== notices === */
+.note{display:flex;gap:11px;padding:11px 14px;margin:14px 0 0;font-size:13px;
+  line-height:1.55;border:1px solid var(--rule);background:var(--paper);}
+.note .ic{font-family:var(--mono);font-weight:600;flex:none;width:15px;text-align:center;}
+.note code{font-size:.9em;}
+.note.warn{border-color:var(--rose-m);background:var(--rose-l);color:var(--ink2);}
+.note.warn .ic{color:var(--rose-d);}
+.note.info .ic{color:var(--faint);}
+.lede{font-size:13px;color:var(--soft);line-height:1.6;max-width:96ch;margin:12px 0 14px;}
 .lede b{color:var(--ink);font-weight:600;}
-.lede i{color:var(--ink2);}
-.lede code{font-family:var(--mono);font-size:12.5px;color:var(--ink2);
-  background:var(--paper);padding:1px 5px;border-radius:4px;}
-.note{
-  display:flex;gap:11px;border-radius:10px;padding:12px 14px;font-size:13px;
-  line-height:1.55;margin:0 0 16px;border:1px solid;max-width:82ch;
-}
-.note .ic{font-family:var(--mono);font-weight:700;flex:none;line-height:1.4;}
-.note.warn{background:var(--amber-l);border-color:rgba(138,103,18,.22);color:#6d520e;}
-.note.warn b{color:#54400a;font-weight:700;}
-.note.info{background:var(--paper);border-color:var(--rule);color:var(--soft);}
-.note.info b{color:var(--ink);font-weight:600;}
+.lede code{font-size:.9em;}
 
-/* =========================================================== tables ======= */
-table.dataTable{font-size:13px;}
+/* ============================================================== tables ==== */
+table.dataTable{font-size:12.5px !important;border-collapse:collapse !important;}
 table.dataTable thead th{
-  font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;
-  color:var(--faint);border-bottom:1px solid var(--rule) !important;padding:11px 10px;
+  border-bottom:1px solid var(--ink) !important;border-top:1.4px solid var(--ink) !important;
+  font-weight:600;font-size:11.5px;color:var(--soft);padding:7px 10px !important;
 }
 table.dataTable tbody td{
-  font-family:var(--mono);color:var(--ink2);padding:10px;
-  border-top:1px solid var(--rule2);
+  border-top:0 !important;border-bottom:1px solid var(--rule2) !important;
+  padding:6px 10px !important;font-family:var(--mono);color:var(--ink2);
 }
-table.dataTable tbody tr:hover td{background:var(--paper);}
-/* a wrapped method name doubles the row height, and the abs-bias colour bar is
-   drawn to the cell box, so it turned into a tall pink slab on those rows */
-table.dataTable td.mth{font-family:var(--mono);font-weight:600;color:var(--ink);white-space:nowrap;}
-table.dataTable td.rk{font-family:var(--mono);color:var(--faint);width:26px;}
-.dataTables_wrapper{overflow-x:auto;}
-.dataTables_wrapper .dataTables_filter input{
-  border:1px solid var(--rule);border-radius:7px;padding:5px 9px;font-size:13px;
+table.dataTable tbody tr.odd,table.dataTable tbody tr.even{background:#fff !important;}
+table.dataTable tbody td.mth{font-family:var(--mono);color:var(--ink);}
+table.dataTable tbody td.rk{color:var(--faint);}
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select{
+  border:1px solid var(--rule);border-radius:0;font-size:12px;
 }
-.dataTables_wrapper .dataTables_info,.dataTables_wrapper .dataTables_length,
-.dataTables_wrapper .dataTables_paginate{font-size:12.5px;color:var(--soft);}
+.dataTables_wrapper .dataTables_info,.dataTables_wrapper .dataTables_paginate{
+  font-size:11.5px;color:var(--faint);
+}
 
-.btn{border-radius:8px;font-weight:600;font-size:13px;padding:7px 13px;}
-.btn-outline-secondary{border-color:var(--rule);color:var(--ink);background:#fff;}
-.btn-outline-secondary:hover{border-color:var(--rose);color:var(--rose-d);background:var(--rose-l);}
-/* the card body is a flex column, so a plain width:auto anchor still stretches
-   edge to edge; align-self is what actually shrink-wraps it */
-#dl{display:inline-flex;align-items:center;gap:7px;width:auto;align-self:flex-start;
-  margin:0 0 16px;}
-
-/* =========================================================== footer ======= */
+/* =============================================================== footer === */
 .foot{
-  margin:20px 2px 10px;padding-top:14px;border-top:1px solid var(--rule);
-  display:flex;flex-wrap:wrap;gap:6px 20px;align-items:baseline;
-  font-size:11.5px;color:var(--faint);line-height:1.5;
+  margin-top:34px;padding-top:11px;border-top:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;gap:6px 26px;font-size:11.5px;color:var(--faint);
 }
-.foot .mono{font-family:var(--mono);}
-.foot b{color:var(--soft);font-weight:600;}
+.foot b{color:var(--soft);font-weight:500;}
 
-/* ============================================================ modal ======= */
-.modal-content{border:1px solid var(--rule);border-radius:14px;}
-.modal-header{border-bottom:1px solid var(--rule);padding:16px 22px;}
-.modal-title{font-size:17px;font-weight:700;letter-spacing:-.01em;}
-.modal-body{padding:18px 22px 22px;}
-.modal-footer{border-top:1px solid var(--rule);padding:12px 22px;}
-.doc h4{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--rose-d);margin:20px 0 8px;}
+/* =============================================================== modal ==== */
+.modal-content{border-radius:0;border:1px solid var(--ink);}
+.modal-header,.modal-footer{border-color:var(--rule);}
+.doc h4{font-size:13px;font-weight:600;margin:18px 0 6px;}
 .doc h4:first-child{margin-top:0;}
-.doc p{font-size:13.5px;line-height:1.62;color:var(--soft);margin:0 0 10px;max-width:74ch;}
-.doc p b{color:var(--ink);font-weight:600;}
-.doc code{font-family:var(--mono);font-size:12.5px;color:var(--ink2);
-  background:var(--paper);padding:1px 5px;border-radius:4px;}
-.doc ul{margin:0 0 10px;padding-left:18px;}
-.doc li{font-size:13.5px;line-height:1.6;color:var(--soft);margin-bottom:5px;}
-.doc li b{color:var(--ink);font-weight:600;}
+.doc p,.doc li{font-size:13px;color:var(--soft);line-height:1.6;}
+.doc ul{padding-left:18px;}
+.doc code{font-size:.9em;color:var(--ink2);}
 
-/* ======================================================= responsive ======= */
-@media (max-width:1250px){
-  .kpis{grid-template-columns:1fr;}
-  .facts{width:100%;}
-  .facts .f:first-child{padding-left:0;}
-}
-@media (max-width:760px){
-  .hdr h1{font-size:22px;}
-  .facts{flex-wrap:wrap;gap:10px 0;}
-  .mast .prov{display:none;}
-  .bslib-sidebar-layout>.main{padding:16px 14px 8px;}
-}
 @media (prefers-reduced-motion:no-preference){
-  .btn,.helpbtn,.nav-tabs .nav-link,.form-select,.form-control,.kpi,.opts .form-check{
-    transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease;
+  .btn,.helpbtn,.form-select,.estr .radio-inline span,.rw .wt{
+    transition:background-color .15s ease,border-color .15s ease,color .15s ease;
   }
 }
 ')
+
 
 ## The full reading guide. It used to sit permanently in the sidebar as three
 ## paragraphs of small grey prose, where it cost ~200px of scroll on every visit
@@ -661,14 +889,14 @@ HOW_TO_READ <- HTML(
    </ul>
    <p>The gap between the last two is the estimand mismatch, and it is not bias
    &mdash; the method is computing its own quantity correctly, but that quantity is
-   not the one being asked for. The <b>Estimand check</b> tab shows both at once,
-   which is the only place the comparison is safe.</p>
+   not the one being asked for. The <b>ledger</b> under the estimand strip shows
+   every route against every reference quantity at once, which is the only place
+   the comparison is safe.</p>
 
    <p>A shared benchmark is sometimes marked <i>no route estimates this</i>. That is
    read off the data, not declared: a route whose own estimand IS a named target
    produces the identical bias column against both, so where no route does, nothing
-   in the study is trying to produce that number. It means two different things and
-   the tab you are on tells you which. In study 08 and in <b>OR to correlation
+   in the study is trying to produce that number. It means two different things. In study 08 and in <b>OR to correlation
    (categorical latent)</b> it is the RESULT &mdash; the quantity a review wants and
    no conversion delivers. In <b>SMD to correlation (z)</b> it is an artefact of how
    the targets were named, which is why that study opens elsewhere.</p>
@@ -704,25 +932,20 @@ HOW_TO_READ <- HTML(
    </ul>
    </div>')
 
-ui <- page_sidebar(
-  title = div(
-    class = "mast",
-    span(class = "wm", "metaConvert"),
-    span(class = "bar"),
-    span(class = "sub", "Simulation programme"),
-    div(class = "right",
-        span(class = "prov",
-             if (is.null(FILES)) "no aggregates found"
-             else HTML(paste0(fmt_n(length(unique(FILES$stem))), " studies &middot; <b>ADEMP</b>"))),
-        tags$button(id = "howto", class = "helpbtn action-button", type = "button",
-                    "How to read this"))
-  ),
-  window_title = "metaConvert simulation results",
-  ## NOT fillable. In fill mode bslib stretches the tab card to the viewport and
-  ## resizes plotOutput to the container, which (a) leaves a table-sized panel
-  ## floating in 200px of white space and (b) silently discards the per-study
-  ## plot height computed from the panel count. The page scrolls instead.
-  fillable = FALSE,
+## ---- UI ----------------------------------------------------------------------
+## ONE COLUMN, and no sidebar. The previous design put every control in a 340px
+## rail, which mixed two kinds of decision that must not be confused: choosing the
+## reference quantity changes the RESULT, choosing the horizontal axis changes the
+## DRAWING. They are now in different places, and the plot controls sit beside the
+## plot rather than two screens above it.
+##
+## The study and the measure are STATIC selectInputs, not uiOutputs. A select
+## whose renderUI reads its own input to set `selected` re-renders on every change,
+## which drops focus mid-interaction and can loop; the two selects whose choices
+## are known before the session starts are therefore built here, and only the
+## things that genuinely depend on the chosen study are rendered.
+ui <- page_fluid(
+  title = "metaConvert simulation results",
   theme = bs_theme(
     version = 5,
     bg = MC$white, fg = MC$ink, primary = MC$rose,
@@ -730,79 +953,91 @@ ui <- page_sidebar(
     code_font = font_collection("Cascadia Code", "Cascadia Mono", font_google("IBM Plex Mono")),
     "border-color" = MC$rule
   ),
+  padding = 0, gap = 0,
   tags$head(tags$style(HTML(app_css))),
 
-  sidebar = sidebar(
-    width = 340, bg = MC$white,
+  div(class = "mast",
+      span(class = "wm", "metaConvert ", tags$em("simulations")),
+      div(class = "rt",
+          span(if (is.null(FILES)) "no aggregates found"
+               else HTML(paste0(fmt_n(length(unique(FILES$stem))), " studies &middot; ADEMP"))),
+          tags$button(id = "howto", class = "helpbtn action-button", type = "button",
+                      "how to read this"))),
+
+  div(
+    class = "wrap",
     if (is.null(FILES)) {
       div(class = "note warn", span(class = "ic", "!"),
           div(HTML("No aggregate files found in <code>data/aggregated</code>. Run the
                     simulation programme first.")))
     } else {
       tagList(
-        div(class = "sec", span(class = "t", "Study"), span(class = "r")),
+        ## ---- the question ------------------------------------------------
+        ## The one control drawn as a field, because it is the one that changes
+        ## every number below it.
         div(class = "pick",
-            selectInput("study", NULL,
-                        choices = stats::setNames(unique(FILES$stem),
-                                                  sprintf("%s — %s",
-                                                          FILES$idx[!duplicated(FILES$stem)],
-                                                          FILES$label[!duplicated(FILES$stem)])))),
-        uiOutput("nrep_ui"),
+            span(class = "lb", "Study"),
+            div(class = "fld",
+                selectInput("study", NULL, width = "100%",
+                            choices = stats::setNames(
+                              unique(FILES$stem),
+                              sprintf("%s  %s",
+                                      FILES$idx[!duplicated(FILES$stem)],
+                                      FILES$label[!duplicated(FILES$stem)])))),
+            uiOutput("study_pos", inline = TRUE),
+            uiOutput("nrep_ui"),
+            uiOutput("study_arg", inline = TRUE)),
+        uiOutput("study_intro"),
 
-        div(class = "sec", span(class = "t", "Scored against"), span(class = "r")),
-        uiOutput("target_ui"),
+        ## ---- the routes, and what each estimates -------------------------
+        uiOutput("routes_head"),
+        div(class = "routes", uiOutput("methods_ui")),
+        div(class = "qa", actionLink("all_m", "all"), tags$em("/"),
+            actionLink("no_m", "none")),
 
-        div(class = "sec", span(class = "t", "Measure"), span(class = "r")),
-        selectInput("metric", NULL,
-                    choices = stats::setNames(names(METRICS),
-                                              vapply(METRICS, `[[`, "", "label")),
-                    selected = "coverage"),
+        ## ---- the reference quantity, as the page navigation --------------
+        uiOutput("estimand_strip"),
+        uiOutput("ledger_block"),
 
-        div(class = "sec", span(class = "t", "Panels"), span(class = "r")),
-        uiOutput("xvar_ui"),
-        uiOutput("facet_ui"),
-        checkboxInput("free_y", "Free vertical scale per panel", FALSE),
-        div(class = "hint", "A shared scale is the default so panels can be compared."),
+        ## ---- the evidence ------------------------------------------------
+        div(class = "sec-h",
+            div(style = "display:flex;align-items:baseline;gap:11px;",
+                span("Across the grid:"),
+                div(style = "width:272px;",
+                    selectInput("metric", NULL, width = "100%",
+                                choices = stats::setNames(
+                                  names(METRICS), vapply(METRICS, `[[`, "", "label")),
+                                selected = "coverage"))),
+            uiOutput("metric_note", inline = TRUE)),
+        div(class = "plot",
+            div(class = "rail",
+                uiOutput("xvar_ui"),
+                uiOutput("facet_ui"),
+                checkboxInput("free_y", "free vertical scale", FALSE),
+                div(class = "hint", "A shared scale is the default so panels compare."),
+                uiOutput("scale_ui"),
+                uiOutput("filters_ui"),
+                downloadButton("dl", "rows, CSV", class = "btn")),
+            div(class = "fig",
+                uiOutput("key_row"),
+                uiOutput("plot_slot"),
+                uiOutput("plot_cap"))),
 
-        uiOutput("scale_ui"),
+        ## ---- the scorecard -----------------------------------------------
+        div(class = "sec-h", span("Every measure, every route"),
+            span(class = "n", "means over the conditions shown")),
+        uiOutput("rank_lede"),
+        DTOutput("rank_tbl"),
 
-        div(class = "sec", span(class = "t", "Methods"), span(class = "r")),
-        div(class = "qa",
-            actionLink("all_m", "all"), tags$em("/"), actionLink("no_m", "none")),
-        uiOutput("methods_ui"),
+        ## ---- the rows behind it ------------------------------------------
+        div(class = "sec-h", span("The rows behind this view")),
+        uiOutput("data_lede"),
+        DTOutput("data_tbl"),
 
-        uiOutput("filters_ui")
+        uiOutput("footer")
       )
     }
-  ),
-
-  uiOutput("study_header"),
-  uiOutput("kpi_row"),
-
-  ## Every card_body is fillable = FALSE. Left at the default, bslib treats
-  ## DTOutput and plotOutput as fill items and stretches them to the card, so a
-  ## two-row ranking table sat in 250px of white space and the data table grew an
-  ## internal scrollbar of its own. Flow layout sizes each panel to its content.
-  navset_card_tab(
-    id = "tabs",
-    nav_panel("Plot",
-              card_body(fillable = FALSE,
-                        uiOutput("key_row"), uiOutput("plot_slot"))),
-    nav_panel("Ranking",
-              card_body(fillable = FALSE,
-                        uiOutput("rank_lede"), DTOutput("rank_tbl"))),
-    nav_panel("Estimand check",
-              card_body(fillable = FALSE,
-                        uiOutput("estimand_lede"), uiOutput("estimand_slot"))),
-    nav_panel("Data",
-              card_body(fillable = FALSE,
-                        uiOutput("data_lede"),
-                        downloadButton("dl", "Download these rows",
-                                       class = "btn-outline-secondary btn-sm"),
-                        DTOutput("data_tbl")))
-  ),
-
-  uiOutput("footer")
+  )
 )
 
 ## ---- server ------------------------------------------------------------------
@@ -817,13 +1052,15 @@ server <- function(input, output, session) {
   output$nrep_ui <- renderUI({
     req(input$study)
     n <- sort(unique(FILES$nrep[FILES$stem == input$study]), decreasing = TRUE)
-    ## a select with one option is noise; show the fact instead
+    ## a select with one option is noise; show the fact instead. The hidden select
+    ## still has to exist, because every reactive below reads input$nrep.
     if (length(n) == 1)
-      tagList(div(class = "nrep-chip", span("reps"), fmt_n(n)),
+      tagList(span(class = "reps", paste0("nrep ", fmt_n(n))),
               tags$div(style = "display:none;",
                        selectInput("nrep", NULL, choices = n, selected = n)))
     else
-      selectInput("nrep", "Replications per condition", choices = n, selected = n[1])
+      div(style = "width:120px;",
+          selectInput("nrep", NULL, choices = n, selected = n[1], width = "100%"))
   })
 
   raw <- reactive({
@@ -841,40 +1078,9 @@ server <- function(input, output, session) {
   ## The ordering, the opening selection and the "no route estimates this" labelling
   ## live in target_order() / default_target() / unattained_targets() at the top of
   ## this file, so they can be exercised without starting Shiny (roadmap 4.3).
-  output$target_ui <- renderUI({
-    ag <- raw()
-    tg <- unique(ag$target)
-    own_like <- grep("^own", tg, value = TRUE)
-    ord <- target_order(tg)
-    unattained <- unattained_targets(ag)
-    pretty <- vapply(ord, function(z) {
-      base <- if (z == "own") "Each method's own estimand"
-      else if (z == "own_true_r") "Own estimand, at the true r"
-      else if (z == "population") "Population parameter"
-      else if (z == "sample") "Same-sample statistic"
-      else gsub("_", " ", z)
-      if (z %in% unattained) paste0(base, " — no route estimates this") else base
-    }, character(1))
-    tagList(
-      div(class = "opts",
-          radioButtons("target", NULL,
-                       choices = stats::setNames(ord, pretty),
-                       selected = default_target(tg, input$study))),
-      div(class = "hint",
-          if (length(own_like))
-            HTML(paste0("Shared benchmarks come first — use those to compare methods, ",
-                        "except where one is marked <i>no route estimates this</i>. ",
-                        "<b>Own estimand</b> scores each method against a different quantity. ",
-                        "<a id=\"howto2\" class=\"action-button\">What that means</a>"))
-          else NULL)
-    )
-  })
-
-  observeEvent(input$howto2, {
-    showModal(modalDialog(
-      title = "How to read this", HOW_TO_READ, size = "l", easyClose = TRUE,
-      footer = modalButton("Close")))
-  })
+  ## target_ui is gone: the reference quantity is now the estimand strip, rendered
+  ## inside the document by output$estimand_strip. target_order(), default_target()
+  ## and unattained_targets() are unchanged and still live at the top of this file.
 
   ## Several studies encode the output scale in the method name -- "bonett (r)"
   ## and "bonett (z)" are the same formula reported on the correlation and on the
@@ -894,10 +1100,8 @@ server <- function(input, output, session) {
     if (is.null(s)) return(NULL)
     lv <- sort(unique(stats::na.omit(s)))
     tagList(
-      div(class = "sec", span(class = "t", "Reported scale"), span(class = "r")),
-      div(class = "opts",
-          radioButtons("scale", NULL, choices = lv, selected = lv[1], inline = TRUE)),
-      div(class = "hint", "The same formulas on different scales, so one is shown at a time.")
+      radioButtons("scale", "Reported scale", choices = lv, selected = lv[1], inline = TRUE),
+      div(class = "hint", "One scale at a time: the same formulas, different transforms.")
     )
   })
 
@@ -955,12 +1159,10 @@ server <- function(input, output, session) {
     rest <- setdiff(cc, c(input$xvar, input$facet_row, input$facet_col))
     if (!length(rest)) return(NULL)
     tagList(
-      div(class = "sec", span(class = "t", "Held constant"), span(class = "r")),
-      div(class = "held",
-          lapply(rest, function(k) {
-            v <- sort(unique(raw()[[k]]))
-            selectInput(paste0("f_", k), k, choices = v, selected = v[1])
-          }))
+      lapply(rest, function(k) {
+        v <- sort(unique(raw()[[k]]))
+        selectInput(paste0("f_", k), paste("held at:", k), choices = v, selected = v[1])
+      })
     )
   })
 
@@ -971,11 +1173,7 @@ server <- function(input, output, session) {
     d <- raw(); req(input$target)
     ms <- input$methods; if (is.null(ms)) ms <- character(0)
     d <- d[d$target == input$target & d$method %in% ms, , drop = FALSE]
-    for (k in setdiff(cond_cols(), c(input$xvar, input$facet_row, input$facet_col))) {
-      v <- input[[paste0("f_", k)]]
-      if (!is.null(v)) d <- d[as.character(d[[k]]) == as.character(v), , drop = FALSE]
-    }
-    d
+    apply_held(d)
   })
 
   ## The condition count is a property of the design grid, not of how many
@@ -983,11 +1181,7 @@ server <- function(input, output, session) {
   ## otherwise unticking a method would appear to shrink the simulation.
   n_conditions <- reactive({
     d <- raw(); req(input$target)
-    d <- d[d$target == input$target, , drop = FALSE]
-    for (k in setdiff(cond_cols(), c(input$xvar, input$facet_row, input$facet_col))) {
-      v <- input[[paste0("f_", k)]]
-      if (!is.null(v)) d <- d[as.character(d[[k]]) == as.character(v), , drop = FALSE]
-    }
+    d <- apply_held(d[d$target == input$target, , drop = FALSE])
     cc <- cond_cols()
     if (!length(cc) || !nrow(d)) return(nrow(d))
     ## single-argument [ on a data.frame always returns a data.frame, so drop =
@@ -995,66 +1189,9 @@ server <- function(input, output, session) {
     nrow(unique(d[cc]))
   })
 
-  ## ---- study header ----------------------------------------------------------
-  output$study_header <- renderUI({
-    req(input$study)
-    lab <- if (input$study %in% names(STUDY_LABELS)) STUDY_LABELS[[input$study]] else input$study
-    arg <- STUDY_ARG[[input$study]]
-    q   <- STUDY_Q[[input$study]]
-    idx <- FILES$idx[match(input$study, FILES$stem)]
-    nm  <- length(input$methods)
-    ncond <- n_conditions()
-    div(
-      class = "hdr",
-      div(class = "txt",
-          div(class = "line",
-              span(class = "ix", idx),
-              h1(lab),
-              if (!is.null(arg)) span(class = "arg", arg)),
-          if (!is.null(q)) p(class = "q", q)),
-      div(class = "facts",
-          div(class = "f", div(class = "v", fmt_n(ncond)), div(class = "k", "Conditions")),
-          div(class = "f", div(class = "v", fmt_n(input$nrep)), div(class = "k", "Replications")),
-          div(class = "f", div(class = "v", fmt_n(nm)), div(class = "k", "Methods")))
-    )
-  })
-
-  ## ---- headline ---------------------------------------------------------------
-  ## The payoff of the whole page: which method leads on the selected measure,
-  ## what its worst single condition looks like, and -- the question a reader
-  ## should ask before quoting any of it -- whether the spread between methods is
-  ## larger than the simulation's own noise. A difference inside the resolution
-  ## limit is not a finding, and saying so here stops it being quoted as one.
-  headline <- reactive({
-    d <- dat(); m <- METRICS[[input$metric]]
-    if (!nrow(d)) return(NULL)
-    v <- suppressWarnings(as.numeric(d[[input$metric]]))
-    if (!any(is.finite(v))) return(NULL)
-    dev <- if (is.na(m$ref)) abs(v) else abs(v - m$ref)
-    s <- split(seq_along(v), d$method)
-    md <- vapply(s, function(i) mean(dev[i], na.rm = TRUE), numeric(1))
-    md <- md[is.finite(md)]
-    if (!length(md)) return(NULL)
-    best <- names(md)[which.min(md)]
-    i <- s[[best]]
-    worst_i <- which.max(dev[i])
-    res <- NA_real_
-    if (!is.na(m$mcse) && m$mcse %in% names(d)) {
-      e <- suppressWarnings(as.numeric(d[[m$mcse]]))
-      res <- 2 * stats::median(e[is.finite(e)], na.rm = TRUE)
-    }
-    list(metric = m, best = best, best_dev = unname(md[best]),
-         best_val = mean(v[i], na.rm = TRUE),
-         worst_val = v[i][worst_i], worst_dev = dev[i][worst_i],
-         spread = if (length(md) > 1) unname(max(md) - min(md)) else NA_real_,
-         laggard = if (length(md) > 1) names(md)[which.max(md)] else NA_character_,
-         nmethod = length(md), res = res)
-  })
-
   ## Not every study records every measure -- study 06 imputes a standard error,
-  ## so it has no interval and no coverage. With coverage as the default the
-  ## whole headline silently disappeared on those studies, leaving the reason
-  ## buried inside one tab. Name the measures the study does carry instead.
+  ## so it has no interval and no coverage. With coverage as the default the plot
+  ## would silently empty, so the measures the study DOES carry are named instead.
   available_metrics <- reactive({
     d <- dat(); if (!nrow(d)) return(character(0))
     Filter(function(k) k %in% names(d) &&
@@ -1062,93 +1199,281 @@ server <- function(input, output, session) {
            names(METRICS))
   })
 
-  output$kpi_row <- renderUI({
-    if (!length(input$methods) && !is.null(input$study))
-      return(div(class = "note info", span(class = "ic", "i"),
-                 div(HTML("No method is selected. Tick at least one in the
-                           <b>Methods</b> list, or use <b>all</b>."))))
-    h <- headline()
-    if (is.null(h)) {
-      av <- available_metrics()
-      if (!length(av)) return(NULL)
-      return(div(
-        class = "note warn", span(class = "ic", "!"),
-        div(HTML(paste0(
-          "<b>", METRICS[[input$metric]]$label, " was not recorded for this study.</b> ",
-          "Measures available here: ",
-          paste(vapply(av, function(k) paste0("<b>", METRICS[[k]]$label, "</b>"),
-                       character(1)), collapse = ", "), ".")))))
-    }
-    m <- h$metric
-    ok <- .calibration_ok(input$metric, input$target)
-    own <- grepl("^own", input$target)
+  ## ---- the question ----------------------------------------------------------
+  ## The study is the only control drawn as a field, because it is the only one
+  ## that changes every number on the page. Prev/next and the position counter are
+  ## there because the programme is read study by study, and a select alone gives
+  ## no sense of where in it you are.
+  ## The three facts that sit beside the study select. They are separate outputs
+  ## rather than one re-rendered picker, so the select itself is static: a select
+  ## whose renderUI reads its own value to set `selected` drops focus on every
+  ## change and can loop.
+  output$study_pos <- renderUI({
+    req(input$study)
+    stems <- unique(FILES$stem)
+    span(class = "ct", sprintf("%d of %d", match(input$study, stems), length(stems)))
+  })
 
-    if (.scale_mismatch(input$study, input$scale, input$target)) {
-      return(div(
-        class = "note warn", span(class = "ic", "!"),
-        div(HTML(paste0(
-          "<b>The <code>", input$target, "</code> target is on the <b>",
-          unname(STUDY_SHARED_SCALE[[input$study]]), "</b> scale, and you are viewing the <b>",
-          input$scale, "</b> routes.</b> The two are different transforms of the same ",
-          "quantity, so the gap below is arithmetic rather than a difference in ",
-          "performance. Switch the reported scale back, or score against ",
-          "<b>each method&rsquo;s own estimand</b>, which is scale-matched by construction.")))))
-    }
+  output$study_arg <- renderUI({
+    req(input$study)
+    a <- .lookup(STUDY_ARG, input$study)
+    if (is.null(a)) return(NULL)
+    span(class = "arg", a)
+  })
 
-    if (!ok) {
-      return(div(
-        class = "note warn", span(class = "ic", "!"),
-        div(HTML(paste0(
-          "<b>", m$label, " is not interpretable against the <code>", input$target,
-          "</code> target.</b> A nominal 95% interval is not built to cover a quantity ",
-          "that is itself recomputed on each replication&rsquo;s own sample. Switch to a ",
-          "population parameter to read it, or choose bias or RMSE.")))))
-    }
-
-    resolvable <- is.finite(h$spread) && is.finite(h$res) && h$spread > h$res
-    verdict <-
-      if (!is.finite(h$spread)) span(class = "chip solid", "single method")
-      else if (!is.finite(h$res)) span(class = "chip solid", "no Monte Carlo SE recorded")
-      else if (resolvable) span(class = "chip solid", "resolvable")
-      else span(class = "chip warn", "within simulation noise")
-
+  output$study_intro <- renderUI({
+    req(input$study)
+    q <- .lookup(STUDY_Q, input$study)
+    cc <- cond_cols()
+    req(input$target)
+    ## The design grid, spelled out -- over the SAME rows the condition count is
+    ## taken from, and before the method filter. Counting the levels over the whole
+    ## file while counting the conditions over the held subset made study 06 read
+    ## "2 conditions, 4 br x 17 rr". The method filter is deliberately not applied:
+    ## unticking a route must not appear to shrink the simulation.
+    d0 <- apply_held(raw()[raw()$target == input$target, , drop = FALSE])
+    lv <- vapply(cc, function(k) length(unique(d0[[k]])), integer(1))
+    shown <- setdiff(cc, names(held_values()))
+    shown <- shown[lv[shown] > 1]
+    grid <- if (length(shown))
+      paste(sprintf("%d %s", lv[shown], shown), collapse = " × ") else ""
+    held <- held_values()
     tagList(
-      if (own)
-        div(class = "note info", span(class = "ic", "i"),
-            div(HTML(paste0(
-              "Every method below is scored against a <b>different</b> quantity, so this ",
-              "says how accurately each computes its own value — not which to use. ",
-              "See the <b>Estimand check</b> tab.")))),
-      div(
-        class = "kpis",
-        div(class = "kpi lead",
-            ## on `own` the methods are held to different standards, so "leads"
-            ## would be a claim the data do not support
-            div(class = "k", if (own) "Most accurate on its own estimand"
-                             else "Leads on this measure"),
-            div(class = "v", h$best),
-            div(class = "n", HTML(paste0(
-              m$label, " averages <b>", fmt_v(h$best_val),
-              "</b>, a mean deviation of <b>", fmt_v(h$best_dev, 4), "</b> per condition.")))),
-        div(class = "kpi",
-            div(class = "k", "Its least favourable condition"),
-            div(class = "v", fmt_v(h$worst_val)),
-            div(class = "n", HTML(paste0(
-              "The single worst cell for <b>", h$best, "</b> across the conditions shown. ",
-              "This is what a review should plan for, not the average.")))),
-        div(class = "kpi",
-            div(class = "k", "Spread across methods"),
-            div(class = "v", if (is.finite(h$spread)) fmt_v(h$spread, 4) else "--",
-                if (is.finite(h$spread)) tags$u(paste0("  over ", h$nmethod, " methods")) else NULL),
-            div(class = "n", HTML(paste0(
-              if (is.finite(h$res))
-                paste0("Resolution limit is <b>", fmt_v(h$res, 4), "</b> (2 &times; median Monte Carlo SE). ")
-              else "",
-              if (is.finite(h$spread) && !is.na(h$laggard))
-                paste0("Widest gap: <b>", h$best, "</b> to <b>", h$laggard, "</b>.") else ""))),
-            verdict)
-      )
+      if (!is.null(q)) p(class = "qline", HTML(q)) else NULL,
+      p(class = "slice",
+        HTML(paste0(
+          fmt_n(n_conditions()), " conditions",
+          if (nzchar(grid)) paste0("  <b>", grid, "</b>") else "",
+          if (length(held))
+            paste0("  &middot;  held at ",
+                   paste(sprintf("%s <b>%s</b>", names(held), unlist(held)), collapse = ", "))
+          else "",
+          "  &middot;  <b>", fmt_n(input$nrep), "</b> replications each")))
     )
+  })
+
+  ## The condition columns not on an axis and not a facet, with their current
+  ## value. Used by dat(), by the slice line and by the ledger, so the three can
+  ## never describe different subsets.
+  held_values <- reactive({
+    out <- list()
+    for (k in setdiff(cond_cols(), c(input$xvar, input$facet_row, input$facet_col))) {
+      v <- input[[paste0("f_", k)]]
+      if (!is.null(v)) out[[k]] <- v
+    }
+    out
+  })
+
+  apply_held <- function(d) {
+    for (k in names(held_values()))
+      d <- d[as.character(d[[k]]) == as.character(held_values()[[k]]), , drop = FALSE]
+    d
+  }
+
+  ## ---- routes and their estimands --------------------------------------------
+  output$routes_head <- renderUI({
+    req(input$study)
+    h <- .lookup(ROUTE_HEAD, input$study); if (is.null(h)) h <- "Routes"
+    n <- length(all_methods())
+    div(class = "sec-h", span(h),
+        span(class = "n", paste(n, if (n == 1) "route" else "routes")))
+  })
+
+  ## Each row carries the tick, the colour key and what the route estimates, so
+  ## the three cannot drift apart. The estimand and the reference are DECLARED in
+  ## ROUTES (transcribed from the QUESTION header of the matching studies/*.R);
+  ## an undeclared route still gets its tick and its swatch.
+  output$methods_ui <- renderUI({
+    pal <- method_pal(); m <- names(pal)
+    checkboxGroupInput(
+      "methods", NULL,
+      choiceNames = lapply(m, function(k) {
+        nt <- route_note(input$study, k)
+        tags$span(
+          class = "rw",
+          tags$span(class = "nm",
+                    tags$i(style = paste0("background:", pal[[k]], ";")), k),
+          tags$span(class = "wt", if (is.null(nt)) "" else nt$what),
+          tags$span(class = "rf",
+                    if (is.null(nt)) "" else tagList(
+                      if (!identical(nt$kind, "shipped"))
+                        tags$span(class = "kd", nt$kind) else NULL,
+                      nt$ref)))
+      }),
+      choiceValues = as.list(m),
+      selected = m)
+  })
+
+  ## Coverage is the default measure and study 06 does not record it. Rather than
+  ## leaving the plot to answer with an error, the selection moves to the first
+  ## measure the study DOES carry, and the section rule says which.
+  ## Keyed on available_metrics() itself, not on (study, target): when the study
+  ## changes, the estimand strip has not re-rendered yet, so dat() is momentarily
+  ## empty and an observer keyed on the inputs sees no measures at all and does
+  ## nothing. input$metric is isolated so writing to it cannot re-trigger this.
+  observe({
+    av <- available_metrics()
+    m  <- isolate(input$metric)
+    if (length(av) && !is.null(m) && !(m %in% av))
+      updateSelectInput(session, "metric", selected = av[1])
+  })
+
+  ## ---- the reference quantity ------------------------------------------------
+  ## What used to be a radio list in the rail, and a tab nobody opened. Rendered
+  ## as a tab strip inside the document, because choosing it IS choosing the
+  ## question -- and on studies 01, 02, 03, 08 and 09 it reverses the ranking.
+  output$estimand_strip <- renderUI({
+    ag <- raw()
+    tg <- unique(ag$target)
+    ord <- target_order(tg)
+    unattained <- unattained_targets(ag)
+    pretty <- vapply(ord, function(z) {
+      base <- if (z == "own") "own estimand"
+      else if (z == "own_true_r") "own estimand, true r"
+      else if (z == "population") "population parameter"
+      else if (z == "sample") "same-sample statistic"
+      else sub("_sample$", " (samp.)", sub("_population$", " (pop.)", z))
+      base
+    }, character(1))
+    names(ord) <- pretty
+    div(
+      class = "estr",
+      p(class = "lb", "Scored against"),
+      radioButtons("target", NULL, inline = TRUE,
+                   choiceNames = lapply(seq_along(ord), function(i)
+                     if (ord[[i]] %in% unattained)
+                       tags$span(pretty[i], tags$span(class = "unatt", " · no route estimates this"))
+                     else tags$span(pretty[i])),
+                   choiceValues = as.list(unname(ord)),
+                   selected = default_target(tg, input$study))
+    )
+  })
+
+  ## ---- the ledger ------------------------------------------------------------
+  ## Routes down, reference quantities across, over the conditions currently
+  ## shown. On the estimand-split studies the mirror in it IS the result, and it
+  ## replaces both the three headline cards and the Estimand check tab: the cards
+  ## named a leader that this table shows to be a property of the selected column.
+  ledger_df <- reactive({
+    d <- apply_held(raw())
+    ms <- input$methods; if (is.null(ms)) ms <- character(0)
+    d <- d[d$method %in% ms, , drop = FALSE]
+    if (!nrow(d)) return(NULL)
+    tg <- target_order(unique(d$target))
+    ms <- intersect(names(method_pal()), unique(d$method))
+    if (!length(ms) || !length(tg)) return(NULL)
+    num <- function(col, i) if (col %in% names(d)) suppressWarnings(as.numeric(d[[col]][i])) else NA_real_
+    cell <- function(m, t) {
+      i <- which(d$method == m & d$target == t)
+      if (!length(i)) return(list(lead = NA_real_, sub = NA_real_))
+      list(lead = mean(num("coverage", i), na.rm = TRUE),
+           sub  = mean(abs(num("bias", i)), na.rm = TRUE))
+    }
+    ## Which shared column each route is already estimating. Computed on the WHOLE
+    ## study, not the held slice: it is a structural property of the route, and on a
+    ## one- or two-cell slice two bias columns could agree by accident.
+    hit <- own_matches(raw())
+    ## The `own` column earns its place only where some route own estimand is NOT
+    ## on the table. Where every route is marked -- study 01a -- the column is a
+    ## duplicate of the marked cells, so it goes.
+    if ("own" %in% tg && length(hit) && all(!is.na(hit[ms])) &&
+        !identical(input$target, "own"))
+      tg <- setdiff(tg, "own")
+    grid <- lapply(ms, function(m) lapply(tg, function(t) cell(m, t)))
+    have_cov <- any(vapply(unlist(grid, recursive = FALSE),
+                           function(z) is.finite(z$lead), logical(1)))
+    list(methods = ms, targets = tg, grid = grid, have_cov = have_cov, hit = hit)
+  })
+
+  output$ledger_block <- renderUI({
+    L <- ledger_df()
+    if (is.null(L))
+      return(div(class = "note info", span(class = "ic", "i"),
+                 div(HTML("No route is selected. Tick at least one above, or use <b>all</b>."))))
+    if (length(L$targets) < 2 && !L$have_cov) return(NULL)
+    pal <- method_pal()
+    lab <- function(z) if (z == "own") HTML("its own<br>estimand")
+      else HTML(gsub(" ", "<br>", pretty_target(z)))
+    ## Coverage is the lead number because it is the only measure that degrades
+    ## under EITHER a wrong estimate or a wrong standard error. Study 06 imputes a
+    ## standard error and has no interval, so there the table leads on |bias|.
+    head_lab <- if (L$have_cov) HTML("mean coverage <span style=\"font-weight:400\">/ mean |bias|</span>")
+                else HTML("mean |bias|")
+    body <- lapply(seq_along(L$methods), function(i) {
+      m <- L$methods[i]
+      tags$tr(
+        tags$td(class = "l",
+                tags$i(style = paste0("background:", pal[[m]], ";")), m),
+        lapply(seq_along(L$targets), function(j) {
+          z <- L$grid[[i]][[j]]
+          on <- identical(L$targets[j], input$target)
+          bad <- is.finite(z$lead) && abs(z$lead - 0.95) > 0.05
+          ## The marker says "this column IS the quantity this route was built to
+          ## return", which is the reading the note below asks for. On 09a it lands
+          ## on every tetrachoric route and not on lipsey_cooper, which is that
+          ## study result; on 09b it lands nowhere, which is 09b result.
+          own <- identical(unname(L$hit[m]), L$targets[j])
+          tags$td(class = paste(c("", if (on) "on", if (own) "ownc",
+                                  if (L$have_cov && bad) "bad"), collapse = " "),
+                  title = if (own) "the quantity this route was built to return" else NULL,
+                  if (L$have_cov) fmt_v(z$lead) else fmt_v(z$sub, 4),
+                  if (L$have_cov) tags$span(class = "sm", fmt_v(z$sub, 4)) else NULL)
+        }))
+    })
+    marked <- length(L$hit) && any(!is.na(L$hit[L$methods]))
+    tagList(
+      tags$table(
+        class = "ledger",
+        tags$thead(tags$tr(
+          tags$th(class = "l", head_lab),
+          lapply(L$targets, function(t)
+            tags$th(class = if (identical(t, input$target)) "on" else "", lab(t))))),
+        tags$tbody(body)),
+      p(class = "lednote", HTML(paste0(
+        if (marked)
+          paste0("<span class=\"mk\"></span> indicates the estimand the approach was ",
+                 "built to capture. When a formula is near-exact on its target estimand ",
+                 "but not on the selected one, the gap is an <b>estimand mismatch, ",
+                 "not an estimation error</b>. ")
+        else if ("own" %in% L$targets)
+          paste0("No route here estimates any of the shared quantities, so its own ",
+                 "estimand is shown as its own column. ")
+        else ""
+        # ,
+        # if ("own" %in% L$targets && marked)
+        #   paste0("The <b>own estimand</b> column is there for the routes with no mark: ",
+        #          "the quantity they return is not one of the columns. ")
+        # else "",
+        # "<br>Select the column your review pools, then read the rows</b> ranking ",
+        # "routes without fixing the column reports a setting as a finding.",
+        # if (any(grepl("sample", L$targets)))
+        #   paste0(" <span class=\"fn\">Sample columns score against a statistic recomputed ",
+        #          "on each replication, so coverage there is not a calibration statement.</span>")
+        # else ""
+        ))
+        )
+    )
+  })
+
+  ## ---- the plot section ------------------------------------------------------
+  output$metric_note <- renderUI({
+    m <- METRICS[[input$metric]]
+    span(class = "n",
+         if (!is.na(m$ref)) paste0("reference ", m$ref) else m$better)
+  })
+
+  output$plot_cap <- renderUI({
+    d <- dat(); m <- METRICS[[input$metric]]
+    if (!nrow(d)) return(NULL)
+    div(class = "figcap", HTML(paste0(
+      "<b>", m$label, "</b> against <code>", input$xvar, "</code>",
+      if (!identical(input$facet_row, "(none)"))
+        paste0(", split by <code>", input$facet_row, "</code>") else "",
+      ", scored against the <b>", pretty_target(input$target), "</b>. ",
+      fmt_n(input$nrep), " replications per cell",
+      if (!is.na(m$mcse) && !is.na(m$ref))
+        "; the shaded band is twice the median Monte Carlo standard error of that panel, and a difference inside it is not a result"
+      else "", ".")))
   })
 
   ## ---- key row ---------------------------------------------------------------
@@ -1158,7 +1483,6 @@ server <- function(input, output, session) {
   ## screenshotted with the plot.
   output$key_row <- renderUI({
     d <- dat()
-    if (!nrow(d)) return(NULL)
     m <- METRICS[[input$metric]]
     pal <- method_pal()
     ms <- intersect(names(pal), unique(d$method))
@@ -1166,23 +1490,45 @@ server <- function(input, output, session) {
     ## band to key, and claiming otherwise above an empty panel is a small lie
     have <- input$metric %in% available_metrics()
     tagList(
+      ## The three warnings that used to sit above the headline cards. They are
+      ## about how the numbers may be read, so they belong with the figure rather
+      ## than at the top of the page.
+      if (.scale_mismatch(input$study, input$scale, input$target))
+        div(class = "note warn", span(class = "ic", "!"),
+            div(HTML(paste0(
+              "The <code>", input$target, "</code> target is on the <b>",
+              unname(STUDY_SHARED_SCALE[[input$study]]), "</b> scale and you are viewing the <b>",
+              input$scale, "</b> routes. The two are different transforms of the same ",
+              "quantity, so the gap below is arithmetic rather than a difference in ",
+              "performance. Switch the reported scale back, or score against ",
+              "<b>each route&rsquo;s own estimand</b>, which is scale-matched by construction."))))
+      else if (!.calibration_ok(input$metric, input$target))
+        div(class = "note warn", span(class = "ic", "!"),
+            div(HTML(paste0(
+              "<b>", m$label, "</b> is not interpretable against the <code>", input$target,
+              "</code> target. A nominal 95% interval is not built to cover a quantity ",
+              "that is itself recomputed on each replication&rsquo;s own sample. Switch to a ",
+              "population parameter to read it, or choose bias or RMSE."))))
+      else if (grepl("^own", input$target))
+        div(class = "note info", span(class = "ic", "i"),
+            div(HTML(paste0(
+              "Every route is scored against a <b>different</b> quantity here, so this says ",
+              "how accurately each computes its own value &mdash; not which to use. The ledger ",
+              "above reads that column beside the shared ones."))))
+      else if (!have)
+        div(class = "note warn", span(class = "ic", "!"),
+            div(HTML(paste0("<b>", m$label, "</b> was not recorded for this study. ",
+                            "Measures available: ",
+                            paste(vapply(available_metrics(),
+                                         function(k) paste0("<b>", METRICS[[k]]$label, "</b>"),
+                                         character(1)), collapse = ", "), "."))))
+      else NULL,
       div(class = "key",
-          span(class = "lbl", "Methods"),
           lapply(ms, function(k)
             span(class = "m", tags$i(style = paste0("background:", pal[[k]], ";")), k)),
-          if (have && !is.na(m$mcse))
-            span(class = "band",
-                 title = paste("Half-width is twice the median Monte Carlo SE of the cells",
-                               "in that panel. Differences inside the band are smaller than",
-                               "the simulation own noise and are not results."),
-                 tags$i(), "resolution limit, per panel")
-          else NULL),
-      div(class = "measline",
-          HTML(paste0("<b>", m$label, "</b> against the <b>", pretty_target(input$target),
-                      "</b> target",
-                      if (have && !is.na(m$ref))
-                        paste0(", with the dashed line at ", m$ref, " marking no error")
-                      else "", ".")))
+          if (have && !is.na(m$mcse) && !is.na(m$ref))
+            span(class = "band", tags$i(), "resolution limit, per panel")
+          else NULL)
     )
   })
 
@@ -1290,6 +1636,7 @@ server <- function(input, output, session) {
   ## sometimes negative. So all four measures are shown side by side; the
   ## selected measure only decides the sort order.
   output$rank_lede <- renderUI({
+    req(input$target)
     m <- METRICS[[input$metric]]
     tagList(
       div(class = "lede",
@@ -1323,7 +1670,7 @@ server <- function(input, output, session) {
             div(HTML(paste0("Every method here is scored against a <b>different</b> quantity, so ",
                             "this table says how accurately each computes its own value — not ",
                             "which method to use. Switch to the population parameter to compare ",
-                            "them, and see the Estimand check tab for the difference."))))
+                            "them; the ledger above shows both columns side by side."))))
       else NULL
     )
   })
@@ -1407,89 +1754,10 @@ server <- function(input, output, session) {
     dt
   })
 
-  ## ---- estimand check --------------------------------------------------------
-  output$estimand_lede <- renderUI({
-    tagList(
-      div(class = "lede",
-          HTML(paste0(
-            "Two questions have to be kept apart. <b>Is the method computing its own ",
-            "quantity correctly?</b> — that is the dark marker. <b>Is that quantity the ",
-            "one you asked for?</b> — the distance to the rose marker. A marker far from ",
-            "zero with a short bar is a method with a real accuracy problem. A marker at ",
-            "zero with a long bar is a method working perfectly on a different estimand, ",
-            "and reporting that bar as bias is a mistake. Bars are the mean absolute bias ",
-            "over the conditions currently shown."))))
-  })
-
-  estimand_df <- reactive({
-    d0 <- raw()
-    validate(need("own" %in% d0$target,
-                  "This study did not record an 'own' target, so there is no estimand gap to show."))
-    pop <- grep("population", unique(d0$target), value = TRUE)
-    validate(need(length(pop) > 0, "This study records no population-scale target."))
-    validate(need(length(input$methods) > 0, "No method selected."))
-    a <- d0[d0$target == "own" & d0$method %in% input$methods, , drop = FALSE]
-    b <- d0[d0$target == pop[1] & d0$method %in% input$methods, , drop = FALSE]
-    key <- function(x) do.call(paste, c(x[c(cond_cols(), "method")], sep = "\r"))
-    i <- match(key(a), key(b)); ok <- !is.na(i)
-    validate(need(any(ok), "No matching own/population cells."))
-    df <- data.frame(method = a$method[ok], bias_own = a$bias[ok], bias_pop = b$bias[i[ok]])
-
-    s <- do.call(rbind, lapply(split(df, df$method), function(x) data.frame(
-      method = x$method[1],
-      own    = mean(abs(x$bias_own), na.rm = TRUE),
-      pop    = mean(abs(x$bias_pop), na.rm = TRUE),
-      stringsAsFactors = FALSE)))
-    s <- s[is.finite(s$own) & is.finite(s$pop), , drop = FALSE]
-    validate(need(nrow(s) > 0, "No comparable cells."))
-    s$gap <- s$pop - s$own
-    s <- s[order(s$pop), ]
-    s$method <- factor(s$method, levels = s$method)
-    s
-  })
-
-  output$estimand_slot <- renderUI({
-    n <- tryCatch(nrow(estimand_df()), error = function(e) 3)
-    ## each row carries two markers and two mono labels stacked vertically, so it
-    ## needs more than a bar chart row would
-    plotOutput("estimand_plot", height = paste0(max(260, 74 * n + 110), "px"))
-  })
-
-  output$estimand_plot <- renderPlot({
-    s <- estimand_df()
-    pal <- method_pal()
-
-    ## One row per method: how far it misses its OWN estimand (computational
-    ## error) and how far it misses the POPULATION parameter (the total). The
-    ## distance between the two is the estimand gap. A dumbbell reads far more
-    ## directly than the bias-vs-bias scatter this replaced, where the reader had
-    ## to infer the gap from a point's distance off the identity line.
-    lab <- function(v) formatC(v, format = "f", digits = 3)
-    ggplot(s) +
-      geom_segment(aes(y = method, yend = method, x = own, xend = pop),
-                   colour = MC$rule, linewidth = 2.8, lineend = "round") +
-      geom_point(aes(y = method, x = pop), colour = MC$rose, size = 3.8) +
-      geom_point(aes(y = method, x = own), colour = MC$ink, size = 3.8) +
-      ## own above the dot, population below: when a method has no estimand gap
-      ## the two dots coincide, and labels on the same side would overlap into a
-      ## dark dot carrying a rose number.
-      geom_text(aes(y = method, x = own, label = lab(own)),
-                colour = MC$ink, size = 3.1, vjust = -1.5, family = "Cascadia Code") +
-      geom_text(aes(y = method, x = pop, label = lab(pop)),
-                colour = MC$rose_d, size = 3.1, vjust = 2.3, family = "Cascadia Code") +
-      ## start at zero so the dot positions and the gap length are both read
-      ## against a true origin
-      scale_x_continuous(limits = c(0, NA),
-                         expand = expansion(mult = c(0.02, 0.12))) +
-      labs(x = "Mean absolute bias", y = NULL,
-           subtitle = "dark = against the method own estimand   |   rose = against the population parameter") +
-      theme_mc() +
-      theme(panel.grid.major.y = element_blank(),
-            axis.text.y = element_text(family = "Cascadia Code", size = 11.5,
-                                       colour = MC$ink),
-            plot.subtitle = element_text(size = 10.5, colour = MC$soft,
-                                         margin = margin(0, 0, 14, 0)))
-  }, res = 108)
+  ## The Estimand check tab is gone. Its whole content -- how far each route
+  ## misses its own estimand versus the population parameter -- is the ledger
+  ## above, where it is read as a table rather than inferred from a dumbbell, and
+  ## where it cannot be missed by a reader who never opened the third tab.
 
   ## ---- data ------------------------------------------------------------------
   output$data_lede <- renderUI({

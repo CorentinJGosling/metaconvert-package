@@ -24,7 +24,7 @@ es_from_rr_se(
 
 \item{logrr_se}{standard error of the log risk ratio}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)}
+\item{baseline_risk}{proportion of cases in the non-exposed group (required for the \code{rr_to_or = "grant"} argument, and for the risk difference and the NNT). It is never derived from other columns.}
 
 \item{n_exp}{number of participants in the exposed group}
 

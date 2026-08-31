@@ -190,9 +190,9 @@ es_from_plot_means <- function(n_exp, n_nexp,
 #' @param plot_ancova_mean_ci_up_nexp upper bound of an error bar depicting the 95% CI of the ancova_mean of the non-experimental/non-exposed group (extracted from a plot).
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.

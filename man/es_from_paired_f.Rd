@@ -13,7 +13,9 @@ es_from_paired_f(
   r_pre_post_nexp,
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "cooper",
-  reverse_paired_f
+  reverse_paired_f,
+  reverse_paired_f_exp,
+  reverse_paired_f_nexp
 )
 }
 \arguments{
@@ -34,6 +36,13 @@ es_from_paired_f(
 \item{pre_post_to_smd}{formula used to convert the paired t-test value into a SMD (see details).}
 
 \item{reverse_paired_f}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
+
+\item{reverse_paired_f_exp}{a logical value indicating that the experimental/exposed group changed in the
+NEGATIVE direction. A paired F value is unsigned, so this is the only way to state that arm's own
+direction (see details).}
+
+\item{reverse_paired_f_nexp}{a logical value indicating that the non-experimental/non-exposed group
+changed in the NEGATIVE direction (see details).}
 }
 \value{
 This function estimates and converts between several effect size measures.
@@ -59,8 +68,31 @@ Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the C
 \deqn{paired\_t\_exp = \sqrt{paired\_f\_exp}}
 \deqn{paired\_t\_nexp = \sqrt{paired\_f\_nexp}}
 
+\strong{A paired F value carries no sign.} It is the square of the paired t, so the square roots above
+return \eqn{|t|} and only the MAGNITUDE of each arm's change is recoverable. Unless told otherwise,
+this function therefore assumes that both arms moved in the SAME direction. The between-group
+estimate is formed as \eqn{cohen\_d = d\_exp - d\_nexp}; when the control arm actually moved the
+other way -- it deteriorated while the treatment arm improved, an ordinary trial result -- the
+correct contrast is \eqn{|d\_exp| + |d\_nexp|}, so the assumption biases the estimate by
+\eqn{2|d\_nexp|}. That halves it exactly when the two arms' magnitudes are equal, and shrinks it
+towards zero or reverses its sign when the control arm moved more than the treatment arm. The
+assumption cannot be verified from the reported statistic, so no quality flag fires on such a row.
+
+Mark the arm that moved down with \code{reverse_paired_f_exp} / \code{reverse_paired_f_nexp},
+which flip the sign of that arm's recovered t before the contrast is formed.
+\code{reverse_paired_f} flips the whole contrast instead, so it cannot express two arms moving
+apart. When the signed t values are reported, \code{\link{es_from_paired_t}()} needs no such
+assumption, and the \code{es_from_mean_change_*} family carries the direction in the sign of the
+mean change.
+
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_paired_t}()} are applied.
+}
+\note{
+Both arms are assumed to have changed in the same direction, and a paired F value can neither
+confirm nor refute that. Use \code{\link{es_from_paired_t}()} with signed t values, the
+\code{es_from_mean_change_*} family, or the per-arm \code{reverse_paired_f_exp} /
+\code{reverse_paired_f_nexp} flags when the arms diverge.
 }
 \examples{
 es_from_paired_f(paired_f_exp = 2.1, paired_f_nexp = 4.2, n_exp = 20, n_nexp = 22)

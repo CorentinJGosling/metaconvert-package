@@ -104,6 +104,30 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
   if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(mean_pre_exp))
   r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
+  # The mdw block below indexes the raw arguments with nn_miss, whereas the SMD block
+  # reads a data.frame() that has already recycled its length-1 columns. Without this,
+  # an explicitly length-1 n_exp / r_pre_post_exp / SD -- the natural way to pass one
+  # value common to every study -- leaves mdw_se and the mdw CI NA on every row but the
+  # first while mdw itself stays populated, so rma() thins the pool without comment.
+  # Same idiom, and the same failure, as es_from_cronbach_alpha() / es_from_pearson_r().
+  len <- max(length(mean_pre_exp), length(mean_exp),
+             length(mean_pre_sd_exp), length(mean_sd_exp),
+             length(n_exp), length(r_pre_post_exp))
+  rec <- function(v, nm) {
+    if (length(v) == 1) return(rep(v, len))
+    if (length(v) != len) {
+      stop(paste0("The length of the '", nm, "' argument is incorrectly specified."))
+    }
+    v
+  }
+  mean_pre_exp <- rec(mean_pre_exp, "mean_pre_exp")
+  mean_exp <- rec(mean_exp, "mean_exp")
+  mean_pre_sd_exp <- rec(mean_pre_sd_exp, "mean_pre_sd_exp")
+  mean_sd_exp <- rec(mean_sd_exp, "mean_sd_exp")
+  n_exp <- rec(n_exp, "n_exp")
+  r_pre_post_exp <- rec(r_pre_post_exp, "r_pre_post_exp")
+  reverse_means_pre_post <- rec(reverse_means_pre_post, "reverse_means_pre_post")
+
   g <- g_se <- g_var <- g_ci_lo <- g_ci_up <-
     d <- d_se <- d_var <- d_ci_lo <- d_ci_up <-
     mdw <- mdw_se <- mdw_ci_lo <- mdw_ci_up <- rep(NA, length(mean_pre_exp))
@@ -142,9 +166,17 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
     g_ci_lo[nn_miss] <- smd_pp[, 7]
     g_ci_up[nn_miss] <- smd_pp[, 8]
 
+    # The mdw arithmetic sits outside the SMD kernel, so it needs the kernel's own SD
+    # predicate applied here: a negative SD flips the sign of the -2*r*sd_pre*sd_post
+    # cross term and yields a positive, plausible mdw_se that is up to 3x too small,
+    # while dw/gw are already NA'd. Zero is kept, because the mean-change wrappers zero
+    # the pre slot by construction (R/internal_guards.R).
+    mdw_sd_pre <- .nonneg_or_na(mean_pre_sd_exp[nn_miss])
+    mdw_sd_post <- .nonneg_or_na(mean_sd_exp[nn_miss])
+
     mdw[nn_miss] <- mean_exp[nn_miss] - mean_pre_exp[nn_miss]
-    mdw_var <- (mean_pre_sd_exp[nn_miss]^2 + mean_sd_exp[nn_miss]^2 -
-                2 * r_pre_post_exp[nn_miss] * mean_pre_sd_exp[nn_miss] * mean_sd_exp[nn_miss]) / n_exp[nn_miss]
+    mdw_var <- (mdw_sd_pre^2 + mdw_sd_post^2 -
+                2 * r_pre_post_exp[nn_miss] * mdw_sd_pre * mdw_sd_post) / n_exp[nn_miss]
     mdw_se[nn_miss] <- sqrt(mdw_var)
     mdw_ci_lo[nn_miss] <- mdw[nn_miss] - qt(0.975, n_exp[nn_miss] - 1) * mdw_se[nn_miss]
     mdw_ci_up[nn_miss] <- mdw[nn_miss] + qt(0.975, n_exp[nn_miss] - 1) * mdw_se[nn_miss]
@@ -246,8 +278,12 @@ es_from_means_se_pre_post_single_group <- function(mean_pre_exp, mean_exp,
   if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(mean_pre_exp))
   r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
+  # A reported standard error must be strictly positive, so a negative one is blanked
+  # before it becomes an SD (R/internal_guards.R). The BASELINE slot is left to the
+  # weaker >= 0 predicate applied downstream, because es_from_mean_change_se_single_group()
+  # passes mean_pre_se_exp = 0 by construction.
   sd_pre <- mean_pre_se_exp * sqrt(n_exp)
-  sd_post <- mean_se_exp * sqrt(n_exp)
+  sd_post <- .positive_or_na(mean_se_exp) * sqrt(n_exp)
 
   es <- es_from_means_sd_pre_post_single_group(
     mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
@@ -351,8 +387,11 @@ es_from_means_ci_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 
   df <- n_exp - 1
 
-  se_pre <- (mean_pre_ci_up_exp - mean_pre_ci_lo_exp) / (2 * qt(0.975, df))
-  se_post <- (mean_ci_up_exp - mean_ci_lo_exp) / (2 * qt(0.975, df))
+  # .ci_width() rather than a raw subtraction: a transposed bound describes the same
+  # interval, so it must give the same standard error instead of a negative one that
+  # sign-flips the mdw cross term downstream (R/internal_guards.R).
+  se_pre <- .ci_width(mean_pre_ci_lo_exp, mean_pre_ci_up_exp) / (2 * qt(0.975, df))
+  se_post <- .ci_width(mean_ci_lo_exp, mean_ci_up_exp) / (2 * qt(0.975, df))
 
   es <- es_from_means_se_pre_post_single_group(
     mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
@@ -835,13 +874,11 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
 
   r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
 
-  # DELEGATED, not reimplemented. This block used to hold a second copy of the
-  # morris_dz / morris_drm arithmetic that .single_group_pre_post_to_smd already
-  # computes -- its own comment said it was "matching" the kernel, which is a promise
-  # to keep two copies in step rather than a mechanism for doing so. The n >= 2 guard
-  # and the qt(.975, n - 1) intervals come from the kernel too, so nothing about the
-  # estimator is restated here. See .paired_t_to_smd() for how a paired t, which
-  # carries no pre/post SDs, is expressed as an equivalent single-group problem.
+  # The morris_dz and morris_drm arithmetic is delegated to
+  # .single_group_pre_post_to_smd() rather than written out again here, so that all
+  # pre-post routes share one implementation. The n >= 2 guard and the qt(.975, n - 1)
+  # intervals come from the kernel too. See .paired_t_to_smd() for how a paired t,
+  # which carries no pre/post SDs, is expressed as an equivalent single-group problem.
   res <- .paired_t_to_smd(paired_t_exp, n_exp, r_pre_post_exp, pre_post_to_smd)
 
   d       <- res[, "d"]

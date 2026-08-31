@@ -178,10 +178,14 @@ test_that("Z - MD+SD vs MD+SE/CI/p", {
   es.mcv_md_pval <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "md_pval", measure = "z"), digits = 11)
 
   ## test ES
-  expect_equal(unique(es.mcv_md_sd$info_used_crude), "md_sd")
-  expect_equal(unique(es.mcv_md_se$info_used_crude), "md_se")
-  expect_equal(unique(es.mcv_md_ci$info_used_crude), "md_ci")
-  expect_equal(unique(es.mcv_md_pval$info_used_crude), "md_pval")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_md_sd$info_used_crude, "md_sd")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_md_se$info_used_crude, "md_se")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_md_ci$info_used_crude, "md_ci")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_md_pval$info_used_crude, "md_pval")
 
   expect_equal(es.mcv_md_sd$es_crude, es.mcv_md_se$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_md_sd$se_crude, es.mcv_md_se$se_crude, tolerance = 1e-10)
@@ -309,7 +313,7 @@ test_that("MD - Reverse standard", {
   es.mcv_md_ci_or_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "md_ci", measure = "logor"), digits = 11)
 
 
-  expect_true(all(c(es.mcv_md_se_d$info_used_crude,
+  expect_route(c(es.mcv_md_se_d$info_used_crude,
     es.mcv_md_se_md$info_used_crude,
     es.mcv_md_se_g$info_used_crude,
     es.mcv_md_se_r1$info_used_crude,
@@ -322,9 +326,9 @@ test_that("MD - Reverse standard", {
     es.mcv_md_se_r1_rv$info_used_crude,
     es.mcv_md_se_r2_rv$info_used_crude,
     es.mcv_md_se_z1_rv$info_used_crude,
-    es.mcv_md_se_z2_rv$info_used_crude) == "md_se"))
+    es.mcv_md_se_z2_rv$info_used_crude), "md_se")
 
-  expect_true(all(c(es.mcv_md_sd_d$info_used_crude,
+  expect_route(c(es.mcv_md_sd_d$info_used_crude,
     es.mcv_md_sd_md$info_used_crude,
     es.mcv_md_sd_g$info_used_crude,
     es.mcv_md_sd_r1$info_used_crude,
@@ -337,9 +341,9 @@ test_that("MD - Reverse standard", {
     es.mcv_md_sd_r1_rv$info_used_crude,
     es.mcv_md_sd_r2_rv$info_used_crude,
     es.mcv_md_sd_z1_rv$info_used_crude,
-    es.mcv_md_sd_z2_rv$info_used_crude) == "md_sd"))
+    es.mcv_md_sd_z2_rv$info_used_crude), "md_sd")
 
-  expect_true(all(c(es.mcv_md_ci_d$info_used_crude,
+  expect_route(c(es.mcv_md_ci_d$info_used_crude,
     es.mcv_md_ci_md$info_used_crude,
     es.mcv_md_ci_g$info_used_crude,
     es.mcv_md_ci_r1$info_used_crude,
@@ -352,7 +356,7 @@ test_that("MD - Reverse standard", {
     es.mcv_md_ci_r1_rv$info_used_crude,
     es.mcv_md_ci_r2_rv$info_used_crude,
     es.mcv_md_ci_z1_rv$info_used_crude,
-    es.mcv_md_ci_z2$info_used_crude) == "md_ci"))
+    es.mcv_md_ci_z2$info_used_crude), "md_ci")
 
   expect_equal(es.mcv_md_sd_d$es_crude, -es.mcv_md_sd_d_rv$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_md_se_d$es_crude, -es.mcv_md_se_d_rv$es_crude, tolerance = 1e-10)
@@ -466,7 +470,7 @@ test_that("MD - Reverse pval", {
   es.mcv_md_pval_or_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "md_pval", measure = "logor"), digits = 11)
   es.mcv_md_pval_d_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "md_pval", measure = "d"), digits = 11)
 
-  expect_true(all(c(es.mcv_md_pval_d$info_used_crude,
+  expect_route(c(es.mcv_md_pval_d$info_used_crude,
                     es.mcv_md_pval_md$info_used_crude,
                     es.mcv_md_pval_g$info_used_crude,
                     es.mcv_md_pval_r1$info_used_crude,
@@ -479,7 +483,7 @@ test_that("MD - Reverse pval", {
                     es.mcv_md_pval_r1_rv$info_used_crude,
                     es.mcv_md_pval_r2_rv$info_used_crude,
                     es.mcv_md_pval_z1_rv$info_used_crude,
-                    es.mcv_md_pval_z2$info_used_crude) == "md_pval"))
+                    es.mcv_md_pval_z2$info_used_crude), "md_pval")
 
   expect_equal(es.mcv_md_pval_d$es_crude, -es.mcv_md_pval_d_rv$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_md_pval_d$se_crude, es.mcv_md_pval_d_rv$se_crude, tolerance = 1e-10)

@@ -1,0 +1,133 @@
+<title>Simulation Viewer Directions</title>
+<style>
+/* =============================================================================
+   Three directions for the metaConvert simulation viewer.
+
+   Palette is metaconvert.org: rose accent, indigo for data, warm neutrals, and
+   no green anywhere. One rule governs colour throughout, and the current app
+   breaks it: COLOUR ENCODES DATA. Rose marks the current selection or a value
+   that has failed a stated test. It is never a stripe, a badge fill, or a
+   heading tint.
+   ========================================================================== */
+:root{
+  --paper:#fbfaf7;
+  --white:#ffffff;
+  --ink:#1c1a2e;
+  --ink2:#2c2a47;
+  --soft:#56556a;
+  --faint:#83828f;
+  --rule:#e2e2dc;
+  --hair:#eeeee9;
+  --rose:#c0474e;
+  --rose-d:#8f2f36;
+  --t1:#f6e7e7;
+  --t2:#eec9ca;
+  --t3:#d98f92;
+  --t4:#b8474e;
+  --sans:"Work Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --serif:"Newsreader","Source Serif 4",Charter,Georgia,serif;
+  --mono:"Cascadia Code","Cascadia Mono","IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;}
+/* A column of figures that does not align is the fastest way to make results
+   look untrustworthy. */
+.num,table td,table th,.mono,code{
+  font-variant-numeric:tabular-nums lining-nums;
+  font-feature-settings:"tnum" 1,"lnum" 1;}
+code,.mono{font-family:var(--mono);}
+a{color:var(--rose-d);}
+:focus-visible{outline:2px solid var(--rose);outline-offset:2px;}
+@media (prefers-reduced-motion:no-preference){
+  a,button{transition:color .14s ease,background-color .14s ease,border-color .14s ease;}}
+
+/* ---------- the wrapper document ---------------------------------------- */
+.sheet{max-width:1180px;margin:0 auto;padding:0 40px 100px;}
+.doc-mast{display:flex;align-items:baseline;gap:11px;padding:20px 0 13px;
+  border-bottom:1px solid var(--ink);}
+.doc-mast .wm{font-size:15px;font-weight:600;letter-spacing:-.01em;}
+.doc-mast .em{color:var(--faint);font-weight:400;}
+.doc-mast .rt{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--faint);}
+
+h1.doc{font-size:34px;font-weight:600;letter-spacing:-.024em;line-height:1.1;
+  margin:38px 0 14px;max-width:20ch;}
+p.lede{font-size:18px;line-height:1.5;color:var(--soft);margin:0 0 34px;max-width:68ch;}
+h2.doc{font-size:13px;font-weight:600;color:var(--ink);margin:40px 0 12px;
+  padding-bottom:7px;border-bottom:1px solid var(--rule);letter-spacing:0;}
+.sheet p{margin:0 0 13px;max-width:76ch;color:var(--soft);}
+.sheet p b{color:var(--ink);font-weight:600;}
+.sheet code{font-size:.9em;color:var(--ink2);}
+
+/* the three complaints, answered */
+.fixes{display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+  border-top:1px solid var(--rule);margin:6px 0 4px;}
+.fix{padding:16px 22px 18px 0;border-right:1px solid var(--hair);}
+.fix:last-child{border-right:0;padding-right:0;}
+.fix .said{font-family:var(--mono);font-size:12px;color:var(--rose-d);
+  margin-bottom:9px;line-height:1.45;}
+.fix h3{font-size:14.5px;font-weight:600;margin:0 0 6px;line-height:1.3;}
+.fix p{font-size:13.5px;margin:0;max-width:none;line-height:1.55;}
+@media(max-width:860px){.fixes{grid-template-columns:1fr;}
+  .fix{border-right:0;border-bottom:1px solid var(--hair);padding-right:0;}}
+
+/* the switcher */
+.switch{position:sticky;top:0;z-index:30;background:var(--paper);
+  border-bottom:1px solid var(--ink);margin:44px 0 0;
+  display:flex;align-items:stretch;gap:0;}
+.switch b{align-self:center;font-size:12px;font-weight:600;color:var(--faint);
+  padding-right:20px;white-space:nowrap;}
+.switch button{appearance:none;background:none;border:0;cursor:pointer;
+  font-family:var(--sans);font-size:13.5px;color:var(--soft);
+  padding:13px 20px 12px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  text-align:left;line-height:1.3;}
+.switch button .k{font-family:var(--mono);font-size:12px;color:var(--faint);
+  margin-right:9px;}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-selected="true"]{color:var(--ink);font-weight:600;
+  border-bottom-color:var(--rose);}
+.switch button[aria-selected="true"] .k{color:var(--rose);}
+
+.panel{padding:34px 0 0;}
+.panel[hidden]{display:none;}
+.panel-note{max-width:76ch;margin:0 0 26px;font-size:14px;color:var(--soft);}
+.panel-note b{color:var(--ink);}
+
+/* the mockup frame: a hairline and a warm ground, no fake browser chrome */
+.mock{background:var(--white);border:1px solid var(--rule);overflow:hidden;}
+.mock *{box-sizing:border-box;}
+
+/* shared mockup primitives --------------------------------------------------*/
+.mock .mast{display:flex;align-items:center;gap:10px;
+  padding:11px 22px;border-bottom:1px solid var(--ink);}
+.mock .mast .wm{font-size:13.5px;font-weight:600;letter-spacing:-.01em;}
+.mock .mast .wm em{font-style:normal;color:var(--faint);font-weight:400;}
+.mock .mast .rt{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--faint);}
+.mock .mast .rt a{color:var(--faint);text-decoration:none;border-bottom:1px solid var(--rule);}
+
+/* a control rendered as a token in a sentence, not as a form widget */
+.tok{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+  border-bottom:1px dashed var(--faint);padding-bottom:1px;cursor:pointer;
+  white-space:nowrap;}
+.tok::after{content:"\2304";font-family:var(--sans);font-size:10px;
+  color:var(--faint);margin-left:5px;position:relative;top:-2px;}
+.tok:hover{color:var(--rose-d);border-bottom-color:var(--rose);}
+
+/* booktabs: three rules, no verticals, no zebra */
+table.bt{border-collapse:collapse;width:100%;font-size:12.5px;}
+table.bt thead th{font-weight:600;color:var(--soft);text-align:right;
+  padding:0 0 6px 18px;white-space:nowrap;font-size:11.5px;
+  border-bottom:1px solid var(--ink);}
+table.bt thead tr:first-child th{border-top:1.4px solid var(--ink);padding-top:7px;}
+table.bt th.l,table.bt td.l{text-align:left;padding-left:0;}
+table.bt tbody td{font-family:var(--mono);text-align:right;padding:5px 0 5px 18px;
+  color:var(--ink2);white-space:nowrap;}
+table.bt tbody tr:last-child td{border-bottom:1.4px solid var(--ink);}
+table.bt tbody td.l{font-family:var(--sans);color:var(--ink);}
+.sw{display:inline-block;width:9px;height:9px;margin-right:8px;
+  vertical-align:middle;position:relative;top:-1px;}
+
+figure{margin:0;}
+figure svg{display:block;width:100%;height:auto;}
+</style>

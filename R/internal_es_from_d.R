@@ -60,14 +60,15 @@
 .glass_from_means <- function(mean_exp, mean_sd_exp, mean_nexp, mean_sd_nexp,
                               n_exp, n_nexp, smd_to_cor = "viechtbauer",
                               smd_var = "borenstein", reverse, robust = FALSE) {
-  # Glass's delta: the endpoint mean difference standardised by the CONTROL
+  # Glass's delta: the endpoint mean difference standardised by the control
   # (non-experimental) endpoint SD instead of the pooled SD. Bit-exact with
   # metafor measure = "SMD1" (homoscedastic variance, with the vtype matched to
   # smd_var: "borenstein" = LS2, "hedges_olkin" = LS) and "SMD1H" (robust,
   # heteroscedasticity-consistent variance). glass_robust/SMD1H has a single
   # variance form, so smd_var is ignored for it. The Hedges small-sample
   # correction and every variance term use the control-group degrees of freedom
-  # (n_nexp - 1), NOT the pooled df (this is what distinguishes SMD1 from SMD).
+  # (n_nexp - 1) rather than the pooled df, which is what distinguishes SMD1
+  # from SMD.
   if (missing(reverse)) reverse <- rep(FALSE, length(mean_exp))
   reverse[is.na(reverse)] <- FALSE
   smd_var <- .normalize_smd_var(smd_var)
@@ -119,16 +120,17 @@
   # only costs degrees of freedom, so the crude default is a safe reading and keeps the
   # returned row internally coherent.
   if (missing(n_cov_ancova)) n_cov_ancova <- rep(0, length(d))
-  # cov_outcome_r is different: it scales the Cooper eq. 12.26 (1 - R^2) variance shrink,
-  # and there is no safe default value for it. It is read ONLY on the adjusted branch, so
-  # the 0.5 placeholder below is never used on the crude branch and stays. On the adjusted
-  # branch it must NOT be silently invented: R's missing() propagates through an unforced
-  # promise, so es_from_cohen_d_adj() -- the one adjusted entry point where cov_outcome_r
-  # never enters the POINT estimate, hence is never forced -- used to fall through to
-  # R = 0.5 and return a confidently wrong SE (weight inflated ~29%), while its 13 sibling
-  # routes hard-error on the same omission. NA propagates to d_se and from there to every
-  # variance-bearing output, blanking the row coherently; this matches what convert_df()
-  # already returns for an absent/NA column.
+  # cov_outcome_r is different: it scales the Cooper eq. 12.26 (1 - R^2) variance
+  # shrink, and there is no safe default value for it. It is read only on the adjusted
+  # branch, so the 0.5 placeholder below is never used on the crude branch and stays.
+  # On the adjusted branch it must not be invented, because R's missing() propagates
+  # through an unforced promise: es_from_cohen_d_adj() is the one adjusted entry point
+  # where cov_outcome_r never enters the point estimate and so is never forced, which
+  # would let it fall through to R = 0.5 and return a confidently wrong SE (weight
+  # inflated about 29%) while its 13 sibling routes hard-error on the same omission.
+  # NA propagates to d_se and from there to every variance-bearing output, blanking the
+  # row coherently, which matches what convert_df() returns for an absent or NA
+  # column.
   .is_adj <- rep_len(adjusted, length(d)) %in% TRUE
   if (missing(cov_outcome_r)) {
     cov_outcome_r <- rep(0.5, length(d))
@@ -171,7 +173,7 @@
   # ========= d_se ========= #
   # Large-sample default variance (only used for rows where d_se was not supplied).
   # The leading term is 1/n1 + 1/n2 (adjusted for the covariate multiple correlation
-  # in the ANCOVA case). g_se = d_se * J holds in BOTH conventions (see below), so the
+  # in the ANCOVA case). g_se = d_se * J holds in both conventions (see below), so the
   # only thing smd_var changes is the *default* d_se:
   #   LS2 (default): v_d = leading + d^2/(2N)                  -> v_g = cm^2 * v_d
   #   LS  (opt-in) : v_g = leading + g^2/(2N), v_d = v_g/cm^2  (g = d * J, metafor default)
@@ -185,12 +187,19 @@
   } else {
     d_se_ls <- rep(NA_real_, length(d))
   }
+  # Recorded before the default fills the gaps: the r/z conversion below has to tell a
+  # standard error the caller supplied (which carries real design information) from one
+  # this function invented (which carries none). vd_ls2 is that invented variance on the
+  # LS2 convention, kept separately because the conversion needs it whichever convention
+  # smd_var selected -- see the note on dat_r.
+  d_se_supplied <- !is.na(d_se)
+  vd_ls2 <- leading + d^2 / (2 * (n_exp + n_nexp))
   d_se <- ifelse(
-    !is.na(d_se),
+    d_se_supplied,
     d_se,
     ifelse(use_LS,
       d_se_ls,
-      sqrt(leading + d^2 / (2 * (n_exp + n_nexp)))
+      sqrt(vd_ls2)
     )
   )
 
@@ -221,8 +230,20 @@
 
 
   # ========= r/Z ========= #
+  # .smd_to_cor() rescales Soper's closed-form biserial variance by vd / vd_crude, and
+  # its vd_crude is the LS2 expression, so the ratio is exactly 1 on an ordinary crude
+  # row only when vd is on that same convention. A supplied d_se carries precision the
+  # closed form cannot know about (the ANCOVA (1 - R^2) shrink, the pre-post
+  # 2(1 - r_pre_post) factor, the control-group df of a Glass row, a user-reported
+  # standard error) and must pass through untouched. A defaulted one carries none, so it
+  # is handed over on the LS2 convention: otherwise smd_var = "hedges_olkin" would leak
+  # the pure estimator-convention factor 1/J^2 into r_se and z_se (11.6% of the variance
+  # at N = 16, 5.5% at N = 30, 0.74% at N = 200), taking r_se off metafor's exact RBIS
+  # variance and z_se^2 off the stabilised 1/(N - 1). Only what the conversion sees
+  # changes; the returned d_se/g_se stay on whichever convention smd_var selected.
   dat_r <- data.frame(
-    d = d, vd = d_se^2, n_exp = n_exp, n_nexp = n_nexp,
+    d = d, vd = ifelse(d_se_supplied, d_se^2, vd_ls2),
+    n_exp = n_exp, n_nexp = n_nexp,
     smd_to_cor = smd_to_cor, n_cov_ancova = n_cov_ancova
   )
 

@@ -98,7 +98,7 @@ un-ignoring it in git cannot leak it into the package.
 > the offending value and pointing at `metaumbrella`/`transpose`. In-domain output is
 > bit-identical; swept 400 random draws for a mixed finite/NA quartet — **0 found**.
 >
-> **The mirror is safe and was deliberately left alone**, checked rather than assumed:
+> **The mirror is safe and was left alone on purpose**, checked rather than assumed:
 > `or_to_rr = "grant"` computes `or / (1 − BR + BR·or)`, whose denominator is positive
 > for every `or > 0`, `BR ∈ (0,1)`. Verified over a 30-point grid and pinned by a test,
 > so a later "fix for symmetry" cannot add a guard that can never fire.
@@ -223,7 +223,7 @@ minimal-input case, asserting whichever contract is chosen.
 > 0.870 overall**, so 3.5's regeneration should move in-band to ~1.00. The width roughly
 > doubles — that is the price of the conservative interval and belongs in the write-up.
 >
-> ⚠️ **Scope limit the fix does NOT remove, and the README must respect.** The guarantee
+> ⚠️ **Scope limit the fix does not remove, and the README must respect.** The guarantee
 > holds only where **both** outcome probabilities are in `[0.2, 0.8]`. In this grid
 > `p0 = br`, `p1 = rr*br`, so the guaranteed region is just `br = 0.30` × `rr ∈
 > {0.75, 1, 2}` and `br = 0.50` × `rr ∈ {0.5, 0.75, 1}` — **6 of 18 (br, rr) combinations,
@@ -234,7 +234,7 @@ minimal-input case, asserting whichever contract is chosen.
 > `br = 0.30, rr = 0.25`) because the *point estimate* is biased there (log RR bias 0.54–0.61),
 > which no interval rule can repair.
 >
-> **`logrr_se` deliberately left as the delta-method SE** (`SE(logOR)/2`). The paper gives
+> **`logrr_se` left as the delta-method SE** (`SE(logOR)/2`), on purpose. The paper gives
 > no variance, so the interval is not `es ± z·se` — safe because `performance()` takes
 > coverage/width from the CI columns and `se_ratio` from the SE column independently
 > ([03_performance.R:88-101](R/03_performance.R#L88-L101)), verified rather than assumed. A
@@ -559,7 +559,7 @@ against the population tetrachoric.
 > 0.939 — that figure matched no target at all.
 >
 > **The margin-drift column, which carries this item's whole argument, reproduces
-> EXACTLY — all five values.** So does the "~6×" claim below (measured 5.7× for `digby`,
+> Exactly — all five values.** So does the "~6×" claim below (measured 5.7× for `digby`,
 > 5.9× for `pearson`). An earlier note in the handoff guessed 0.0212 was stale too; it
 > was not, and the guess came from measuring a different quantity on a different grid.
 >
@@ -1077,7 +1077,7 @@ count is unaffected.
 > `simulations/tests/test-runner-registry.R` (50 assertions) checks every registry
 > member's arity via `match.call()` — arity only, never executing the studies — plus
 > that `run_99`'s new arguments are **inert** (absent from its body, so a later edit
-> cannot quietly make them load-bearing), that `run_all.R` still uses the pattern this
+> cannot quietly come to depend on them), that `run_all.R` still uses the pattern this
 > file tests, and that `run_99` survives the exact `do.call()` end to end, since it is
 > deterministic and fast enough to actually run.
 >
@@ -1315,7 +1315,7 @@ diagnostic in `simulations/R/`.
 > ⚠️ **Two corrections to the item, both from measurement.**
 >
 > (a) **Studies 03 and 09 look like the same defect and are not**, so they were
-> deliberately left alone — an earlier draft of this fix would have changed them and
+> left alone on purpose — an earlier draft of this fix would have changed them and
 > deleted a finding. Their `population` target is attained **exactly** by the route
 > that is correct for the mechanism (03a `phi (r)` 0.0035 / 0.962, identical to its
 > `own`; 03b and 09a `tetrachoric (r)` likewise), and where nothing attains it — 09b,
@@ -1407,7 +1407,7 @@ diagnostic in `simulations/R/`.
 > counters, asserts the dispatch in both directions and at 1/2/3 rows, asserts the
 > 7 / 8 / 5 route split so adding a pre/post route edits a test rather than silently
 > invalidating a paragraph, and asserts which studies touch which path. Encoding the
-> OLD claim in it (`single_group = 0`, no fourth path) turns the file red — verified by
+> Old claim in it (`single_group = 0`, no fourth path) turns the file red — verified by
 > running it, not assumed. It rebinds through a wrapper with an `on.exit()` restore
 > rather than using `trace()`, which leaves the namespace edited if a test errors first,
 > and it records/restores each binding's lock state because `pkgload::load_all()` may

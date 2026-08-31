@@ -29,8 +29,10 @@
 ^audit$
 ^AUDIT[-_].*\.md$
 ^HANDOFF-.*\.md$
+^ROADMAP[-_].*\.md$
 ^VERDICT-.*\.md$
 ^.*\.stackdump$
 ^scratchpad.*$
 ^tests/testthat/_problems$
 ^checks\.R$
+^Rplots\.pdf$

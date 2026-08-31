@@ -33,6 +33,8 @@ convert_df(
   prop_to_es = "raw",
   alpha_to_es = "bonett",
   omega_to_es = "bonett",
+  alpha_se_source = "closed_form",
+  omega_se_source = "reported",
   icc_to_es = "bonett",
   icc_agreement_se = "compute",
   correct_inputs = TRUE,
@@ -71,7 +73,7 @@ obvious alternative, the phi coefficient, has an attainable range bounded by the
 margins (with balanced exposure, max \eqn{|\phi|} is 1.00 at a 50\% event rate but
 0.33 at 10\% and 0.10 at 1\%). Two studies of the same association but different event
 rates therefore report different phi values, so pooling phi manufactures
-heterogeneity that is pure margin artefact -- at a fixed latent correlation of 0.40,
+heterogeneity that is pure margin artefact: at a fixed latent correlation of 0.40,
 \eqn{I^2} for pooled phi rises from 14\% to 88\% as the primary studies get \emph{larger},
 because the between-study variance is pinned by the margins while the within-study
 variance falls as \eqn{1/n}. Jacobs & Viechtbauer (2017) make the same point.
@@ -95,12 +97,13 @@ of which metaConvert estimates from the same table.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient
 correlation. Two things differ between the options, and they are independent.
-(1) WHICH CORRELATION: "viechtbauer" (default) estimates the biserial correlation,
-"lipsey_cooper" the point-biserial. (2) WHICH TRANSFORM lands in the \code{z}
-column when \code{measure = "z"}: "lipsey_cooper" reports Fisher's z,
-\code{atanh(r)}, whereas "viechtbauer" reports a VARIANCE-STABILISING transform,
-which is a different function of the correlation -- at a point-biserial
-\eqn{\rho = 0.75} it returns 1.0925 where \code{atanh()} of its own r is 1.7468.
+First, which correlation is estimated: "viechtbauer" (the default) estimates the
+biserial correlation and "lipsey_cooper" the point-biserial. Second, which
+transform lands in the \code{z} column when \code{measure = "z"}: "lipsey_cooper"
+reports Fisher's z, \code{atanh(r)}, whereas "viechtbauer" reports a
+variance-stabilising transform, a different function of the correlation. At a
+point-biserial \eqn{\rho = 0.75} it returns 1.0925 where \code{atanh()} of its own
+r is 1.7468.
 Every other family (\code{pearson_r}, \code{fisher_z}, the OR routes, 2x2) reports
 Fisher's z. So under the default a \code{measure = "z"} review holding both SMD
 studies and correlation studies pools two transforms; flag E8 reports it, and
@@ -125,7 +128,7 @@ groups (default \code{FALSE}). The two options target the same estimand when the
 equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
 which to prefer, so this is a deliberate choice and not a technical detail.
 \itemize{
-\item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+\item \code{FALSE} (default): each arm's change is standardized by that arm's own SD and the two
 within-group values are subtracted, their variances adding because the arms are independent. This
 is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
 SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
@@ -139,16 +142,20 @@ assumes the two arms' true standardizing SDs are equal.
 
 \item{alpha_to_es}{method used to compute the effect size from Cronbach's alpha. One of "bonett" (default, the variance-stabilising log(1 - alpha) transform), "raw", or "hakstian_whalen" (the cube-root transform Rodriguez & Maeda (2006) recommend and most published reliability-generalization syntheses use; stored in metafor's increasing orientation, matching measure = "AHW"). See \code{\link{es_from_cronbach_alpha}}.}
 
-\item{omega_to_es}{method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no PUBLISHED sampling variance in (n, k). The alpha formula is numerically close under a correct unidimensional normal model but 8-26\% anti-conservative under ordinal items, mild misspecification, or a hierarchical omega, so the standard error is taken from the reported omega_se or confidence interval instead.}
+\item{omega_to_es}{method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no published sampling variance in (n, k), so by default the standard error is taken from the reported omega_se or confidence interval; see \code{omega_se_source} to borrow alpha's closed form.}
+
+\item{alpha_se_source}{where the standard error of Cronbach's alpha comes from when the study reported neither an SE nor a confidence interval. "closed_form" (default, the pre-existing behaviour) uses the (n, k) formula belonging to the selected \code{alpha_to_es} scale; "reported" refuses it and leaves \code{alpha_se = NA}, so the row stays visible but is left out of the pool. The closed form inherits Bonett's multivariate-normality assumption. Measured on ordinary Likert items it is well calibrated (se_ratio 0.95-1.06, 95\% coverage .94-.96), but under a severe floor effect it is ~22\% too small (coverage .89) and on dichotomous items ~37\% too small (coverage .78, and NOT improving with n). Flag V44 identifies the affected rows from \code{scale_mean} / \code{n_response_categories} / \code{scale_min}.}
+
+\item{omega_se_source}{where the standard error of McDonald's omega comes from when the study reported neither an SE nor a confidence interval. "reported" (default) leaves \code{omega_se = NA}, so the row stays visible but unpooled. "closed_form" borrows alpha's (n, k) formula on the selected \code{omega_to_es} scale - which is what every published omega reliability generalisation does, and what metafor's \code{measure = "ABT"} computes, so it is required to reproduce that literature. It is opt-in because switching it on makes previously unpooled rows enter the pool. Simulation support (\code{simulations/studies/11_reliability_se.R}) is for one narrow claim - the closed form is no more wrong for omega than for alpha - and NOT for the broader claim that it is safe for reliability generalisation, where estimator mixture moves omega_h by far more than any variance question.}
 
 \item{icc_to_es}{method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).}
 
 \item{icc_agreement_se}{what to do about the closed-form standard error of an absolute-agreement ICC (ICC(2,1)) - which is the default \code{icc_type}, and therefore also what an absent one resolves to. One of:
 \itemize{
 \item \bold{"compute"} (default): emit it. This is the pre-existing behaviour and is accurate when the raters are exchangeable (negligible rater variance).
-\item \bold{"drop"}: return \code{NA} for it, so the row is left out of the pool by \code{summary()} instead of entering it over-weighted. A standard error the STUDY reported (\code{icc_se}, or \code{icc_ci_lo}/\code{icc_ci_up}) is kept either way - the option targets the approximation, not the row.
+\item \bold{"drop"}: return \code{NA} for it, so the row is left out of the pool by \code{summary()} instead of entering it over-weighted. A standard error the study itself reported (\code{icc_se}, or \code{icc_ci_lo}/\code{icc_ci_up}) is kept either way, since the option targets the approximation rather than the row.
 }
-The closed-form standard error is a one-way approximation assuming negligible between-rater variance. With real rater variance its measured 95\% CI coverage is 0.82 at n = 20, 0.67 at n = 50, 0.32 at n = 200 and 0.14 at n = 1000: it degrades as studies get BIGGER, because ICC(2,1) inherits the between-rater mean square (k - 1 df) while the reported standard error shrinks like \eqn{1/\sqrt{n}}, so such a row can carry up to 50x too much weight. Agreement rows are flagged by V31 whichever option is used.
+The closed-form standard error is a one-way approximation assuming negligible between-rater variance. With real rater variance its measured 95\% CI coverage is 0.82 at n = 20, 0.67 at n = 50, 0.32 at n = 200 and 0.14 at n = 1000: it degrades as studies get bigger, because ICC(2,1) inherits the between-rater mean square (k - 1 df) while the reported standard error shrinks like \eqn{1/\sqrt{n}}, so such a row can carry up to 50x too much weight. Agreement rows are flagged by V31 whichever option is used.
 The default is \code{"compute"} in 2.1.0 for backward compatibility and is expected to become \code{"drop"} in a future release; set it explicitly if you care which you get.
 Consistency ICCs (ICC(3,1)) are unaffected either way: for them the same formula is exact at leading order.}
 
@@ -303,11 +310,19 @@ If you select an automatic hierarchy, here are the types of input data that will
 \enumerate{
 \item User's input adjusted effect size value
 \item Adjusted SMD value
-\item Estimated marginal means from ANCOVA
-\item F- or t-test value from ANCOVA
-\item Adjusted mean difference from ANCOVA
+\item Estimated marginal means from ANCOVA, with a standard deviation
+\item Adjusted mean difference from ANCOVA, with the residual standard deviation
+\item Estimated marginal means from ANCOVA, with a standard error or a confidence interval
+\item F- or t-test value (or partial eta-squared) from ANCOVA
+\item Adjusted mean difference from ANCOVA, with a standard error, a confidence interval or a p-value
 \item Estimated marginal means from ANCOVA extracted from a plot
 }
+
+Items 3 to 7 are ordered by how much the covariate imbalance attenuates the estimate
+(Lai & Kelley 2012). A route handed a standardizer directly (3, 4) is unaffected; one
+that must recover it from a reported standard error, confidence interval or test
+statistic sets the leverage term to zero and shrinks both the effect size and its
+standard error. Item 5 carries half that term, items 6 and 7 the whole of it.
 }
 
 \subsection{Odds Ratio (\code{measure=c("or")})}{

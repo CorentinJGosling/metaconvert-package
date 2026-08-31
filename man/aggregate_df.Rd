@@ -52,7 +52,7 @@ aggregate_df(
 }
 \value{
 A dataframe containing the aggregating factor, the aggregated effect size and its
-standard error, plus any columns named in the \code{col_*} arguments -- and
+standard error, plus any columns named in the \code{col_*} arguments, and
 \strong{no other column of the input}. See the note in the details: everything not
 listed below is dropped, so a moderator must either be named in a \code{col_*}
 argument or merged back afterwards on the aggregating factor.

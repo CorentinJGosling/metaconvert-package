@@ -85,10 +85,7 @@ es_from_spearman_rho <- function(spearman_r, n_sample,
   if (missing(unit_increase_iv)) {
     unit_increase_iv <- rep(NA, length(spearman_r))
   }
-  if (missing(unit_type)) {
-    unit_type <- rep(NA, length(spearman_r))
-  }
-  .validate_unit_type(unit_type)
+  unit_type <- .unit_type_or_raw(unit_type, length(spearman_r))
 
   # Mirror the sample-size fallback es_from_pearson_r applies internally, so a
   # direct call supplying only n_exp/n_nexp gets the same delta-method r/z SEs

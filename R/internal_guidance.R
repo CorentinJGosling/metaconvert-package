@@ -1,9 +1,11 @@
 ################### es guidance ###################
 
 #' mapping of methods to their required input columns
+#' @param omega_se_source the active `omega_se_source`. Only the omega entry depends on
+#'   it: the closed form needs `n_sample` and `n_items`, the reported route cannot use them.
 #' @return named list of lists with $specific and $shared
 #' @noRd
-.method_required_columns <- function() {
+.method_required_columns <- function(omega_se_source = "reported") {
   list(
     # smd
     cohen_d = list(
@@ -445,12 +447,22 @@
     # psychometric
     # omega alone is not enough: without a reported SE (or CI) there is no
     # aggregate-data sampling variance for omega, so the row cannot be pooled.
-    # Listing omega_se as "shared" makes a bare-omega row a NEAR MISS, so the
+    # Listing omega_se as "shared" makes a bare-omega row a near miss, so the
     # user is told what to add instead of getting the generic
     # "No partial input data found" fallback.
+    # Under omega_se_source = "closed_form" the SE is computed from n_sample and
+    # n_items instead, so a row lacking them is dropped for a reason the "reported"
+    # wording cannot state. Naming them is conditional rather than unconditional
+    # because on the default "reported" route they cannot help, and advising a user
+    # to hunt for a sample size that the active setting will ignore is worse than
+    # saying nothing.
     omega = list(
       specific = c("omega"),
-      shared = c("omega_se")
+      shared = if (identical(omega_se_source, "closed_form")) {
+        c("omega_se", "n_sample", "n_items")
+      } else {
+        c("omega_se")
+      }
     ),
     # An alpha row needs a variance from somewhere: the study's own SE or CI, or
     # n_sample + n_items for the closed-form (n, k) SE. Listing all four as "shared"
@@ -462,7 +474,7 @@
     ),
     # An ICC row needs a variance from somewhere: the study's own icc_se or CI,
     # or n_sample + n_measurements for the closed-form (n, k) SE. Listing all four
-    # as "shared" makes a bare-ICC row a NEAR MISS naming every route out of it.
+    # as "shared" makes a bare-ICC row a near miss naming every route out of it.
     icc = list(
       specific = c("icc"),
       shared   = c("n_sample", "n_measurements", "icc_se", "icc_ci_lo", "icc_ci_up")
@@ -665,9 +677,9 @@
     return(c("icc", "user_input_crude"))
   } else if (measure %in% c("hr", "loghr")) {
     # HR needs per-subject time-to-event data the wide extraction sheet cannot hold,
-    # so convert_df() runs ONLY the user-input methods (hierarchy c(USER_crude,
-    # USER_adjusted)). Without this case HR fell through to the switch default and
-    # guidance offered ~55 means/SD/variability methods that can never yield a hazard
+    # so convert_df() runs the user-input methods alone (hierarchy c(USER_crude,
+    # USER_adjusted)). Without this case HR falls through to the switch default and
+    # guidance offers about 55 means/SD/variability methods that can never yield a hazard
     # ratio. Respect the crude/adjusted split so es_guidance_crude/_adjusted are right.
     if (suffix == "_crude") return("user_input_crude")
     if (suffix == "_adjusted") return("user_input_adj")
@@ -867,7 +879,10 @@
   guidance_col <- paste0("es_guidance", suffix)
   es_col <- paste0("es", suffix)
 
-  method_cols  <- .method_required_columns()
+  method_cols  <- .method_required_columns(
+    omega_se_source = if (is.null(attr(object, "omega_se_source"))) "reported"
+                      else attr(object, "omega_se_source")
+  )
   descriptions <- .method_descriptions()
 
   methods_to_check <- .get_applicable_methods(measure, suffix)

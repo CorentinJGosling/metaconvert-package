@@ -56,12 +56,7 @@ p{
 library(metaConvert)
 library(metafor)
 
-# DT is a Suggests-only dependency, so it is absent on the check flavour that
-# installs hard dependencies only. Fall back to a static table there.
 show_table <- function(x, ..., digits = 3) {
-  # summary() returns es/se/CI at FULL precision on purpose (se becomes an
-  # inverse-variance weight downstream, so rounding it in the data would bias
-  # every pooled estimate). Rounding is therefore a display-time job, done here.
   if (is.data.frame(x)) {
     num <- vapply(x, is.numeric, logical(1))
     x[num] <- lapply(x[num], round, digits)
@@ -398,8 +393,8 @@ used as a moderator directly. That includes character values, so `"1 week"` stay
 `"1 week"` --- registering the column as numeric would silently coerce it to `NA`.
 
 ```{r, eval = FALSE}
-# retest_interval_days is YOUR column: nothing in the package reads it, and it
-# passes through untouched.
+# retest_interval_days is your own column: nothing in the package reads it, and
+# it passes through untouched.
 dat_icc$retest_interval_days <- c(7, 14, 30, 30, 90, 180, 365)
 
 ma_int <- metafor::rma(yi = es, sei = se, mods = ~ log(retest_interval_days),
@@ -465,9 +460,9 @@ metafor::forest(ma_icc, slab = paste0(summary_icc$author, " (", dat_icc$year, ")
 ```{r}
 # Back-transform pooled estimate
 # reliability_backtransform() performs the bound swap for you: 1 - exp(T) is
-# monotone DECREASING, so the transformed-scale UPPER bound is the ICC-scale
-# LOWER bound. Doing it by hand is the most-botched step in published reliability
-# work, and it is silent -- the interval still looks like an interval.
+# monotone decreasing, so the transformed-scale upper bound is the ICC-scale
+# lower bound. This step is easy to get wrong by hand, and the mistake is hard to
+# spot, because the interval still looks like an interval either way.
 bt_icc <- reliability_backtransform(ma_icc)
 
 cat(sprintf("Pooled ICC = %.3f [%.3f, %.3f]\n",
@@ -794,7 +789,7 @@ res_resp <- convert_df(dat_resp, measure = "r",
                        verbose = FALSE, split_adjusted = FALSE)
 summary_resp <- summary(res_resp)
 
-# Step 3: Disattenuate using CHANGE-SCORE reliability
+# Step 3: disattenuate using the change-score reliability
 corrected_resp <- es_disattenuate(
   r             = summary_resp$es,
   r_se          = summary_resp$se,

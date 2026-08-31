@@ -27,7 +27,7 @@
 #' @param icc_ci_up upper bound of the 95% confidence interval of the ICC (natural scale)
 #' @param icc_to_es method used to compute the effect size from ICC.
 #'   Must be either \code{"bonett"} or \code{"raw"}.
-#' @param agreement_se what to do about the CLOSED-FORM standard error of an
+#' @param agreement_se what to do about the closed-form standard error of an
 #'   absolute-agreement ICC. \code{"compute"} (the default here) emits it;
 #'   \code{"drop"} returns \code{NA} for it, keeping the effect size and any
 #'   standard error the study itself reported. See the coverage table in the
@@ -60,7 +60,7 @@
 #' The ordering matters because of the coverage problem documented below: for an
 #' agreement-type ICC the computed standard error is a one-way approximation, so
 #' wherever the study reported its own uncertainty that is the better source. The
-#' ICC literature reports intervals routinely (\emph{"ICC 0.94, 95\% CI 0.86 to
+#' ICC literature reports intervals routinely (\emph{"ICC 0.94, 95% CI 0.86 to
 #' 0.98"}), and such a row is now usable even when no sample size is given -
 #' \code{n_sample} and \code{n_measurements} gate only source 3, not the point
 #' estimate. A row with none of the three keeps its effect size and gets
@@ -95,7 +95,7 @@
 #' the estimator occupies at any n and reads as a bounded problem when it is an
 #' unbounded one.
 #'
-#' These figures are REPRODUCIBLE rather than quoted: they come from
+#' These figures are reproducible rather than quoted: they come from
 #' `simulations/studies/10_reliability.R`, study `10a_icc_agreement_coverage`, at a
 #' fixed seed. The same grid includes `rater_share = 0`, where the formula's own
 #' assumption holds and coverage returns to nominal (0.939 / 0.953 / 0.944 / 0.959),
@@ -104,13 +104,13 @@
 #'
 #' The exact ICC(2,1) variance requires the rater-variance component, which summary
 #' data do not report, so an agreement row can enter a pool with up to 50x too much
-#' weight. Two things follow. Every agreement row is flagged by V31. And the
-#' approximation can be refused: \code{agreement_se = "drop"} here, or
+#' weight. Two things follow from that. Every agreement row is flagged by V31, and
+#' the approximation can be refused: \code{agreement_se = "drop"} here, or
 #' \code{icc_agreement_se = "drop"} in \code{\link{convert_df}}, returns \code{NA}
-#' for it so \code{summary()} leaves the row out of the pool rather than
-#' over-weighting it. A standard error the study itself reported is kept either way -
-#' the option targets the approximation, not the row - which is why supplying
-#' \code{icc_se} or a CI is the better fix where the study offers one.
+#' for it, so \code{summary()} leaves the row out of the pool rather than
+#' over-weighting it. A standard error the study itself reported is kept either way,
+#' since the option targets the approximation rather than the row, which is why
+#' supplying \code{icc_se} or a CI is the better fix where the study offers one.
 #'
 #' Both default to \code{"compute"} in 2.1.0, for backward compatibility and because
 #' the archived reference suite pins the computed value; \code{"drop"} is expected to
@@ -197,15 +197,27 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
   ci_lo  <- .ci_lower(icc_ci_lo, icc_ci_up)
   ci_up  <- .ci_upper(icc_ci_lo, icc_ci_up)
 
+  # An ICC confidence bound outside [-1, 1] is arithmetically impossible, and nothing
+  # upstream removes it: V11's .bounded_columns holds `icc` but not its two CI columns,
+  # and the CI-triplet check tests ordering and containment only. Left alone such a
+  # bound reaches route 2 below and pre-empts the closed-form (n, k) SE with a finite,
+  # plausible-looking one; on an average-measures row it is worse still, since
+  # .icc_step_down() has a pole at k/(k-1) and sends the bound NEGATIVE, so the SE ends
+  # up built from a sign-flipped interval after .ci_lower()/.ci_upper() have already
+  # been spent. A bound of exactly 1 is kept: it is in range, and the transform-scale
+  # exclusion below is the right place to refuse it.
+  ci_lo[!is.na(ci_lo) & abs(ci_lo) > 1] <- NA_real_
+  ci_up[!is.na(ci_up) & abs(ci_up) > 1] <- NA_real_
+
   icc_type <- .normalise_icc_type(icc_type)
 
-  # Roadmap 1.2. An average-measures ICC describes the mean of k measurements, so
-  # it is a DIFFERENT estimand from the single-measurement ICC every other row in
-  # the pool carries. Step it down with Spearman-Brown where k is known; where it
-  # is not, leave the value alone and let the n_measurements guard below set the
-  # row to NA (a step-down cannot be guessed, and pooling the un-stepped value is
-  # the silent error this exists to stop). .validate_input_data() raises [INFO] on
-  # the stepped rows and [INVALID] on the ones dropped for want of k.
+  # An average-measures ICC describes the mean of k measurements, so it is a
+  # different estimand from the single-measurement ICC every other row in the pool
+  # carries. Step it down with Spearman-Brown where k is known; where it is not,
+  # leave the value alone and let the n_measurements guard below set the row to NA,
+  # since a step-down cannot be guessed and pooling the un-stepped value is the error
+  # this exists to stop. .validate_input_data() raises [INFO] on the stepped rows and
+  # [INVALID] on the ones dropped for want of k.
   avg <- .icc_is_average(icc_type)
   can_step <- avg & !is.na(icc) & !is.na(n_measurements) &
     is.finite(n_measurements) & n_measurements >= 2 & !is.na(icc) & abs(icc) <= 1
@@ -236,12 +248,12 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
   fwd    <- function(r) if (identical(icc_to_es, "bonett")) log(1 - r) else r
   se_map <- function(r, s) if (identical(icc_to_es, "bonett")) s / (1 - r) else s
 
-  # P16: per-element guards -- |icc| > 1 is impossible (V11 bounds) and icc = 1
-  # has no Bonett transform (log(0)) and a degenerate raw SE. Direct calls degrade
-  # to NA instead of emitting Inf/NaN. n_sample/n_measurements are NOT part of this
-  # test any more: they gate only the COMPUTED standard error (route 3 below), not
-  # the point estimate, so a study reporting "ICC 0.94 (95% CI 0.86-0.98)" with no
-  # sample size is now usable instead of being dropped whole.
+  # P16: per-element guards. |icc| > 1 is impossible (V11 bounds), and icc = 1 has
+  # no Bonett transform (log(0)) and a degenerate raw SE, so direct calls degrade to
+  # NA instead of emitting Inf or NaN. n_sample and n_measurements are not part of
+  # this test: they gate only the computed standard error (route 3 below), not the
+  # point estimate, so a study reporting "ICC 0.94 (95% CI 0.86-0.98)" with no sample
+  # size is usable rather than dropped whole.
   valid_es <- !is.na(icc) & icc >= -1 & icc < 1
 
   n <- length(icc)
@@ -271,8 +283,20 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
     ci_lo < 1 & ci_up < 1
   }
   ci_usable[is.na(ci_usable)] <- FALSE
+  # ... and the interval has to contain its own point estimate. When it does not, one
+  # of the three reported numbers is a transcription error and which one cannot be
+  # inferred, so the contradiction must not be allowed to set the row's weight: refuse
+  # the CI-derived SE and fall through to the closed form. Tier-1's V3 reports the same
+  # condition, but only inside convert_df() and only by wide column name, so it never
+  # reaches a direct call of this exported calculator (metaumbrella among them). Strict,
+  # with no rounding allowance: the guard chooses between two SE sources rather than
+  # destroying data, and where a study's own interval contradicts its own point estimate
+  # the closed form is the better source. Both sides have already been stepped down for
+  # an average-measures row, and Spearman-Brown is monotone on [-1, 1], so containment
+  # is tested on the scale actually returned.
+  contains <- !is.na(icc) & !is.na(ci_lo) & !is.na(ci_up) & icc >= ci_lo & icc <= ci_up
   from_ci <- which(valid_es & is.na(icc_es_se) &
-                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable)
+                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable & contains)
   if (length(from_ci)) {
     icc_es_se[from_ci] <-
       abs(fwd(ci_up[from_ci]) - fwd(ci_lo[from_ci])) / (2 * qnorm(0.975))
@@ -283,13 +307,13 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
     # For the two-way consistency ICC(3,1), deriving Var(ln(1 - ICC)) directly from
     # F0 = MSR / MSE (df = n - 1 and (n - 1)(k - 1)) gives
     # [(1 + (k - 1) * rho) / k]^2 * 2k / ((k - 1)(n - 1)), which reduces to the
-    # expression below (confirmed by simulation for the consistency case) -- it is
-    # NOT independent of rho. For the two-way absolute-agreement ICC(2,1) the same
-    # expression is only a one-way approximation that assumes NEGLIGIBLE
+    # expression below, and is confirmed by simulation for the consistency case. Note
+    # that it is not independent of rho. For the two-way absolute-agreement ICC(2,1)
+    # the same expression is only a one-way approximation that assumes negligible
     # between-rater variance; with sigma^2_rater > 0 the ICC(2,1) estimator depends
-    # on MSC (k - 1 df only) and this SE is anti-conservative (see the roxygen
-    # details and the V31 informational flag). The exact ICC(2,1) variance needs
-    # the rater-variance component, which summary data do not carry.
+    # on MSC, which has k - 1 df, and this SE is anti-conservative (see the roxygen
+    # details and the V31 informational flag). The exact ICC(2,1) variance needs the
+    # rater-variance component, which summary data do not carry.
   from_nk <- which(valid_es & is.na(icc_es_se) &
                      !is.na(n_sample) & n_sample > 1 &
                      !is.na(n_measurements) & n_measurements >= 2)
@@ -306,25 +330,25 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
       (1 - rho) * bonett_transformed_se
     }
   }
-  # Roadmap 1.1. Under agreement_se = "drop", an absolute-agreement row keeps the
-  # SE it was GIVEN (routes 1 and 2) but not the one route 3 computed for it: that
-  # is the one-way approximation whose measured coverage is 0.82 at n = 20, 0.67 at
-  # n = 50, 0.32 at n = 200 and 0.14 at n = 1000, i.e. it degrades as studies get
-  # bigger, because ICC(2,1) inherits MSC's k - 1 df while the reported SE shrinks
-  # like 1/sqrt(n). The row keeps its point estimate and is dropped from the pool by
-  # summary() rather than entering it with up to 50x too much weight.
+  # Under agreement_se = "drop", an absolute-agreement row keeps the SE it was given
+  # (routes 1 and 2) but not the one route 3 computed for it. That one is the one-way
+  # approximation whose measured coverage is 0.82 at n = 20, 0.67 at n = 50, 0.32 at
+  # n = 200 and 0.14 at n = 1000, degrading as studies get bigger because ICC(2,1)
+  # inherits MSC's k - 1 df while the reported SE shrinks like 1/sqrt(n). The row
+  # keeps its point estimate and is dropped from the pool by summary() rather than
+  # entering it with up to 50x too much weight.
   #
   # icc_type has already had any "_average" suffix stripped, so a stepped-down
-  # ICC(2,k) is covered here too -- it is computed with the same approximation.
+  # ICC(2,k) is covered here too, being computed with the same approximation.
   #
-  # The DEFAULT is "compute", which is the pre-existing behaviour, and it is
-  # deliberate: es_from_icc() is an exported calculator, and
-  # tests_save/checked/test-icc.R pins the shared proxy SE as a documented
-  # convention ("this test pins the documented proxy behaviour, it does not certify
-  # the agreement variance"). Refusing to compute inside the route would overturn
-  # that pin and change every direct caller, including metaumbrella. Declining to
-  # POOL an untrustworthy variance is an analysis decision, so convert_df() owns it
-  # and passes agreement_se = "drop" by default.
+  # The default is "compute", here and in convert_df(). es_from_icc() is an exported
+  # calculator, and tests_save/checked/test-icc.R pins the shared proxy SE as a
+  # documented convention ("this test pins the documented proxy behaviour, it does
+  # not certify the agreement variance"), so refusing to compute inside the route
+  # would overturn that pin and change every direct caller, including metaumbrella.
+  # Declining to pool an untrustworthy variance is an analysis decision, which is why
+  # the switch is exposed on convert_df() as icc_agreement_se; NEWS records the
+  # intended future flip to "drop".
   if (identical(agreement_se, "drop") && length(from_nk)) {
     drop_i <- from_nk[.icc_is_agreement(icc_type[from_nk])]
     if (length(drop_i)) icc_es_se[drop_i] <- NA_real_
@@ -352,33 +376,32 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
 
 # Normalise icc_type to one of 'agreement' / 'consistency'.
 #
-# ONE definition, called from three places -- es_from_icc() (the route),
-# convert_df() (which normalises the stored column before validation) and the V31
-# check in internal_flags.R. Before this, es_from_icc() normalised while V31 used
-# bare string equality on the raw cell, so the rows that GET the anti-conservative
-# agreement SE were largely the rows that did not get warned about it: of ten
-# spellings that resolve to 'agreement', only the two already spelled exactly
-# 'agreement' fired V31. Two places independently deciding what 'agreement' means
-# is the same rot recorded for the hardcoded route list in roadmap 1.2.
+# One definition, called from three places: es_from_icc() (the route), convert_df()
+# (which normalises the stored column before validation) and the V31 check in
+# internal_flags.R. If any of them used bare string equality on the raw cell instead,
+# the rows that get the anti-conservative agreement SE would largely not be the rows
+# warned about it: of the ten spellings that resolve to 'agreement', only the two
+# already spelled exactly 'agreement' would match. Two places independently deciding
+# what 'agreement' means is how such a check rots.
 #
-# The key keeps DIGITS ([^a-z0-9], not [^a-z]). The old inline version stripped
-# them, which silently made the 'icc21' and 'icc31' map entries unreachable: every
-# ICC(2,1) / ICC(3,1) / icc21 spelling collapsed to the key 'icc', missed the map,
-# and fell through to the 'agreement' default -- so a CONSISTENCY ICC entered as
-# 'ICC(3,1)' was relabelled as agreement, with a warning that named it unrecognised.
-# The shared SE is unaffected (it is one formula for both types), so the cost was a
-# wrong estimand label and a spurious V31 on consistency rows, not a wrong number.
+# The key keeps digits ([^a-z0-9], not [^a-z]). Stripping them makes the 'icc21' and
+# 'icc31' map entries unreachable: every ICC(2,1) / ICC(3,1) / icc21 spelling
+# collapses to the key 'icc', misses the map, and falls through to the 'agreement'
+# default, so a consistency ICC entered as 'ICC(3,1)' is relabelled as agreement with
+# a warning calling it unrecognised. The shared SE is unaffected, being one formula
+# for both types, so the cost is a wrong estimand label and a spurious V31 on
+# consistency rows rather than a wrong number.
 #
 # Idempotent, like .normalise_omega_type(): convert_df() normalises the column and
 # es_from_icc() normalises again, so every output must also be a valid input.
 #
-# AVERAGE-MEASURES levels are a separate axis, not aliases. icc_type carries two
-# independent facts -- the model (absolute agreement vs consistency) and the UNIT
-# (a single measurement vs the mean of k). Before roadmap 1.2 the second was not
-# representable at all: 'average', 'ICC(2,k)' and 'icc2k' were unrecognised, warned,
-# and fell back to 'agreement', so an average-measures value was computed as if it
-# were single-measures. The SE ratio stays near 1 (1.05-1.39x), so nothing
-# downstream looks wrong, while the POINT ESTIMATE is off by up to 1.9 log units:
+# Average-measures levels are a separate axis, not aliases. icc_type carries two
+# independent facts: the model (absolute agreement versus consistency) and the unit
+# (a single measurement versus the mean of k). Without the second, 'average',
+# 'ICC(2,k)' and 'icc2k' would be unrecognised, warn, and fall back to 'agreement',
+# so an average-measures value would be computed as if it were single-measures. The
+# SE ratio stays near 1 (1.05-1.39x), so nothing downstream looks wrong, while the
+# point estimate is off by up to 1.9 log units:
 #
 #   k    ICC_avg   true ICC_1   es (wrong)   es (right)   error
 #   2    0.90      0.8182       -2.3026      -1.7047      -0.598
@@ -440,7 +463,23 @@ es_from_icc <- function(icc, n_sample, n_measurements, icc_type = "agreement",
 # Spearman-Brown, inverted: recover the single-measurement ICC from an
 # average-of-k ICC.  ICC_k = k*ICC_1 / (1 + (k-1)*ICC_1)  =>
 .icc_step_down <- function(rho_k, k) {
-  # Denominator k - (k-1)*rho_k is >= 1 for any rho_k <= 1 and k >= 2, so it cannot
-  # vanish for an in-range ICC (V11 already bounds icc to [-1, 1]).
-  rho_k / (k - (k - 1) * rho_k)
+  # The map is a Mobius transform with a pole at rho_k = k/(k-1), where the denominator
+  # vanishes and the value is genuinely undefined.
+  #
+  # What is refused is not the pole alone, and not the whole far branch either, but an
+  # OUTPUT that is not an ICC: the result is a single-measurement correlation, so it has
+  # to land in [-1, 1]. That test never bites on an in-range argument -- the denominator
+  # is >= 1 for any rho_k <= 1 and k >= 2, so |rho_1| <= |rho_k| <= 1 -- and it leaves the
+  # legitimate far branch alone, where the transform is still its own exact inverse
+  # (k = 10, rho_1 = -0.2 gives rho_k = 2.5 and back, pinned in
+  # tests/testthat/test-reliability-generalization.R). What it does catch is the case the
+  # CI-bound guard in es_from_icc() exists for: an impossible bound just past the pole
+  # (1.20 at k = 10) maps to -1.5, a sign-flipped value that would otherwise go on to set
+  # the row's standard error. The two layers agree rather than duplicate -- the route
+  # refuses the bound by column, this refuses the arithmetic by range, and a direct
+  # caller of the helper gets the same protection.
+  denom <- k - (k - 1) * rho_k
+  out <- rho_k / denom
+  out[!is.na(out) & (!is.finite(out) | abs(out) > 1)] <- NA_real_
+  out
 }

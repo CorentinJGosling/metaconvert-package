@@ -45,8 +45,12 @@ Convert a 2x2 table into several effect size measures
 \details{
 This function first computes (log) odds ratio (OR), (log) risk ratio (RR) and number needed to treat (NNT)
 from the 2x2 table. Note that if a cell is equal to 0, we applied the typical adjustment (add 0.5) to all cells.
-This adjustment is used for the OR/RR only; the RD and NNT are obtained from the raw cell counts.
-Cohen's d (D), Hedges' g (G) and correlation coefficients (R/Z) are then estimated from the OR.
+This adjustment feeds the OR, the RR, the SMD (D/G) converted from the OR, \strong{and the correlation
+coefficients (R/Z)}, which are solved from the corrected table; only the RD and the NNT are
+obtained from the raw cell counts.
+Cohen's d (D) and Hedges' g (G) are then estimated from the OR. The correlation coefficients
+(R/Z) are \strong{not} obtained from the OR: they come from the tetrachoric solve on the 2x2 table
+itself (see below), which is a different route and returns a different value.
 
 \strong{To estimate an OR}, the formulas used (Box 6.4.a in the Cochrane Handbook) are:
 \deqn{logor = log(\frac{n\_cases\_exp / n\_cases\_nexp}{n\_controls\_exp / n\_controls\_nexp})}
@@ -67,8 +71,8 @@ Note that NNT confidence intervals are set to NA when the RD confidence interval
 (discontinuous CI; Altman, 1998).
 
 \strong{Direction convention.} The risk difference is defined as \eqn{rd = pc - pt}
-(control risk minus exposed risk), so a POSITIVE RD means the control group has the
-higher risk. This is the OPPOSITE direction to the OR and RR produced from the same
+(control risk minus exposed risk), so a positive RD means the control group has the
+higher risk. This is the opposite direction to the OR and RR produced from the same
 2x2 table, which are exposed-over-non-exposed (an OR/RR \eqn{> 1} means the exposed
 group has the higher risk). Consequently, for the same table, a protective exposure
 yields \eqn{OR < 1}, \eqn{RR < 1} but \eqn{RD > 0}; keep this in mind when pooling RD
@@ -88,6 +92,20 @@ we relied on the implementation of the formulas of the 'metafor' package. More
 information can be retrieved here
 (https://wviechtb.github.io/metafor/reference/escalc.html#-b-measures-for-two-dichotomous-variables).
 }
+
+That parity holds \strong{on a table with no zero cell}. On a table with a zero cell it does not, and
+the difference is large. 'metafor' deliberately does not apply its \code{add}/\code{to} continuity
+correction to \code{"RTET"}, so it returns the boundary maximum-likelihood estimate
+(\eqn{r = \pm 1}) with an enormous variance -- its way of reporting that the correlation is not
+identified. \emph{metaConvert} solves the +0.5-corrected table instead, so it returns an interior
+estimate with an ordinary-looking, finite standard error. That standard error is the sampling SE
+\emph{of the shrunk table} and does not account for the shrinkage, so it is anti-conservative for
+the value actually reported: on \eqn{a/b/c/d = 0/20/10/10} \emph{metaConvert} gives
+\eqn{r = -0.856} with \eqn{SE = 0.113}, against \eqn{r = -1} with \eqn{SE = 149} from 'metafor' --
+an inverse-variance weight about 1300 times larger. This is a deliberate choice, not an oversight:
+the boundary estimate cannot be pooled. But treat the correlation from any zero-cell table as a
+shrunk value whose precision is overstated, and consider excluding such rows or handling them in a
+sensitivity analysis.
 }
 \examples{
 es_from_2x2(n_cases_exp = 467, n_cases_nexp = 22087, n_controls_exp = 261, n_controls_nexp = 8761)

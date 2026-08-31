@@ -1,3 +1,25 @@
+# ---- unit_type: the declared default has to reach the mathur route ---------
+#
+# The seven routes that take `unit_type` all declare "raw_scale" in their signature
+# and then used to overwrite it with NA under missing(). The mathur eligibility gate
+# below requires `!is.na(unit_type)`, so a caller relying on the documented default
+# was dropped from the conversion and got NA for d/g/OR rather than the raw-units
+# result the help page promises. Recycling the formal repairs the direct call.
+#
+# Reading NA as raw units repairs the convert_df() path as well: there
+# .validate_unit_type(column = TRUE) neutralises an unrecognised cell such as "SD" to
+# NA while warning that "Those rows are treated as raw units", and that promise is
+# only kept if an NA cell is estimated rather than dropped. It is also the reading
+# the rest of the design already takes -- NA has always been the internal "not
+# supplied" value, and every non-"sd" value means raw units.
+#
+# Belongs beside .validate_unit_type() in R/internal_guards.R.
+.unit_type_or_raw <- function(unit_type, n) {
+  unit_type <- rep(unit_type, length.out = n)
+  .validate_unit_type(unit_type)
+  ifelse(is.na(unit_type), "raw_scale", unit_type)
+}
+
 #' Convert a Pearson's correlation coefficient to several effect size measures
 #'
 #' @param pearson_r a Pearson's correlation coefficient value
@@ -40,7 +62,7 @@
 #'
 #' **C.** Cooper converts a point-biserial correlation to Cohen's d with the fixed
 #' per-2-SD transformation (Formula 12.38 & 12.39 in Cooper, \code{cor_to_smd = "cooper"}).
-#' Unlike the \code{"mathur"} option, this branch does NOT use \code{unit_increase_iv},
+#' Unlike the \code{"mathur"} option, this branch does not use \code{unit_increase_iv},
 #' \code{unit_type} or \code{sd_iv}; it always returns the standardized mean difference
 #' between two groups lying two predictor standard deviations apart:
 #' \deqn{d = \frac{2 * r}{\sqrt{1 - r^2}}}
@@ -107,10 +129,7 @@ es_from_pearson_r <- function(pearson_r, sd_iv, n_sample,
   if (missing(unit_increase_iv)) {
     unit_increase_iv <- rep(NA, length(pearson_r))
   }
-  if (missing(unit_type)) {
-    unit_type <- rep(NA, length(pearson_r))
-  }
-  .validate_unit_type(unit_type)
+  unit_type <- .unit_type_or_raw(unit_type, length(pearson_r))
 
   if (!all(cor_to_smd %in% c("cooper", "mathur", "viechtbauer"))) {
     stop(paste0("'",
@@ -248,10 +267,7 @@ es_from_fisher_z <- function(fisher_z, n_sample, unit_type = "raw_scale",
   if (missing(unit_increase_iv)) {
     unit_increase_iv <- rep(NA, length(fisher_z))
   }
-  if (missing(unit_type)) {
-    unit_type <- rep(NA, length(fisher_z))
-  }
-  .validate_unit_type(unit_type)
+  unit_type <- .unit_type_or_raw(unit_type, length(fisher_z))
   r <- tanh(fisher_z)
 
   es <- es_from_pearson_r(

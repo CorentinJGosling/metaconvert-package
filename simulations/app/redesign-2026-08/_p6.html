@@ -1,0 +1,85 @@
+            <figcaption style="font-size:11.5px;color:#83828f;margin-top:9px;line-height:1.6;">
+              Dashed rule marks the nominal 0.95. Below &rho;&nbsp;=&nbsp;0.25 the two
+              routes are indistinguishable at this many replications; above it,
+              <code style="font-size:.9em">lipsey_cooper</code> falls away faster the
+              larger the sample.
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== C ===================================== -->
+<section class="panel" id="p-v3" role="tabpanel" aria-labelledby="t-v3" hidden>
+  <p class="panel-note"><b>No rail, no tabs, no cards.</b> One continuous listing,
+  the way statistical output is set: the entire control state is a single query
+  line at the top, each token editable in place, and everything below is sections
+  in a gutter with hanging numbered findings. Furthest from a dashboard and the
+  most opinionated &mdash; it assumes a reader comfortable with a software listing,
+  and it is the only one of the three that fits a whole study on one screen.</p>
+
+  <div class="mock v3">
+    <div class="mast">
+      <span class="wm">metaConvert <em>simulations</em></span>
+      <span class="rt">nrep 1000 &nbsp;&middot;&nbsp; <a href="#">how to read this</a></span>
+    </div>
+    <div class="lst">
+
+      <div class="idl">
+        <span class="st">01a</span>
+        <h2>SMD to correlation (r)</h2>
+        <span class="arg">smd_to_cor &nbsp;&middot;&nbsp; study 1 of 16</span>
+      </div>
+      <p class="sub">A study reports a standardised mean difference and the review
+      pools correlations. Which conversion should <code>convert_df()</code> take?</p>
+
+      <div class="query">
+        <a class="edit" href="#">edit query</a>
+        <span class="kw">against</span> <span class="tok">biserial (population)</span>
+        &nbsp; <span class="kw">measure</span> <span class="tok">interval coverage</span><br>
+        <span class="kw">over</span> <span class="tok">rho</span> &times;
+        <span class="tok">n</span>
+        &nbsp; <span class="kw">holding</span> <span class="tok">p_exp = 0.30</span>
+        &nbsp; <span class="kw">routes</span> <span class="tok">lipsey_cooper, viechtbauer</span>
+        &nbsp; <span class="kw">&rarr;</span> 20 cells
+      </div>
+
+      <div class="blk">
+        <div class="gut">Finding<em>coverage</em></div>
+        <div class="bd">
+          <ol class="find">
+            <li><b>Use <code>viechtbauer</code>.</b> Mean coverage 0.940 against a
+            nominal 0.95, worst cell 0.916. <code>lipsey_cooper</code> averages
+            0.764. The 0.176 gap is 11&times; the 0.016 resolution limit, so it is
+            not simulation noise.</li>
+            <li><b><code>lipsey_cooper</code> is safe to about &rho;&nbsp;=&nbsp;0.25
+            and then collapses</b>, and it collapses faster the larger the sample: at
+            &rho;&nbsp;=&nbsp;0.75, coverage runs 0.845, 0.457, 0.085, 0.000 across
+            n&nbsp;=&nbsp;25, 50, 100, 300. Figure&nbsp;1, right panel.</li>
+            <li><b>Neither route miscomputes anything.</b> Against its own estimand
+            each has mean absolute bias under 0.005 and covers at 0.940. The
+            shortfall in 1 and 2 is entirely a difference of estimand:
+            <code>lipsey_cooper</code> returns the point-biserial correlation, this
+            query asks for the biserial, and a larger n narrows the interval around
+            a centre that was never the target.</li>
+            <li><b>The ranking reverses if the query does.</b> Against the
+            point-biserial parameter, mean coverage is 0.940 for
+            <code>lipsey_cooper</code> and 0.803 for <code>viechtbauer</code>.
+            Choose the route from which correlation the review pools, not from
+            line&nbsp;1.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="blk">
+        <div class="gut">Figure 1<em>coverage</em></div>
+        <div class="bd">
+          <p class="key">
+            <span><i style="background:#c0474e"></i>lipsey_cooper</span>
+            <span><i style="background:#2c2a47"></i>viechtbauer</span>
+            <span style="color:#83828f"><i style="background:#83828f;height:1px;top:-4px"></i>nominal 0.95</span>
+          </p>
+          <div class="figrow">
+            <figure>

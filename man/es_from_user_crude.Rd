@@ -107,14 +107,49 @@ Directly input a crude effect size value + variance, with optional conversion
 This function is a generic function allowing to include any crude effect size measure value + variance.
 Importantly, when the \code{user_es_original_measure_crude} is one of the known measures
 (d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, loghr, r, z, rd, nnt),
-conversions towards the other effect size measures are performed.
-Otherwise, no conversion is performed (the effect size value + variance you enter is
-the value + variance exported by this function) and a warning is issued.
+conversions towards other effect size measures are performed -- but not towards
+\emph{every} other measure: which targets are reachable depends on the measure entered,
+and the combinations that are not identified are listed in the Note below.
+For a measure outside that list, no conversion is performed (the effect size value +
+variance you enter is the value + variance exported by this function) and a warning is issued.
 The sample sizes and baseline risk are used only to perform the conversions.
 
 For the or/rr/irr/hr measures, the standard error you enter must be on the log scale.
 If you indicate the 95\% CI bounds instead of the standard error, the log-transformation
 is applied automatically.
+}
+\note{
+The entered measure decides which targets are reachable, and no entered measure
+reaches all of them. A target this function cannot build is returned as NA, and
+\code{\link{convert_df}} then reports that row in the "Missing ES in input rows"
+line of \code{summary()} instead of pooling it (\code{guidance = TRUE} names the
+columns that would rescue it). The combinations that return NA are:
+
+\itemize{
+\item \strong{dw, gw} (within-subject SMD) reach the SMD family only --
+\code{dw}/\code{d} and \code{gw}/\code{g}, related by Hedges' correction on the
+\emph{paired} degrees of freedom \eqn{J(n - 1)} rather than the pooled
+\eqn{J(n_{exp} + n_{nexp} - 2)} an entered \code{d}/\code{g} uses. \code{r},
+\code{z}, \code{logor}, \code{logrr}, \code{nnt} and \code{rd} return NA: the
+point-biserial and Cox maps both assume two independent groups of size
+\code{n_exp} and \code{n_nexp}, so neither is defined for a paired SMD.
+\item \strong{mdw} (within-subject raw mean difference) reaches \code{mdw} and
+\code{md} only. Standardizing it needs the within-subject standardizer, which is
+not an input here; enter the value as \code{md} with \code{n_exp} and
+\code{n_nexp} if the between-group standardization is what is wanted.
+\item \strong{rr, logrr} reach the ratio family (\code{or}, \code{nnt}, \code{rd})
+only, never an SMD or a correlation -- see \code{\link{es_from_rr_se}}.
+\item \strong{rd, nnt} likewise stay inside the binary family (\code{nnt},
+\code{rd}, and \code{or}/\code{rr} when \code{baseline_risk} is supplied).
+\item \strong{irr, logirr, hr, loghr} are carried through unconverted: no other
+measure is identified from a rate or a hazard ratio without the underlying
+time-to-event data.
+\item Any \code{user_es_original_measure_crude} outside the list above is a
+passthrough (value and variance are exported unchanged, with a warning), except
+for \code{measure = "alpha"}, \code{"omega"}, \code{"icc"} or \code{"prop"} under
+a non-identity transform, where the passthrough is refused -- see
+\code{alpha_to_es} above.
+}
 }
 \examples{
 dat = data.frame(user_es_original_measure_crude = "or", user_es_crude = 2.5,

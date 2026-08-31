@@ -121,7 +121,7 @@ es_disattenuate <- function(r, r_se, reliability_x, reliability_y, n_sample) {
   # first-order approx
   r_corrected_se <- r_se / A
 
-  # Single constant for the extreme trigger AND the atanh bound: a corrected r
+  # One constant serves as both the extreme trigger and the atanh bound: a corrected r
   # beyond it has no meaningful Fisher's z, so every derived-scale output is
   # suppressed below (the bounded value never surfaces in the output).
   extreme_threshold <- 0.999
@@ -143,7 +143,7 @@ es_disattenuate <- function(r, r_se, reliability_x, reliability_y, n_sample) {
   # CI from back-transformed z interval
   r_corrected_ci_lo <- tanh(z_corrected_ci_lo)
   r_corrected_ci_up <- tanh(z_corrected_ci_up)
-  # For extreme rows, NA every derived-scale output (r CI AND the z columns):
+  # For extreme rows, NA every derived-scale output, both the r CI and the z columns:
   # a bounded atanh would be a pure artifact (identical whatever the input),
   # and r_c >= 1 has no valid Fisher's z or SE. Only the point estimate and
   # its first-order SE are kept.

@@ -1,35 +1,38 @@
 # # !!! for alll internal formulas, check whether nn_miss does not prevent the code to be ran
 # # important to check the input of the method before calling these functions
 
-# Row-wise mapply with memoisation on the argument tuple.
+# Row-wise mapply that caches results by argument tuple.
 #
-# The tetrachoric route (.contingency_to_cor -> .tet_r -> metafor::escalc with
-# measure = "RTET") has no closed form and is solved row by row by numerical ML over a
-# bivariate normal CDF (optim + mvtnorm::pmvnorm). Profiling es_from_2x2() and
-# es_from_or_se() puts ~83% of the total time inside pmvnorm and ~93% inside .tet_r, so
-# that single call dominates both. (.or_to_cor itself is closed-form arithmetic; it is
-# routed through here only because it is scalar-valued and shares the call shape.)
+# The tetrachoric correlation has no closed form. It is solved one row at a time by
+# numerical maximum likelihood over a bivariate normal CDF (.contingency_to_cor ->
+# .tet_r -> metafor::escalc with measure = "RTET"), and that solve dominates the
+# runtime of es_from_2x2() and es_from_or_se(): profiling puts about 83% of their total
+# time inside mvtnorm::pmvnorm and 93% inside .tet_r. (.or_to_cor is ordinary
+# closed-form arithmetic and passes through here only because it has the same call
+# shape.)
 #
-# Because each result is a deterministic function of that row's arguments alone, rows
-# with identical arguments are solved once and the solution reused. Counts repeat
-# heavily in real datasets and overwhelmingly in simulation grids (~250 distinct tables
-# per 1,500 draws at n = 50/arm): measured 44.75 s -> 1.31 s (34x) on 2,000 rows drawn
-# from 60 distinct tables. With all-distinct rows it costs one paste() and two match()
-# calls and is not slower (53.29 s -> 44.30 s on the same benchmark).
+# A row's result depends only on that row's arguments, so identical rows are solved
+# once and the answer reused. Repeated counts are common in real datasets and close to
+# universal in simulation grids, where 1,500 draws at n = 50 per arm yield only about
+# 250 distinct tables. On 2,000 rows drawn from 60 distinct tables, the cache brings
+# the runtime from 44.75 s down to 1.31 s. When every row is distinct it adds one
+# paste() and two match() calls, which costs nothing measurable (44.30 s with the cache
+# against 53.29 s without, on the same benchmark).
 #
-# Output is identical to t(mapply(FUN, ...)) for every input reachable from the exported
-# functions. One theoretical caveat: paste() renders doubles at 15 significant digits, so
-# two doubles agreeing to ~15 digits but not identical() share a key and hence a result.
-# The induced relative error is ~1e-15 -- far below the ML solver's own tolerance -- and
-# the memoised arguments are 2x2 counts, method names and reverse flags on one path and
-# or / logor_se / margins on the other. Integer counts cannot collide.
+# The output matches t(mapply(FUN, ...)) for every input the exported functions can
+# produce. One caveat about the key: paste() prints doubles to 15 significant digits,
+# so two doubles that agree to 15 digits without being identical() would share a key,
+# and therefore a result. This is harmless here. The cached arguments are 2x2 counts,
+# method names and reverse flags on one path, and or / logor_se / margins on the other;
+# integer counts cannot collide, and a relative difference of 1e-15 is far inside the
+# solver's own tolerance.
 # Which of estimraw::estim_raw()'s candidate 2x2 reconstructions are actually usable.
 #
-# When the reconstruction quadratic has a negative discriminant -- routine whenever the
-# outcome is not rare -- estim_raw() still returns its candidate list, but with NaN cell
-# counts. Distinguishing "no real solution" from "several real solutions" is what lets
-# the two callers below emit an accurate message instead of one that over-counts the
-# candidates and recommends a remedy that cannot work.
+# When the reconstruction quadratic has a negative discriminant, which happens whenever
+# the outcome is not rare, estim_raw() still returns its candidate list but fills the
+# cell counts with NaN. Telling "no real solution" apart from "several real solutions"
+# lets the two callers below describe the situation accurately, instead of over-counting
+# the candidates and recommending a remedy that cannot work.
 #
 # Returns a logical vector, one element per candidate; all FALSE means no real solution.
 .estimraw_usable <- function(estim) {
@@ -45,17 +48,18 @@
 # Extract column `j` of a t(mapply(...)) result as a plain numeric vector of
 # length nrow(m), whatever shape mapply chose.
 #
-# mapply() only simplifies to a numeric matrix when EVERY call returns the same
+# mapply() simplifies to a numeric matrix only when every call returns the same
 # type. The conversion helpers (.or_to_rr, .rr_to_or, ...) mostly return a 1x4
-# cbind() matrix, but .or_to_rr()'s 'dipietrantonj' branch returns a data.frame,
-# on the successful reconstruction as much as on the no-real-solution one, and a
-# single such row is enough to turn the whole result into a LIST-matrix. The
-# column then extracts as a list, and assigning it into a numeric vector
-# silently recycles values across rows: with or_to_rr supplied as a per-row
-# column, one 'dipietrantonj' row made every other row inherit the FIRST row's
-# standard error, leaving each SE inconsistent with its own confidence interval.
-# Zero-length elements are mapped to NA rather than dropped, so the result can
-# never be short (and hence can never be recycled).
+# cbind() matrix, but the 'dipietrantonj' branch of .or_to_rr() returns a
+# data.frame, on the successful reconstruction as much as on the no-real-solution
+# one. One such row turns the whole result into a list-matrix; the column then
+# extracts as a list, and assigning that into a numeric vector recycles values
+# across rows. With or_to_rr supplied as a per-row column, a single
+# 'dipietrantonj' row made every other row inherit the first row's standard
+# error, leaving each SE inconsistent with its own confidence interval.
+#
+# Zero-length elements become NA rather than being dropped, so the result can
+# never come back short and therefore can never be recycled.
 .mapply_col <- function(m, j) {
   vapply(seq_len(nrow(m)), function(i) {
     v <- m[i, j]
@@ -133,8 +137,9 @@
       n_exp = n_exp, n_nexp = n_nexp
     )
 
-    # Non-identifiability gate (see .rotation_tied). Only when the exact solve did
-    # NOT fire: a solved table is identified whatever the margins look like.
+    # Refuse the reconstruction when the two margins are equal, because the table is
+    # then not identified (see .rotation_tied). Skipped when the exact solve succeeded,
+    # since a solved table is identified whatever its margins.
     if (!isTRUE(attr(contingency_meta_cases, "solved")) &&
         .rotation_tied(n_cases, n_controls)) {
       warning(.msg_nonidentified_2x2("metaumbrella_cases", "n_cases", "n_controls",
@@ -150,12 +155,9 @@
       n_controls_nexp = contingency_meta_cases$n_controls_nexp
     )
 
-    res <- cbind(
-      logrr = calc_meta_cases$logrr,
-      logrr_se = calc_meta_cases$logrr_se,
-      logrr_ci_lo = calc_meta_cases$logrr_ci_lo,
-      logrr_ci_up = calc_meta_cases$logrr_ci_up
-    )
+    # The table gives the POINT estimate; the precision comes from the study, not from
+    # the reconstructed counts. See .rr_from_or_se / .dlogrr_dlogor.
+    res <- .rr_from_or_se(calc_meta_cases, contingency_meta_cases, or, logor_se)
 
     return(res)
   } else if (or_to_rr == "metaumbrella_exp") {
@@ -167,8 +169,9 @@
       n_cases = n_cases, n_controls = n_controls, baseline_risk = baseline_risk
     )
 
-    # Non-identifiability gate (see .rotation_tied). Only when the exact solve did
-    # NOT fire: a solved table is identified whatever the margins look like.
+    # Refuse the reconstruction when the two margins are equal, because the table is
+    # then not identified (see .rotation_tied). Skipped when the exact solve succeeded,
+    # since a solved table is identified whatever its margins.
     if (!isTRUE(attr(contingency_meta_exp, "solved")) &&
         .rotation_tied(n_exp, n_nexp)) {
       warning(.msg_nonidentified_2x2("metaumbrella_exp", "n_exp", "n_nexp",
@@ -185,12 +188,9 @@
       n_controls_nexp = contingency_meta_exp$n_controls_nexp
     )
 
-    res <- cbind(
-      logrr = calc_meta_exp$logrr,
-      logrr_se = calc_meta_exp$logrr_se,
-      logrr_ci_lo = calc_meta_exp$logrr_ci_lo,
-      logrr_ci_up = calc_meta_exp$logrr_ci_up
-    )
+    # Mirror of the metaumbrella_cases branch above: solved table for the point
+    # estimate, reported logor_se delta-propagated for the SE and the CI.
+    res <- .rr_from_or_se(calc_meta_exp, contingency_meta_exp, or, logor_se)
 
     return(res)
   } else if (or_to_rr == "transpose") {
@@ -216,13 +216,13 @@
 
     if (length(estim) != 4) {
       # estimraw returns either one solution (a 4-element a/b/c/d list) or a list
-      # of candidate solutions. It can also return NO usable candidate: for a
-      # common outcome the reconstruction quadratic has a negative discriminant,
-      # so the cell counts come back NaN. In that case which.min() below sees only
+      # of candidate solutions. It can also return no usable candidate at all: for
+      # a common outcome the reconstruction quadratic has a negative discriminant,
+      # so the cell counts come back NaN. which.min() below then sees only
       # non-finite values and returns integer(0), and estim[[integer(0)]] raises
-      # "attempt to select less than one element" -- aborting the whole
-      # convert_df() run over a single unreconstructable row. Return NA instead:
-      # one bad cell must never stop a run.
+      # "attempt to select less than one element", which would abort an entire
+      # convert_df() run over one unreconstructable row. Return NA instead, so that
+      # a single bad cell cannot stop a run.
       numb <- 1L
       usable <- .estimraw_usable(estim)
       if (!is.na(baseline_risk) && length(estim) >= 2L) {
@@ -306,11 +306,11 @@
 }
 ################### OR to 2x2 ##################
 # internal function
-#' Solve a 2x2 table exactly from an odds ratio and ALL FOUR margins
+#' Solve a 2x2 table exactly from an odds ratio and all four margins
 #'
 #' When both margin pairs are known the table is over-determined by one degree of
-#' freedom, so the odds ratio pins it down exactly: no enumeration, no search, and --
-#' critically -- \strong{no use of the reported variance}.
+#' freedom, so the odds ratio pins it down exactly. No enumeration, no search, and in
+#' particular \strong{no use of the reported variance}.
 #'
 #' Write the table as
 #' \tabular{lcc}{
@@ -326,18 +326,18 @@
 #' \eqn{a = n\_cases \cdot n\_exp / N}. Exactly one root is ever feasible (verified over
 #' 19,626 configurations), so root choice is unambiguous.
 #'
-#' WHY THIS MATTERS. The two enumerating helpers below search for the candidate table
-#' whose reconstructed variance best matches the reported one. Two failure modes follow.
-#' (1) The 180-degree rotation \eqn{(a,b,c,d) \to (d,c,b,a)} preserves the odds ratio AND
-#' \eqn{1/a+1/b+1/c+1/d} \emph{exactly}, and is admissible with the same arm sizes
-#' precisely when \code{n_exp == n_nexp} (resp. \code{n_cases == n_controls}), so the
-#' search faces an exact tie broken only by enumeration order -- measured 25-32% correct
-#' at rare event rates. (2) On the \code{es_from_or()} route the \code{var} being matched
-#' is itself imputed by \code{\link{.se_from_or}} and runs ~1.4x wide, so the search lands
-#' on the wrong table \emph{before} any tie arises; with a realistically rounded OR the
-#' current rule's MAE |logRR| is 0.10-0.19 even at unequal arms. Solving ignores
-#' \code{var} entirely and removes both: MAE |logRR| 0.0002, branch hit 1.000 at every
-#' event rate from 0.03 to 0.97.
+#' Why this matters: the two enumerating helpers below search for the candidate table
+#' whose reconstructed variance best matches the reported one, and that search fails in
+#' two ways. First, the 180-degree rotation \eqn{(a,b,c,d) \to (d,c,b,a)} preserves both
+#' the odds ratio and \eqn{1/a+1/b+1/c+1/d} \emph{exactly}, and is admissible with the
+#' same arm sizes precisely when \code{n_exp == n_nexp} (or \code{n_cases ==
+#' n_controls}). The search then faces an exact tie broken only by enumeration order,
+#' and is 25-32% correct at rare event rates. Second, on the \code{es_from_or()} route
+#' the \code{var} being matched is itself imputed by \code{\link{.se_from_or}} and runs
+#' about 1.4x wide, so the search lands on the wrong table \emph{before} any tie arises;
+#' with a realistically rounded OR its MAE in |logRR| is 0.10-0.19 even at unequal arms.
+#' Solving ignores \code{var} entirely and removes both problems: MAE |logRR| 0.0002,
+#' branch hit 1.000 at every event rate from 0.03 to 0.97.
 #'
 #' @param or odds ratio
 #' @param n_exp,n_nexp exposure margins
@@ -354,9 +354,9 @@
 
   N <- n_exp + n_nexp
   # Multi-arm guard: a two-arm comparison drawn from a larger trial can legitimately
-  # report a case margin covering arms that are not in n_exp + n_nexp (flagged
-  # [UNUSUAL], not [INVALID], by V15). Such a margin does not describe THIS table, so
-  # the solve must decline rather than return a table built from mismatched inputs.
+  # report a case margin covering arms that are not in n_exp + n_nexp (V15 flags this
+  # [UNUSUAL] rather than [INVALID]). Such a margin does not describe the table being
+  # solved here, so decline rather than return a table built from mismatched inputs.
   if (n_cases <= 0 || n_cases >= N) return(NULL)
   n_controls <- N - n_cases
 
@@ -381,32 +381,31 @@
     feas
   }
 
-  # ROUNDING: PREFER THE INTEGER, BUT DO NOT DESTROY A CORRECTED TABLE.
+  # Rounding: prefer the integer, but do not destroy a corrected table.
   #
   # Rounding to the nearest integer is right for a raw count table whose odds ratio
   # was reported to a few decimals: the exact root then sits a little off an integer
-  # and rounding recovers it (measured 96.2% exact recovery at 2 dp).
+  # and rounding recovers it (96.2% exact recovery at 2 dp).
   #
-  # It is WRONG whenever the reported odds ratio came from a table that had already
-  # received a +0.5 continuity correction -- which is what this package itself emits
-  # for a zero cell, and what any analyst reporting a corrected OR supplies. Such a
-  # table's cells are HALF-INTEGERS, and nothing in the margins reveals it: adding 0.5
-  # to all four cells adds exactly 1 to every margin. Rounding then moves a genuine
-  # 0.5 to 1 and the reconstruction is badly wrong -- measured over 900 corrected
-  # tables, mean |error| in log RR of 0.869, with a table returned at all for only 423
-  # of them (the old "< 1" guard rejected the rest).
+  # It is wrong whenever the reported odds ratio came from a table that had already
+  # received a +0.5 continuity correction, which is what this package emits for a zero
+  # cell and what any analyst reporting a corrected OR supplies. The cells of such a
+  # table are half-integers, and nothing in the margins reveals it, because adding 0.5
+  # to all four cells adds exactly 1 to every margin. Rounding then moves a genuine 0.5
+  # to 1 and the reconstruction is badly wrong: over 900 corrected tables the mean
+  # |error| in log RR was 0.869, and a table was returned at all for only 423 of them.
   #
-  # The fix keeps the integer default and takes the half-integer ONLY when the exact
-  # root sits essentially on one, which is the signature of a corrected table (the
-  # quadratic recovers a = 0.5000000000 there). Measured against the alternatives:
+  # The rule below keeps the integer default and takes the half-integer only when the
+  # exact root sits essentially on one, which is the signature of a corrected table
+  # (the quadratic recovers a = 0.5000000000 there). Against the alternatives:
   #
   #   rule           integer tables (OR at 2dp)   corrected tables
   #   round to 1     96.2% exact                  0% exact, err 0.869, 423/900 solved
   #   round to 0.5   91.8% exact                  100% exact
   #   no rounding     5.0% exact                  100% exact
-  #   THIS RULE      96.1% exact                  100% exact
+  #   this rule      96.1% exact                  100% exact
   #
-  # i.e. it costs 0.1 percentage points on the ordinary case and removes the failure
+  # It costs 0.1 percentage points on the ordinary case and removes the failure
   # entirely on the corrected one.
   frac <- a - floor(a)
   on_half <- is.finite(frac) && abs(frac - 0.5) < 0.02
@@ -430,6 +429,120 @@
 
   data.frame(n_cases_exp = a, n_cases_nexp = cc,
              n_controls_exp = b, n_controls_nexp = d)
+}
+
+
+#' Derivative of log RR with respect to log OR, at the reconstruction's own root
+#'
+#' With all four margins fixed, the odds ratio pins the 2x2 table, so the risk ratio
+#' read off that table carries no information the odds ratio did not already carry.
+#' Its standard error is therefore the delta-method propagation of the reported one,
+#' \eqn{SE(\log RR) = |d \log RR / d \log OR| \cdot SE(\log OR)}, and NOT the sampling
+#' SE of the reconstructed counts -- which is invariant to the reported precision, so
+#' a 30x range in the supplied \code{logor_se} used to return a byte-identical
+#' \code{logrr_se} and a null OR could come back as a significant RR.
+#'
+#' With \eqn{a} = n_cases_exp and the other cells following from the margins
+#' (\eqn{b = n\_exp - a}, \eqn{c = n\_cases - a}, \eqn{d = n\_nexp - n\_cases + a}):
+#' \deqn{\log RR = \log(a \cdot n\_nexp / (c \cdot n\_exp)) \Rightarrow d\log RR/da = 1/a + 1/c}
+#' \deqn{\log OR = \log a + \log d - \log b - \log c \Rightarrow d\log OR/da = 1/a + 1/b + 1/c + 1/d}
+#' and the derivative wanted is the ratio of the two.
+#'
+#' It MUST be evaluated at the UNROUNDED root of the reconstruction quadratic (the same
+#' one \code{\link{.solve_2x2_from_or}} solves, before its integer/half-integer
+#' rounding). Neither of the two obvious shortcuts works: perturbing the exported route
+#' returns EXACTLY 0, because the solved cells are rounded and are invariant to a small
+#' perturbation of the OR -- that would ship \code{logrr_se = 0}, an infinite
+#' meta-analytic weight, strictly worse than the defect it repairs. Evaluating the
+#' closed form at the rounded table is merely imprecise (0.7628506 against 0.7630761 on
+#' the worked case), but there is no reason to accept even that.
+#'
+#' @param or odds ratio, natural scale
+#' @param n_exp,n_nexp,n_cases margins of the reconstructed table
+#'
+#' @return the derivative, or \code{NA_real_} when the quadratic has no feasible root
+#'   or the root leaves a cell non-positive. NA means "fall back to the
+#'   reconstructed-table SE", never "fail".
+#' @noRd
+.dlogrr_dlogor <- function(or, n_exp, n_nexp, n_cases) {
+  if (anyNA(c(or, n_exp, n_nexp, n_cases))) return(NA_real_)
+  if (!is.finite(or) || or <= 0) return(NA_real_)
+  if (!is.finite(n_exp) || !is.finite(n_nexp) || n_exp <= 0 || n_nexp <= 0) return(NA_real_)
+
+  N <- n_exp + n_nexp
+  if (!is.finite(n_cases) || n_cases <= 0 || n_cases >= N) return(NA_real_)
+  n_controls <- N - n_cases
+
+  A <- 1 - or
+  B <- or * (n_cases + n_exp) + n_nexp - n_cases
+  C <- -or * n_cases * n_exp
+
+  a <- if (abs(A) < 1e-12) {
+    # or == 1: independence, the quadratic collapses to a linear equation.
+    if (abs(B) < 1e-12) return(NA_real_)
+    -C / B
+  } else {
+    disc <- B^2 - 4 * A * C
+    if (!is.finite(disc) || disc < 0) return(NA_real_)
+    roots <- c((-B + sqrt(disc)) / (2 * A), (-B - sqrt(disc)) / (2 * A))
+    feas <- roots[is.finite(roots) & roots > 0 & roots < n_exp &
+                  roots < n_cases & (n_controls - n_exp + roots) > 0]
+    if (length(feas) != 1L) return(NA_real_)
+    feas
+  }
+
+  b <- n_exp - a
+  cc <- n_cases - a
+  d <- n_controls - b
+  if (!is.finite(a) || min(a, b, cc, d) <= 0) return(NA_real_)
+
+  num <- 1 / a + 1 / cc
+  den <- num + 1 / b + 1 / d
+  if (!is.finite(num) || !is.finite(den) || den == 0) return(NA_real_)
+  num / den
+}
+
+
+#' Propagate a reported log-OR SE onto the reconstructed log RR
+#'
+#' Keeps the exactly solved table for the POINT estimate and rebuilds the SE and the
+#' confidence interval from the study's own precision. Falls back to the
+#' reconstructed-table quartet whenever \code{logor_se} is missing (the
+#' \code{es_from_or()} imputed-SE route) or the derivative is not computable.
+#'
+#' @param calc the \code{es_from_2x2()} result on the reconstructed table
+#' @param tab the reconstructed table (a one-row data.frame of the four cells)
+#' @param or the reported odds ratio, natural scale
+#' @param logor_se the reported log-OR standard error, or NA
+#'
+#' @noRd
+.rr_from_or_se <- function(calc, tab, or, logor_se) {
+  fallback <- cbind(
+    logrr = calc$logrr, logrr_se = calc$logrr_se,
+    logrr_ci_lo = calc$logrr_ci_lo, logrr_ci_up = calc$logrr_ci_up
+  )
+  if (length(logor_se) != 1L || is.na(logor_se) || !is.finite(logor_se)) return(fallback)
+  # A quartet is all-finite or all-NA (pinned by test-or-to-rr-identifiability.R): never
+  # attach a propagated SE to a point estimate the reconstruction could not produce.
+  if (length(calc$logrr) != 1L || !is.finite(calc$logrr)) return(fallback)
+
+  # Margins are recovered from the table itself, so the derivative is taken at exactly
+  # the margins the reconstruction used -- whichever rung of the cascade supplied them
+  # -- while the root is re-solved from the REPORTED or, i.e. unrounded.
+  n_exp   <- tab$n_cases_exp + tab$n_controls_exp
+  n_nexp  <- tab$n_cases_nexp + tab$n_controls_nexp
+  n_cases <- tab$n_cases_exp + tab$n_cases_nexp
+
+  g <- .dlogrr_dlogor(or, n_exp, n_nexp, n_cases)
+  if (length(g) != 1L || is.na(g) || !is.finite(g)) return(fallback)
+
+  se <- abs(g) * logor_se
+  cbind(
+    logrr = calc$logrr,
+    logrr_se = se,
+    logrr_ci_lo = calc$logrr - qnorm(.975) * se,
+    logrr_ci_up = calc$logrr + qnorm(.975) * se
+  )
 }
 
 
@@ -458,24 +571,25 @@
 #'
 #' The rotation \eqn{(a,b,c,d) \to (d,c,b,a)} preserves the odds ratio and
 #' \eqn{1/a+1/b+1/c+1/d} exactly, and swaps the two supplied margins. It is therefore
-#' admissible with the SAME reported inputs precisely when those two margins are equal --
+#' admissible with the same reported inputs precisely when those two margins are equal:
 #' \code{n_exp == n_nexp} for the \code{_exp} parameterisation, \code{n_cases ==
 #' n_controls} for \code{_cases}. In that configuration the enumerating search faces an
 #' exact tie broken only by enumeration order, so its answer is arbitrary.
 #'
-#' Measured on the \code{_exp} parameterisation, 782 usable draws at
-#' \code{n_exp == n_nexp == 50} with no second margin: the returned table is the true
-#' one 37.0% of the time and its rotation 66.6% (4.4% of true tables are their own
-#' rotation, so those two overlap; 0.8% land on neither). Genuinely wrong: 62.3%.
+#' Measured on the \code{_exp} parameterisation over 782 usable draws at
+#' \code{n_exp == n_nexp == 50} with no second margin, the returned table is the true
+#' one 37.0% of the time and its rotation 66.6% of the time. The two overlap, because
+#' 4.4% of true tables are their own rotation, and 0.8% land on neither. The result is
+#' genuinely wrong 62.3% of the time.
 #'
-#' The cliff is sharp rather than gradual -- one participant of imbalance makes the
-#' rotation inadmissible -- which is why the gate tests exact equality and nothing
-#' looser. Hit rate by \code{|n_exp - n_nexp|}: 0.384 (0) -> 0.995 (1) -> 0.987 (2)
-#' -> 0.995 (5) -> 0.982 (10). The \code{_cases} mirror behaves the same way at
+#' The gate tests exact equality because the effect disappears abruptly: one
+#' participant of imbalance already makes the rotation inadmissible. Hit rate by
+#' \code{|n_exp - n_nexp|}: 0.384 (0) -> 0.995 (1) -> 0.987 (2) -> 0.995 (5) ->
+#' 0.982 (10). The \code{_cases} mirror behaves the same way at
 #' \code{|n_cases - n_controls|}: 0.745 (0) -> 0.995 (1) -> 0.995 (2) -> 0.993 (5)
-#' -> 0.993 (10). The two tied-cell rates are not comparable to each other (they come
-#' from different draw distributions, and the published 0.352 for \code{_cases} from a
-#' third); what reproduces across all of them is the size of the drop at zero.
+#' -> 0.993 (10). The two rates at zero are not comparable to each other, since they
+#' come from different draw distributions, as does the published 0.352 for
+#' \code{_cases}; what reproduces across all of them is the size of the drop at zero.
 #'
 #' @param m1,m2 the two margins the caller supplied
 #' @return TRUE when the reconstruction is non-identified by this mechanism
@@ -490,11 +604,10 @@
 #' Warning text for a non-identified metaumbrella reconstruction
 #'
 #' Kept in one place because the two branches differ only in which margin pair ties
-#' and which columns would break the tie. No hit-rate percentage is quoted: the two
-#' parameterisations were measured at different rates and both figures are properties
-#' of a draw distribution, not of the method. What is true of every measurement, and
-#' is what the message says, is that the tie is EXACT -- so the search has nothing to
-#' decide on.
+#' and which columns would break the tie. The message quotes no hit-rate percentage,
+#' because the two parameterisations were measured at different rates and both figures
+#' describe a draw distribution rather than the method. It says instead that the tie is
+#' exact, which held in every measurement and leaves the search nothing to decide on.
 #'
 #' @noRd
 .msg_nonidentified_2x2 <- function(method, m1_name, m2_name, m_value, fix) {
@@ -513,10 +626,10 @@
                                             n_exp = NA, n_nexp = NA,
                                             baseline_risk = NA) {
   # ---- Rung 1: the opposite margin pair closes all four margins -> exact solve.
-  # Rung 2 (baseline_risk) is deliberately NOT applied here: unlike the _n_exp mirror
-  # it is not fully identifying on this parameterisation (measured 0.9965, because
+  # Rung 2 (baseline_risk) is not applied here. Unlike the _n_exp mirror, it does not
+  # fully identify the table on this parameterisation (hit rate 0.9965, because
   # c/(c+d) == b/(a+b) admits b + c == n_cases as a second solution), whereas n_exp is
-  # exact (1.000 at every exposure prevalence 0.1-0.9).
+  # exact (1.000 at every exposure prevalence from 0.1 to 0.9).
   if (!is.na(n_exp) && !is.na(n_cases)) {
     hit <- .solve_2x2_from_or(or, n_exp,
                               if (!is.na(n_nexp)) n_nexp else n_cases + n_controls - n_exp,
@@ -622,17 +735,17 @@
     if (!is.null(hit)) return(structure(hit, solved = TRUE))
   }
 
-  # ---- Otherwise: fall through to the enumeration below, UNCHANGED. No prior is
-  # applied. Where neither rung fires the row is genuinely non-identified, and every
-  # candidate rule tested was a bet on outcome coding: "assume events are the minority"
-  # is 3.65x worse than the status quo on common outcomes, wrong on 74% of those rows,
-  # and produced +44% pooled-RR bias end-to-end on a common-outcome review. Recoding an
-  # outcome from "response" to "non-response" flips its answer on identical data, so
-  # there is no principled default. Output here is bit-identical to pre-cascade.
+  # ---- Otherwise: fall through to the enumeration below, with no prior applied.
+  # Where neither rung fires the row is genuinely non-identified, and every candidate
+  # rule tested amounted to a bet on outcome coding. "Assume events are the minority",
+  # for instance, is 3.65x worse than doing nothing on common outcomes, wrong on 74% of
+  # those rows, and produced a +44% pooled-RR bias end-to-end on a common-outcome
+  # review. Recoding an outcome from "response" to "non-response" flips its answer on
+  # identical data, so there is no principled default.
   #
-  # What DID change (item 1.8): the caller now refuses to publish a risk ratio built
-  # on this path when the two supplied margins are equal, because there the search is
-  # not merely imprecise but exactly tied. See .rotation_tied.
+  # The caller does refuse to publish a risk ratio built on this path when the two
+  # supplied margins are equal, because the search is then not merely imprecise but
+  # exactly tied. See .rotation_tied.
   res <- data.frame(n_cases_exp = NA, n_cases_nexp = NA, n_controls_exp = NA, n_controls_nexp = NA)
   attr(res, "solved") <- FALSE
 
@@ -703,6 +816,14 @@
     controls_nexp <- n_controls - controls_exp
     v_or_mean <- mean(1 / cases_exp + 1 / cases_nexp + 1 / controls_exp + 1 / controls_nexp, na.rm = TRUE)
 
+    # An empty enumeration (every candidate NA'd by the feasibility filter above)
+    # makes mean(numeric(0)) return NaN, not NA. .positive_or_na() cannot catch
+    # that downstream (is.na(NaN) is TRUE, so its x <= 0 branch is skipped), so
+    # the NaN would reach logor_se / logor_ci_lo / logor_ci_up beside a finite
+    # logor. Decline the variance here instead; the OR itself is the user's own
+    # input and is kept with se = NA (the bare-omega convention).
+    if (!is.finite(v_or_mean)) return(res)
+
     res$value <- or
     res$var <- v_or_mean
     res$se <- sqrt(v_or_mean)
@@ -718,21 +839,21 @@
   if (rr_to_or == "grant") {
     # Grant's transform maps a risk ratio to an odds ratio as
     #   OR = RR (1 - BR) / (1 - RR * BR)
-    # which is only defined while RR * BR < 1. It is applied to THREE values -- the
-    # point estimate and both interval bounds -- and the upper bound is the largest of
-    # them, so it leaves the domain first. The failure was therefore asymmetric and
-    # silent: a row could return a perfectly plausible log OR beside a NaN standard
-    # error and a half-open interval, with every log() wrapped in suppressWarnings().
-    # A finite estimate with no usable variance is worse than no estimate at all,
-    # because it looks poolable and is not.
+    # which is defined only while RR * BR < 1. It is applied to three values, the point
+    # estimate and both interval bounds, and the upper bound is the largest of them, so
+    # it leaves the domain first. The failure is therefore asymmetric and quiet: a row
+    # can return a perfectly plausible log OR beside a NaN standard error and a
+    # half-open interval, because every log() is wrapped in suppressWarnings(). A finite
+    # estimate with no usable variance is worse than no estimate at all, since it looks
+    # poolable and is not.
     #
-    # The caller (es_from_stand_RR.R:153) only routes rows here when rr, baseline_risk
-    # and both CI bounds are non-NA, so a non-finite result is always a domain
-    # violation and never a missing input. Return the whole quartet as NA and say why.
+    # The caller (es_from_stand_RR.R:153) routes rows here only when rr, baseline_risk
+    # and both CI bounds are non-NA, so a non-finite result is always a domain violation
+    # and never a missing input. Return the whole quartet as NA and say why.
     #
-    # NB the mirror direction is safe and is deliberately left alone: .or_to_rr()'s
-    # grant branch computes or / (1 - BR + BR*or), whose denominator is positive for
-    # every or > 0 and BR in (0, 1), so it has no domain boundary to cross.
+    # The mirror direction needs no such guard: the grant branch of .or_to_rr() computes
+    # or / (1 - BR + BR*or), whose denominator is positive for every or > 0 and every BR
+    # in (0, 1), so it has no domain boundary to cross.
     .grant_or <- function(x) {
       suppressWarnings(log(x * (1 - baseline_risk) / (1 - x * baseline_risk)))
     }
@@ -861,9 +982,8 @@
 
     return(res)
   } else {
-    # The previous message advertised 'grant_2x2' and 'grant_CI'. Neither is accepted
-    # anywhere -- the branch above is plain 'grant' -- so it named two values that could
-    # not be selected while omitting two that could ('grant', 'dipietrantonj').
+    # Keep this list in step with the branches above: the accepted values are 'grant'
+    # and 'dipietrantonj'. There is no 'grant_2x2' or 'grant_CI'.
     stop(paste0("'", rr_to_or, "' not in tolerated values for the 'rr_to_or' argument. ",
                 "Possible inputs are: 'metaumbrella', 'transpose', 'grant' or ",
                 "'dipietrantonj'."), call. = FALSE)
@@ -910,13 +1030,14 @@
     n_cases_exp_sim <- append(n_cases_exp_sim1, n_cases_exp_sim2)
 
     some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
-    # var(log RR) = 1/a - 1/n1 + 1/c - 1/n2: the two ARM-TOTAL terms are SUBTRACTED
-    # (delta method for log of a binomial proportion; identical to es_from_2x2()'s
-    # se_rr and the Cochrane Handbook). This is NOT the log-OR pattern 1/a+1/b+1/c+1/d
-    # (all added). Matching the candidate table to logrr_se^2 with the arm-total terms
-    # ADDED selected the wrong table along the RR-constrained family and biased the
-    # reconstructed OR (round-trip recovery of a known OR failed). Mapping of the sweep
-    # variables: a = n_cases - n_cases_nexp_sim, c = n_cases_nexp_sim,
+    # var(log RR) = 1/a - 1/n1 + 1/c - 1/n2, where the two arm-total terms are
+    # subtracted (delta method for the log of a binomial proportion; the same
+    # expression as es_from_2x2()'s se_rr and the Cochrane Handbook). Note that this
+    # differs from the log-OR pattern 1/a+1/b+1/c+1/d, in which all four terms are
+    # added. Adding the arm-total terms here instead selects the wrong table along the
+    # RR-constrained family and biases the reconstructed OR, so a round trip through a
+    # known OR fails to recover it. The sweep variables map as
+    # a = n_cases - n_cases_nexp_sim, c = n_cases_nexp_sim,
     # n1 (exposed total) = n_cases + n_controls - (n_cases_nexp_sim + n_controls_nexp_sim),
     # n2 (non-exposed total) = n_cases_nexp_sim + n_controls_nexp_sim.
     var_sim <- ifelse(some_zero,
@@ -954,24 +1075,19 @@
 .contingency_to_cor <- function(n_cases_exp, n_controls_exp, n_cases_nexp, n_controls_nexp,
                                table_2x2_to_cor, reverse_2x2) {
 
-  # NB there is deliberately no "lipsey" (phi) branch. A commented-out one lived here
-  # until it was removed: an if-branch containing nothing but comments and, because it
-  # had no return(), silently falling through to NULL had anyone re-enabled it.
+  # There is no "lipsey" (phi) branch here, and its absence is intentional.
   #
-  # It is not coming back, and the reason is not that the formula was wrong (the version
-  # kept here had already been corrected -- its denominator originally used the diagonal
-  # (n_controls_exp + n_cases_nexp) where phi needs the controls MARGIN
-  # (n_controls_exp + n_controls_nexp)). It is that phi is not a poolable estimand:
-  # its attainable range is bounded by the margins, so studies of the same association
-  # with different event rates report different phi values, and pooling them manufactures
-  # heterogeneity that is pure margin artefact (I^2 rising from 14% to 88% as the primary
-  # studies get LARGER, because tau^2 is pinned by the margins while the within-study
-  # variance falls as 1/n). And the choice could not be offered responsibly even if it
-  # were wanted: a 2x2 table with fixed n has three free parameters and the
-  # dichotomised-bivariate-normal family also has three, so the latent-normal model is
-  # saturated and no goodness-of-fit test can tell a user which estimand applies to their
-  # data. See ?convert_df. Genuinely dichotomous variables should use a binary measure
-  # (logor / rr / rd), not a correlation.
+  # Phi is not a poolable estimand. Its attainable range is bounded by the margins, so
+  # studies of the same association with different event rates report different phi
+  # values, and pooling them manufactures heterogeneity that is pure margin artefact:
+  # I^2 rises from 14% to 88% as the primary studies get larger, because tau^2 is pinned
+  # by the margins while the within-study variance falls as 1/n.
+  #
+  # Nor could the choice be offered responsibly. A 2x2 table with fixed n has three free
+  # parameters, and the dichotomised-bivariate-normal family also has three, so the
+  # latent-normal model is saturated and no goodness-of-fit test can tell a user which
+  # estimand applies to their data. See ?convert_df. Genuinely dichotomous variables
+  # should use a binary measure (logor / rr / rd) rather than a correlation.
   if (table_2x2_to_cor == "tetrachoric") {
     res <- .tet_r(as.numeric(n_cases_exp),
                   as.numeric(n_controls_exp),
@@ -980,14 +1096,14 @@
     res[res == "calculation failure"] <- NA
 
     # res[] <- lapply(res, function(x) as.numeric(as.character(x)))
-    # On reverse: negate AND swap each CI (new_lo = -old_up, new_up = -old_lo). Negating
-    # the bounds in place left lo > up -- a wrong-signed, inverted interval that did not
-    # bracket the negated point estimate. This is the same defect that was fixed on the
-    # OR path (see es_from_stand_OR.R, the .or_to_cor result block). The z interval is a
-    # symmetric Wald interval (z +- z*sqrt(vz)) and the r interval is its tanh
-    # back-transform; both are therefore odd-symmetric about 0, since tanh(-x) = -tanh(x).
-    # So the reflected interval is exactly the interval recomputed around the negated
-    # estimate, in both cases. Old bounds are saved first, since res is overwritten.
+    # On reverse, each CI must be negated and swapped (new_lo = -old_up,
+    # new_up = -old_lo). Negating the bounds in place leaves lo > up, an inverted
+    # interval that does not bracket the negated point estimate. The OR path handles the
+    # same case in es_from_stand_OR.R, in the .or_to_cor result block. The z interval is
+    # a symmetric Wald interval (z +- z*sqrt(vz)) and the r interval is its tanh
+    # back-transform, so both are odd-symmetric about 0 because tanh(-x) = -tanh(x). The
+    # reflected interval is therefore exactly the interval one would recompute around
+    # the negated estimate. Old bounds are saved first, since res is overwritten.
     r_lo_raw <- res[3]; r_up_raw <- res[4]
     z_lo_raw <- res[7]; z_up_raw <- res[8]
     res[1] <- ifelse(reverse_2x2, -res[1], res[1])
@@ -1030,11 +1146,12 @@
 
 .tet_r <- function(n_cases_exp, n_controls_exp, n_cases_nexp, n_controls_nexp) {
   # metafor::escalc(measure = "RTET") solves the tetrachoric correlation by numerical ML
-  # over a bivariate normal CDF, which needs 'mvtnorm'. mvtnorm is a Suggests of metafor,
-  # NOT an Imports, so installing metafor does not bring it in and a perfectly ordinary
-  # installation can lack it. Without this guard escalc() raised an error, the tryCatch
-  # below swallowed it, and every 2x2-derived correlation and Fisher's z came back NA
-  # with nothing said -- indistinguishable from data that genuinely cannot support them.
+  # over a bivariate normal CDF, which needs 'mvtnorm'. mvtnorm is a Suggests of metafor
+  # rather than an Imports, so installing metafor does not bring it in and a perfectly
+  # ordinary installation can lack it. Without this guard escalc() raises an error, the
+  # tryCatch below swallows it, and every 2x2-derived correlation and Fisher's z comes
+  # back NA with nothing said, which looks exactly like data that genuinely cannot
+  # support them.
   if (!.has_mvtnorm()) {
     .notify_once(
       "mvtnorm_missing",
@@ -1060,16 +1177,41 @@
 
       z_lo <- z - qnorm(.975) * sqrt(vz)
       z_up <- z + qnorm(.975) * sqrt(vz)
-      # The r-scale interval is the BACK-TRANSFORMED z interval, not a symmetric Wald
+      # The r-scale interval is the back-transformed z interval, not a symmetric Wald
       # interval on r. A symmetric interval r +- z*sqrt(vr) is unbounded and routinely
-      # escapes the parameter space: measured over a realistic grid it left [-1, 1] on
-      # 45.8% of tables (and flag B1b -- the [INFO] disclosure that exists only because
-      # of this -- fired on 20.6%, rising to 67% at n = 50 with |r| >= 0.6). Since vz is
-      # already the delta-method transform of vr (line above), tanh() of the z bounds is
-      # the same interval expressed on a scale where it cannot overshoot: escape falls to
-      # 0.0% with coverage of the true correlation unchanged (96.1% -> 96.2%).
+      # escapes the parameter space: over a realistic grid it left [-1, 1] on 45.8% of
+      # tables, and flag B1b (the [INFO] disclosure that exists for this reason) fired
+      # on 20.6%, rising to 67% at n = 50 with |r| >= 0.6. Since vz is already the
+      # delta-method transform of vr on the line above, tanh() of the z bounds gives the
+      # same interval on a scale where it cannot overshoot. Escape falls to 0.0%, and
+      # coverage of the true correlation is unchanged (96.1% -> 96.2%).
       r_lo <- tanh(z_lo)
       r_up <- tanh(z_up)
+
+      # BOUNDARY. metafor's ML returns the boundary estimate r = +-1 whenever a cell is
+      # empty, together with an enormous vi -- that pair is how escalc() says the
+      # correlation is not identified by this table, and both halves of it are honest
+      # and must be kept. What is not honest is everything the transform produces from
+      # it: z = atanh(+-1) = +-Inf, vz = vr / (1 - r^2)^2 = Inf, one CI bound is then
+      # Inf - Inf = NaN, and tanh() carries the NaN onto the r scale. Measured on the
+      # raw table (0, 20, 10, 10): r = -1, vr = 22209.7 (both wanted), z = -Inf,
+      # vz = Inf, z_up = NaN, r_up = NaN. Those four are exported columns, and an Inf
+      # standard error is not a large standard error -- it is a value no downstream
+      # check, weight or plot can consume.
+      #
+      # So the point estimate and its variance pass through and the transformed
+      # quantities are declined. Keyed on non-finite vz rather than on |r| >= 1 alone,
+      # so a non-finite vi from any other cause is caught by the same line.
+      degenerate <- !is.finite(r) | abs(r) >= 1 | !is.finite(vr) | !is.finite(vz)
+      z[degenerate] <- NA_real_
+      vz[degenerate] <- NA_real_
+      z_lo[degenerate] <- NA_real_
+      z_up[degenerate] <- NA_real_
+      r_lo[degenerate] <- NA_real_
+      r_up[degenerate] <- NA_real_
+      # A non-finite r or vr is not an estimate at all, unlike the boundary pair above.
+      r[!is.finite(r) | !is.finite(vr)] <- NA_real_
+      vr[!is.finite(vr)] <- NA_real_
 
       dat <- cbind(r, vr, r_lo, r_up, z, vz, z_lo, z_up)
       return(dat)
@@ -1096,7 +1238,36 @@
                        or_to_cor) {
   if (or_to_cor %in% c("bonett", "pearson")) {
     if (or_to_cor == "bonett") {
+      # small_margin_prop is Bonett and Price's p_min, the SMALLEST of the four marginal
+      # proportions of the underlying 2x2 table, so its domain is (0, 0.5]. Their
+      # coefficient c is guaranteed to land in (0.275, 0.5] only on that domain; outside
+      # it the guarantee is lost and, once c goes negative, r = cos(pi / (1 + or^c))
+      # reverses its monotonicity in or while r_se picks up the sign of c. A percentage
+      # entered instead of a proportion (30 for 0.30) gives c = -434.6, r = -1 for an
+      # odds ratio of 3, and r_se = -1.4e-221 -- a NEGATIVE standard error, i.e. an
+      # inverse-variance weight of ~5e442 that dominates any pool it enters. Entering
+      # the LARGEST margin (0.9) instead of the smallest is the quiet case: r is ~12%
+      # off with nothing at all to see.
+      #
+      # .bounded_columns() in R/internal_flags.R carries the same (0, 0.5] domain, so a
+      # convert_df() run names the cell in a Tier-1 flag and, under correct_inputs =
+      # TRUE, blanks it. This guard is the route-level half of the two-layer policy
+      # written out at the top of R/internal_guards.R: es_from_or_se()/_ci()/_pval() are
+      # exported, documented and called directly by metaumbrella, none of which passes
+      # through the column-keyed Tier-1 validation, and under correct_inputs = FALSE the
+      # value is preserved on purpose. The flag reports; the guard contains.
+      small_margin_prop <- ifelse(
+        !is.na(small_margin_prop) & (small_margin_prop <= 0 | small_margin_prop > 0.5),
+        NA_real_, small_margin_prop
+      )
       c <- (1 - abs(n_exp/n_sample - n_cases/n_sample) / 5 - (1 / 2 - small_margin_prop)^2) / 2
+      # Belt and braces. With p_min inside its domain c cannot exceed 0.5, and it can
+      # only reach 0 through margins so incoherent that n_exp/n_sample and
+      # n_cases/n_sample differ by more than 3.75 -- which no bound on p_min can rule
+      # out, since those two proportions are read from the margins directly. A
+      # non-positive c is neutralised rather than clamped: a clamped c would return a
+      # number that is not the Bonett estimate of anything.
+      c <- .positive_or_na(c)
     } else {
       c <- 1 / 2
     }
@@ -1142,31 +1313,44 @@
   #
   # Both branches below convert d -> r through a deterministic map, so Var(r) must
   # inherit Var(d). The viechtbauer branch, however, uses Soper's (1914) large-sample
-  # closed form for the biserial correlation, which is a function of n, p and r ONLY.
-  # That closed form is not an independent estimator: to leading order it IS the delta
-  # propagation of the CRUDE d variance (they agree to ~0.3% at n = 400, and exactly up
-  # to (n-1)/(n-2) at r = 0). So using it verbatim silently throws away whatever
-  # precision the d actually has -- the Cooper eq. 12.26 (1 - R^2) shrink on an ANCOVA
-  # row, the 2(1 - r_pre_post) factor on a pre-post row, the control-group df on a
-  # Glass row, or a user-reported standard error. Rescaling by vd / vd_crude restores
-  # it while leaving the crude case BIT-IDENTICAL (the ratio is exactly 1, since
-  # vd_crude below is the same expression .es_from_d() uses), so agreement with
-  # metafor's measure = "RBIS" is preserved for the rows it applies to.
+  # closed form for the biserial correlation, which depends only on n, p and r. That
+  # closed form is not an independent estimator: to leading order it is the delta
+  # propagation of the crude d variance, agreeing with it to about 0.3% at n = 400 and
+  # exactly up to (n-1)/(n-2) at r = 0. Using it verbatim would therefore discard
+  # whatever precision the d actually carries, whether that is the Cooper eq. 12.26
+  # (1 - R^2) shrink on an ANCOVA row, the 2(1 - r_pre_post) factor on a pre-post row,
+  # the control-group df on a Glass row, or a user-reported standard error. Rescaling by
+  # vd / vd_crude restores it and leaves the crude case untouched, since the ratio is
+  # then exactly 1 (vd_crude below is the same expression .es_from_d() uses). That
+  # preserves agreement with metafor's measure = "RBIS" on the rows it applies to.
+  #
+  # SCOPE: that "exactly 1" holds only under smd_var = "borenstein" (LS2), the default.
+  # vd_crude below is hard-coded to the LS2 form, whereas .es_from_d() builds its
+  # DEFAULT d_se under whichever convention is in force, so under the opt-in
+  # smd_var = "hedges_olkin" (alias "viechtbauer", metafor's LS) an ordinary crude row
+  # arrives with vd = (leading + (d*J)^2/(2N))/J^2 and gets prec_ratio = 1.0257 at
+  # n = 30/30, d = 0.5 -- inflating both r_se^2 and z_se^2 by a pure estimator-convention
+  # factor (11.6% at N = 16, 5.5% at N = 30, 0.74% at N = 200) and taking z_se^2 off the
+  # stabilised 1/(N - 1). The repair belongs in .es_from_d(), which is the only place
+  # that knows whether d_se was DEFAULTED (in which case the LS2 default is the right
+  # reference) or SUPPLIED by the user (in which case vd must pass through untouched, as
+  # it does today); normalising here would make user-supplied-SE rows depend on smd_var
+  # for the first time. See R/internal_es_from_d.R and the note on the NEWS/cran-comments
+  # "bit-identical to metafor RBIS" sentence, which is likewise a borenstein-only claim.
   vd_crude <- (n_exp + n_nexp) / (n_exp * n_nexp) + d^2 / (2 * (n_exp + n_nexp))
   prec_ratio <- ifelse(!is.na(vd) & is.finite(vd) & !is.na(vd_crude) & vd_crude > 0,
                        vd / vd_crude, 1)
 
   if (smd_to_cor == "viechtbauer") {
     # h encodes the finite-sample point-biserial identity r_pb = t / sqrt(t^2 + df),
-    # which holds for the MARGINAL two-group design at df = n_exp + n_nexp - 2. The d
-    # arriving here is always on the marginal (unadjusted) SD scale -- that is the
-    # whole point of Cooper's eq. 12.23/12.24 convention, which keeps ANCOVA studies
-    # poolable with unadjusted ones. Subtracting n_cov_ancova used to shrink h and
-    # inflate r into a quantity that is NEITHER the marginal r_pb NOR the partial one
-    # (the partial would additionally require h * (1 - cov_outcome_r^2)), and made the
-    # reported correlation depend on how many covariates the source study happened to
-    # adjust for. n_cov_ancova now enters only the confidence-interval degrees of
-    # freedom, where it belongs.
+    # which holds for the marginal two-group design at df = n_exp + n_nexp - 2. The d
+    # arriving here is always on the marginal (unadjusted) SD scale, which is the point
+    # of Cooper's eq. 12.23/12.24 convention: it keeps ANCOVA studies poolable with
+    # unadjusted ones. Subtracting n_cov_ancova from df would shrink h and inflate r
+    # into a quantity that is neither the marginal r_pb nor the partial one (the partial
+    # would also require h * (1 - cov_outcome_r^2)), and would make the reported
+    # correlation depend on how many covariates the source study happened to adjust for.
+    # n_cov_ancova therefore enters only the confidence-interval degrees of freedom.
     df <- n_exp + n_nexp - 2
     h <- df / n_exp + df / n_nexp
     p <- n_exp / (n_exp + n_nexp)
@@ -1190,9 +1374,9 @@
     vz_viechtbauer <- 1 / (n_exp + n_nexp - 1)
 
     # Carry the actual precision of d through to r and z (see the note at the top of
-    # this function). Both are scaled by the SAME factor, so the variance-stabilising
-    # relation between them -- z is built so that (dz/dr)^2 * vr = 1/(n-1) under the
-    # standard design -- is preserved exactly, whatever the design.
+    # this function). Both are scaled by the same factor, so the variance-stabilising
+    # relation between them is preserved exactly whatever the design: z is built so that
+    # (dz/dr)^2 * vr = 1/(n-1) under the standard design.
     vr_viechtbauer <- vr_viechtbauer * prec_ratio
     vz_viechtbauer <- vz_viechtbauer * prec_ratio
     # ========= 95% CI ===== #
@@ -1202,6 +1386,52 @@
     z_up_viechtbauer <- z_viechtbauer + qnorm(.975) * sqrt(vz_viechtbauer)
     r_lo_viechtbauer <- (1 / a_viechtbauer) * ((exp(2 * z_lo_viechtbauer / a_viechtbauer) - 1) / (exp(2 * z_lo_viechtbauer / a_viechtbauer) + 1))
     r_up_viechtbauer <- (1 / a_viechtbauer) * ((exp(2 * z_up_viechtbauer / a_viechtbauer) - 1) / (exp(2 * z_up_viechtbauer / a_viechtbauer) + 1))
+
+    # ---- Out-of-range biserial r: keep the point estimate, decline what is derived.
+    #
+    # sqrt(p*q)/f is 1.2533 at p = 0.5, so r_viechtbauer is NOT bounded by 1: any
+    # point-biserial above 0.798 pushes it out of the parameter space. r_trunc exists so
+    # that Soper's variance and the variance-stabilising z stay computable, but once it
+    # binds, z collapses onto (a/2)*log((1+a)/(1-a)) -- a function of the arm-size split
+    # ALONE, carrying no information about the data, and it arrives with a plausible SE
+    # and a plausible CI. On the r scale Category B catches this ("[INVALID] r outside
+    # [-1, 1]"); z is unbounded, so no bound check can see it there, which left the
+    # POOLABLE metric as the one where the error was invisible. On the shipped df.short
+    # that is Lopez_2019 (route cohen_d) and Yu_2018 (route med_min_max) -- two
+    # unrelated studies from two different routes, both reported as the constant.
+    #
+    # Same policy as es_disattenuate() for the same situation (R/es_disattenuate.R:147):
+    # keep the point estimate and its first-order SE for inspection, NA every derived
+    # quantity, since a clamped value is an artifact identical whatever the input.
+    saturated <- !is.na(r_viechtbauer) & abs(r_viechtbauer) > 1
+
+    # Say so, once per session. Declining is right for this estimand -- a biserial r
+    # outside [-1, 1] means the latent-normal model behind it does not fit -- but a row
+    # that leaves a measure = "z" pool with no explanation is the part that could bias a
+    # synthesis: the threshold is |d| ~ 2.6 at balanced arms (2.4 at 20/80), so what
+    # drops out is always the upper tail, and dropping the upper tail pulls the pooled
+    # estimate down. The remedy loses nothing, which is why it is named here rather than
+    # left to the help page: smd_to_cor = "lipsey_cooper" uses d/sqrt(d^2 + a), which is
+    # bounded by construction, so every study stays in and the affected rows come back
+    # as distinct values rather than the shared constant the old clamp produced.
+    if (any(saturated)) {
+      .notify_once(
+        "viechtbauer_biserial_out_of_range",
+        "The biserial correlation of ", sum(saturated), " row(s) falls outside [-1, 1] ",
+        "under smd_to_cor = \"viechtbauer\" (this happens above |d| of roughly 2.6). ",
+        "Their Fisher's z is returned as NA rather than clamped, because a clamped value ",
+        "is a function of the group-size split alone and is identical for any two such ",
+        "studies. The correlation itself is kept and flagged. To keep these studies in a ",
+        "z analysis, use smd_to_cor = \"lipsey_cooper\", whose correlation is bounded by ",
+        "construction, so no row is dropped.")
+    }
+
+    r_lo_viechtbauer <- ifelse(saturated, NA_real_, r_lo_viechtbauer)
+    r_up_viechtbauer <- ifelse(saturated, NA_real_, r_up_viechtbauer)
+    z_viechtbauer    <- ifelse(saturated, NA_real_, z_viechtbauer)
+    vz_viechtbauer   <- ifelse(saturated, NA_real_, vz_viechtbauer)
+    z_lo_viechtbauer <- ifelse(saturated, NA_real_, z_lo_viechtbauer)
+    z_up_viechtbauer <- ifelse(saturated, NA_real_, z_up_viechtbauer)
 
     res <- cbind(
       r_viechtbauer, vr_viechtbauer, r_lo_viechtbauer, r_up_viechtbauer,
@@ -1215,13 +1445,13 @@
     r_lipsey <- d / sqrt(d^2 + 1 / (p * (1 - p)))
     vr_lipsey <- a^2 * vd / ((d^2 + a)^3)
     z_lipsey <- atanh(r_lipsey)
-    # delta method for z = atanh(r), r = d / sqrt(d^2 + a) with a = 1/(p*(1-p)):
-    # dz/dd = 1/sqrt(d^2 + a), so Var(z) = vd / (d^2 + a). The additive denominator
-    # term is the SQUARED point estimate d^2, NOT the sampling variance vd. This makes
-    # vz_lipsey the EXACT Fisher transform of vr_lipsey above (vz = vr/(1-r^2)^2).
-    # NB: esc::convert_d2r() returns vd/(vd + a) here, which is NOT Fisher-consistent
-    # with its own r variance; metaConvert intentionally uses the consistent value, so
-    # the lipsey_cooper z-SE differs from esc for large |d| (they agree as d -> 0).
+    # Delta method for z = atanh(r), r = d / sqrt(d^2 + a) with a = 1/(p*(1-p)):
+    # dz/dd = 1/sqrt(d^2 + a), so Var(z) = vd / (d^2 + a). The additive denominator term
+    # is the squared point estimate d^2, not the sampling variance vd. That makes
+    # vz_lipsey the exact Fisher transform of vr_lipsey above (vz = vr/(1-r^2)^2).
+    # esc::convert_d2r() returns vd/(vd + a) here instead, which is not Fisher-consistent
+    # with its own r variance. metaConvert uses the consistent value, so the
+    # lipsey_cooper z-SE differs from esc for large |d| and agrees with it as d -> 0.
     vz_lipsey <- vd / (d^2 + 1 / (p * (1 - p)))
     # Same error degrees of freedom as the d/g interval built for this row in
     # .es_from_d() (n_cov_ancova is 0 on every crude route, so this is a no-op there).
@@ -1275,7 +1505,7 @@
     )
     res[res == "calculation failure"] <- NA
 
-    # Negate AND swap each CI on reverse -- see the identical block in
+    # Negate and swap each CI on reverse; see the matching block in
     # .contingency_to_cor() for why negating in place is wrong.
     r_lo_raw <- res[3]; r_up_raw <- res[4]
     z_lo_raw <- res[7]; z_up_raw <- res[8]
@@ -1330,7 +1560,7 @@
     )
     res[res == "calculation failure"] <- NA
 
-    # Negate AND swap each CI on reverse -- see the identical block in
+    # Negate and swap each CI on reverse; see the matching block in
     # .contingency_to_cor() for why negating in place is wrong.
     r_lo_raw <- res[3]; r_up_raw <- res[4]
     z_lo_raw <- res[7]; z_up_raw <- res[8]
@@ -1352,12 +1582,12 @@
 #' Guard a standardizing SD before it is used as a denominator
 #'
 #' Returns NA for any standardizer that is zero, negative or non-finite, so the
-#' resulting SMD is NA rather than a silent Inf/NaN. Scoped deliberately to the
-#' DENOMINATOR: the mean-change wrappers legitimately pass mean_pre_sd = 0 (the
-#' pre slot is zeroed by construction), so guarding raw inputs would break them,
-#' whereas a zero *standardizer* is always degenerate. Reachable when a study
-#' reports SD = 0, or when r_pre_post = 1 with equal pre/post SDs makes the
-#' change SD collapse to 0.
+#' resulting SMD is NA rather than an unnoticed Inf or NaN. The guard applies to
+#' the denominator only: the mean-change wrappers legitimately pass
+#' mean_pre_sd = 0, because the pre slot is zeroed by construction, so guarding
+#' raw inputs would break them, whereas a zero standardizer is always degenerate.
+#' This is reachable when a study reports SD = 0, or when r_pre_post = 1 with
+#' equal pre/post SDs makes the change SD collapse to 0.
 #'
 #' @noRd
 .guard_standardizer <- function(sd_value) {
@@ -1375,26 +1605,45 @@
   ifelse(is.finite(r) & abs(r) < 1, r, NA_real_)
 }
 
+#' The pre-post cross term 2*r*SD_pre*SD_post, made zero-aware
+#'
+#' Var(post - pre) = SD_pre^2 + SD_post^2 - 2*r*SD_pre*SD_post. Several callers zero
+#' one slot by construction: the mean-change wrappers pass mean_pre_sd = 0 (the change
+#' SD arrives through mean_post_sd), and .paired_t_to_smd() passes mean_pre_sd = 0 with
+#' mean_post_sd = 1. The cross term is then mathematically zero whatever r is -- with
+#' Var(pre) = 0 the change SD is exactly SD_post -- but in R `0 * NA` is NA, so an r
+#' that .guard_r_pre_post() has NA'd (|r| >= 1, e.g. a correlation typed as a
+#' percentage) used to poison the whole radicand and null a d_z that carries no r at
+#' all. Contribute an exact 0 on those rows instead.
+#'
+#' Only the cross term is neutralised: morris_drm still returns NA through its
+#' sqrt(2(1-r)) factor and morris_dav through its (1 + r^2) effective df, which is
+#' correct -- those estimands do use r.
+#'
+#' @noRd
+.pre_post_cross <- function(r, sd_pre, sd_post) {
+  ifelse(!is.na(sd_pre) & !is.na(sd_post) & (sd_pre == 0 | sd_post == 0),
+         0, 2 * r * sd_pre * sd_post)
+}
 
-#' One paired-t arm, through the single-group kernel rather than beside it
+
+#' Convert a paired t statistic into a within-group SMD
 #'
-#' The paired-t and paired-F routes used to reimplement the morris_dz and morris_drm
-#' arithmetic inline, as a second copy of what .single_group_pre_post_to_smd already
-#' does. The two agreed -- measured at 0 for morris_dz and 1.1e-16 for morris_drm -- but
-#' only because both were maintained in step, which is a promise rather than a
-#' mechanism. This routes them through the one implementation.
+#' The paired-t and paired-F routes delegate to .single_group_pre_post_to_smd() rather
+#' than keeping their own copy of the morris_dz and morris_drm arithmetic, so that all
+#' pre-post routes share one implementation.
 #'
-#' A paired t carries no pre/post SDs, so the kernel is handed an EQUIVALENT synthetic
-#' problem: a change score of t/sqrt(n) on a change SD of 1, with the pre slot zeroed
-#' exactly as the mean-change wrappers already do. The kernel's sd_diff then reduces to
-#' 1, giving d = t/sqrt(n) for morris_dz and d = t*sqrt(2(1-r)/n) for morris_drm -- the
-#' two expressions the inline copy wrote by hand. The variances follow from the same
-#' branch, so nothing about the estimator is being restated here.
+#' A paired t carries no pre-test or post-test SD, so the kernel is given an equivalent
+#' problem instead: a change score of t/sqrt(n) with a change SD of 1, and the pre-test
+#' slot set to zero exactly as the mean-change wrappers do. The kernel's sd_diff then
+#' reduces to 1, which yields d = t/sqrt(n) under morris_dz and d = t*sqrt(2(1-r)/n)
+#' under morris_drm. The variances come from the same branch. That reduction holds for
+#' ANY r, including an out-of-range one that .guard_r_pre_post() has NA'd: the kernel's
+#' cross term is zero-aware (.pre_post_cross), so the r-free morris_dz row stays finite.
 #'
-#' Called per row via mapply because the kernel dispatches on a SCALAR
-#' pre_post_to_smd, while these routes accept a vector of methods (one per row) --
-#' a capability that a straight vectorised call would silently drop into whichever
-#' branch the first element selected.
+#' The kernel is called row by row through mapply because it dispatches on a single
+#' pre_post_to_smd value, whereas these routes accept one method per row. A plain
+#' vectorised call would apply the first row's method to every row.
 #'
 #' @param paired_t vector of paired t values
 #' @param n vector of per-arm sample sizes
@@ -1407,21 +1656,27 @@
   rec <- function(x) rep_len(x, k)
   nn <- rec(n)
 
-  # An arm with n < 2 has no estimable variance and the kernel returns NA for it -- but
-  # it reaches that answer through qt(.975, n - 1) and .d_j(n - 1), which emit "NaNs
-  # produced" on the way. The inline version this replaced was silent there, because it
-  # NA'd such arms before computing anything. Skipping them keeps the OUTPUT identical
-  # and the OUTPUT STREAM identical too; suppressWarnings() around the kernel would hide
-  # genuine warnings from the other rows as well.
-  # .d_j() is where the "Hedges' J correction is undefined for df <= 1" warning comes
-  # from, and this route emitted it before delegation. It is informative -- it tells the
-  # caller g will be NA on those rows -- so it must survive. Skipping the n < 2 rows
-  # below means the kernel never reaches .d_j() for them, so it is called here on
-  # exactly the df the inline version passed (n - 1, per arm). Pure apart from the
-  # warning, so nothing else changes.
+  # An arm with n < 2 has no estimable variance, and the kernel returns NA for it, but
+  # it gets there through qt(.975, n - 1) and .d_j(n - 1), which emit "NaNs produced"
+  # along the way. Such arms are skipped below, so the results are unchanged and the
+  # warning stream stays clean. Wrapping the kernel in suppressWarnings() would instead
+  # hide genuine warnings from the other rows.
+  #
+  # .d_j() is the source of the "Hedges' J correction is undefined for df <= 1"
+  # warning, which is worth keeping: it tells the caller that g will be NA on those
+  # rows. Because the skip means the kernel never reaches .d_j() for those rows, it is
+  # called explicitly here on the per-arm df (n - 1). Apart from the warning the call
+  # has no effect.
   invisible(.d_j(nn - 1))
 
-  ok <- is.finite(nn) & nn >= 2
+  # A row with no paired statistic yields all-NA from every branch of the kernel, so
+  # sending it through the per-row mapply buys nothing. convert_df() fills unsupplied
+  # columns with NA and calls all five paired routes on every dataset, so a sheet
+  # carrying no paired data at all used to pay nine full row-by-row loops purely to
+  # produce NA: ~26% of the R time of a convert_df() run at 3000 rows. Skipping those
+  # rows is output-identical (checked branch by branch) and leaves the .d_j() warning
+  # stream above untouched, since that call sits outside the filter on purpose.
+  ok <- is.finite(nn) & nn >= 2 & !is.na(rec(paired_t))
   out <- matrix(NA_real_, nrow = k, ncol = 8L)
   if (!any(ok)) {
     colnames(out) <- c("d", "var_d", "d_ci_lo", "d_ci_up",
@@ -1505,58 +1760,60 @@
 #' between arms; the standardizer is pooled across arms (baseline SD for bonett /
 #' d_ppc2 eq. 8-9; change SD for d_z/d_rm; average SD for d_av / d_ppc3 eq. 12-14).
 #'
-#' Each branch's variance follows metafor's LS *pattern* for the corresponding measure
-#' -- an empirical leading term plus a g^2 term -- but note this is a pattern, not a
-#' single closed-form rule: metafor puts n (or n1+n2), NOT the standardizer df, in the
-#' g^2 denominator of its non-heteroscedastic LS forms, while evaluating J at the
-#' standardizer df; the two df deliberately differ. So the g^2 term below is over 2N,
-#' and J is J(nu) with nu the standardizer df. Var(d) = Var(g)/J^2 exactly, since
-#' g = J*d with J a deterministic constant.
+#' Each branch's variance follows metafor's LS *pattern* for the corresponding measure,
+#' an empirical leading term plus a g^2 term. It is a pattern rather than a single
+#' closed-form rule: metafor puts n (or n1+n2) in the g^2 denominator of its
+#' non-heteroscedastic LS forms rather than the standardizer df, while evaluating J at
+#' the standardizer df, and the two df differ by design. The g^2 term below is therefore
+#' over 2N, and J is J(nu) with nu the standardizer df. Var(d) = Var(g)/J^2 exactly,
+#' since g = J*d with J a deterministic constant.
 #'
-#' The leading term is heteroscedasticity-robust: it is built from the EMPIRICAL pooled
-#' change SD, not from Var(change) = 2*sigma^2*(1-r) (valid only when SD_pre = SD_post).
-#' For bonett this reduces EXACTLY to Viechtbauer's published two-group pre/post
-#' variance vi = 2(1-r)(1/nT + 1/nC) + g^2/(2N) when SD_pre = SD_post within each arm
-#' (the df-weighted r_avg makes the reduction exact even when n1 != n2); under
-#' heteroscedasticity it departs from that homoscedastic form, which understates the
-#' variance (its coverage falls to ~0.86 at SD_pre/SD_post ~ 0.64). d_av takes its
-#' fourth-moment g^2 COEFFICIENT from Bonett (2008) eq. 19 but NOT its leading term --
-#' see the d_av entry below.
+#' The leading term is heteroscedasticity-robust, being built from the empirical pooled
+#' change SD rather than from Var(change) = 2*sigma^2*(1-r), which is valid only when
+#' SD_pre = SD_post. For bonett it reduces exactly to Viechtbauer's published two-group
+#' pre/post variance vi = 2(1-r)(1/nT + 1/nC) + g^2/(2N) when SD_pre = SD_post within
+#' each arm, the df-weighted r_avg making that reduction exact even when n1 != n2. Under
+#' heteroscedasticity it departs from the homoscedastic form, which understates the
+#' variance, with coverage falling to about 0.86 at SD_pre/SD_post around 0.64. d_av
+#' takes its fourth-moment g^2 coefficient from Bonett (2008) eq. 19 but not its leading
+#' term; see the d_av entry below.
 #'
 #' Publication status of each pooled variance:
 #'   - bonett: reduces to Viechtbauer's published vi (metafor-project Morris-2008 page)
 #'             under homoscedasticity; the robust departure is metafor SMCRH / Bonett
 #'             (2008) generalized across arms.
 #'   - d_z:    exactly metafor::escalc(measure = "SMD", vtype = "LS") on the change
-#'             scores (Hedges 1981) -- a published two-group variance.
+#'             scores (Hedges 1981), a published two-group variance.
 #'   - d_rm:   d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13, a definition),
 #'             so Var(d_rm) = 2(1-r)*Var(d_z) for known r.
-#'   - d_av:   PARTLY Bonett (2008) eq. 19 (two-group mixed design, all-four-SD
-#'             standardizer). Only the fourth-moment g^2 coefficient is eq. 19's, and it
-#'             is reproduced exactly: eq. 19's first bracket
+#'   - d_av:   partly Bonett (2008) eq. 19 (two-group mixed design, all-four-SD
+#'             standardizer). Only the fourth-moment g^2 coefficient comes from eq. 19,
+#'             and it is reproduced exactly: eq. 19's first bracket
 #'             [(s1^4+s2^4+2 r12^2 s1^2 s2^2)/df1 + (s3^4+s4^4+2 r34^2 s3^2 s4^2)/df2]
 #'             /(32 s^4) is identical to g2_coef below (checked to 1e-14 over a grid of
-#'             arm sizes). The LEADING term is NOT eq. 19's. Eq. 19 uses the df-based
-#'             sum Sc1^2/(n1-1) + Sc2^2/(n2-1); this code uses metafor's n-based pooled
-#'             form (sd_change_pooled^2/sd_pooled^2) * N/(n1*n2), i.e. the two-sample
+#'             arm sizes). The leading term is not eq. 19's. Eq. 19 uses the df-based
+#'             sum Sc1^2/(n1-1) + Sc2^2/(n2-1), whereas this code uses metafor's n-based
+#'             pooled form (sd_change_pooled^2/sd_pooled^2) * N/(n1*n2), the two-sample
 #'             SMD leading term. Under homoscedasticity the ratio of the two is
-#'             (1/(n1-1) + 1/(n2-1)) / (1/n1 + 1/n2), so eq. 19 is LARGER by ~2% at
-#'             n = 50/50, ~3% at 30/30, ~10% at 12/11 and ~32% at 100/4 -- with
-#'             heteroscedastic SDs the departure reaches ~38% at n = 100/10 and is
+#'             (1/(n1-1) + 1/(n2-1)) / (1/n1 + 1/n2), so eq. 19 is larger by about 2% at
+#'             n = 50/50, 3% at 30/30, 10% at 12/11 and 32% at 100/4. With
+#'             heteroscedastic SDs the departure reaches about 38% at n = 100/10 and is
 #'             unbounded as min(n1, n2) -> 2. The n-based form is the conventional and
 #'             more conservative (smaller-variance) choice, but at strongly unequal arm
 #'             sizes it is not eq. 19 and should not be described as such.
-#' The pooled forms without a directly published two-group source (the robust
-#' bonett departure, d_rm's algebra, and d_av's leading term) are Monte-Carlo calibrated
-#' in tests_save/checked/test-pooled-variance-calibration.R, whose coverage grid is
-#' n1, n2 in {10, 29, 90} -- imbalance up to 9:1, where the departure above is ~10%.
-#' Ratios beyond that (and small min(n) with a large imbalance) are uncalibrated.
+#' The pooled forms without a directly published two-group source (the robust bonett
+#' departure, d_rm's algebra, and d_av's leading term) are Monte-Carlo calibrated in
+#' tests_save/checked/test-pooled-variance-calibration.R, whose coverage grid is
+#' n1, n2 in {10, 29, 90}. That covers imbalance up to 9:1, where the departure above is
+#' about 10%. Ratios beyond that, and a small min(n) combined with a large imbalance,
+#' are uncalibrated.
 #'
-#' CIs use qt(.975, m) with m = N - 2 the pooled standardizer df, for EVERY branch --
-#' including d_av, whose Cousineau effective df nu = 2m/(1 + r2_avg) feeds ONLY the bias
-#' correction J, not the interval (the single-group kernel follows the same split: its d_av
-#' CI is on n - 1, not on its Cousineau df). qt is a small-sample-conservative choice (it
-#' slightly over-covers at n ~ 10); metafor and Bonett (2008) use a normal (z) critical value.
+#' CIs use qt(.975, m) with m = N - 2, the pooled standardizer df, on every branch. That
+#' includes d_av, whose Cousineau effective df nu = 2m/(1 + r2_avg) feeds the bias
+#' correction J alone and not the interval; the single-group kernel follows the same
+#' split, putting its d_av CI on n - 1 rather than on its Cousineau df. qt is a
+#' small-sample-conservative choice and slightly over-covers at n around 10, whereas
+#' metafor and Bonett (2008) use a normal (z) critical value.
 #'
 #' References:
 #'   Morris (2008) ORM 11(2):364-386 -- d_ppc1/d_ppc2/d_ppc3 point estimates (eq. 6-14)
@@ -1600,7 +1857,7 @@
   mean_diff <- change_exp - change_nexp
 
   # df-weighted mean of the per-arm correlations. df-weighting (not n-weighting) is
-  # what makes the robust bonett/dz variances reduce EXACTLY to Viechtbauer's published
+  # what makes the robust bonett/dz variances reduce exactly to Viechtbauer's published
   # vi = 2(1-r)(1/nT + 1/nC) + g^2/(2N) under homoscedasticity when the arms' SDs are
   # equal but n1 != n2 (an n-weighted mean leaves a residual there).
   r_avg <- ((n_exp - 1) * r_pre_post_exp + (n_nexp - 1) * r_pre_post_nexp) / m
@@ -1608,9 +1865,9 @@
   # Pooled change SD: the empirical scale of the numerator. Used by every branch,
   # so that no branch assumes SD_pre = SD_post.
   sd_change_exp <- sqrt(mean_pre_sd_exp^2 + mean_sd_exp^2 -
-                        2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp)
+                        .pre_post_cross(r_pre_post_exp, mean_pre_sd_exp, mean_sd_exp))
   sd_change_nexp <- sqrt(mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
-                         2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp)
+                         .pre_post_cross(r_pre_post_nexp, mean_pre_sd_nexp, mean_sd_nexp))
   sd_change_pooled <- sqrt(((n_exp - 1) * sd_change_exp^2 +
                             (n_nexp - 1) * sd_change_nexp^2) / m)
 
@@ -1619,7 +1876,7 @@
 
   if (pre_post_to_smd == "bonett") {
     # Morris (2008) d_ppc2: numerator = difference in mean change, standardizer =
-    # BASELINE SD pooled across arms (eq. 8-9). Variance is the SMCRH form: the
+    # baseline SD pooled across arms (eq. 8-9). Variance is the SMCRH form, the
     # numerator's empirical variance expressed in standardizer units.
     sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * mean_pre_sd_exp^2 +
                                            (n_nexp - 1) * mean_pre_sd_nexp^2) / m))
@@ -1636,7 +1893,7 @@
   } else if (pre_post_to_smd == "morris_dz") {
     # Change-score metric. Once the change SD is pooled across arms this is exactly
     # an independent-groups Hedges g computed on the change scores, so its variance
-    # is metafor::escalc(measure = "SMD", vtype = "LS") -- no r, no 2(1-r) term.
+    # is metafor::escalc(measure = "SMD", vtype = "LS"), with no r and no 2(1-r) term.
     sd_pooled <- .guard_standardizer(sd_change_pooled)
     nu <- m
     J <- .d_j(nu)
@@ -1649,7 +1906,7 @@
   } else if (pre_post_to_smd == "morris_drm") {
     # Raw-score metric: d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13).
     # r is a known constant, so Var(d_rm) = 2(1-r) * Var(d_z): the 2(1-r) here is a
-    # deterministic rescaling, NOT a homoscedasticity assumption.
+    # deterministic rescaling rather than a homoscedasticity assumption.
     sd_pooled <- .guard_standardizer(sd_change_pooled)
     nu <- m
     J <- .d_j(nu)
@@ -1665,15 +1922,15 @@
     # Morris (2008) d_ppc3: standardizer = quadratic mean of the pre and post SDs,
     # pooled across arms (eq. 12-13). Variance is the two-group heteroscedasticity-
     # robust form Bonett (2008) eq. 19 (the mixed-design "difference-in-differences"
-    # standardized by all four cell SDs) == metafor SMCRPH carried across two
-    # independent arms: a robust change-SD leading term plus a per-arm fourth-moment
-    # g^2 term. This is NOT the homoscedastic SMCRP coefficient (1+r^2)/(4N), which is
-    # only its SD_pre = SD_post special case.
+    # standardized by all four cell SDs), equivalently metafor SMCRPH carried across
+    # two independent arms: a robust change-SD leading term plus a per-arm
+    # fourth-moment g^2 term. Note that this is not the homoscedastic SMCRP
+    # coefficient (1+r^2)/(4N), which is only its SD_pre = SD_post special case.
     sd_av_exp <- sqrt((mean_pre_sd_exp^2 + mean_sd_exp^2) / 2)
     sd_av_nexp <- sqrt((mean_pre_sd_nexp^2 + mean_sd_nexp^2) / 2)
     sd_pooled <- .guard_standardizer(sqrt(((n_exp - 1) * sd_av_exp^2 +
                                            (n_nexp - 1) * sd_av_nexp^2) / m))
-    # nu is used ONLY for the bias correction J. The (1+r^2) effective df is
+    # nu is used for the bias correction J alone. The (1+r^2) effective df is
     # homoscedastic (Cousineau 2020 eq. 2), so we feed it the df-weighted mean of r^2
     # (its two-arm generalization); the variance itself uses the fourth moments below.
     r2_avg <- ((n_exp - 1) * r_pre_post_exp^2 + (n_nexp - 1) * r_pre_post_nexp^2) / m
@@ -1694,11 +1951,11 @@
     var_d <- var_g / J^2
   }
 
-  # CI on the pooled standardizer df (N - 2 = m) for EVERY branch. dav's Cousineau
-  # effective df nu = 2m/(1 + r2_avg) feeds ONLY the bias correction J (as in the
-  # single-group kernel, whose dav CI is likewise on n - 1, not on its Cousineau df) --
-  # the variance is built on m, so the interval is too. For bonett/dz/drm nu == m, so
-  # this changes nothing there; it only homogenises the dav path.
+  # CI on the pooled standardizer df (N - 2 = m) for every branch. dav's Cousineau
+  # effective df nu = 2m/(1 + r2_avg) feeds the bias correction J alone, as in the
+  # single-group kernel, whose dav CI likewise sits on n - 1 rather than on its
+  # Cousineau df. The variance is built on m, so the interval is too. For bonett, dz
+  # and drm nu equals m, so this matters only on the dav path.
   d_ci_lo <- d - sqrt(var_d) * qt(.975, m)
   d_ci_up <- d + sqrt(var_d) * qt(.975, m)
   g_ci_lo <- g - sqrt(var_g) * qt(.975, m)
@@ -1737,8 +1994,8 @@
 
   r_pre_post <- .guard_r_pre_post(r_pre_post)
 
-  # A negative SD is invalid input. NA it out so the ES is NA rather than a silently
-  # corrupted one: a negative raw SD flips the sign of the -2*r*sd_pre*sd_post cross
+  # A negative SD is invalid input. NA it out so the ES is NA rather than quietly
+  # corrupted: a negative raw SD flips the sign of the -2*r*sd_pre*sd_post cross
   # term in sd_diff, yielding a wrong-but-finite standardizer that the .guard_standardizer
   # on the assembled denominator cannot catch. Zero is allowed: the mean-change wrappers
   # legitimately pass mean_pre_sd = 0 (the pre slot is zeroed by construction).
@@ -1746,8 +2003,8 @@
   mean_post_sd <- ifelse(is.finite(mean_post_sd) & mean_post_sd >= 0, mean_post_sd, NA_real_)
 
   # An arm needs n >= 2 for a variance/CI to exist. NA the standardizing SDs below 2 so
-  # d, var and CI are ALL NA. morris_drm's var_d = 2*(1-r)/n + d^2/(2n) carries no J, so
-  # the J(n-1) = NA path that silently nulls the other three branches leaves it finite at
+  # d, var and CI are all NA. morris_drm's var_d = 2*(1-r)/n + d^2/(2n) carries no J, so
+  # the J(n-1) = NA path that nulls the other three branches leaves it finite at
   # n = 1 (and Inf at n = 0); nulling the SDs here closes that leak and matches the
   # pooled kernel's explicit n >= 2 guard.
   bad_n <- !(is.finite(n) & n >= 2)
@@ -1759,7 +2016,8 @@
     # Matches metafor SMCRH (heteroscedastic-robust variance formula)
     J <- .d_j(n - 1)
 
-    var_change <- mean_pre_sd^2 + mean_post_sd^2 - 2 * r_pre_post * mean_pre_sd * mean_post_sd
+    var_change <- mean_pre_sd^2 + mean_post_sd^2 -
+      .pre_post_cross(r_pre_post, mean_pre_sd, mean_post_sd)
 
     sd_std <- .guard_standardizer(mean_pre_sd)
     d <- (mean_post - mean_pre) / sd_std
@@ -1783,16 +2041,17 @@
     return(res)
   } else if (pre_post_to_smd == "morris_drm") {
     # Morris d_rm (alias "cooper"): d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020),
-    # i.e. the change SD rescaled onto the raw-score metric. This equals metafor's SMCR
-    # (baseline/raw-SD standardizer) ONLY under homoscedasticity (SD_pre = SD_post); when
-    # they differ the two diverge, so d_rm is defined by the Caldwell rescaling here, not
-    # by SMCR. Its variance below is 2(1-r) * Var(d_z), the exact scaling of the SMCC form.
-    # nb: the mean_change wrappers pass sd_change through mean_post_sd
-    # (mean_pre = 0 and mean_pre_sd = 0, so sd_diff reduces to sd_change)
+    # that is, the change SD rescaled onto the raw-score metric. It equals metafor's SMCR
+    # (baseline/raw-SD standardizer) only under homoscedasticity (SD_pre = SD_post); when
+    # the two SDs differ they diverge, so d_rm is defined here by the Caldwell rescaling
+    # rather than by SMCR. Its variance below is 2(1-r) * Var(d_z), the exact scaling of
+    # the SMCC form.
+    # Note that the mean_change wrappers pass sd_change through mean_post_sd
+    # (mean_pre = 0 and mean_pre_sd = 0, so sd_diff reduces to sd_change).
     J <- .d_j(n - 1)
 
     sd_diff <- .guard_standardizer(sqrt(mean_pre_sd^2 + mean_post_sd^2 -
-                    (2 * r_pre_post * mean_pre_sd * mean_post_sd)))
+                    .pre_post_cross(r_pre_post, mean_pre_sd, mean_post_sd)))
 
     d <- (mean_post - mean_pre) / sd_diff * sqrt(2 * (1 - r_pre_post))
     g <- d * J
@@ -1819,7 +2078,7 @@
     J <- .d_j(n - 1)
 
     sd_diff <- .guard_standardizer(sqrt(mean_pre_sd^2 + mean_post_sd^2 -
-                    2 * r_pre_post * mean_pre_sd * mean_post_sd))
+                    .pre_post_cross(r_pre_post, mean_pre_sd, mean_post_sd)))
 
     d <- (mean_post - mean_pre) / sd_diff
     g <- d * J
@@ -1842,14 +2101,14 @@
     return(res)
   } else if (pre_post_to_smd == "morris_dav") {
     # Morris (2008) d_av (d_ppc3): standardize by the quadratic mean of the pre and
-    # post SDs. Its sampling variance is metafor SMCRPH == Bonett (2008) eq. 10: a
-    # heteroscedasticity-robust change-SD leading term PLUS a fourth-moment g^2 term.
-    # This is NOT the homoscedastic SMCRP form 2(1-r)/n + g^2(1+r^2)/(4n), which
-    # assumes SD_pre = SD_post and understates var(g) when they differ (its CI
-    # coverage falls to ~0.93 as SD_pre/SD_post moves away from 1). Morris (2008,
-    # p.384) recommended AGAINST d_av precisely because its variance was unknown to
-    # him; Bonett (2008) supplies it and this branch uses it.
-    # nu = 2(n-1)/(1+r^2) is used ONLY for the Hedges bias correction J (Cousineau
+    # post SDs. Its sampling variance is metafor SMCRPH, equivalently Bonett (2008)
+    # eq. 10: a heteroscedasticity-robust change-SD leading term plus a fourth-moment
+    # g^2 term. It is not the homoscedastic SMCRP form 2(1-r)/n + g^2(1+r^2)/(4n),
+    # which assumes SD_pre = SD_post and understates var(g) when they differ, with CI
+    # coverage falling to about 0.93 as SD_pre/SD_post moves away from 1. Morris (2008,
+    # p.384) advised against d_av because its variance was unknown to him; Bonett (2008)
+    # supplies it and this branch uses it.
+    # nu = 2(n-1)/(1+r^2) is used for the Hedges bias correction J alone (Cousineau
     # 2020 eq. 2; metafor SMCRP/SMCRPH); the variance itself is on df = n-1.
     mi <- 2 * (n - 1) / (1 + r_pre_post^2)
     J <- .d_j(mi)
@@ -1859,14 +2118,15 @@
     d <- (mean_post - mean_pre) / sd_av
     g <- d * J
 
-    # metafor SMCRPH "LS" == Bonett (2008) eq. 10. Verified as a FORMULA IDENTITY:
-    # 0 difference against metafor::escalc(measure = "SMCRPH"). It does NOT reproduce
-    # the var = 0.0148 printed for Bonett's worked Example 2 (n = 60): this branch
-    # gives 0.0146674131, and re-doing Bonett's own arithmetic for that example gives
-    # 0.0147449109, so 0.0148 is a rounding slip in the paper rather than a package
-    # error. Recomputing eq. 10 by hand with the bias-corrected g used here returns
-    # 0.0146674131, identical to 12 digits.
-    sd_diff2 <- mean_pre_sd^2 + mean_post_sd^2 - 2 * r_pre_post * mean_pre_sd * mean_post_sd
+    # metafor SMCRPH "LS" is Bonett (2008) eq. 10, verified as a formula identity with
+    # zero difference against metafor::escalc(measure = "SMCRPH"). It does not reproduce
+    # the var = 0.0148 printed for Bonett's worked Example 2 (n = 60): this branch gives
+    # 0.0146674131, and redoing Bonett's own arithmetic for that example gives
+    # 0.0147449109, so 0.0148 appears to be a rounding slip in the paper rather than a
+    # package error. Recomputing eq. 10 by hand with the bias-corrected g used here
+    # returns 0.0146674131, identical to 12 digits.
+    sd_diff2 <- mean_pre_sd^2 + mean_post_sd^2 -
+      .pre_post_cross(r_pre_post, mean_pre_sd, mean_post_sd)
     fm <- mean_pre_sd^4 + mean_post_sd^4 + 2 * r_pre_post^2 * mean_pre_sd^2 * mean_post_sd^2
     var_g <- sd_diff2 / (sd_av^2 * (n - 1)) + g^2 * fm / (8 * sd_av^4 * (n - 1))
     var_d <- var_g / (J^2)
@@ -1888,26 +2148,26 @@
 ################# R/Z to SMD ###################
 # Vectorised front end for .cor_to_smd().
 #
-# .cor_to_smd() is scalar and was reached through a per-row mapply() at four call
-# sites. Its "viechtbauer" branch -- the DEFAULT for cor_to_smd -- builds a fresh
-# metafor::conv.delta() call per row, although conv.delta is itself vectorised:
-# 18.1 s per 10,000 rows versus 0.34 s for a single vectorised call.
+# .cor_to_smd() is scalar, and calling it per row through mapply() is slow. Its
+# "viechtbauer" branch, the default for cor_to_smd, builds a fresh
+# metafor::conv.delta() call per row even though conv.delta is itself vectorised,
+# which costs 18.1 s per 10,000 rows against 0.34 s for a single vectorised call.
 #
-# Memoisation (.mapply_memo) does not help here the way it does on the tetrachoric
-# path: correlations are continuous, so rows are effectively all distinct. The fix
-# has to be real vectorisation. Rows are grouped by their cor_to_smd value (it is a
-# per-row column) and each group is computed in one shot, then reassembled in the
-# original order.
+# Memoisation (.mapply_memo) does not help here as it does on the tetrachoric path,
+# because correlations are continuous and rows are effectively all distinct. Real
+# vectorisation is the only option. Rows are grouped by their cor_to_smd value, which
+# is a per-row column; each group is computed in one shot, and the groups are then
+# reassembled in the original order.
 #
-# Agreement with the per-row path: all three branches agree to within 1-2 ULP. The
-# "viechtbauer" d is bit-identical on every row, but its SE differs by 1 ULP on ~0.02%
-# of rows (44 / 200,000, max |rel| 2.2e-16), because conv.delta's numerical derivative
-# is evaluated at slightly different precision in a vector call. The closed-form
-# "cooper" and "mathur" branches likewise differ by 1-2 ULP (max |rel| 4.3e-16, ~0.02%
-# of rows) because R evaluates length-1 and length-n arithmetic on different code paths.
+# All three branches agree with the per-row path to within 1-2 ULP. The "viechtbauer"
+# d is bit-identical on every row, but its SE differs by 1 ULP on about 0.02% of rows
+# (44 out of 200,000, max |rel| 2.2e-16), because conv.delta's numerical derivative is
+# evaluated at slightly different precision in a vector call. The closed-form "cooper"
+# and "mathur" branches differ by 1-2 ULP as well (max |rel| 4.3e-16, about 0.02% of
+# rows), because R evaluates length-1 and length-n arithmetic on different code paths.
 #
-# NB all arguments must be per-row vectors of the same length; unlike mapply this
-# does NOT recycle a scalar. Every call site passes rep(x, length.out = n).
+# All arguments must be per-row vectors of the same length. Unlike mapply, this does
+# not recycle a scalar, so every call site passes rep(x, length.out = n).
 .cor_to_smd_vec <- function(r, r_se, unit_increase_iv, sd_iv, unit_type,
                             n_sample, cor_to_smd) {
   n <- length(r)
@@ -1953,11 +2213,10 @@
     res <- cbind(d, d_se)
     return(res)
   } else if (cor_to_smd == "viechtbauer") {
-    # transf.rtod(r_hat) lands in the g slot, NOT the d slot, and this is
-    # deliberate. It is tempting to reason that transf.rtod is a population map
-    # with no df term, so its output "must" be an uncorrected d -- but which slot
-    # it belongs in is a question about ESTIMATOR BIAS, not about the algebra of
-    # the transform.
+    # transf.rtod(r_hat) lands in the g slot rather than the d slot. Since
+    # transf.rtod is a population map with no df term, its output looks as though
+    # it ought to be an uncorrected d, but the choice of slot is a question about
+    # estimator bias rather than about the algebra of the transform.
     #
     # Checked by simulation (bivariate normal, rho = 0.5, median split, true
     # delta = 0.870126, nrep = 2e5), bias of the reported g against delta:
@@ -1967,12 +2226,12 @@
     #   25          -0.000                    +0.012                  -0.017
     #  200          -0.000                    +0.002                  -0.002
     #
-    # Putting transf.rtod in g is closer to unbiased at every n. The reason is
-    # that this route's small-sample bias is not the Hedges bias: E[r_hat] is
-    # biased DOWN, which partly cancels the upward bias the pooled-SD denominator
-    # induces in a directly computed d. Applying J on top over-corrects.
-    # Neither convention is exactly unbiased -- the residual is the uncancelled
-    # remainder, and it is small (<0.02 for n >= 25).
+    # Putting transf.rtod in g is closer to unbiased at every n, because this
+    # route's small-sample bias is not the Hedges bias. E[r_hat] is biased
+    # downwards, which partly cancels the upward bias that the pooled-SD
+    # denominator induces in a directly computed d, so applying J on top
+    # over-corrects. Neither convention is exactly unbiased; the residual is the
+    # uncancelled remainder, and it stays below 0.02 for n >= 25.
     res_g <- metafor::conv.delta(
       yi = r, vi = r_se^2, transf = metafor::transf.rtod, var.names = c("g", "g_var")
     )

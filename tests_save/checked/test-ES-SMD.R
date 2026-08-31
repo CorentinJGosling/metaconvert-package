@@ -165,8 +165,11 @@ test_that("d => R/Z - VIECHTBAUER", {
     p <- n1 / n
     fzp <- dnorm(qnorm(p))
     a <- sqrt(fzp) / (p*(1-p))^(1/4)
-    rb = ifelse(rb > 1, 1,
-                 ifelse(rb < -1, -1, rb))
+    # Clamping an out-of-range biserial r to the boundary is exactly the saturation the
+    # package no longer performs (see helper-z-declined.R): past |r| = 1 the clamped z
+    # stops moving with the data. The reference declines the row too, so every row stays
+    # compared exactly rather than being dropped from the pin.
+    rb = ifelse(abs(rb) > 1, NA_real_, rb)
     zrb <- (a/2) * log((1+a*rb)/(1-a*rb))
 
 
@@ -183,7 +186,8 @@ test_that("d => R/Z - VIECHTBAUER", {
   expect_equal(es.mcv_rb$es_crude, as.numeric(mfr_rb$yi), tolerance = 1e-10)
   expect_equal(es.mcv_rb$se_crude^2, as.numeric(mfr_rb$vi), tolerance = 1e-10)
 
-  expect_equal(unique(es.mcv_zb$info_used_crude), "cohen_d")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_zb$info_used_crude, "cohen_d")
   expect_equal(es.mcv_zb$es_crude, res_z[,1], tolerance = 1e-10)
   expect_equal(es.mcv_zb$es_ci_lo_crude, res_z[,2], tolerance = 1e-10)
   expect_equal(es.mcv_zb$es_ci_up_crude, res_z[,3], tolerance = 1e-10)
@@ -241,8 +245,10 @@ test_that("g => g + SE", {
   expect_equal(es.mcv_r_d$es_crude, es.mcv_r_g$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_r_d$se_crude, es.mcv_r_g$se_crude, tolerance = 1e-10)
 
-  expect_equal(unique(es.mcv_z_d$info_used_crude), "cohen_d")
-  expect_equal(unique(es.mcv_z_g$info_used_crude), "hedges_g")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_z_d$info_used_crude, "cohen_d")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_z_g$info_used_crude, "hedges_g")
   expect_equal(es.mcv_z_d$es_crude, es.mcv_z_g$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_z_d$se_crude, es.mcv_z_g$se_crude, tolerance = 1e-10)
 })

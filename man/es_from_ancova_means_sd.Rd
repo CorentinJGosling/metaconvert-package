@@ -33,9 +33,9 @@ es_from_ancova_means_sd(
 
 \item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
 covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 total-sample correlation, nor the square root of the whole model R-squared (which also
-absorbs the group effect): both bias the effect size AND its standard error by the
+absorbs the group effect): both bias the effect size and its standard error by the
 same factor, so the p-value is unchanged and no quality flag can detect the error.}
 
 \item{n_cov_ancova}{number of covariates in the ANCOVA model.}

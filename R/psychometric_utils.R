@@ -70,16 +70,30 @@ reliability_change_score <- function(reliability, r_pre_post) {
 }
 
 
+# Recycle one argument up to the common length `len`.
+#
+# A length-1 value -- or any clean divisor, recycled exactly as R itself would --
+# is expanded; anything else is an error rather than a silent partial fill. The
+# point is to do this BEFORE any vectorised ifelse(): ifelse() returns an object
+# the length of its *test*, so a short argument used as a test silently collapses
+# the result and row 1's value is then broadcast over the whole column.
+.recycle_arg <- function(v, len, nm) {
+  if (length(v) == len) return(v)
+  if (length(v) >= 1L && len %% length(v) == 0L) return(rep_len(v, len))
+  stop(paste0("The length of the '", nm, "' argument is incorrectly specified."))
+}
+
+
 #' Compute Standard Error of Measurement (SEM) from reliability and SD
 #'
 #' @param sd standard deviation of the PROM/test scores
 #' @param icc intraclass correlation coefficient (test-retest reliability)
 #' @param n_sample sample size (used for the SEM sampling-variance estimation).
-#'   Required in BOTH variance regimes: it feeds \eqn{Var(SD)} in the
+#'   Required in both variance regimes: it feeds \eqn{Var(SD)} in the
 #'   external-\code{icc_se} delta method and the degrees of freedom of the
 #'   same-sample chi-square variance, so when it is omitted the SEM standard
 #'   error and CI are \code{NA}.
-#' @param icc_se standard error of the ICC (optional), on the RAW ICC scale.
+#' @param icc_se standard error of the ICC (optional), on the raw ICC scale.
 #'   Note that \code{\link{es_from_icc}} under its default
 #'   \code{icc_to_es = "bonett"} returns a column named \code{icc_se} on the
 #'   \eqn{\ln(1 - ICC)} scale: that value must be converted first
@@ -110,13 +124,25 @@ reliability_change_score <- function(reliability, r_pre_post) {
 #' from the same reliability sample, where they are strongly positively
 #' correlated. Because \eqn{SEM = SD\sqrt{1 - ICC}} equals the within-subject
 #' residual root-mean-square \eqn{\sqrt{MSE}}, and \eqn{MSE / \sigma_e^2} follows
-#' a scaled chi-square with \eqn{(n-1)(k-1)} degrees of freedom, the exact
-#' sampling variance is
+#' a scaled chi-square with \eqn{(n-1)(k-1)} degrees of freedom, the leading-order
+#' (first-order in \eqn{MSE}) sampling variance implied by that chi-square is
 #' \deqn{Var(SEM) = \frac{SEM^2}{2(n-1)(k-1)}}
 #' where \eqn{k} is the number of measurement occasions/raters
 #' (\code{n_measurements}, default 2 for test-retest). Treating the same-sample SD
 #' and ICC as independent (the delta method of case 1) would overestimate this
-#' variance by roughly 2-6x, so the exact form is used instead.
+#' variance by roughly 2-6x, so the same-sample form is used instead.
+#'
+#' That expression is a leading-order form, not an exact one: the exact variance
+#' of \eqn{\sqrt{MSE}} is \eqn{\sigma_e^2 (1 - c_1^2)} with
+#' \eqn{c_1 = \sqrt{2/df}\,\Gamma((df+1)/2)/\Gamma(df/2)}, which the formula above
+#' overstates by 7.4% (3.6% on the SE scale) at \eqn{df = 4} and by under 1.1%
+#' from \eqn{df = 24}. In practice the two errors run in opposite directions,
+#' because the reported SE substitutes the estimate \eqn{\widehat{SEM}} (whose
+#' expectation is \eqn{c_1 \sigma_e < \sigma_e}) for \eqn{\sigma_e}: the reported
+#' SE divided by the true sampling SD of the SEM is 0.974 at \eqn{df = 4}, 0.987
+#' at \eqn{df = 9} and 0.995 at \eqn{df = 24}, i.e. mildly \emph{anti}-conservative,
+#' by at most about 2.6%. The interval below is not affected -- it inverts the
+#' chi-square directly rather than going through a variance.
 #'
 #' The 95% CI is likewise regime-specific. In the same-sample regime (case 2)
 #' the degrees of freedom \eqn{df = (n - 1)(k - 1)} are known, so the exact
@@ -126,6 +152,26 @@ reliability_change_score <- function(reliability, r_pre_post) {
 #' instead of 95% at n = 10, k = 2). When \code{icc_se} is supplied (case 1)
 #' the df behind the external estimate is unknown, so the Wald interval
 #' \eqn{SEM \pm 1.96 \times SE}, truncated at 0, is kept.
+#'
+#' **ICC type.** The case-2 variance and chi-square interval are calibrated for a
+#' *consistency* ICC(3,1), where \eqn{SD^2 (1 - ICC) = MSE} exactly and the
+#' residual carries all \eqn{(n-1)(k-1)} degrees of freedom. They are
+#' **anti-conservative for an absolute-agreement ICC(2,1)** -- the estimand
+#' \code{\link{es_from_icc}} returns by default -- because there
+#' \eqn{SD^2 (1 - ICC)} also absorbs the systematic rater/occasion variance,
+#' whose sampling variability is dominated by a mean square carrying only
+#' \eqn{k - 1} degrees of freedom, not \eqn{(n-1)(k-1)}. Measured (two-way
+#' random-effects simulation, systematic occasion effect worth 5% of the total
+#' variance): the reported SE is 0.61 times the empirical sampling SD at
+#' \eqn{n = 30} and 0.37 times it at \eqn{n = 100}, with nominal-95% coverage of
+#' 0.80 and 0.51. As with the V31 note \code{\link{es_from_icc}} carries, the
+#' failure gets *worse* as n grows, because the reported SE shrinks like
+#' \eqn{1/\sqrt{n}} while the true sampling SD does not. The closed form is still
+#' computed on that path -- summary data hold no rater-variance component with
+#' which to widen it -- so when the ICC is an absolute-agreement one and a
+#' systematic occasion or rater effect is plausible, read the SE and CI as a
+#' lower bound on the uncertainty. A consistency ICC(3,1) is unaffected
+#' (measured coverage 0.949 at \eqn{n = 30}, 0.957 at \eqn{n = 100}).
 #'
 #' Degenerate inputs: \code{n_measurements} = 1 makes the same-sample df zero,
 #' so the SE and CI are returned as \code{NA} with a warning; an ICC > 1 is
@@ -146,11 +192,26 @@ reliability_change_score <- function(reliability, r_pre_post) {
 #' compute_sem(sd = 10, icc = 0.85, n_sample = 100)
 compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
 
-  if (missing(icc_se)) icc_se <- rep(NA_real_, length(sd))
-  if (missing(n_sample)) n_sample <- rep(NA_real_, length(sd))
-  if (missing(n_measurements)) n_measurements <- rep(2, length(sd))
+  if (missing(icc_se)) icc_se <- NA_real_
+  if (missing(n_sample)) n_sample <- NA_real_
+
+  # Every argument is recycled to the common length BEFORE any of the vectorised
+  # arithmetic below. A reliability review naturally passes one number beside a
+  # vector: one externally reported `icc_se` from a validation study, one
+  # `n_sample`, one `sd`. Without the recycling, that short argument reaches the
+  # nested ifelse() chains as the *test*, which makes their result the length of
+  # the test rather than the length of the data; data.frame() then broadcasts
+  # ROW 1's variance and interval over every row, and a reported 95% CI need not
+  # contain its own point estimate. Same defect, and the same idiom, as the
+  # recycling already carried by es_from_cronbach_alpha() and es_from_icc().
+  len <- max(length(sd), length(icc), length(n_sample),
+             length(icc_se), length(n_measurements))
+  sd <- .recycle_arg(sd, len, "sd")
+  icc <- .recycle_arg(icc, len, "icc")
+  n_sample <- .recycle_arg(n_sample, len, "n_sample")
+  icc_se <- .recycle_arg(icc_se, len, "icc_se")
+  n_measurements <- .recycle_arg(n_measurements, len, "n_measurements")
   n_measurements[is.na(n_measurements)] <- 2
-  if (length(n_measurements) == 1) n_measurements <- rep(n_measurements, length(sd))
 
   if (any(!is.na(sd) & sd < 0, na.rm = TRUE)) {
     warning("Negative SD detected; SEM will be invalid")
@@ -184,19 +245,32 @@ compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
 
   # Sampling variance of SEM, in two regimes:
   #
-  # (A) icc_se SUPPLIED -- the ICC is an external estimate, independent of the
+  # (A) icc_se supplied. The ICC is an external estimate, independent of the
   #     within-sample SD, so the bivariate delta method with Cov(SD, ICC) = 0
   #     applies:
   #       Var(SEM) = (SD^2 / (4(1 - ICC))) * Var(ICC) + (1 - ICC) * Var(SD)
   #     with Var(ICC) = icc_se^2 and Var(SD) = SD^2 / (2(n - 1)).
   #
-  # (B) icc_se NOT supplied -- ICC and SD come from the SAME reliability sample and
-  #     are strongly positively correlated; treating them as independent (case A)
-  #     overestimates Var(SEM) by ~2-6x. Since SEM = SD * sqrt(1 - ICC) = sqrt(MSE)
-  #     (the within-subject residual RMS), and MSE / sigma_e^2 ~ chi-square / df
-  #     with df = (n - 1)(k - 1), the exact sampling variance is
+  # (B) icc_se not supplied. ICC and SD come from the same reliability sample and
+  #     are strongly positively correlated, so treating them as independent, as in
+  #     case A, overestimates Var(SEM) by roughly 2-6x. Since
+  #     SEM = SD * sqrt(1 - ICC) = sqrt(MSE), the within-subject residual RMS, and
+  #     MSE / sigma_e^2 follows a scaled chi-square with df = (n - 1)(k - 1), the
+  #     leading-order sampling variance implied by that chi-square is
   #       Var(SEM) = SEM^2 / (2 (n - 1)(k - 1)),   k = n_measurements (default 2).
-  #     Verified by simulation to within ~1%.
+  #     Leading-order, not exact: the exact variance of sqrt(MSE) is
+  #     sigma_e^2 (1 - c1^2), c1 = sqrt(2/df) * Gamma((df+1)/2)/Gamma(df/2). The
+  #     plug-in of SEM_hat (biased low by c1) more than offsets the 7.4% variance
+  #     overstatement, so the reported SE runs 0.974 of the true sampling SD at
+  #     df = 4 and 0.995 at df = 24 - mildly anti-conservative, within ~2.6%.
+  #     Two-way calibration: this is exact at leading order for a CONSISTENCY
+  #     ICC(3,1) only. Under an absolute-agreement ICC(2,1) - es_from_icc()'s
+  #     default - SD^2 (1 - ICC) also carries the systematic rater/occasion
+  #     variance, whose sampling variability rides on a mean square with k - 1 df,
+  #     so the SE is far too small and, like the V31 note, worsens with n
+  #     (coverage 0.80 at n = 30, 0.51 at n = 100 for a 5%-of-total occasion
+  #     effect). Documented in @details rather than fixed: nothing in summary
+  #     data identifies the rater-variance component.
   var_sd <- sd^2 / (2 * (n_sample - 1))
   var_sem_delta <- (sd^2 / (4 * (1 - icc))) * icc_se^2 + (1 - icc) * var_sd
   var_sem_exact <- sem^2 / (2 * df_sem)
@@ -236,6 +310,11 @@ compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
 #'
 #' @param sem standard error of measurement
 #' @param sem_se standard error of the SEM (optional; for propagating uncertainty)
+#' @param sem_ci_lo lower bound of the SEM confidence interval (optional), as
+#'   returned by \code{\link{compute_sem}}. When supplied it is rescaled rather
+#'   than discarded (see Details).
+#' @param sem_ci_up upper bound of the SEM confidence interval (optional), as
+#'   returned by \code{\link{compute_sem}}.
 #'
 #' @details
 #' Computes the smallest detectable change (SDC) from the standard error
@@ -248,6 +327,25 @@ compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
 #' the uncertainty in SDC is propagated:
 #'
 #' \deqn{SDC\_se = 1.96 \times \sqrt{2} \times SEM\_se}
+#'
+#' The interval is handled the same way, and that matters. Since
+#' \eqn{SDC = c \times SEM} with \eqn{c = 1.96\sqrt{2}} a known constant, the SDC
+#' interval is simply \eqn{c} times the SEM interval -- a monotone rescaling,
+#' which carries over whatever coverage the SEM interval had. So when
+#' \code{sem_ci_lo} / \code{sem_ci_up} are supplied (pass through the whole
+#' \code{\link{compute_sem}} result, as in the example) the bounds returned are
+#' \eqn{c \times sem\_ci\_lo} and \eqn{c \times sem\_ci\_up}. Rebuilding a
+#' symmetric Wald interval \eqn{SDC \pm 1.96 \times SDC\_se} from the standard
+#' error instead would reinstate, one step downstream, exactly the undercoverage
+#' \code{\link{compute_sem}} abandons the Wald form to avoid: in the same-sample
+#' regime it returns an exact chi-square interval, and the Wald rebuild of it
+#' covers 0.918 against a nominal 0.95 at n = 10, k = 2 (against 0.961 for the
+#' rescaled interval), with bounds roughly 20% low at both ends.
+#'
+#' The Wald form is kept as the fallback for callers that have no SEM interval to
+#' rescale -- an SDC computed from a literature SEM, say -- so the bounds are
+#' \eqn{SDC \pm 1.96 \times SDC\_se}, truncated at 0, whenever the corresponding
+#' SEM bound is missing.
 #'
 #' @export compute_sdc
 #'
@@ -262,18 +360,39 @@ compute_sem <- function(sd, icc, n_sample, icc_se, n_measurements = 2) {
 #'
 #' @examples
 #' sem_res <- compute_sem(sd = 10, icc = 0.85, n_sample = 100)
-#' compute_sdc(sem = sem_res$sem, sem_se = sem_res$sem_se)
-compute_sdc <- function(sem, sem_se) {
+#' compute_sdc(sem = sem_res$sem, sem_se = sem_res$sem_se,
+#'             sem_ci_lo = sem_res$sem_ci_lo, sem_ci_up = sem_res$sem_ci_up)
+compute_sdc <- function(sem, sem_se, sem_ci_lo, sem_ci_up) {
 
-  if (missing(sem_se)) sem_se <- rep(NA, length(sem))
+  if (missing(sem_se)) sem_se <- NA_real_
+  if (missing(sem_ci_lo)) sem_ci_lo <- NA_real_
+  if (missing(sem_ci_up)) sem_ci_up <- NA_real_
+
+  # Recycled up front for the same reason as in compute_sem(): the ifelse()
+  # below takes the SEM bound as its test, so a short bound would collapse the
+  # interval to row 1's.
+  len <- max(length(sem), length(sem_se), length(sem_ci_lo), length(sem_ci_up))
+  sem <- .recycle_arg(sem, len, "sem")
+  sem_se <- .recycle_arg(sem_se, len, "sem_se")
+  sem_ci_lo <- .recycle_arg(sem_ci_lo, len, "sem_ci_lo")
+  sem_ci_up <- .recycle_arg(sem_ci_up, len, "sem_ci_up")
 
   multiplier <- qnorm(0.975) * sqrt(2)
 
   sdc <- multiplier * sem
   sdc_se <- multiplier * sem_se
 
-  sdc_ci_lo <- pmax(0, sdc - qnorm(0.975) * sdc_se)
-  sdc_ci_up <- sdc + qnorm(0.975) * sdc_se
+  # SDC is a known constant times SEM, so its interval is that same constant
+  # times the SEM interval - a monotone rescaling that preserves the coverage of
+  # whatever interval compute_sem() built (exact chi-square in the same-sample
+  # regime). Rebuilding sdc +/- 1.96 * sdc_se instead would put the Wald
+  # undercoverage compute_sem() removed straight back one function downstream
+  # (0.918 vs 0.95 at n = 10, k = 2). The Wald form stays as the fallback for
+  # callers with no SEM interval to rescale.
+  sdc_ci_lo <- ifelse(!is.na(sem_ci_lo), multiplier * sem_ci_lo,
+                      pmax(0, sdc - qnorm(0.975) * sdc_se))
+  sdc_ci_up <- ifelse(!is.na(sem_ci_up), multiplier * sem_ci_up,
+                      sdc + qnorm(0.975) * sdc_se)
 
   result <- data.frame(
     sdc = sdc,
@@ -285,14 +404,14 @@ compute_sdc <- function(sem, sem_se) {
   return(result)
 }
 
-# Map ONE analysis-scale value back to the coefficient (alpha / ICC) scale.
+# Map one analysis-scale value back to the coefficient (alpha / ICC) scale.
 #
-# Shared by reliability_backtransform() and the Tier-2 magnitude flags, which
-# must compare against a threshold expressed in coefficient units. Doing that
-# comparison on the analysis scale is what made C7/C8 dead under the Bonett
-# default AND made C7 misfire: on that scale a STRONGLY NEGATIVE alpha maps to
-# ln(1 - alpha) in (0.99, 1], which satisfied the old `es > 0 && es <= 1` guard
-# and got reported as "Near-perfect alpha: 0.99".
+# Shared by reliability_backtransform() and the Tier-2 magnitude flags, which must
+# compare against a threshold expressed in coefficient units. Making that comparison
+# on the analysis scale is what leaves C7 and C8 dead under the Bonett default, and
+# what makes C7 misfire: on that scale a strongly negative alpha maps to
+# ln(1 - alpha) in (0.99, 1], which satisfies an `es > 0 && es <= 1` guard and gets
+# reported as "Near-perfect alpha: 0.99".
 .to_reliability_scale <- function(es, scale) {
   if (identical(scale, "bonett")) return(1 - exp(es))
   if (identical(scale, "hakstian_whalen")) return(1 - (1 - es)^3)
@@ -444,10 +563,10 @@ reliability_backtransform <- function(x, ci_lo, ci_up, method = "bonett") {
   if (length(ci_lo) != length(x)) stop("The length of the 'ci_lo' argument is incorrectly specified.")
   if (length(ci_up) != length(x)) stop("The length of the 'ci_up' argument is incorrectly specified.")
 
-  # bonett: 1 - exp(t) is DECREASING, so the transformed-scale upper bound is the
-  # reliability-scale LOWER bound -- the bounds swap. hakstian_whalen is stored in
-  # metafor's INCREASING orientation, so its inverse 1 - (1 - t)^3 keeps the bounds
-  # in place (identical to metafor::transf.iahw). raw: identity.
+  # bonett: 1 - exp(t) is decreasing, so the transformed-scale upper bound is the
+  # reliability-scale lower bound and the bounds swap. hakstian_whalen is stored in
+  # metafor's increasing orientation, so its inverse 1 - (1 - t)^3 keeps the bounds
+  # in place, identically to metafor::transf.iahw(). raw is the identity.
   if (method == "bonett") {
     bt <- function(t) 1 - exp(t)
     out_lo <- bt(ci_up)

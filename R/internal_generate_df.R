@@ -420,13 +420,33 @@
   col_min <- apply(df_value_min_max, 1, function(x) which.min(x)[1])
   col_max <- apply(df_value_min_max, 1, function(x) which.max(x)[1])
 
+  # `col_min == col_max` means the point estimates cannot separate the routes:
+  # either a single route is available, or several returned the SAME value (e.g.
+  # `2x2` and `2x2_sum` on one contingency table). We then break the tie on the CI
+  # lower bound, so that two routes agreeing on the point estimate but not on the
+  # interval are still reported as min/max.
+  #
+  # That re-derivation must not be allowed to destroy the indices it replaces. The
+  # CI bounds can be entirely missing on exactly these rows -- systematically so for
+  # an NNT whose risk-difference CI crosses zero, where the Altman (1998) disjoint
+  # rule blanks them on purpose -- and which.min() over an all-NA row returns
+  # integer(0), whose [1] is NA. Every min_*/max_* diagnostic and diff_min_max was
+  # then lost on a row whose min and max are perfectly well defined (both equal to
+  # the tied estimate). Keep the pre-tie-break index wherever the CI-based lookup
+  # yields NA. The lookup is also restricted to the columns that carry a non-NA
+  # point estimate, so a tie is never broken in favour of a route whose value was
+  # nulled above.
   cols_equal = which(col_min == col_max)
   if (length(cols_equal) > 0 && ncol(df_ci_lo_min_max) > 1) {
     # drop = FALSE keeps the matrix/data.frame shape when df_ci_lo_min_max
     # has 1 column (e.g. measure = "hr" with only user_input_crude),
     # which otherwise collapses to a vector and breaks apply().
-    col_min[cols_equal] <- apply(data.frame(df_ci_lo_min_max)[cols_equal, , drop = FALSE], 1, function(x) which.min(x)[1])
-    col_max[cols_equal] <- apply(data.frame(df_ci_lo_min_max)[cols_equal, , drop = FALSE], 1, function(x) which.max(x)[1])
+    ci_lo_usable <- data.frame(df_ci_lo_min_max)[cols_equal, , drop = FALSE]
+    ci_lo_usable[is.na(data.frame(df_value_min_max)[cols_equal, , drop = FALSE])] <- NA
+    tie_min <- apply(ci_lo_usable, 1, function(x) which.min(x)[1])
+    tie_max <- apply(ci_lo_usable, 1, function(x) which.max(x)[1])
+    col_min[cols_equal] <- ifelse(is.na(tie_min), col_min[cols_equal], tie_min)
+    col_max[cols_equal] <- ifelse(is.na(tie_max), col_max[cols_equal], tie_max)
   }
 
   for (i in 1:length(col_min)) {
@@ -457,9 +477,17 @@
   min_up <- as.numeric(x[, paste0("min_es_ci_up", suffix)])
   max_lo <- as.numeric(x[, paste0("max_es_ci_lo", suffix)])
   max_up <- as.numeric(x[, paste0("max_es_ci_up", suffix)])
+  # A missing bound makes the overlap UNKNOWN, not zero. The former fallback to 0
+  # meant every row whose two routes carry NA CI bounds emitted "[DISCORDANT] Zero
+  # CI overlap between min and max estimates" -- again systematic for a
+  # non-significant NNT under the Altman (1998) disjoint rule, i.e. a false
+  # positive on rows where the two routes agree to the last digit. NA is what
+  # .flag_internal_consistency() already skips (E2/E2b test !is.na(overlap)).
   inter_w <- pmax(0, pmin(min_up, max_up) - pmax(min_lo, max_lo))
   union_w <- pmax(min_up, max_up) - pmin(min_lo, max_lo)
-  overlap_val <- ifelse(is.finite(union_w) & union_w > 0, inter_w / union_w, 0)
+  bounds_known <- !is.na(min_lo) & !is.na(min_up) & !is.na(max_lo) & !is.na(max_up)
+  overlap_val <- ifelse(!bounds_known, NA_real_,
+                        ifelse(is.finite(union_w) & union_w > 0, inter_w / union_w, 0))
   x[, paste0("overlap_min_max", suffix)] <- ifelse(
     x[, paste0("n_estimations", suffix)] > 1,
     overlap_val,
@@ -507,11 +535,11 @@
   dat_long = merge(x = dat_long,
                    y = dispersion)
 
-  # NOTE: both merges below MUST pass `by = "row_id"` explicitly. Letting merge()
-  # infer the key from intersect(names(x), names(y)) silently pulls in any
-  # user-supplied input column that happens to share a name with the carrier
-  # frame -- a column called "blank" or "dat_long" then joined on NA, produced a
-  # 0-row result, and crashed summary() on the DEFAULT path.
+  # Both merges below must pass `by = "row_id"` explicitly. Letting merge() infer the
+  # key from intersect(names(x), names(y)) pulls in any user-supplied input column that
+  # happens to share a name with the carrier frame: a column called "blank" or
+  # "dat_long" then joins on NA, produces a 0-row result, and crashes summary() on the
+  # default path.
   if (main_es == TRUE & nrow(dat_long) != 0) {
     dispersion$row_id = as.numeric(as.character(dispersion$row_id))
     x_transit = merge(x = dispersion[, "row_id", drop = FALSE],

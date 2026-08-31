@@ -2,10 +2,10 @@
 #'
 #' The long-format branches build the crude and adjusted pools with two separate
 #' \code{.generate_df()} calls and then drop every row whose \code{measure} is NA.
-#' That silently deleted whole comparisons from the output: the row count no
-#' longer matched the input, the console banner reported a vacuous
-#' "ES estimated: n/n (100%)", and -- because \code{.add_es_guidance()} only
-#' writes where \code{es} is NA -- the entire \code{es_guidance} feature became
+#' That deletes whole comparisons from the output: the row count no longer
+#' matches the input, the console banner reports a vacuous
+#' "ES estimated: n/n (100%)", and since \code{.add_es_guidance()} only writes
+#' where \code{es} is NA, the entire \code{es_guidance} feature becomes
 #' unreachable in these modes. Re-attach the untouched crude row for any
 #' comparison that survived in neither pool.
 #'
@@ -32,11 +32,12 @@
               prop = "prop", alpha = "alpha", omega = "omega", icc = "ICC")
   base <- if (measure %in% names(labels)) unname(labels[measure]) else measure
 
-  # Roadmap 2.3: the reliability and proportion measures are reported on an ANALYSIS
-  # scale, not on the coefficient scale, and the string did not say so. Under the
-  # default alpha_to_es = "bonett" it printed `alpha = -1.204 [-1.385, -1.023]` -- an
-  # impossible alpha, labelled "alpha", with the bounds in transformed order. Pasted
-  # into a supplement that is simply wrong. Name the scale instead.
+  # The reliability and proportion measures are reported on an analysis scale rather
+  # than on the coefficient scale, and the string has to say so. Under the default
+  # alpha_to_es = "bonett" it would otherwise print
+  # `alpha = -1.204 [-1.385, -1.023]`: an impossible alpha, labelled "alpha", with
+  # the bounds in transformed order, ready to be pasted into a supplement. Name the
+  # scale instead.
   scale_txt <- switch(measure,
     alpha = switch(as.character(rel_method),
                    bonett = "ln(1 - alpha)",
@@ -94,27 +95,27 @@
       paste0("min: ", res[[min_info_col]], " = ", round(min_val, digits),
              ", max: ", res[[max_info_col]], " = ", round(max_val, digits),
              ", overlap: ", round(overlap_raw * 100), "%",
-             # 'dispersion_es' is .dispersion_stat() = max|v - median(v)|, NOT a
+             # 'dispersion_es' is .dispersion_stat() = max|v - median(v)|, not a
              # sample SD (see the rationale at internal_generate_df.R). Label it
-             # for what it is -- this string is the one place a user reads it.
+             # for what it is; this string is the one place a user reads it.
              ", max dev: ", round(disp_raw, digits)),
       "")
   )
   res
 }
 
-# Round the DIAGNOSTIC numeric columns for display.
+# Round the diagnostic numeric columns for display.
 #
-# `es`, `se`, `es_ci_lo` and `es_ci_up` are deliberately NOT in this list. They
+# `es`, `se`, `es_ci_lo` and `es_ci_up` are not in this list, on purpose. They
 # are the analysis columns: `se` becomes an inverse-variance weight the moment
-# the result reaches rma(), so rounding it in the RETURNED data.frame (not
-# merely in the printout) silently corrupts every pooled estimate. At the
-# default digits = 3 a Bonett-scale alpha SE of 0.0203460 came back as 0.020 --
-# a 3.4% weight error on every study -- and a raw-scale alpha SE of 0.00010173
-# came back as exactly 0, at which point rma() aborts with "Division by zero
-# when computing the inverse variance weights". Rounding for the reader is the
-# job of the `es_summary` / `es_consistency` strings, which .make_es_summary()
-# and .make_es_consistency() build at `digits` from these full-precision values.
+# the result reaches rma(), so rounding it in the returned data.frame, rather
+# than merely in the printout, corrupts every pooled estimate. At the default
+# digits = 3 a Bonett-scale alpha SE of 0.0203460 comes back as 0.020, a 3.4%
+# weight error on every study, and a raw-scale alpha SE of 0.00010173 comes back
+# as exactly 0, at which point rma() aborts with "Division by zero when
+# computing the inverse variance weights". Rounding for the reader is the job of
+# the `es_summary` / `es_consistency` strings, which .make_es_summary() and
+# .make_es_consistency() build at `digits` from these full-precision values.
 .round_numeric_cols <- function(res, digits, suffix) {
   cols_to_round <- paste0(
     c("overlap_min_max", "diff_min_max", "dispersion_es",
@@ -156,7 +157,7 @@
 #'   \item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
 #'   \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
 #'   \item \code{direction_conflict_min} (default 2): number of significantly-positive and significantly-negative studies needed to raise the direction conflict flag (G1)
-#'   \item \code{flag_group} (default NULL): one or more input-column names (e.g. \code{"outcome"} or \code{c("outcome", "subgroup")}) used to scope the CROSS-ROW checks (ES/SE/SD outliers, direction conflict, study-duplication, NNT-type and standardizer mixing). With the default \code{NULL} the whole dataset is one pool. Set it for multivariate / multi-outcome data, where a deviation or a repeated \code{study_id} is only meaningful WITHIN a group of comparable rows; a study contributing several outcomes is then no longer flagged as a duplicate, and outliers are judged against same-group peers. Per-row and cross-method checks, and the byte-identical templated-data check (V23), are unaffected.
+#'   \item \code{flag_group} (default NULL): one or more input-column names (e.g. \code{"outcome"} or \code{c("outcome", "subgroup")}) used to scope the cross-row checks (ES/SE/SD outliers, direction conflict, study-duplication, NNT-type and standardizer mixing). With the default \code{NULL} the whole dataset is one pool. Set it for multivariate / multi-outcome data, where a deviation or a repeated \code{study_id} is only meaningful within a group of comparable rows; a study contributing several outcomes is then no longer flagged as a duplicate, and outliers are judged against same-group peers. Per-row and cross-method checks, and the byte-identical templated-data check (V23), are unaffected.
 #' }
 #' @param guidance a logical value indicating whether missing data guidance should be generated for rows where the effect size is NA. Default is TRUE. When enabled, a column \code{es_guidance} (or \code{es_guidance_crude}/\code{es_guidance_adjusted}) is appended, listing the closest estimation methods and which specific columns are missing.
 #' @param include_raw a logical value indicating whether the raw input columns should be appended after the effect size columns in the returned dataframe. Default is TRUE.

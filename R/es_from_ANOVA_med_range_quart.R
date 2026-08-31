@@ -1,7 +1,7 @@
 # Bounds-safe lookup into a Wan (2014) / Hozo (2005) constant table. At index 0 R
-# silently DROPS the element (and does negative indexing at index < 0), which shortens
-# the result vector so the enclosing ifelse() recycles a constant onto the WRONG (valid)
-# row -- silently corrupting a neighbouring study's SD/effect size. Mapping every
+# drops the element (and does negative indexing at index < 0), which shortens the
+# result vector, so the enclosing ifelse() recycles a constant onto the wrong, valid
+# row and corrupts a neighbouring study's SD and effect size. Mapping every
 # out-of-range index to NA keeps the result the same length as the input, so each row
 # keeps its own constant and an out-of-range row is NA (n <= 1 for the IQR/quartile
 # tables, n <= 0 for the range table). This complements the Tier-1 V16 check in

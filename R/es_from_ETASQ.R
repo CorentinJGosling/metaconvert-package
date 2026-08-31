@@ -63,7 +63,7 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
   # df_err = n_exp + n_nexp - 2, then apply Cohen's d from F (table 12.1 in Cooper):
   #   F = etasq * df_err / (1 - etasq)
   #   d = sqrt(F * (n_exp + n_nexp) / (n_exp * n_nexp))
-  # which collapses to the single expression below. This carries BOTH arm sizes, so
+  # which collapses to the single expression below. This carries both arm sizes, so
   # it is exact for unequal groups; the former closed form 2 * sqrt(etasq/(1 - etasq))
   # is its equal-n, large-n limit (it replaces sqrt(df_err * (1/n_exp + 1/n_nexp)) by
   # the constant 2) and understated d by up to 39% at n_exp/n_nexp = 10/90. This now
@@ -97,9 +97,9 @@ es_from_etasq <- function(etasq, n_exp, n_nexp, smd_to_cor = "viechtbauer", smd_
 #' @param n_nexp number of participants in the non-experimental/non-exposed group.
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
@@ -171,11 +171,11 @@ es_from_etasq_adj <- function(etasq_adj, n_exp, n_nexp, n_cov_ancova, cov_outcom
   if (missing(reverse_etasq)) reverse_etasq <- rep(FALSE, length(etasq_adj))
   reverse_etasq[is.na(reverse_etasq)] <- FALSE
 
-  # A partial eta-squared from an ANCOVA is natively defined on the RESIDUAL
+  # A partial eta-squared from an ANCOVA is natively defined on the residual
   # (covariate-adjusted) SD scale. Convert it back to the ANCOVA F-statistic it
   # implies (eta_p^2 = F / (F + df_err), so F = eta_p^2 * df_err / (1 - eta_p^2))
   # and delegate to es_from_ancova_f(), which back-transforms the point estimate
-  # to the MARGINAL (unadjusted-SD) scale via sqrt(1 - cov_outcome_r^2)
+  # to the marginal (unadjusted-SD) scale via sqrt(1 - cov_outcome_r^2)
   # (table 12.3 in Cooper). This keeps a single source of truth for the ANCOVA
   # family: the point estimate, the (1 - cov_outcome_r^2)-shrunk sampling
   # variance and the df = N - 2 - n_cov_ancova CIs are mutually consistent, and

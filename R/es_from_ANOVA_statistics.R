@@ -19,7 +19,7 @@
 #'
 #' **Important - Student's t, not Welch's t.** This formula is the exact inverse of the
 #' pooled-variance (Student) t-test, so \code{student_t} must be the *equal-variance* t.
-#' It should NOT be used with a Welch (unequal-variance) t-test, which is the default of
+#' It should not be used with a Welch (unequal-variance) t-test, which is the default of
 #' R's \code{t.test()}. A Welch t uses \eqn{\sqrt{s_1^2/n_1 + s_2^2/n_2}} rather than
 #' \eqn{s_{pooled}\sqrt{1/n_1 + 1/n_2}}, so when group sizes and variances both differ,
 #' plugging a Welch t into this formula yields a biased Cohen's d (the bias can exceed

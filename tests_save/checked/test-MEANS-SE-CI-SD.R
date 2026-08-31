@@ -279,8 +279,11 @@ test_that("raw_means + SD => Z (VIECHTBAUER)", {
     p <- n1 / n
     fzp <- dnorm(qnorm(p))
     a <- sqrt(fzp) / (p*(1-p))^(1/4)
-    rb = ifelse(rb > 1, 1,
-                ifelse(rb < -1, -1, rb))
+    # Clamping an out-of-range biserial r to the boundary is exactly the saturation the
+    # package no longer performs (see helper-z-declined.R): past |r| = 1 the clamped z
+    # stops moving with the data. The reference declines the row too, so every row stays
+    # compared exactly rather than being dropped from the pin.
+    rb = ifelse(abs(rb) > 1, NA_real_, rb)
     zrb <- (a/2) * log((1+a*rb)/(1-a*rb))
     ci_1 <- zrb - qnorm(.975) * sqrt(1/(n-1))
     ci_2 <- zrb + qnorm(.975) * sqrt(1/(n-1))
@@ -297,7 +300,8 @@ test_that("raw_means + SD => Z (VIECHTBAUER)", {
     ),
     digits = 13
   )
-  expect_equal(unique(es.mcv_z$info_used_crude), "means_sd")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_z$info_used_crude, "means_sd")
   expect_equal(es.mcv_z$es_crude, res_z[,1], tolerance = 1e-10)
   expect_equal(es.mcv_z$es_ci_lo_crude, res_z[,2], tolerance = 1e-10)
   expect_equal(es.mcv_z$es_ci_up_crude, res_z[,3], tolerance = 1e-10)

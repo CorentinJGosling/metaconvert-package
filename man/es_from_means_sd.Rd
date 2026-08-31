@@ -60,9 +60,9 @@ from the means and standard deviations of two independent groups.
 Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 
 \strong{The Z returned here is not Fisher's z under the default.} \code{smd_to_cor}
-chooses two things at once. It chooses WHICH correlation is estimated --
-"viechtbauer" (default) the biserial, "lipsey_cooper" the point-biserial -- and
-it chooses WHICH TRANSFORM fills the Z column. "lipsey_cooper" returns Fisher's z,
+chooses two things at once. It chooses which correlation is estimated, the biserial
+under "viechtbauer" (the default) or the point-biserial under "lipsey_cooper", and
+it chooses which transform fills the Z column. "lipsey_cooper" returns Fisher's z,
 \eqn{atanh(r)}; "viechtbauer" returns a variance-stabilising transform, which is a
 different function of the correlation: at a point-biserial rho = 0.75 it
 returns 1.0925 where \eqn{atanh(r)} of its own R is 1.7468.

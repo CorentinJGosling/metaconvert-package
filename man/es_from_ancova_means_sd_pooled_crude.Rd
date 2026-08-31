@@ -26,18 +26,18 @@ es_from_ancova_means_sd_pooled_crude(
 
 \item{cov_outcome_r}{pooled \strong{within-group} correlation between the outcome and the
 covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 total-sample correlation, nor the square root of the whole model R-squared (which also
 absorbs the group effect).
 
 \strong{This route behaves differently from the rest of the \code{es_from_ancova_*} family,
 and the difference matters.} Here you supply an already-\strong{marginal} SD
 (\code{mean_sd_pooled}), so \code{cov_outcome_r} is not used to rescale it: the value
-enters the sampling variance ONLY, through the \eqn{(1 - R^2)} factor of Cooper's
+enters the sampling variance alone, through the \eqn{(1 - R^2)} factor of Cooper's
 eq. 12.26. A mis-specified \code{cov_outcome_r} therefore leaves the effect size
-\strong{exactly unchanged} and shrinks its standard error. Nothing cancels, so -- unlike
-the residual-SD routes, where the estimate and the SE move by the same factor and the
-p-value is unaffected -- here the p-value DOES move and the error IS visible.
+\strong{exactly unchanged} and shrinks its standard error. Nothing cancels here, so the
+p-value moves and the error is visible. On the residual-SD routes the estimate and
+the SE move by the same factor and the p-value is unaffected.
 Supplying 0.9 where the truth is 0 multiplies \code{d_se} by 0.48 and the t statistic
 by 2.07: a roughly 4-fold inflation of the study's inverse-variance weight. Simulation
 over a covariate-correlation grid gives coverage 0.633 and an SE ratio of 0.457 at

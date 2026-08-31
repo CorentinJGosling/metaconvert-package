@@ -7,7 +7,7 @@
 #' @param n_controls number of controls/no-event
 #' @param n_exp number of participants in the exposed group
 #' @param n_nexp number of participants in the non-exposed group
-#' @param baseline_risk proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)
+#' @param baseline_risk proportion of cases in the non-exposed group (required for the \code{rr_to_or = "grant"} argument, and for the risk difference and the NNT). It is never derived from other columns.
 #' @param reverse_rr a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param rr_to_or formula used to convert the \code{rr} value into an odds ratio (see details).
 #'
@@ -101,10 +101,14 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
     baseline_risk <- rep(NA_real_, length(rr))
   }
   # Divided by, not merely reported: outside [0, 1) both (1 - BR) and (1 - RR*BR)
-  # change sign together, so the grant conversion stays finite and POSITIVE while
+  # change sign together, so the grant conversion stays finite and positive while
   # returning a negative standard error and a transposed interval. See
   # R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on rr <= 0,
+  # but the risk-difference block does not: it returns a fabricated rd with a negative
+  # rd_se and a transposed CI (and rd_se exactly 0 at rr = 0).
+  rr <- .ratio_or_na(rr)
   if (missing(n_exp)) {
     n_exp <- rep(NA_real_, length(rr))
   }
@@ -179,30 +183,45 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
 
     es$logor[nn_miss] <- ifelse(reverse_rr[nn_miss], -res_or[, 1], res_or[, 1])
     es$logor_se[nn_miss] <- res_or[, 2]
-    # On reverse the point estimate is negated, so the (symmetric, log-scale) CI must be
-    # NEGATED AND SWAPPED: new_lo = -old_up, new_up = -old_lo. Swapping alone left a
-    # wrong-signed, inverted interval (lo > up) that did not bracket the reversed estimate.
+    # On reverse the point estimate is negated, so the symmetric, log-scale CI must be
+    # negated and swapped: new_lo = -old_up, new_up = -old_lo. Swapping alone leaves a
+    # wrong-signed, inverted interval (lo > up) that does not bracket the reversed
+    # estimate.
     es$logor_ci_lo[nn_miss] <- ifelse(reverse_rr[nn_miss], -res_or[, 4], res_or[, 3])
     es$logor_ci_up[nn_miss] <- ifelse(reverse_rr[nn_miss], -res_or[, 3], res_or[, 4])
   }
 
   # Risk difference from RR + baseline_risk
   # The risk difference is baseline_risk - (rr * baseline_risk), so it presumes the
-  # implied EXPOSED risk rr * baseline_risk is itself a probability. When it exceeds 1
+  # implied exposed risk rr * baseline_risk is itself a probability. When it exceeds 1
   # the pair of risks does not exist and the RD and NNT describe nothing: at rr = 2 with
-  # baseline_risk = 0.9 the implied exposed risk is 1.8, and the route returned
+  # baseline_risk = 0.9 the implied exposed risk is 1.8, and the route returns
   # rd = -0.900 and nnt = -1.111 while correctly returning the odds ratio as NA. Neither
-  # value trips a flag -- B6 tests |rd| > 1, and |-0.9| is inside the bound -- so the
-  # impossible pair reached the output silently.
+  # value trips a flag, since B6 tests |rd| > 1 and |-0.9| is inside the bound, so the
+  # impossible pair would reach the output unremarked.
   #
   # NB the OR path already declines here (Grant's transform needs rr * baseline_risk < 1
   # and returns NA outside it), so this closes the one route that did not.
   .risk_pair_ok <- is.na(rr) | is.na(baseline_risk) | (rr * baseline_risk <= 1)
   rd <- ifelse(.risk_pair_ok, baseline_risk * (1 - rr), NA_real_)
 
-  es$rd <- ifelse(reverse_rr, -rd, rd)
   # delta method
   rd_se <- ifelse(.risk_pair_ok, baseline_risk * rr * logrr_se, NA_real_)
+
+  # A derived risk-difference SE of exactly 0 is a zero sampling variance -- an infinite
+  # inverse-variance weight, or an rma() abort. It arises at baseline_risk = 0, where
+  # rd_se = BR * rr * logrr_se collapses. Given the delta method own assumption that
+  # baseline_risk is a known constant, rd = 0 IS the correct conditional point estimate
+  # there; what is wrong is shipping it as a poolable row, so the row declines both.
+  # The guard is keyed on the SE and never on rd itself: a genuinely null risk
+  # difference has rd = 0 with a perfectly good standard error and must survive.
+  # baseline_risk = 0 stays legal on the log scale (the rare-disease limit, where the
+  # grant conversions become the identity). See R/internal_guards.R.
+  degenerate_rd <- !is.na(rd_se) & rd_se <= 0
+  rd_se <- .positive_or_na(rd_se)
+  rd <- ifelse(degenerate_rd, NA_real_, rd)
+
+  es$rd <- ifelse(reverse_rr, -rd, rd)
   es$rd_se <- rd_se
   es$rd_ci_lo <- es$rd - qnorm(.975) * rd_se
   es$rd_ci_up <- es$rd + qnorm(.975) * rd_se
@@ -212,7 +231,9 @@ es_from_rr_se <- function(rr, logrr, logrr_se, baseline_risk,
   es$nnt_se <- ifelse(rd == 0, NA, rd_se / rd^2)
   rd_ci_lo_raw <- rd - qnorm(.975) * rd_se
   rd_ci_up_raw <- rd + qnorm(.975) * rd_se
-  crosses_zero <- (rd_ci_lo_raw < 0 & rd_ci_up_raw > 0) | rd == 0
+  # Non-strict: a bound landing exactly on 0 is still the Altman discontinuity, and
+  # the reciprocal of +0 is a literal Inf where the neighbouring input returns NA.
+  crosses_zero <- (rd_ci_lo_raw <= 0 & rd_ci_up_raw >= 0) | rd == 0
   es$nnt_ci_lo <- ifelse(crosses_zero, NA,
                           ifelse(reverse_rr, -1 / rd_ci_lo_raw, 1 / rd_ci_up_raw))
   es$nnt_ci_up <- ifelse(crosses_zero, NA,
@@ -284,10 +305,14 @@ es_from_rr_ci <- function(rr, rr_ci_lo, rr_ci_up, logrr, logrr_ci_lo, logrr_ci_u
     baseline_risk <- rep(NA_real_, length(rr))
   }
   # Divided by, not merely reported: outside [0, 1) both (1 - BR) and (1 - RR*BR)
-  # change sign together, so the grant conversion stays finite and POSITIVE while
+  # change sign together, so the grant conversion stays finite and positive while
   # returning a negative standard error and a transposed interval. See
   # R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on rr <= 0,
+  # but the risk-difference block does not: it returns a fabricated rd with a negative
+  # rd_se and a transposed CI (and rd_se exactly 0 at rr = 0).
+  rr <- .ratio_or_na(rr)
   if (missing(n_exp)) {
     n_exp <- rep(NA_real_, length(rr))
   }
@@ -389,10 +414,14 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
     baseline_risk <- rep(NA_real_, length(rr))
   }
   # Divided by, not merely reported: outside [0, 1) both (1 - BR) and (1 - RR*BR)
-  # change sign together, so the grant conversion stays finite and POSITIVE while
+  # change sign together, so the grant conversion stays finite and positive while
   # returning a negative standard error and a transposed interval. See
   # R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on rr <= 0,
+  # but the risk-difference block does not: it returns a fabricated rd with a negative
+  # rd_se and a transposed CI (and rd_se exactly 0 at rr = 0).
+  rr <- .ratio_or_na(rr)
   if (missing(n_exp)) {
     n_exp <- rep(NA_real_, length(rr))
   }
@@ -410,15 +439,15 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
 
   rr <- ifelse(is.na(rr) & !is.na(logrr), exp(logrr), rr)
   # Mirror es_from_or_pval: take the positive critical value and the absolute
-  # magnitude, so rr == 1 (log(rr) = 0) evaluates to 0 HERE rather than to the 0/0 =
-  # NaN the earlier sign(log(rr)) denominator produced. The direction of the effect is
+  # magnitude, so rr == 1 (log(rr) = 0) evaluates to 0 here rather than to the 0/0 =
+  # NaN a sign(log(rr)) denominator would produce. The direction of the effect is
   # carried by rr itself, so the SE only needs its magnitude.
   #
-  # What this function RETURNS at rr == 1 is NA, not 0 -- an earlier version of this
-  # comment said 0 and was describing the intermediate. es_from_rr_se() passes the
-  # value through .positive_or_na(), and a zero SE is non-positive: it would be an
-  # infinite inverse-variance weight. NA is the intended outcome, since rr = 1 beside
-  # a large p-value carries no information about the standard error at all.
+  # What this function returns at rr == 1 is NA rather than 0; the 0 above describes
+  # the intermediate value. es_from_rr_se() passes it through .positive_or_na(), and a
+  # zero SE is non-positive: it would be an infinite inverse-variance weight. NA is the
+  # intended outcome, since rr = 1 beside a large p-value carries no information about
+  # the standard error at all.
   # Measured and pinned in tests/testthat/test-unverified-routes-external.R, which
   # also checks that es_from_or_pval behaves identically, as "mirror" claims.
   z_rr <- qnorm(rr_pval / 2, lower.tail = FALSE)

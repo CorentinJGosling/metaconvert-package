@@ -72,7 +72,7 @@ groups (default \code{FALSE}). The two options target the same estimand when the
 equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
 which to prefer, so this is a deliberate choice and not a technical detail.
 \itemize{
-\item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+\item \code{FALSE} (default): each arm's change is standardized by that arm's own SD and the two
 within-group values are subtracted, their variances adding because the arms are independent. This
 is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
 SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more

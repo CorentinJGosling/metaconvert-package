@@ -19,9 +19,12 @@
 # =============================================================================
 
 .sheet_measures <- function() {
-  # Every measure convert_df() accepts, plus the "all" superset the sheet supports.
-  c("all", "d", "g", "md", "or", "rr", "rd", "nnt", "irr",
-    "r", "z", "logvr", "logcvr", "prop", "alpha", "icc")
+  # Every value data_extraction_sheet() documents, read off the argument's own
+  # choices vector so this helper cannot fall behind the function again: it used to
+  # enumerate 16 of the 27, leaving the within-group (dw/gw/mdw), partial-correlation
+  # (rp/zp), hazard-ratio, omega and log-scale branches unvisited by the two
+  # assertions below.
+  eval(formals(data_extraction_sheet)$measure)
 }
 
 test_that("every name the extraction sheet emits is recognised by .check_data()", {

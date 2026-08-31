@@ -1,0 +1,131 @@
+                <figcaption class="cap"><b>Figure 2.</b> The same
+                <code>lipsey_cooper</code> cells with n on the axis, one line per
+                &rho;. Coverage falling as n rises is the signature of bias, not of
+                a variance that the interval got wrong.</figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="blk">
+        <div class="gut">Table 1<em>by route</em></div>
+        <div class="bd">
+          <table class="bt">
+            <thead><tr>
+              <th class="l">route</th><th>coverage</th><th>|bias|</th><th>RMSE</th>
+              <th>SE ratio</th><th>worst cell</th><th>at</th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="l"><i class="sw" style="background:#2c2a47"></i>viechtbauer</td>
+                <td>0.940</td><td>0.0036</td><td>0.147</td><td>0.975</td><td>0.916</td>
+                <td>&rho;&nbsp;.75, n&nbsp;25</td></tr>
+              <tr><td class="l"><i class="sw" style="background:#c0474e"></i>lipsey_cooper</td>
+                <td>0.764</td><td>0.0815</td><td>0.152</td><td>0.991</td><td>0.000</td>
+                <td>&rho;&nbsp;.75, n&nbsp;300</td></tr>
+            </tbody>
+          </table>
+          <p class="cap">Means over the 20 conditions in the query. Monte Carlo
+          resolution limit for coverage is 0.016 (twice the median Monte Carlo
+          standard error), so differences smaller than that are not results.
+          <a href="#">Download these rows</a></p>
+        </div>
+      </div>
+
+      <div class="blk">
+        <div class="gut">Caveat<em>read before quoting</em></div>
+        <div class="bd">
+          <p>The SE ratio is near 1 for both routes, so neither reports an interval
+          of the wrong width. Everything in finding 1 comes from where the interval
+          is centred, which is why <code>lipsey_cooper</code> looks worse at
+          n&nbsp;=&nbsp;300 than at n&nbsp;=&nbsp;25.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<h2 class="doc">Side by side</h2>
+<div class="cmp">
+  <div class="row hd">
+    <div class="l"></div>
+    <div><span class="k">A</span>Verdict first</div>
+    <div><span class="k">B</span>Two questions</div>
+    <div><span class="k">C</span>Results listing</div>
+  </div>
+  <div class="row">
+    <div class="l">Scientific choices</div>
+    <div>A sentence across the top; each choice is a token in it.</div>
+    <div>In the document: title, then the reference quantity as a tab strip.</div>
+    <div>One query line, read as a call, tokens editable in place.</div>
+  </div>
+  <div class="row">
+    <div class="l">Plot controls</div>
+    <div>A quiet strip immediately above the figure.</div>
+    <div>The left rail, which now does nothing else.</div>
+    <div>The same query line, second row.</div>
+  </div>
+  <div class="row">
+    <div class="l">Estimand check</div>
+    <div>A two-column <i>Why</i> section under the boundary grid.</div>
+    <div>Gone as a tab. It is the ledger, and the ledger is the page.</div>
+    <div>Finding 3 and 4, in the same numbered list as everything else.</div>
+  </div>
+  <div class="row">
+    <div class="l">Signature</div>
+    <div>The boundary grid: 20 measured cells, tinted by shortfall.</div>
+    <div>The ledger: routes &times; reference quantities, mirror visible.</div>
+    <div>The query line and the hanging finding marks.</div>
+  </div>
+  <div class="row">
+    <div class="l">Best when</div>
+    <div>The reader wants an answer and will trust the working underneath.</div>
+    <div>The reader is choosing an estimand, which is study 01a, 02, 03, 08 and 09.</div>
+    <div>The reader is a methodologist checking the programme, or writing it up.</div>
+  </div>
+  <div class="row">
+    <div class="l">Costs</div>
+    <div>The boundary grid needs a two-factor design; studies with one condition
+    column get a strip instead.</div>
+    <div>The ledger needs every route scored against every target, which studies 04,
+    05 and 06 do not record.</div>
+    <div>Least legible to a reader who has not met ADEMP. Density is the point and
+    also the risk.</div>
+  </div>
+</div>
+
+<h2 class="doc">What none of them does</h2>
+<p>No hero metric cards, no uppercase letterspaced micro-labels, no rounded or
+shadowed boxes, no pill badges, no competitive wording. Rose appears only on the
+current selection and on a value that failed a stated test; it is never a heading
+tint or a divider. Type is the brand pairing, Work Sans with Cascadia Code for
+every figure, plus Newsreader in direction B for the two questions, which are the
+only sentences on that page meant to be read as questions rather than scanned.</p>
+
+<p class="foot"><b>Source</b> data/aggregated/01a_smd_to_cor_r_nrep1000.csv,
+target biserial_population, p_exp 0.30, 20 conditions, 1,000 replications each.
+<b>Figures</b> app/redesign-2026-08/make-figures.R. <b>Mockups</b> static HTML;
+the controls are drawn, not wired.</p>
+
+</div>
+
+<script>
+(function(){
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.switch button'));
+  function show(t){
+    tabs.forEach(function(b){
+      var on = b === t;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach(function(b){
+    b.addEventListener('click', function(){ show(b); });
+    b.addEventListener('keydown', function(e){
+      var i = tabs.indexOf(b), j = e.key === 'ArrowRight' ? i+1 : e.key === 'ArrowLeft' ? i-1 : -1;
+      if (j >= 0 && j < tabs.length){ e.preventDefault(); tabs[j].focus(); show(tabs[j]); }
+    });
+  });
+})();
+</script>

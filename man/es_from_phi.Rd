@@ -50,7 +50,7 @@ Then, the calculations of the \code{\link{es_from_2x2}()} function are applied.
 
 \strong{To estimate D, G and the correlation coefficients (R/Z) when the 2x2 table cannot be
 reconstructed} (e.g., the number of cases or exposed participants is missing), the phi
-coefficient -- which is the Pearson correlation of the two binary variables -- is
+coefficient, which is the Pearson correlation of the two binary variables, is
 treated directly as a correlation coefficient and passed to
 \code{\link{es_from_pearson_r}()}. This yields R and Z with their standard large-sample
 sampling variances,

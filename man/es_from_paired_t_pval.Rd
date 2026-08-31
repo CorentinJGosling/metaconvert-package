@@ -13,7 +13,9 @@ es_from_paired_t_pval(
   r_pre_post_nexp,
   smd_to_cor = "viechtbauer",
   pre_post_to_smd = "cooper",
-  reverse_paired_t_pval
+  reverse_paired_t_pval,
+  reverse_paired_t_pval_exp,
+  reverse_paired_t_pval_nexp
 )
 }
 \arguments{
@@ -34,6 +36,13 @@ es_from_paired_t_pval(
 \item{pre_post_to_smd}{formula used to convert the paired t-test value into a SMD (see details).}
 
 \item{reverse_paired_t_pval}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
+
+\item{reverse_paired_t_pval_exp}{a logical value indicating that the experimental/exposed group changed in the
+NEGATIVE direction. A two-sided p-value is unsigned, so this is the only way to state that arm's own
+direction (see details).}
+
+\item{reverse_paired_t_pval_nexp}{a logical value indicating that the non-experimental/non-exposed group
+changed in the NEGATIVE direction (see details).}
 }
 \value{
 This function estimates and converts between several effect size measures.
@@ -63,8 +72,32 @@ which are then converted into a Cohen's d (Cooper et al., 2019):
 \deqn{cohen\_d\_exp = paired\_t\_exp * \sqrt{\frac{2 * (1 - r\_pre\_post\_exp)}{n\_exp}}}
 \deqn{cohen\_d\_nexp = paired\_t\_nexp * \sqrt{\frac{2 * (1 - r\_pre\_post\_nexp)}{n\_nexp}}}
 
+\strong{A two-sided p-value carries no sign.} The quantile above returns \eqn{|t|}, so only the
+MAGNITUDE of each arm's change is recoverable and, unless told otherwise, this function assumes
+that both arms moved in the SAME direction. The between-group estimate is formed as
+\eqn{cohen\_d = d\_exp - d\_nexp}; when the control arm actually moved the other way -- it
+deteriorated while the treatment arm improved, an ordinary trial result -- the correct contrast
+is \eqn{|d\_exp| + |d\_nexp|}, so the assumption biases the estimate by \eqn{2|d\_nexp|}. That
+halves it exactly when the two arms' magnitudes are equal, and shrinks it towards zero or
+reverses its sign when the control arm moved more than the treatment arm. The assumption cannot
+be verified from the reported statistic, so no quality flag fires on such a row.
+
+Mark the arm that moved down with \code{reverse_paired_t_pval_exp} /
+\code{reverse_paired_t_pval_nexp}, which flip the sign of that arm's recovered t before the
+contrast is formed. \code{reverse_paired_t_pval} flips the whole contrast instead, so it cannot
+express two arms moving apart. When the signed t values are reported,
+\code{\link{es_from_paired_t}()} needs no such assumption, and the
+\code{\link{es_from_mean_change_pval}()} family carries the direction in the sign of the mean
+change.
+
 \strong{To estimate other effect size measures},
 calculations of the \code{\link{es_from_cohen_d}()} are applied.
+}
+\note{
+Both arms are assumed to have changed in the same direction, and a two-sided p-value can neither
+confirm nor refute that. Use \code{\link{es_from_paired_t}()} with signed t values, the
+\code{es_from_mean_change_*} family, or the per-arm \code{reverse_paired_t_pval_exp} /
+\code{reverse_paired_t_pval_nexp} flags when the arms diverge.
 }
 \examples{
 es_from_paired_t_pval(paired_t_pval_exp = 0.4, paired_t_pval_nexp = 0.01, n_exp = 19, n_nexp = 22)

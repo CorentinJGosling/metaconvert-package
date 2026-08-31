@@ -4,14 +4,14 @@
 # metaConvert addresses two distinct sources of variability, which require
 # differentiation:
 #
-#   1. The SOURCE STATISTICS -- the reported quantities from which an effect
+#   1. The source statistics: the reported quantities from which an effect
 #      size is derived (means and standard deviations, a t statistic, a 2x2
 #      table, ...). For a given estimand, alternative derivations are
 #      algebraically equivalent; discrepancies therefore indicate an extraction
 #      or primary reporting error. That is the domain of the metaDETECT
 #      [DISCORDANT] checks, exposed by convert_df(main_es = FALSE).
 #
-#   2. The CONVERSION FORMULA -- the analytical transformation applied once the
+#   2. The conversion formula: the analytical transformation applied once the
 #      source statistics have been read (or_to_rr, cor_to_smd, pre_post_to_smd,
 #      ...). Alternative formulas encode different statistical assumptions and
 #      are therefore not algebraically equivalent: discrepancies reflect the
@@ -46,18 +46,20 @@
     smd_var         = c("borenstein", "hedges_olkin"),
     prop_to_es      = c("raw", "logit", "freeman_tukey"),
     alpha_to_es     = c("bonett", "raw", "hakstian_whalen"),
-    icc_to_es       = c("bonett", "raw")
+    icc_to_es       = c("bonett", "raw"),
+    omega_to_es     = c("bonett", "raw", "hakstian_whalen")
   )
 }
 
-# Parameters whose options alter the ANALYSIS SCALE rather than the formula
+# Parameters whose options alter the analysis scale rather than the formula
 # applied on a fixed scale. alpha_to_es = "bonett" returns ln(1 - alpha) whereas
 # "raw" returns alpha itself; prop_to_es = "logit" returns a log-odds and "raw" a
 # proportion. Direct mathematical comparison between these scales is invalid, so
 # the values are reported side by side but `deviation` and `spread` are returned
 # as NA: the choice determines which quantity is meta-analysed, not how precisely
 # a single quantity is computed.
-.scale_changing_parameters <- function() c("alpha_to_es", "icc_to_es", "prop_to_es")
+.scale_changing_parameters <- function() c("alpha_to_es", "icc_to_es", "prop_to_es",
+                                           "omega_to_es")
 
 # Identifies the conversion parameters relevant to a specific target effect size.
 # Iterating over irrelevant parameters (e.g. varying alpha_to_es for Hedges' g)
@@ -72,15 +74,28 @@
     k <- c("pre_post_to_smd", "smd_denom", "smd_var", "cor_to_smd",
            "or_to_cor", "or_to_rr", "rr_to_or")
   } else if (measure %in% cor_like) {
-    k <- c("smd_to_cor", "or_to_cor", "cor_to_smd", "smd_var", "pre_post_to_smd")
+    # smd_denom, or_to_rr and rr_to_or reach a correlation too: an SMD standardized
+    # on the control arm gives a different point-biserial r, and a reported RR is
+    # routed through the OR before or_to_cor sees it.
+    k <- c("smd_to_cor", "or_to_cor", "cor_to_smd", "smd_var", "pre_post_to_smd",
+           "smd_denom", "or_to_rr", "rr_to_or")
   } else if (measure %in% ratio) {
-    k <- c("or_to_rr", "rr_to_or", "or_to_cor", "smd_to_cor")
+    # A correlation or a pre/post design reaches an odds ratio through the SMD, so
+    # the parameters governing that leg move the ratio as well: on a single
+    # pearson_r row cor_to_smd moves the OR by 53%, and on a paired-t row
+    # pre_post_to_smd moves it by 8.5%. Over-inclusion is free -- a parameter is
+    # reported only where the estimates actually differ -- whereas omitting one
+    # prints an affirmative all-clear.
+    k <- c("or_to_rr", "rr_to_or", "or_to_cor", "smd_to_cor",
+           "cor_to_smd", "pre_post_to_smd", "smd_denom", "smd_var")
   } else if (measure == "prop") {
     k <- "prop_to_es"
   } else if (measure == "alpha") {
     k <- "alpha_to_es"
   } else if (measure == "icc") {
     k <- "icc_to_es"
+  } else if (measure == "omega") {
+    k <- "omega_to_es"
   }
   intersect(k, names(.formula_parameters()))
 }
@@ -105,7 +120,7 @@
 # Maps a value recorded by convert_df() onto the option set of a conversion
 # parameter. Several options are documented under two names ("control" is
 # Glass's delta, "viechtbauer" the Hedges & Olkin variance); unname() is required
-# because the lookup returns a named element, which no longer compares equal to
+# because the lookup returns a named element, which does not compare equal to
 # the plain option name.
 .resolve_formula_alias <- function(value, opts) {
   alias <- c(control = "glass", control_robust = "glass_robust",
@@ -204,6 +219,7 @@
 #'  \code{prop_to_es} \tab raw, logit, freeman_tukey\cr
 #'  \code{alpha_to_es} \tab bonett, raw, hakstian_whalen\cr
 #'  \code{icc_to_es} \tab bonett, raw\cr
+#'  \code{omega_to_es} \tab bonett, raw, hakstian_whalen\cr
 #' }
 #' Options documented under two names are evaluated once, under the name listed
 #' above.
@@ -215,7 +231,7 @@
 #' comparison itself received.
 #'
 #' For each comparison, \code{\link{convert_df}} returns one effect size, derived
-#' from one type of input data -- the type selected by the hierarchy and reported
+#' from one type of input data, the type selected by the hierarchy and reported
 #' in the \code{info_used} column. A conversion parameter can therefore change the
 #' result only if that particular type of input data is converted through it. A
 #' comparison is reported only if the parameter reached it: at least one formula
@@ -237,9 +253,9 @@
 #' \code{"summary"} attribute.
 #'
 #' Parameters whose options alter the analysis scale rather than the formula
-#' applied on a fixed scale (\code{alpha_to_es}, \code{icc_to_es},
-#' \code{prop_to_es}) are reported with \code{deviation} set to \code{NA}, as are
-#' the \code{es_min}, \code{es_max} and \code{spread} columns of the
+#' applied on a fixed scale (\code{alpha_to_es}, \code{omega_to_es},
+#' \code{icc_to_es}, \code{prop_to_es}) are reported with \code{deviation} set to
+#' \code{NA}, as are the \code{es_min}, \code{es_max} and \code{spread} columns of the
 #' \code{"summary"} attribute. For these parameters, \code{"bonett"} returns a
 #' transformed quantity, such as \eqn{\ln(1 - \alpha)}, whereas \code{"raw"}
 #' returns the coefficient itself, so direct mathematical comparison between the
@@ -343,6 +359,7 @@ es_formulas <- function(object, parameters = NULL, digits = 3, verbose = TRUE) {
 
   blocks <- list()
   failed <- character(0)
+  unestimable <- character(0)
   for (pm in parameters) {
     opts <- all_parameters[[pm]]
     # The formula applied by the original call, resolved separately for every
@@ -414,7 +431,17 @@ es_formulas <- function(object, parameters = NULL, digits = 3, verbose = TRUE) {
     changed <- (!is.na(es_spread) & es_spread > tol) |
                (!is.na(se_spread) & se_spread > tol)
     keep <- names(es_spread)[estimable & changed]
-    if (length(keep) == 0) next
+    if (length(keep) == 0) {
+      # A parameter under which NO comparison produced an estimate has not been
+      # examined either. That is the shape the reliability SE-source switches make:
+      # under alpha_se_source = "reported", omega_se_source = "reported" or
+      # icc_agreement_se = "drop", a row with no reported SE has es = NA on every
+      # alternative, so the filter above drops the block for want of a value rather
+      # than for want of a difference. Folding that into the "changed nothing"
+      # all-clear below would answer a question that was never asked.
+      if (!any(estimable)) unestimable <- c(unestimable, pm)
+      next
+    }
     blocks[[pm]] <- param_rows[by_row %in% keep, , drop = FALSE]
   }
 
@@ -425,8 +452,15 @@ es_formulas <- function(object, parameters = NULL, digits = 3, verbose = TRUE) {
             "could not be evaluated, and their influence is therefore unknown: ",
             paste(failed, collapse = ", "), ".", call. = FALSE)
   }
+  if (verbose && length(unestimable) > 0) {
+    message("No comparison could be estimated under any alternative of: ",
+            paste(unestimable, collapse = ", "), ". Their influence is unknown, not ",
+            "nil: the analysis recorded in this object returns no effect size for ",
+            "these comparisons, which is what alpha_se_source = 'reported', ",
+            "omega_se_source = 'reported' and icc_agreement_se = 'drop' are for.")
+  }
   if (length(blocks) == 0) {
-    if (verbose) {
+    if (verbose && length(unestimable) < length(parameters)) {
       message("No conversion formula altered any effect size in this dataset.")
       message("Each comparison is estimated from one type of input data, ",
               "reported in the 'info_used' column of summary(). A conversion ",

@@ -1,0 +1,132 @@
+        <figcaption class="cap" style="font-size:11.5px;color:#83828f;margin-top:9px;line-height:1.6;">
+          Coverage against &rho;, split by n. Dashed rule marks the nominal 0.95.
+          <span style="color:#c0474e">&#9632;</span> lipsey_cooper &nbsp;
+          <span style="color:#2c2a47">&#9632;</span> viechtbauer
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== B ===================================== -->
+<section class="panel" id="p-v2" role="tabpanel" aria-labelledby="t-v2" hidden>
+  <p class="panel-note"><b>The rail survives, but it only draws.</b> Axis, panels,
+  routes and held-constant values stay on the left; every scientific choice moves
+  into the document. The reference quantity becomes the strip of tabs across the
+  results, so switching it is visibly the same act as switching what you are
+  asking. The signature is the ledger: routes down, reference quantities across.
+  The mirror in it is the finding, and it needs no sentence.</p>
+
+  <div class="mock v2">
+    <div class="mast">
+      <span class="wm">metaConvert <em>simulations</em></span>
+      <span class="rt">16 studies &nbsp;&middot;&nbsp; <a href="#">how to read this</a></span>
+    </div>
+    <div class="split">
+      <aside class="rail">
+        <p class="cap">View</p>
+        <p class="capn">These controls change the drawing, never the result.</p>
+
+        <h4>Horizontal axis</h4>
+        <div class="fld">rho</div>
+        <h4>Split panels by</h4>
+        <div class="fld">n</div>
+        <div class="fld" style="margin-top:5px">(none)</div>
+        <h4>Routes</h4>
+        <label><i style="background:#c0474e"></i>lipsey_cooper</label>
+        <label><i style="background:#2c2a47"></i>viechtbauer</label>
+        <h4>Held constant</h4>
+        <p class="held"><span>p_exp</span> 0.30<br><span>nrep</span> 1,000</p>
+        <h4>Vertical scale</h4>
+        <div class="fld">shared across panels</div>
+        <h4>Reported scale</h4>
+        <div class="fld">r</div>
+        <h4>Export</h4>
+        <p class="held"><a href="#" style="color:#8f2f36;text-decoration:none;border-bottom:1px solid #eec9ca">these 20 rows, CSV</a></p>
+        <p class="held" style="margin-top:22px;padding-top:13px;border-top:1px solid #e2e2dc;line-height:1.6">
+          <span>Study, reference quantity and measure are chosen in the document,
+          because they change what the numbers mean.</span></p>
+      </aside>
+
+      <div class="main">
+        <div class="idline">
+          <span class="ix">01a</span>
+          <h2><span class="tok" style="font-size:23px;font-weight:600;font-family:inherit">SMD to correlation (r)</span></h2>
+          <span class="arg">smd_to_cor &nbsp;&middot;&nbsp; 1 of 16</span>
+        </div>
+        <p class="qline">A study reports a standardised mean difference and the review
+        pools correlations. Which conversion should <code>convert_df()</code> take?</p>
+
+        <div class="estr">
+          <p class="lb">Scored against<span class="aside">changing this changes the answer, not the drawing</span></p>
+          <div class="row">
+            <button aria-selected="true">biserial (pop.)</button>
+            <button aria-selected="false">point-biserial (pop.)</button>
+            <button aria-selected="false">biserial (samp.)</button>
+            <button aria-selected="false">point-biserial (samp.)</button>
+            <button aria-selected="false">own estimand</button>
+          </div>
+        </div>
+
+        <div class="qsec">
+          <h3>Is each route computing its own quantity correctly?</h3>
+          <p class="ans"><b>Both are, to three decimals.</b> Scored against the
+          estimand it was built to return, <code>lipsey_cooper</code> has mean
+          absolute bias 0.005 and <code>viechtbauer</code> 0.004, and both cover at
+          0.940 against a nominal 0.95. Neither has an accuracy problem.</p>
+        </div>
+
+        <div class="qsec">
+          <h3>Is that quantity the one you asked for?</h3>
+          <p class="ans">For <code>lipsey_cooper</code>, not in this column. It
+          returns the <b>point-biserial</b> correlation; the selected reference is
+          the <b>biserial</b>. Read the row, then the column you actually pool.</p>
+
+          <table class="ledger">
+            <thead>
+              <tr>
+                <th class="l">mean coverage <span style="font-weight:400">/ mean |bias|</span></th>
+                <th class="on">biserial<br>population</th>
+                <th>point-biserial<br>population</th>
+                <th>biserial<br>sample</th>
+                <th>point-biserial<br>sample</th>
+                <th>its own<br>estimand</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="l"><i style="background:#c0474e"></i>lipsey_cooper</td>
+                <td class="on bad">0.764<span class="sm">0.0815</span></td>
+                <td>0.940<span class="sm">0.0046</span></td>
+                <td class="bad">0.796<span class="sm">0.0803</span></td>
+                <td>1.000<span class="sm">0.0034</span></td>
+                <td>0.940<span class="sm">0.0046</span></td>
+              </tr>
+              <tr>
+                <td class="l"><i style="background:#2c2a47"></i>viechtbauer</td>
+                <td class="on">0.940<span class="sm">0.0036</span></td>
+                <td class="bad">0.803<span class="sm">0.0797</span></td>
+                <td>0.990<span class="sm">0.0040</span></td>
+                <td class="bad">0.885<span class="sm">0.0795</span></td>
+                <td>0.940<span class="sm">0.0036</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="lednote">The first two columns are a mirror, and that is the
+          result of the study. <b>Pick the column your review pools, then read the
+          rows</b> &mdash; ranking the routes without fixing the column reports a
+          setting as a finding. The sample columns score against a statistic
+          recomputed on each replication, so their coverage is not a calibration
+          statement; they are shown for completeness and greyed in the plot.</p>
+        </div>
+
+        <div class="figsec">
+          <div class="fh">
+            <h3><span class="tok" style="font-family:inherit;font-size:13px;font-weight:600">Interval coverage</span></h3>
+            <span class="sub">across the grid, against biserial (pop.)</span>
+            <span class="key">
+              <span><i style="background:#c0474e"></i>lipsey_cooper</span>
+              <span><i style="background:#2c2a47"></i>viechtbauer</span>
+            </span>
+          </div>
+          <figure>

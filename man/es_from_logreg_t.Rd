@@ -34,7 +34,7 @@ es_from_logreg_t(
 
 \item{logreg_t}{a t-statistic (Wald statistic) from a logistic, log-binomial, or modified Poisson regression model}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group}
+\item{baseline_risk}{proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument, and for the risk difference and the NNT). It is never derived from other columns.}
 
 \item{small_margin_prop}{smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])}
 

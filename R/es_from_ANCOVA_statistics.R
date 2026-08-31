@@ -3,9 +3,9 @@
 #' @param ancova_t a t-statistic from an ANCOVA (binary predictor)
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
@@ -81,9 +81,9 @@ es_from_ancova_t <- function(ancova_t, cov_outcome_r, n_cov_ancova, n_exp, n_nex
 #' @param ancova_f a F-statistic from an ANCOVA (binary predictor)
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
@@ -153,9 +153,9 @@ es_from_ancova_f <- function(ancova_f, cov_outcome_r, n_cov_ancova, n_exp, n_nex
 #' @param ancova_t_pval a two-tailed p-value of a t-test in an ANCOVA (binary predictor)
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.
@@ -230,9 +230,9 @@ es_from_ancova_t_pval <- function(ancova_t_pval, cov_outcome_r, n_cov_ancova, n_
 #' @param ancova_f_pval a two-tailed p-value of an F-test in an ANCOVA (binary predictor)
 #' @param cov_outcome_r pooled **within-group** correlation between the outcome and the
 #'   covariate(s) (multiple correlation when the ANCOVA model includes several covariates).
-#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do NOT supply the
+#'   This is the R satisfying \eqn{MSE_{ANCOVA} = MSW (1 - R^2)}. Do not supply the
 #'   total-sample correlation, nor the square root of the whole model R-squared (which also
-#'   absorbs the group effect): both bias the effect size AND its standard error by the
+#'   absorbs the group effect): both bias the effect size and its standard error by the
 #'   same factor, so the p-value is unchanged and no quality flag can detect the error.
 #' @param n_cov_ancova number of covariates in the ANCOVA model.
 #' @param n_exp number of participants in the experimental/exposed group.

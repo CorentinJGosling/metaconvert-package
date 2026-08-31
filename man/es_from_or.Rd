@@ -32,7 +32,7 @@ es_from_or(
 
 \item{small_margin_prop}{smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])}
 
-\item{baseline_risk}{proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)}
+\item{baseline_risk}{proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument, and for the risk difference and the NNT; also identifies the \code{or_to_rr = "metaumbrella_exp"} reconstruction, which is otherwise non-identified when \code{n_exp == n_nexp}). It is never derived from other columns.}
 
 \item{n_exp}{number of participants in the exposed group}
 
@@ -91,8 +91,8 @@ simulated studies crossing exposure prevalence, baseline risk, odds ratio and
 sample size, the median ratio of imputed to true SE is about \strong{1.4}, and it is not
 a constant offset: because the flat enumeration weight puts \eqn{1/(n\_cases - 1)}
 on the table with one case in the exposed arm, whose \eqn{1/a} term is 1, the
-inflation \strong{grows with study size} -- roughly 1.2x in the smallest studies to 2.0x
-in the largest, at fixed exposure prevalence.
+inflation \strong{grows with study size}, from roughly 1.2x in the smallest studies to
+2.0x in the largest, at fixed exposure prevalence.
 
 Two consequences worth knowing. An SE 1.4x too wide gives that study about half its
 correct inverse-variance weight; and because the inflation is size-dependent rather
@@ -103,7 +103,7 @@ The remedy is to supply the uncertainty rather than have it imputed: prefer
 \code{\link{es_from_or_se}()}, \code{\link{es_from_or_ci}()} or
 \code{\link{es_from_or_pval}()} whenever the source reports a standard error, a
 confidence interval or a p-value. \code{\link{convert_df}()} does this
-automatically -- when a row reports an SE or a CI, this route is skipped entirely
+automatically: when a row reports an SE or a CI, this route is skipped entirely
 rather than contributing a dominated second estimate.
 }
 \examples{

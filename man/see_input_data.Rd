@@ -15,9 +15,11 @@ see_input_data(
 }
 \arguments{
 \item{measure}{Target effect size measure. One of "all", "d", "g", "md", "or", "rr",
-"nnt", "r", "z", "irr", "logvr" or "logcvr". Default is "all". The risk difference and
-the psychometric measures (rd, alpha, icc, prop, hr) are not covered by this table;
-use \code{\link{data_extraction_sheet}()} for those.}
+"nnt", "r", "z", "irr", "logvr" or "logcvr". Default is "all". This table is built
+from the measure = "d" hierarchy, so the eleven remaining metaConvert measures - the
+within-group family (dw, gw, mdw), the partial-correlation family (rp, zp), the
+hazard ratio, the risk difference and the psychometric measures (prop, alpha, omega,
+icc) - are not covered by it; use \code{\link{data_extraction_sheet}()} for those.}
 
 \item{type_of_measure}{One of "natural+converted" or "natural" (see details).}
 

@@ -24,7 +24,7 @@ actually pools: the point estimate, its standard error, and its interval.
 
 ---
 
-## STATE OF PLAY — read this first if you are picking the project up
+## State of play — read this first if you are picking the project up
 
 Last full run: **all 8 studies at `nrep = 1000`, 26 cores, no errors**, ~40k
 aggregated rows in `data/aggregated/*_nrep1000.csv`.
@@ -60,9 +60,9 @@ solve the same table rather than searching for it.
 discriminant; full-grid non-estimability 0.152). `grant`'s non-estimability reaches
 0.620 in study 05 (`rr × br_guess ≥ 1`), now counted rather than silently dropped.
 
-### THREE THINGS THE NEXT PERSON SHOULD KNOW
+### Three things to know before continuing
 
-**1. Study 03's `nrep = 1000` files WERE stale; they have been regenerated
+**1. Study 03's `nrep = 1000` files were stale; they have been regenerated
 (roadmap 3.5), together with every other aggregate in `data/aggregated/`.** The
 history is kept because the lesson is general. The bug was in the *simulation*, not
 the package: the `(z)`
@@ -73,7 +73,7 @@ and the pure scale gap was **0.9929**. After the fix (a scale-matched `theta_own
 `phi (r)`. `tetrachoric (z)`'s remaining ≈0.23 is the genuine CAT estimand mismatch.
 *Lesson worth carrying: whenever a study reports both r and z, check the target scale.*
 
-**2. The `se_ratio` > 1 pattern is diagnosed: it is SPARSITY, and the continuity
+**2. The `se_ratio` > 1 pattern is diagnosed: it is sparsity, and the continuity
 correction is innocent.** In both binary studies `se_ratio` is > 1 for every method
 (1.17–1.66 on the full grid), including `transpose`, which merely copies `logor_se`
 through. This README used to name the +0.5 continuity correction as the likely cause
@@ -106,7 +106,7 @@ cells where `rr × br_guess ≥ 1`. Every other route reconstructs essentially a
 (non-estimability < 0.01), which is why only these two need the caveat.
 
 **2c. Every number in studies 04 and 05 is measured at 1:1 allocation, and 1:1 is
-the FAVOURABLE end for 2b and for the split above.** Both studies hold `p_exp = 0.5`,
+the favourable end for 2b and for the split above.** Both studies hold `p_exp = 0.5`,
 so the two arms are always equal. That is not a neutral choice. P(any zero cell)
 depends on the two arms *separately* and is driven by the smaller one, so balance
 maximises the dense region — moving participants out of either arm can only shrink it:
@@ -127,7 +127,7 @@ per-corrected rate — and the share is smallest at balance too, for the same re
 dense region is largest there: 0.148 at 1:1 against 0.362 at 1:9 or 9:1.
 Its shipped 0.152 is therefore a best case, as is `grant`'s in study 05.
 
-**What is NOT conditional is the no-go map itself.** The point estimates in the table
+**The no-go map itself is not conditional.** The point estimates in the table
 further down are allocation-free: with both margins supplied the odds ratio determines
 the 2×2 by a quadratic, and the solve recovers the table exactly (max error `0` over
 400 draws per allocation, `p_exp` = 0.10 to 0.90). The original form of this item —
@@ -140,11 +140,11 @@ Reproduce both halves with `dense_region_by_allocation()` and
 `tests/test-allocation-scope.R`, whose first assertion fails on purpose if anyone adds
 a second `p_exp` level — at which point this paragraph should be deleted, not edited.
 
-**3. Pre-post coverage IS thinner than the eight-study structure suggests — but the
+**3. Pre-post coverage is thinner than the eight-study structure suggests, but the
 old form of this note named the wrong kernels, and named them in prose, which is how
 it went stale unnoticed.** Study 08 does exercise all five `pre_post_to_smd` values;
 what it under-exercises is the code beneath them — and not the code the old table named.
-The two-group entry point is a DISPATCHER, not a kernel.
+The two-group entry point is a dispatcher rather than a kernel.
 Under `pool_sd = FALSE` — its default, and study 08's setting — it calls the
 single-group kernel once per arm and combines, so study 08 runs that kernel **twice on
 every row**. Measured by rebinding both kernels to counting wrappers and calling study
@@ -179,10 +179,10 @@ data-generating mechanism* for paths 3 and 4, and for path 2 reached through its
 entry points.
 
 The fourth path **was** a duplicate implementation: it reproduced the single-group
-kernel's arithmetic in place rather than calling it. The two agreed — max |difference|
-over d, SE, g and g's SE was `0` for `morris_dz` and `1.1e-16` for `morris_drm` — but
-only because both were maintained in step, which is a promise rather than a mechanism.
-The duplication has been removed and the drift risk with it; the delegation moves no
+kernel's arithmetic in place rather than calling it. The two agreed, with a maximum
+|difference| over d, SE, g and g's SE of `0` for `morris_dz` and `1.1e-16` for
+`morris_drm`, but only for as long as both were kept in step by hand. The duplication
+has been removed, and with it the risk of drift; the delegation moves no
 number a user can see (max |difference| `3.55e-15` over a 576-row grid). Those routes
 still offer only two of the five methods and still **error** on the other three rather
 than silently coercing, because a paired t does not identify the separate pre/post SDs
@@ -197,7 +197,7 @@ A `pool_sd` study reusing study 08's DGP and grid with a new `estimate()` would 
 pre/post from **2 kernels to 3**. It cannot be called "study 08b": study 08 already emits
 `08a_pre_post_to_smd_d` and `08b_pre_post_to_smd_g`, both shipped in `data/aggregated/`.
 
-One retraction. `pool_sd = TRUE` used to be described here as "the route carrying the
+One correction to an earlier claim. `pool_sd = TRUE` was described here as "the route carrying the
 known docblock defect". That is stale: the misattribution of d_av's leading variance term
 to Bonett (2008) eq. 19 was corrected in `4955631` (2026-08-13), *before* this paragraph
 was first tracked. `R/internal_multiple_formulas.R:1465-1479` now states exactly which
@@ -208,7 +208,7 @@ documented departure with a stated calibration range, not a defect.
 
 Pinned by `tests/test-prepost-kernel-coverage.R`, which installs the counters above and
 asserts the dispatch in both directions, the 7/8/5 route split, and which studies touch
-which path. Encoding the OLD claim in it instead — `single_group = 0`, and no fourth
+which path. Encoding the earlier claim in it instead — `single_group = 0`, and no fourth
 path — turns the file red. Prose is what rotted here; this is the same statement made
 executable.
 
@@ -465,9 +465,9 @@ be regenerated by anyone, including their author.
 
 | # | Area | Package argument(s) | Status |
 |---|---|---|---|
-All are implemented and run: `source("run_all.R")` registers `run_01` … `run_10`, plus
+All are implemented and run: `source("run_all.R")` registers `run_01` … `run_11`, plus
 `run_99` (a deterministic wiring check, not a Monte Carlo study). Studies 01–09 cover the
-CONVERSION routes; study 10 covers the RELIABILITY family, which had no coverage at all
+conversion routes; studies 10-11 cover the reliability family, which had no coverage at all
 until roadmap item 3.1.
 
 | # | Area | Package argument(s) | File |
@@ -482,6 +482,7 @@ until roadmap item 3.1.
 | 08 | pre/post → SMD | `pre_post_to_smd` | `studies/08_pre_post_to_smd.R` |
 | 09 | OR → *r* / *z* | `or_to_cor` | `studies/09_or_to_cor.R` |
 | 10 | reliability (ICC, alpha) | `icc_to_es`, `icc_agreement_se` | `studies/10_reliability.R` |
+| 11 | reliability **standard errors** (alpha vs omega) + the floor-effect detector | `alpha_to_es`; the omega SE that is *not* shipped | `studies/11_reliability_se.R` |
 
 ### Study 10: the reliability family had zero coverage, and it mattered
 
@@ -526,12 +527,184 @@ do not fit the generate/estimate contract. The first refutes tightening V36's de
 gate (a 100-study pool still flags 95.8% of the time at 4 decimals — the driver is pool
 size, not precision); the second quantifies V42's premise.
 
-**What is deliberately absent.** Roadmap 3.1 also asks for the low-ICC
+**What is left out, and why.** Roadmap 3.1 also asks for the low-ICC
 Bonett-vs-Fisher-TF pooling comparison (item 1.5). `icc_to_es = "fisher_tf"` **is not
 implemented**, so simulating it would mean re-typing the candidate formula inline and
 scoring the package against a private copy of a method it does not ship — the exact
 practice this rebuild exists to stop. When 1.5 ships, add a `10c` that calls the real
 route.
+
+### Study 11: the standard error metaConvert refuses to compute
+
+`es_from_cronbach_alpha()` computes an SE from a closed form in `(n, k)` alone — Bonett's
+`2k/((k−1)(n−2))`. `es_from_omega()` **refuses to**, and returns `se = NA` unless the
+primary study reported an SE or a CI. The rationale in `?es_from_omega` is that Bonett's
+variance descends from the Feldt (1965) / Kristof (1963) *F* result, which assumes
+essential tau-equivalence — the assumption omega exists to drop.
+
+The applied literature ignores the distinction. Villacura-Herrera et al. (2025,
+*Work & Stress* 39(2) 169–196) ran 13 omega reliability generalisations through
+`escalc(measure = "ABT", ai = omega, mi = n_items, ni = n)` — Bonett's *alpha* variance,
+applied to omega. No primary study reported an omega SE. So metaConvert cannot reproduce
+any published omega RG meta-analysis, and the question is whether the refusal is earned.
+
+**No package change was needed to find out.** Feeding `omega_hat` to
+`es_from_cronbach_alpha()` is bit-identical to metafor's `ABT` up to metaConvert's
+deliberate sign flip, so the candidate is scored as *shipped code* — honouring the same
+rule that keeps study 10's `fisher_tf` comparison out of the tree.
+
+**11a — the head-to-head.** Both coefficients from **one covariance matrix per
+replication** (the fairness rule; see below), 42 cells, `nrep = 1000`. The primary measure
+is *centred* coverage — coverage about the estimator's own mean across replications, which
+isolates SE calibration and needs no plim, so it is immune to the four-way ordinal estimand
+confound. Δ = omega − alpha, paired over replication index:
+
+| k | max &#124;Δ se_ratio&#124; | max &#124;Δ coverage&#124; | mean paired *r* |
+|---:|---:|---:|---:|
+| 3 | 0.105 | 0.083 | 0.831 |
+| 8 | 0.026 | 0.021 | 0.990 |
+| 20 | 0.030 | 0.024 | 0.997 |
+
+At k ≥ 8 the two coefficients **fail and succeed together**, against per-coefficient
+`se_ratio` levels spanning **0.468 to 1.095**. The asymmetric treatment in the package is
+not supported at the item counts real instruments use. At k = 3 the differential is real
+(5.5 MCSE) and runs in *both* directions across cells; the pairing benefit also collapses
+there (*r* = 0.83 vs 0.99), so k = 3 is reported as a caveat, not as a gate.
+
+**Response format is the axis, not the coefficient.** Exact marginal moments, so these are
+arithmetic rather than measurement:
+
+All rows below are k = 8, n = 200, from `11a_delta_paired_reps1000.csv`:
+
+| format | excess kurtosis | `se_ratio` (α / ω) | centred coverage (α / ω) |
+|---|---:|---:|---:|
+| continuous normal *(bound)* | 0.00 | 1.064 / 1.053 | .962 / .958 |
+| 5-pt symmetric | −0.50 | 1.045 / 1.042 | .961 / .958 |
+| 7-pt floor-skew | −0.42 | 0.980 / 0.986 | .943 / .944 |
+| **5-pt floor-skew (BAT-like)** | **−0.32** | **0.948 / 0.941** | **.941 / .936** |
+| 5-pt severe floor (65% bottom) | +2.10 | 0.783 / 0.768 | .889 / .882 |
+| binary, 10% endorsement | +5.11 | 0.632 / 0.614 | .784 / .777 |
+| continuous χ²(1.5) *(bound)* | +8.00 | 0.520 / 0.494 | .686 / .665 |
+
+Five-point categorisation **caps** the reachable excess kurtosis near 2, so the continuous
+cell — where the formula is worst — has no empirical referent in RG data and is labelled a
+bound, not a condition. Response format is also the only candidate gate a data extractor
+can actually read off a primary study; kurtosis is not reported by anyone.
+
+**The benchmark gate.** `bin_10` is Maydeu-Olivares, Coffman & Hartmann (2007) Table 5,
+where normal-theory alpha coverage is ≈ 0.79 and **flat in n**. Measured **0.784 / 0.783**
+at n = 200 / 1000. `run_11()` asserts this before any omega number is quoted and warns
+loudly if it fails: the decision turns on a differential of 0.03 against levels spanning
+0.47 to 1.10, so a generator bug would be invisible in the differential and decisive in
+the level.
+
+**11b — the shipped rationale, tested directly.** If tau-equivalence were the operative
+mechanism, the omega arm would degrade as the loadings spread. It does not:
+
+| loadings | `se_ratio` ω | coverage ω |
+|---|---:|---:|
+| tau-equivalent (all .70) | 0.984 | .952 |
+| congeneric (.40–.90) | 1.039 | .961 |
+| extreme (.25–.95) | 1.008 | .959 |
+
+The tau-equivalent cell — where the rationale says the formula *is* valid — is marginally
+the least well calibrated of the three. **The argument shipped in `?es_from_omega` predicts
+nothing that happens.**
+
+**11c — propagation into a pooled RG, at zero new model fits.** It resamples 11a's raw
+frame, so the sampling distributions it pools are the measured, heavy-tailed ones. Writing
+`c` for the factor by which the true variance exceeds the reported one, four results are
+algebraic and are used here as *validity gates*, not findings: μ̂ is unbiased for any
+weights (c never enters `w = 1/(τ̂² + v)`, a function of `(n, k)` alone); the REML pooled SE
+is self-correcting; Hartung–Knapp is exactly invariant to a uniform rescaling of the
+weights; and the PI is too *wide*. All four hold. What is contingent:
+
+- **Pooled inference survives.** Coverage with the Bonett variance vs coverage with
+  **oracle** variances differs by at most **0.0095** across the unconfounded cells — inside
+  Monte Carlo error. Only fixed-effect pooling takes the damage (coverage 0.082–0.935).
+- **The heterogeneity statistics do not.** I² inflation tracks the predicted `1 − 1/c`
+  almost exactly: for binary items, predicted 62.3%, **measured 55.5% (K=10) and 62.7%
+  (K=30) against a true I² of exactly zero.** A homogeneous pool reports substantial
+  heterogeneity out of nothing. For the BAT-like format, predicted 11.5%, measured 12.9 /
+  10.1.
+- **The PI over-covers** (≥ .95 in 33 of 36 cells), which partly *masks* the well-known
+  small-K PI shortfall — the opposite of the intuitive prediction.
+- **The one real bias route is Spearman–Brown weighting.** `v ∝ k/(k−1)` decreases in k, so
+  longer instruments get more weight *and* have higher alpha — a confound the formula
+  creates itself. Measured |bias| up to **0.032 log units**. Confounding the SE *error*
+  with the effect cannot bias μ̂ at all, because the error never enters the weights.
+
+So the headline is neither "the formula is fine" nor "the formula is broken": **the pooled
+coefficient survives, the heterogeneity statistics do not** — which exonerates the headline
+numbers of published RG work while indicting the heterogeneity narratives built on them.
+
+**The fairness rule, and why it has its own test.** A pilot comparing a Pearson-covariance
+alpha against a WLSMV/polychoric omega measured Δ = −0.107 and would have concluded the
+formula is materially worse for omega. On the *same* covariance matrix the same contrast is
+−0.010. The estimator swap manufactures the entire effect the study exists to detect, so
+`.rel_coefficients()` computes both from one `S` and
+`tests/test-study-11-reliability-se.R` asserts it.
+
+**Why `se_ratio` is secondary and coverage is primary.** The sample SD of a transformed
+reliability is a fourth-moment quantity, so its Monte Carlo error is
+`sqrt((κ+2)/(4R))`, not the `sqrt(1/(2(R−1)))` every normal-theory formula quotes.
+`rel_stability()` records κ per cell and blanks `se_ratio` where it exceeds 2, and reports
+the robust IQR/1.349 spread beside the SD — where they disagree, the SD is the broken one.
+
+**11d — deterministic audit of the claims in `?es_from_omega`.** Seconds, no Monte Carlo,
+and it settles shipped documentation outright. `sqrt(2k/((k−1)(n−2)))` at k = 3, n = 200 is
+**0.12309** — finite, and the **largest** value in the k-sweep, decreasing monotonically to
+`sqrt(2/(n−2))` = 0.10050. **The shipped sentence "it diverges at k = 3" is false as
+written.** The block also reproduces the bifactor 14–24% figure as pure arithmetic and
+flags its unstated denominator mismatch (`n` vs `n−2`), and pins that Bonett's variance is
+coefficient-*free* (identical `(n, k)` ⇒ identical weight whether α = .70 or .98) where
+Hakstian–Whalen's spreads the weight by more than 3×.
+
+**11e — can a *reported* number identify the regime?** 11a leaves the practical question
+open: response format drives the variance error, but the **number of categories does not
+identify it** — the three five-point formats span c = 0.92 to 1.69, because what matters is
+where the item mass sits, not how many bins it is cut into. Item skew is never reported, so
+that looked like the end of the road.
+
+It is not. A floor effect is visible in the **total-score mean**, which RG extractors
+routinely have. On a *C*-point scale of *k* items, rescale it to
+
+```
+floor_position = (scale_mean / k − 1) / (C − 1)      ∈ [0, 1]
+```
+
+— 0 at a hard floor, 0.5 when symmetric, and comparable across scales of different length
+*and* different *C*. 11e sweeps 20 distributions (C ∈ {2,3,5,7} × five degrees of floor) and
+asks which reported quantity actually predicts c:
+
+| predictor | Spearman ρ with c | R² (log c) |
+|---|---:|---:|
+| number of response categories | −0.15 | 0.05 |
+| **floor_position** | **−0.96** | **0.77** |
+| + total-score SD (Bhatia–Davis normalised) | — | 0.77 (**+0.002**) |
+| + category count on top of floor_position | — | 0.79 (+0.02) |
+
+**The mean carries the signal; the SD adds nothing measurable.** That is a useful negative
+result — the extraction sheet needs *one* new number per study, not two. And the rule holds
+across every category count, which is what makes it shippable:
+
+| floor_position | c | centred coverage | category counts in band |
+|---|---:|---:|---|
+| < 0.20 | 1.56 – 4.28 | .653 – .874 | 2, 3, 5, 7 |
+| 0.20 – 0.28 | 1.08 – 1.44 | .895 – .941 | 2, 3, 5, 7 |
+| 0.28 – 0.40 | 0.92 – 1.03 | .939 – .954 | 2, 3, 5, 7 |
+| > 0.40 | 0.84 – 1.01 | .952 – .966 | 2, 3, 5, 7 |
+
+Each band contains all four scale types. The only residual *C* effect is at the extreme
+floor, where a dichotomous item is worse than a 7-point one at the same position
+(c = 4.28 vs 2.21 at floor_position ≈ 0.05–0.10) — which is why the category count is worth
+collecting as well, but as an *ingredient* of floor_position rather than as the gate.
+
+**One fitter caveat worth knowing.** The production fitter is `factanal(covmat = )`, pinned
+against lavaan to 1e-5 and 30× faster — which is what makes 11c free. But `factanal` floors
+uniquenesses at `lower = 0.005`, so it cannot produce a Heywood case; an unregularised
+lavaan fit at k = 3 does, with a much heavier tail. The k = 3 numbers here are therefore
+those of a *regularised* estimator, and that is a property of the fitter, not of the data.
 
 ### Study 09: why `or_to_cor` needed a study of its own
 
@@ -589,12 +762,12 @@ margin-dependence result below, not on this average.
 > The `bonett` row changed with the `or_to_cor` fallback (roadmap 2.7). Its
 > replications are not all bonett: where the sampled 2×2 is degenerate, bonett cannot
 > run and the row takes a stand-in — which used to be `lipsey_cooper` and is now
-> `digby`. So this row has always been a MIXTURE, and it is now a closer one: mean
+> `digby`. So this row has always been a mixture, and it is now a closer one: mean
 > \|bias\| 0.0197 → 0.0195 here, 0.0183 → 0.0181 in 09b. Every other method is
 > bit-identical across that change (delta exactly 0 on bias and coverage), which is the
 > control showing the change stayed inside the fallback.
 >
-> The `2x2_tetrachoric` coverage was simply STALE: this table published 0.928 while
+> The `2x2_tetrachoric` coverage was simply out of date: this table published 0.928 while
 > the shipped aggregate said 0.961, and had done since the item 3.5 regeneration. The
 > `bonett` figures were stale too (0.0185 / 0.2571 / 1.051 against 0.0197 / 0.2868 /
 > 1.053). Nothing detected it, because nothing tied the prose to the CSV — which is
@@ -788,7 +961,7 @@ Scored against the population log RR (nrep = 1000, n = 300, correct baseline ris
 
 Three headlines, and the first two are changes from the pre-fix table.
 
-**`metaumbrella_exp` is no longer the worst performer — it is now identical to
+**`metaumbrella_exp` is no longer the worst performer; it is now identical to
 `metaumbrella_cases`.** Both previously searched for the 2x2 table; both now solve it,
 so they return the same table and the same answer. `metaumbrella_exp`'s old coverage of
 0.22 at br = 0.15 was the non-identified rotation (roadmap 1.1/1.8), and its residual
@@ -904,7 +1077,7 @@ computed *d*, so applying J on top over-corrects. Neither convention is exactly
 unbiased — the residual is the uncancelled remainder, and it is small (< 0.02 for
 n ≥ 25).
 
-Two things follow. `tests_save/checked/test-ES-COR.R` (VIECHT block), which
+Two consequences. `tests_save/checked/test-ES-COR.R` (VIECHT block), which
 asserts `g == conv.delta(transf.rtod)`, is **right** and was worth trusting. And
 the `d`/`g` pair is internally consistent (`g = J·d`) on every route, so
 `measure = "d"` and `measure = "g"` both return what they should. Recorded in
@@ -966,7 +1139,7 @@ Recorded so the rebuild does not silently reproduce them, and so no number from
 - Variance denominators pooled over `p`, which is absent from the `group_by`
   (`2_SIM:396-397` and four others), inflating the `bias_var` denominator.
 
-**App (`app/app.R`) — REPLACED.** The defects below were in the legacy app that
+**App (`app/app.R`) — replaced.** The defects below were in the legacy app that
 had been copied into `app/` and deployed at `ebiact.shinyapps.io/simulations`.
 That file read none of the rebuilt aggregates and has been rewritten (see
 "The results viewer" below); the list is kept as the record of what was wrong.
@@ -1115,7 +1288,7 @@ The targets are two different kinds of thing, and listing them as one flat set o
 options invites a real mistake:
 
 - a **shared** target (`population`, `sample`) is *one* quantity applied to every
-  method, which is what lets you compare methods against each other;
+  method, which is how methods are compared against each other;
 - **`own`** is a *different* quantity per method. Scoring on it answers "does this
   method compute its own value correctly?" and never "is that the value I want?".
   Two methods scored on `own` are being held to two different standards.

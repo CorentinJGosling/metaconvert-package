@@ -178,6 +178,7 @@
     # psychometrics
     "cronbach_alpha", "cronbach_alpha_se", "cronbach_alpha_ci_lo",
     "cronbach_alpha_ci_up", "n_items",
+    "n_response_categories", "scale_mean", "scale_min",
     "omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type", "omega_estimator",
     "icc", "icc_se", "icc_ci_lo", "icc_ci_up", "n_measurements", "icc_type",
     "discard",
@@ -211,11 +212,17 @@
   expected_cols_type[grepl("discard", expected_cols, fixed = TRUE)] <- "logical"
 
   expected_cols_type[which(expected_cols == "cov_outcome_r")] <- "numeric"
-  # n_measurements contains "measure", so the grepl above would otherwise type it "char";
-  # force it numeric. n_items does NOT match any char-triggering grepl, so its override
-  # is a harmless belt-and-braces guard (kept for symmetry).
+  # n_measurements contains "measure", so the grepl above would otherwise type it
+  # "char"; force it numeric. n_items matches no char-triggering grepl, so its override
+  # is a harmless guard kept for symmetry.
   expected_cols_type[which(expected_cols == "n_measurements")] <- "numeric"
   expected_cols_type[which(expected_cols == "n_items")] <- "numeric"
+  # V44's two inputs. Neither matches a char-triggering grepl, so these are guards like
+  # n_items, but they are the columns the floor-effect flag would go dark on, without
+  # saying so, if a future pattern ever started matching them.
+  expected_cols_type[which(expected_cols == "n_response_categories")] <- "numeric"
+  expected_cols_type[which(expected_cols == "scale_mean")] <- "numeric"
+  expected_cols_type[which(expected_cols == "scale_min")] <- "numeric"
   # omega_type is a character estimand label; without this override the automatic
   # grepl() detection types it numeric and every value becomes NA (same reason
   # n_items / n_measurements need explicit overrides).

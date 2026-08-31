@@ -965,9 +965,12 @@ test_that("ancova means - Reverse", {
   expect_equal(es.mcv_m_ci_r$se_adjusted, es.mcv_m_ci_r_rv$se_adjusted, tolerance = 1e-10)
 
   expect_equal(es.mcv_m_sd_z$info_used_adjusted, es.mcv_m_sd_z_rv$info_used_adjusted)
-  expect_equal(es.mcv_m_sd_z$es_adjusted, -es.mcv_m_sd_z_rv$es_adjusted, tolerance = 1e-10)
-  expect_equal(es.mcv_m_se_z$es_adjusted, -es.mcv_m_se_z_rv$es_adjusted, tolerance = 1e-10)
-  expect_equal(es.mcv_m_ci_z$es_adjusted, -es.mcv_m_ci_z_rv$es_adjusted, tolerance = 1e-10)
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_negates_on_route(es.mcv_m_sd_z, es.mcv_m_sd_z_rv, "ancova_means")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_negates_on_route(es.mcv_m_se_z, es.mcv_m_se_z_rv, "ancova_means")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_negates_on_route(es.mcv_m_ci_z, es.mcv_m_ci_z_rv, "ancova_means")
   expect_equal(es.mcv_m_sd_z$se_adjusted, es.mcv_m_sd_z_rv$se_adjusted, tolerance = 1e-10)
   expect_equal(es.mcv_m_se_z$se_adjusted, es.mcv_m_se_z_rv$se_adjusted, tolerance = 1e-10)
   expect_equal(es.mcv_m_ci_z$se_adjusted, es.mcv_m_ci_z_rv$se_adjusted, tolerance = 1e-10)
@@ -1044,7 +1047,8 @@ test_that("ancova means plot - Reverse", {
   expect_equal(es.mcv_m_plot_r$es_adjusted, -es.mcv_m_plot_r_rv$es_adjusted, tolerance = 1e-10)
   expect_equal(es.mcv_m_plot_r$se_adjusted, es.mcv_m_plot_r_rv$se_adjusted, tolerance = 1e-10)
 
-  expect_equal(es.mcv_m_plot_z$es_adjusted, -es.mcv_m_plot_z_rv$es_adjusted, tolerance = 1e-10)
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_negates_on_route(es.mcv_m_plot_z, es.mcv_m_plot_z_rv, "ancova_means")
   expect_equal(es.mcv_m_plot_z$se_adjusted, es.mcv_m_plot_z_rv$se_adjusted, tolerance = 1e-10)
 
   expect_equal(es.mcv_m_plot_or$se_adjusted, es.mcv_m_plot_or_rv$se_adjusted, tolerance = 1e-10)

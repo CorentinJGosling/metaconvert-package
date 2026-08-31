@@ -79,6 +79,7 @@ The conversion parameters that support several methodological formulas are:
 \code{prop_to_es} \tab raw, logit, freeman_tukey\cr
 \code{alpha_to_es} \tab bonett, raw, hakstian_whalen\cr
 \code{icc_to_es} \tab bonett, raw\cr
+\code{omega_to_es} \tab bonett, raw, hakstian_whalen\cr
 }
 Options documented under two names are evaluated once, under the name listed
 above.
@@ -90,7 +91,7 @@ the \code{deviation} of each comparison is measured against the formula that
 comparison itself received.
 
 For each comparison, \code{\link{convert_df}} returns one effect size, derived
-from one type of input data -- the type selected by the hierarchy and reported
+from one type of input data, the type selected by the hierarchy and reported
 in the \code{info_used} column. A conversion parameter can therefore change the
 result only if that particular type of input data is converted through it. A
 comparison is reported only if the parameter reached it: at least one formula
@@ -112,9 +113,9 @@ is given by the \code{se_min} and \code{se_max} columns of the
 \code{"summary"} attribute.
 
 Parameters whose options alter the analysis scale rather than the formula
-applied on a fixed scale (\code{alpha_to_es}, \code{icc_to_es},
-\code{prop_to_es}) are reported with \code{deviation} set to \code{NA}, as are
-the \code{es_min}, \code{es_max} and \code{spread} columns of the
+applied on a fixed scale (\code{alpha_to_es}, \code{omega_to_es},
+\code{icc_to_es}, \code{prop_to_es}) are reported with \code{deviation} set to
+\code{NA}, as are the \code{es_min}, \code{es_max} and \code{spread} columns of the
 \code{"summary"} attribute. For these parameters, \code{"bonett"} returns a
 transformed quantity, such as \eqn{\ln(1 - \alpha)}, whereas \code{"raw"}
 returns the coefficient itself, so direct mathematical comparison between the

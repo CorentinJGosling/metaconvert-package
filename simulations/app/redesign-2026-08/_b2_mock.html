@@ -1,0 +1,112 @@
+
+<div class="mock">
+  <div class="mast">
+    <span class="wm">metaConvert <em>simulations</em></span>
+    <span class="rt">ADEMP &nbsp;&middot;&nbsp; <a href="#">how to read this</a></span>
+  </div>
+
+  <div class="body">
+
+    <div class="pick">
+      <span class="lb">Study</span>
+      <div class="sel">
+        <span class="ix">01a</span>
+        <span class="tt">SMD to correlation (r)</span>
+        <span class="cv">&#9662;</span>
+      </div>
+      <span class="nav"><button type="button">&lsaquo;</button><button type="button">&rsaquo;</button></span>
+      <span class="ct">1 of 16</span>
+      <span class="arg">smd_to_cor</span>
+    </div>
+
+    <p class="q">A study reports a standardised mean difference and the review pools
+    correlations. Which conversion should <code>convert_df()</code> take?</p>
+    <p class="slice">20 conditions &nbsp;<b>5 rho &times; 4 n</b>&nbsp; &middot;
+      &nbsp;p_exp held at <b>0.30</b>&nbsp; &middot; &nbsp;<b>1,000</b> replications each</p>
+
+    <h3 class="s">The two routes estimate different correlations</h3>
+    <table class="routes">
+      <tr>
+        <td class="tk"><input type="checkbox" checked aria-label="show lipsey_cooper"></td>
+        <td class="nm"><i style="background:#c0474e"></i>lipsey_cooper</td>
+        <td class="es">point-biserial correlation</td>
+        <td class="ref">Cooper et al. (2019), eq. 12.40&ndash;12.42<br>
+          Borenstein et al. (2021), eq. 54&ndash;56</td>
+      </tr>
+      <tr>
+        <td class="tk"><input type="checkbox" checked aria-label="show viechtbauer"></td>
+        <td class="nm"><i style="background:#2c2a47"></i>viechtbauer</td>
+        <td class="es">biserial correlation</td>
+        <td class="ref">Jacobs &amp; Viechtbauer (2017), eq. 5, 8, 13, 17&ndash;19</td>
+      </tr>
+    </table>
+
+    <div class="estr">
+      <p class="lb">Scored against<span class="as">this selects the estimand, not the drawing</span></p>
+      <div class="row">
+        <button type="button" aria-selected="true">biserial (pop.)</button>
+        <button type="button" aria-selected="false">point-biserial (pop.)</button>
+        <button type="button" aria-selected="false">biserial (samp.)</button>
+        <button type="button" aria-selected="false">point-biserial (samp.)</button>
+        <button type="button" aria-selected="false">own estimand</button>
+      </div>
+    </div>
+
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th class="l">mean coverage <span style="font-weight:400">/ mean |bias|</span></th>
+          <th class="on">biserial<br>population</th>
+          <th>point-biserial<br>population</th>
+          <th>biserial<br>sample &dagger;</th>
+          <th>point-biserial<br>sample &dagger;</th>
+          <th>its own<br>estimand</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="l"><i style="background:#c0474e"></i>lipsey_cooper</td>
+          <td class="on bad">0.764<span class="sm">0.0815</span></td>
+          <td>0.940<span class="sm">0.0046</span></td>
+          <td class="bad">0.796<span class="sm">0.0803</span></td>
+          <td>1.000<span class="sm">0.0034</span></td>
+          <td>0.940<span class="sm">0.0046</span></td>
+        </tr>
+        <tr>
+          <td class="l"><i style="background:#2c2a47"></i>viechtbauer</td>
+          <td class="on">0.940<span class="sm">0.0036</span></td>
+          <td class="bad">0.803<span class="sm">0.0797</span></td>
+          <td>0.990<span class="sm">0.0040</span></td>
+          <td class="bad">0.885<span class="sm">0.0795</span></td>
+          <td>0.940<span class="sm">0.0036</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="lednote">Both routes are near-exact against their own estimand (last
+    column), so the shortfall in the selected column is <b>estimand mismatch, not
+    estimation error</b>. Choose the column the review pools; the ranking follows
+    from it. <span class="fn">&dagger; scored against a statistic recomputed on each
+    replication, so coverage there is not a calibration statement.</span></p>
+
+    <h3 class="s">Interval coverage across the grid<span class="n">nominal 0.95</span></h3>
+    <div class="plot">
+      <aside class="rail">
+        <h4>Horizontal axis</h4>
+        <div class="fld">rho</div>
+        <h4>Split panels by</h4>
+        <div class="fld">n</div>
+        <div class="fld">(none)</div>
+        <h4>Vertical scale</h4>
+        <label><input type="checkbox" aria-label="free vertical scale"> free per panel</label>
+        <h4>Reported scale</h4>
+        <div class="fld">r</div>
+        <h4>Export</h4>
+        <a class="dl" href="#">these 20 rows, CSV</a>
+      </aside>
+      <div class="fig">
+        <p class="key">
+          <span><i style="background:#c0474e"></i>lipsey_cooper</span>
+          <span><i style="background:#2c2a47"></i>viechtbauer</span>
+          <span style="color:#83828f"><i style="background:#83828f;height:1px;top:-4px"></i>nominal 0.95</span>
+        </p>
+        <figure>

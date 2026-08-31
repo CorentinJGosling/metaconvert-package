@@ -4,12 +4,19 @@
 \alias{compute_sdc}
 \title{Compute Smallest Detectable Change (SDC) from SEM}
 \usage{
-compute_sdc(sem, sem_se)
+compute_sdc(sem, sem_se, sem_ci_lo, sem_ci_up)
 }
 \arguments{
 \item{sem}{standard error of measurement}
 
 \item{sem_se}{standard error of the SEM (optional; for propagating uncertainty)}
+
+\item{sem_ci_lo}{lower bound of the SEM confidence interval (optional), as
+returned by \code{\link{compute_sem}}. When supplied it is rescaled rather
+than discarded (see Details).}
+
+\item{sem_ci_up}{upper bound of the SEM confidence interval (optional), as
+returned by \code{\link{compute_sem}}.}
 }
 \value{
 A data.frame with the SDC, its standard error and 95\% CI.
@@ -28,10 +35,30 @@ beyond measurement error with 95\% confidence. If \code{sem_se} is provided,
 the uncertainty in SDC is propagated:
 
 \deqn{SDC\_se = 1.96 \times \sqrt{2} \times SEM\_se}
+
+The interval is handled the same way, and that matters. Since
+\eqn{SDC = c \times SEM} with \eqn{c = 1.96\sqrt{2}} a known constant, the SDC
+interval is simply \eqn{c} times the SEM interval -- a monotone rescaling,
+which carries over whatever coverage the SEM interval had. So when
+\code{sem_ci_lo} / \code{sem_ci_up} are supplied (pass through the whole
+\code{\link{compute_sem}} result, as in the example) the bounds returned are
+\eqn{c \times sem\_ci\_lo} and \eqn{c \times sem\_ci\_up}. Rebuilding a
+symmetric Wald interval \eqn{SDC \pm 1.96 \times SDC\_se} from the standard
+error instead would reinstate, one step downstream, exactly the undercoverage
+\code{\link{compute_sem}} abandons the Wald form to avoid: in the same-sample
+regime it returns an exact chi-square interval, and the Wald rebuild of it
+covers 0.918 against a nominal 0.95 at n = 10, k = 2 (against 0.961 for the
+rescaled interval), with bounds roughly 20\% low at both ends.
+
+The Wald form is kept as the fallback for callers that have no SEM interval to
+rescale -- an SDC computed from a literature SEM, say -- so the bounds are
+\eqn{SDC \pm 1.96 \times SDC\_se}, truncated at 0, whenever the corresponding
+SEM bound is missing.
 }
 \examples{
 sem_res <- compute_sem(sd = 10, icc = 0.85, n_sample = 100)
-compute_sdc(sem = sem_res$sem, sem_se = sem_res$sem_se)
+compute_sdc(sem = sem_res$sem, sem_se = sem_res$sem_se,
+            sem_ci_lo = sem_res$sem_ci_lo, sem_ci_up = sem_res$sem_ci_up)
 }
 \references{
 de Vet, H. C. W., Terwee, C. B., Mokkink, L. B., & Knol, D. L. (2011).

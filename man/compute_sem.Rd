@@ -12,12 +12,12 @@ compute_sem(sd, icc, n_sample, icc_se, n_measurements = 2)
 \item{icc}{intraclass correlation coefficient (test-retest reliability)}
 
 \item{n_sample}{sample size (used for the SEM sampling-variance estimation).
-Required in BOTH variance regimes: it feeds \eqn{Var(SD)} in the
+Required in both variance regimes: it feeds \eqn{Var(SD)} in the
 external-\code{icc_se} delta method and the degrees of freedom of the
 same-sample chi-square variance, so when it is omitted the SEM standard
 error and CI are \code{NA}.}
 
-\item{icc_se}{standard error of the ICC (optional), on the RAW ICC scale.
+\item{icc_se}{standard error of the ICC (optional), on the raw ICC scale.
 Note that \code{\link{es_from_icc}} under its default
 \code{icc_to_es = "bonett"} returns a column named \code{icc_se} on the
 \eqn{\ln(1 - ICC)} scale: that value must be converted first
@@ -54,14 +54,26 @@ with \eqn{Var(ICC) = icc\_se^2} and \eqn{Var(SD) \approx SD^2 / (2(n-1))}.
 from the same reliability sample, where they are strongly positively
 correlated. Because \eqn{SEM = SD\sqrt{1 - ICC}} equals the within-subject
 residual root-mean-square \eqn{\sqrt{MSE}}, and \eqn{MSE / \sigma_e^2} follows
-a scaled chi-square with \eqn{(n-1)(k-1)} degrees of freedom, the exact
-sampling variance is
+a scaled chi-square with \eqn{(n-1)(k-1)} degrees of freedom, the leading-order
+(first-order in \eqn{MSE}) sampling variance implied by that chi-square is
 \deqn{Var(SEM) = \frac{SEM^2}{2(n-1)(k-1)}}
 where \eqn{k} is the number of measurement occasions/raters
 (\code{n_measurements}, default 2 for test-retest). Treating the same-sample SD
 and ICC as independent (the delta method of case 1) would overestimate this
-variance by roughly 2-6x, so the exact form is used instead.
+variance by roughly 2-6x, so the same-sample form is used instead.
 }
+
+That expression is a leading-order form, not an exact one: the exact variance
+of \eqn{\sqrt{MSE}} is \eqn{\sigma_e^2 (1 - c_1^2)} with
+\eqn{c_1 = \sqrt{2/df}\,\Gamma((df+1)/2)/\Gamma(df/2)}, which the formula above
+overstates by 7.4\% (3.6\% on the SE scale) at \eqn{df = 4} and by under 1.1\%
+from \eqn{df = 24}. In practice the two errors run in opposite directions,
+because the reported SE substitutes the estimate \eqn{\widehat{SEM}} (whose
+expectation is \eqn{c_1 \sigma_e < \sigma_e}) for \eqn{\sigma_e}: the reported
+SE divided by the true sampling SD of the SEM is 0.974 at \eqn{df = 4}, 0.987
+at \eqn{df = 9} and 0.995 at \eqn{df = 24}, i.e. mildly \emph{anti}-conservative,
+by at most about 2.6\%. The interval below is not affected -- it inverts the
+chi-square directly rather than going through a variance.
 
 The 95\% CI is likewise regime-specific. In the same-sample regime (case 2)
 the degrees of freedom \eqn{df = (n - 1)(k - 1)} are known, so the exact
@@ -71,6 +83,26 @@ is returned; the symmetric Wald interval undercovers at small df (89.7\%
 instead of 95\% at n = 10, k = 2). When \code{icc_se} is supplied (case 1)
 the df behind the external estimate is unknown, so the Wald interval
 \eqn{SEM \pm 1.96 \times SE}, truncated at 0, is kept.
+
+\strong{ICC type.} The case-2 variance and chi-square interval are calibrated for a
+\emph{consistency} ICC(3,1), where \eqn{SD^2 (1 - ICC) = MSE} exactly and the
+residual carries all \eqn{(n-1)(k-1)} degrees of freedom. They are
+\strong{anti-conservative for an absolute-agreement ICC(2,1)} -- the estimand
+\code{\link{es_from_icc}} returns by default -- because there
+\eqn{SD^2 (1 - ICC)} also absorbs the systematic rater/occasion variance,
+whose sampling variability is dominated by a mean square carrying only
+\eqn{k - 1} degrees of freedom, not \eqn{(n-1)(k-1)}. Measured (two-way
+random-effects simulation, systematic occasion effect worth 5\% of the total
+variance): the reported SE is 0.61 times the empirical sampling SD at
+\eqn{n = 30} and 0.37 times it at \eqn{n = 100}, with nominal-95\% coverage of
+0.80 and 0.51. As with the V31 note \code{\link{es_from_icc}} carries, the
+failure gets \emph{worse} as n grows, because the reported SE shrinks like
+\eqn{1/\sqrt{n}} while the true sampling SD does not. The closed form is still
+computed on that path -- summary data hold no rater-variance component with
+which to widen it -- so when the ICC is an absolute-agreement one and a
+systematic occasion or rater effect is plausible, read the SE and CI as a
+lower bound on the uncertainty. A consistency ICC(3,1) is unaffected
+(measured coverage 0.949 at \eqn{n = 30}, 0.957 at \eqn{n = 100}).
 
 Degenerate inputs: \code{n_measurements} = 1 makes the same-sample df zero,
 so the SE and CI are returned as \code{NA} with a warning; an ICC > 1 is

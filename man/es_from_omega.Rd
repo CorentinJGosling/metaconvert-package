@@ -13,7 +13,8 @@ es_from_omega(
   n_items,
   omega_type = "total",
   omega_estimator = "unspecified",
-  omega_to_es = "bonett"
+  omega_to_es = "bonett",
+  omega_se_source = "reported"
 )
 }
 \arguments{
@@ -25,12 +26,15 @@ es_from_omega(
 
 \item{omega_ci_up}{upper bound of the 95\% confidence interval of omega (natural scale)}
 
-\item{n_sample}{the total number of participants that completed the scale. Not used to
-compute the standard error (see \strong{Details}); carried through for reporting and
-moderator analyses.}
+\item{n_sample}{the total number of participants that completed the scale. Under the
+default \code{omega_se_source = "reported"} it is carried through for reporting and
+moderator analyses and takes no part in the standard error (see \strong{Details});
+under \code{omega_se_source = "closed_form"} it is, with \code{n_items}, what the
+standard error is computed from, and a row lacking it gets \code{omega_se = NA}.}
 
-\item{n_items}{number of items in the scale. Carried through for reporting; not used in
-the standard error.}
+\item{n_items}{number of items in the scale. Same two regimes as \code{n_sample}:
+reporting only by default, an input to the standard error under
+\code{omega_se_source = "closed_form"}.}
 
 \item{omega_type}{which omega is reported: \code{"total"} (default), \code{"hierarchical"},
 \code{"asymptotic"} or \code{"subscale"}. These are \strong{different estimands} and must
@@ -40,13 +44,34 @@ not be pooled together (see \strong{Details}).}
 \code{"cfa_bifactor"}, \code{"cfa_1factor"}, \code{"efa_schmid_leiman"},
 \code{"first_pc"}, \code{"first_pf"} or \code{"unspecified"} (default).
 Case-insensitive, with the common synonyms accepted. This is a
-\strong{provenance} field, not a computational one -- it changes nothing in the
-arithmetic, but a pool that mixes estimators is flagged, because the estimator
+\strong{provenance} field rather than a computational one: it changes nothing in
+the arithmetic, but a pool that mixes estimators is flagged, because the estimator
 moves omega far more than most moderators do (see \strong{Details}).}
 
 \item{omega_to_es}{method used to compute the effect size from omega. One of
 \code{"bonett"} (default), \code{"raw"} or \code{"hakstian_whalen"}, matching
 \code{\link{es_from_cronbach_alpha}}.}
+
+\item{omega_se_source}{where the standard error comes from when the study reported
+neither \code{omega_se} nor a confidence interval. \code{"reported"} (default) leaves
+\code{omega_se = NA}, so the row keeps its effect size and stays visible and countable
+but is left out of the pool by \code{summary()}. \code{"closed_form"} borrows alpha's
+\eqn{(n, k)} formula on the selected \code{omega_to_es} scale.
+
+\strong{Why it is offered.} Every published omega reliability generalisation computes
+its variance this way, which is what \code{metafor::escalc(measure = "ABT")} returns
+with omega in the alpha slot, and no primary study reports an omega standard error,
+so without this route none of that literature can be reproduced here.
+
+\strong{Why it is not the default.} Switching it on makes rows that were previously
+excluded from the pool enter it, which changes results rather than warnings. The
+simulation behind it (\code{simulations/studies/11_reliability_se.R}) supports one
+narrow claim: that the closed form is no more wrong for omega than for alpha
+(\eqn{|\Delta| \le 0.03} at \eqn{k \ge 8}, against per-coefficient calibration ratios
+spanning 0.47 to 1.10). It does not support the broader claim that the closed form is
+safe for reliability generalisation in general, since estimator mixture alone moves
+\eqn{\omega_h} by up to 0.40, roughly 15 of these standard errors, which is V38 and
+V39's territory rather than a variance question.}
 }
 \value{
 This function estimates the standard error of McDonald's omega.
@@ -56,7 +81,7 @@ This function estimates the standard error of McDonald's omega.
 \tab \cr
 \code{converted effect size measure} \tab N/A\cr
 \tab \cr
-\code{required input data} \tab omega + (omega_se OR omega_ci_lo & omega_ci_up)\cr
+\code{required input data} \tab omega + (omega_se OR omega_ci_lo & omega_ci_up), or omega + n_sample + n_items under omega_se_source = "closed_form"\cr
 \tab \cr
 }
 }
@@ -72,18 +97,18 @@ that \eqn{(1 - r)/(1 - \alpha)} is distributed as \eqn{F}, which holds under
 essential tau-equivalence, compound symmetry and multivariate normality. Omega exists
 precisely to \emph{drop} tau-equivalence.
 
-It would be tidy to say that borrowing the alpha variance is therefore a category
-error, but that is \strong{not what the numbers show}, and the honest reasons are
-more specific. Under a correct unidimensional congeneric \emph{normal} model the
+That does not, however, make borrowing the alpha variance a category error, and the
+actual reasons against it are more specific. Under a correct unidimensional
+congeneric \emph{normal} model the
 Bonett variance on the \eqn{\ln(1-\omega)} scale is within \eqn{[0.899, 1.003]} of
 the full normal-theory asymptotic SE of \eqn{\omega_{total}} (1283 random loading
 patterns, \eqn{k \ge 4}, \eqn{\omega \ge 0.60}, \eqn{n = 200}), and coincides with
-it exactly under tau-equivalence. The reasons not to use it are that it is
-anti-conservative exactly where omega is actually reached for:
+it exactly under tau-equivalence. The reason not to use it is that it is
+anti-conservative in precisely the situations where omega is chosen over alpha:
 
 \itemize{
 \item \strong{7.6\% and 25.6\% narrower} than the two published bootstrap CIs in
-Flora (2020) -- inverse-variance weight inflated 1.17x and 1.81x;
+Flora (2020), inflating the inverse-variance weight by 1.17x and 1.81x;
 \item \strong{13\% narrower} under a single correlated residual
 (\eqn{r = .30}, \eqn{k = 6}, \eqn{n = 200}), where \eqn{\hat\omega} is also
 biased \eqn{+0.028};
@@ -92,7 +117,7 @@ variance is governed by the number of \emph{group factors} \eqn{m}, not by
 \eqn{k} (the normal-theory identity is
 \eqn{SE(\ln(1-\omega_h)) = \sqrt{2m/((m-1)n)}});
 \item it \strong{diverges at \eqn{k = 3}} (a just-identified one-factor model);
-\item and \strong{no published source endorses it} -- every source consulted
+\item and \strong{no published source endorses it}: every source consulted
 declines to give an omega variance at all.
 }
 
@@ -100,10 +125,10 @@ There is also no route through the loadings that adds information: conditioning 
 correctly specified model makes Raykov's (2002) delta method evaluable from
 \eqn{(\lambda, n)}, but the result lands inside that same
 \eqn{[0.899, 1.003]} band, so a printed loadings table buys essentially nothing over
-\eqn{(k, n)} -- while the dominant source of variability \emph{across} studies is
+\eqn{(k, n)}. Meanwhile the dominant source of variability \emph{across} studies is
 which estimator was used (EFA / Schmid-Leiman / bifactor CFA / first principal
-component), which no summary statistic identifies. The recommended interval remains a
-bootstrap (BCa) one computed from raw data (Kelley & Pornprasertmanit, 2016).
+component), and no summary statistic identifies that. The recommended interval remains
+a bootstrap (BCa) one computed from raw data (Kelley & Pornprasertmanit, 2016).
 
 The standard error is therefore taken from what the primary study reported, in this
 order:
@@ -117,10 +142,14 @@ analysis scale by the delta method:
 and differenced. Transforming the bounds rather than the point estimate is what makes
 this correct for the asymmetric bootstrap intervals omega usually carries, since a
 BCa interval is transformation-respecting.
-\item otherwise the effect size is returned with \code{omega_se = NA}. The row is then
-visible and countable in the pipeline (it appears in the extraction sheet and in the
-reporting-rate accounting) but is dropped by \code{summary()} and cannot be pooled --
-which is the honest outcome for a bare omega with no uncertainty attached.
+\item otherwise, under the default \code{omega_se_source = "reported"}, the effect size
+is returned with \code{omega_se = NA}. The row is then visible and countable in the
+pipeline (it appears in the extraction sheet and in the reporting-rate accounting)
+but is dropped by \code{summary()} and cannot be pooled, which is the correct
+outcome for a bare omega with no uncertainty attached. Under
+\code{omega_se_source = "closed_form"} this last step instead borrows alpha's
+\eqn{(n, k)} formula on the selected scale, so \code{n_sample} and \code{n_items}
+become the standard error's inputs rather than reporting fields.
 }
 
 \strong{Lossiness.} Step 2 collapses a possibly asymmetric interval into a single
@@ -164,7 +193,7 @@ In practice the estimator is usually codeable from the software a paper reports:
 \code{MBESS::ci.reliability} are CFA-based (\code{"cfa_1factor"} or
 \code{"cfa_bifactor"} according to the fitted model).
 
-\strong{Two extraction traps worth knowing before you copy a number.}
+\strong{Two extraction traps to check before copying a number.}
 
 \enumerate{
 \item \strong{Do not recompute omega from a printed loadings table unless the
@@ -172,7 +201,7 @@ residual variances are printed too.} \code{lavaan}'s \code{std.lv = TRUE}
 fixes the \emph{factor} variance to 1, not the item variances, so the
 "Estimate" column is \strong{unstandardised}. Assuming
 \eqn{\theta_j = 1 - \lambda_j^2} from such a table gives 0.7725 for the
-worked example in Flora (2020) whose published omega is 0.5999 -- an error of
+worked example in Flora (2020) whose published omega is 0.5999, an error of
 +0.17 that nothing downstream can detect.
 \item \strong{On a bifactor model, the output row labelled "omega" is not
 \eqn{\omega_h}.} In \code{semTools} it is the total (0.97 in Flora's
@@ -183,7 +212,15 @@ which one in \code{omega_type}.
 \strong{Heywood cases.} An estimated \eqn{\omega \ge 1} arises from an improper solution
 (a negative estimated error variance) and is not simply a transcription error. It has no
 Bonett or Hakstian-Whalen transform, so those scales return \code{NA}; \code{"raw"}
-returns the value so it stays inspectable.
+returns the value so it stays inspectable. That escape hatch belongs to this route, not
+to the pipeline. \code{\link{convert_df}} bounds \code{omega} at
+\eqn{(-\infty, 1]} in Tier-1 validation and, under the default
+\code{correct_inputs = TRUE}, sets an out-of-range value to \code{NA} with an
+\code{[INVALID]} flag before the route is ever called - deliberately, since a Heywood
+omega left on the raw scale would otherwise enter the pool at full weight. To inspect
+one through the pipeline, ask for both halves explicitly:
+\code{convert_df(x, measure = "omega", omega_to_es = "raw", correct_inputs = FALSE)}.
+A direct call to \code{es_from_omega()} keeps the value either way.
 }
 \examples{
 # from a reported standard error (natural scale)

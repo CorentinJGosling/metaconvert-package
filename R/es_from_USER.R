@@ -4,7 +4,7 @@
     "irr", "logirr", "nnt", "dw", "gw", "mdw", "hr", "loghr")
 }
 
-# Is the target measure's ANALYSIS SCALE set by a package argument rather than by
+# Is the target measure's analysis scale set by a package argument rather than by
 # the measure name?
 #
 # For every other measure, "the user says it is already a `g`" pins the scale, so
@@ -12,13 +12,13 @@
 # and prop it is not: `measure = "alpha"` returns ln(1 - alpha) under the default
 # alpha_to_es = "bonett" and alpha itself under "raw", so the same column name
 # means two different quantities. An unconverted passthrough therefore drops a
-# RAW coefficient into a transformed pool -- an alpha of 0.91 landing at +0.91
+# raw coefficient into a transformed pool: an alpha of 0.91 landing at +0.91
 # beside native rows near -2.12, carrying roughly nineteen times the correct
 # inverse-variance weight, flagged only as "implies a negative Cronbach's alpha",
 # which blames the extraction rather than the scale.
 #
-# Returns TRUE when the active transform is NOT the identity, i.e. when a
-# passthrough cannot be correct. Under `*_to_es = "raw"` the analysis scale IS
+# Returns TRUE when the active transform is not the identity, that is, when a
+# passthrough cannot be correct. Under `*_to_es = "raw"` the analysis scale is
 # the coefficient scale and the passthrough is allowed unchanged.
 .user_passthrough_blocked <- function(target, alpha_to_es = "bonett",
                                       icc_to_es = "bonett", prop_to_es = "raw",
@@ -35,12 +35,12 @@
 
 # Message shared by the crude and adjusted routes.
 #
-# Two things this must not overclaim. (a) `*_to_es = "raw"` is a DATASET-WIDE
-# switch, not a per-row rescue: it re-scales every native cronbach_alpha / icc /
-# prop row in the pool too, so it must not be offered as if it fixed only the
-# offending row. (b) For measure = "alpha"/"icc"/"prop" the ADJUSTED user route
-# is not in the convert_df() hierarchy at all, so on that route nothing could
-# have received a weight in the first place -- claiming a weight error was
+# Two things this must not overclaim. First, `*_to_es = "raw"` is a dataset-wide
+# switch rather than a per-row rescue: it re-scales every native cronbach_alpha,
+# icc and prop row in the pool too, so it must not be offered as if it fixed only
+# the offending row. Second, for measure = "alpha", "icc" or "prop" the adjusted
+# user route is not in the convert_df() hierarchy at all, so nothing on that route
+# could have received a weight in the first place, and claiming a weight error was
 # averted would be false there.
 .user_passthrough_block_msg <- function(target, scale_arg, scale_val, n_rows, suffix) {
   native <- switch(target,
@@ -106,11 +106,43 @@
 
   lo_raw <- ifelse(user_gave_ci, ifelse(natural_ratio, log_lo, user_ci_lo), z_lo)
   up_raw <- ifelse(user_gave_ci, ifelse(natural_ratio, log_up, user_ci_up), z_up)
-  # The user's own bounds are restored verbatim here, so a transposed pair would
-  # be handed back transposed -- the only route in the package that can emit an
+  # The user's own bounds are restored verbatim here, so a transposed pair would be
+  # handed back transposed. This is the only route in the package that can emit an
   # inverted interval without also emitting a negative SE. See R/internal_guards.R.
   list(lo = .ci_lower(lo_raw, up_raw), up = .ci_upper(lo_raw, up_raw),
        user_gave_ci = user_gave_ci)
+}
+
+# Hedges' small-sample correction for the WITHIN-SUBJECT user-input branches.
+#
+# A paired design has one sample, so the correction runs on n - 1, which is what
+# every native pre/post kernel applies (internal_multiple_formulas.R:1757/1790/1817).
+# The between-group "d"/"g" branches below use the pooled J(n_exp + n_nexp - 2)
+# instead; mixing the two inside one gw pool would be wrong by ~0.8% at n = 50
+# (J(49) = 0.98460 against J(98) = 0.99232). n is read from n_exp, the column the
+# within-group routes use for the paired sample size, falling back to n_sample.
+#
+# No sample size means no correction is identified: J = 1 carries the entered
+# value through unconverted rather than dropping the row, the same choice the
+# "g" branch already makes.
+.user_within_j <- function(n_exp, n_sample) {
+  n <- ifelse(!is.na(n_exp), n_exp, n_sample)
+  J <- .d_j(n - 1)
+  ifelse(is.na(J), 1, J)
+}
+
+# Read a conversion-method argument for the rows a dispatch batch keeps.
+#
+# convert_df() supports specifying or_to_rr / or_to_cor / smd_to_cor / cor_to_smd /
+# rr_to_or per row as a dataset column, and merges the column with the dataset-level
+# argument before calling the routes. The user-input route therefore has to accept
+# BOTH shapes: a length-1 argument (a direct call, or a dataset with no such column)
+# and a length-nrow vector (the merged column). The rows are dispatched in batches of
+# one entered measure, so the vector must be subset by the batch's row indices --
+# recycling it by the batch length instead would hand a row the method cell of some
+# other study as soon as one row is dispatched elsewhere or dropped.
+.user_method_by_row <- function(method, idx, len) {
+  rep_len(method, len)[idx]
 }
 
 .dispatch_user_conversion <- function(original_type, es_val, se_val,
@@ -122,11 +154,20 @@
   len <- length(es_val)
   no_reverse <- rep(FALSE, len)
 
+  # A scalar argument and a per-row vector are both allowed (see
+  # .user_method_by_row()); expanding once here lets every branch below index by row
+  # and hands the underlying routes the vector shape they already accept.
+  or_to_rr <- rep_len(or_to_rr, len)
+  or_to_cor <- rep_len(or_to_cor, len)
+  smd_to_cor <- rep_len(smd_to_cor, len)
+  cor_to_smd <- rep_len(cor_to_smd, len)
+  rr_to_or <- rep_len(rr_to_or, len)
+
   switch(original_type,
     "d" = {
       res_d <- .es_from_d(d = es_val, d_se = se_val,
                  n_exp = n_exp, n_nexp = n_nexp, n_sample = n_sample,
-                 smd_to_cor = rep(smd_to_cor, len), reverse = no_reverse)
+                 smd_to_cor = smd_to_cor, reverse = no_reverse)
       # dw = d for user input
       res_d$dw       <- res_d$d
       res_d$dw_se    <- res_d$d_se
@@ -144,7 +185,7 @@
       d_se <- se_val / J
       res_g <- .es_from_d(d = d, d_se = d_se,
                  n_exp = n_exp, n_nexp = n_nexp, n_sample = n_sample,
-                 smd_to_cor = rep(smd_to_cor, len), reverse = no_reverse)
+                 smd_to_cor = smd_to_cor, reverse = no_reverse)
       # keep user g/se when conversion returned NA
       res_g$g <- ifelse(is.na(res_g$g) & !is.na(es_val), es_val, res_g$g)
       res_g$g_se <- ifelse(is.na(res_g$g_se) & !is.na(se_val), se_val, res_g$g_se)
@@ -180,8 +221,8 @@
                     reverse_or = no_reverse)
     },
     "logrr" = {
-      # A risk ratio is a ratio-family measure: convert to OR / NNT / RD only,
-      # NOT to an SMD or correlation. Reaching a standardized family would route
+      # A risk ratio is a ratio-family measure: convert to OR, NNT and RD only,
+      # not to an SMD or correlation. Reaching a standardized family would route
       # through the OR and an assumed baseline risk (not identified from the RR
       # alone, anti-conservative SE); this matches the risk-ratio pipeline
       # measure (es_from_rr_se) and the risk-difference user path. To obtain a
@@ -215,7 +256,9 @@
         d_res <- .cor_to_smd_vec(
           r = r[nn], r_se = r_se_user[nn], n_sample = n_s[nn],
           sd_iv = NA, unit_increase_iv = NA, unit_type = NA,
-          cor_to_smd = rep(cor_to_smd, length.out = length(nn)))
+          # nn drops the rows with no se or no n, so the method column has to be
+          # read at those row indices, not recycled onto the survivors.
+          cor_to_smd = cor_to_smd[nn])
         d_val[nn] <- unlist(d_res[, 1])
         d_se_val[nn] <- unlist(d_res[, 2])
       }
@@ -251,7 +294,9 @@
         d_res <- .cor_to_smd_vec(
           r = r[nn], r_se = r_se_user[nn], n_sample = n_s[nn],
           sd_iv = NA, unit_increase_iv = NA, unit_type = NA,
-          cor_to_smd = rep(cor_to_smd, length.out = length(nn)))
+          # nn drops the rows with no se or no n, so the method column has to be
+          # read at those row indices, not recycled onto the survivors.
+          cor_to_smd = cor_to_smd[nn])
         d_val[nn] <- unlist(d_res[, 1])
         d_se_val[nn] <- unlist(d_res[, 2])
       }
@@ -349,6 +394,16 @@
       )
     },
     "dw" = {
+      # The Hedges step is the ONLY cross-family conversion available from a
+      # paired SMD, and it uses the within-subject J(n - 1) (see
+      # .user_within_j()). The correlation and ratio families stay refused: the
+      # point-biserial and Cox maps both assume two independent groups of size
+      # n_exp and n_nexp, so neither is defined here. Without this step an
+      # entered dw was dropped from every g-family pool while the numerically
+      # identical d entry converted. See the @note on es_from_user_crude().
+      J <- .user_within_j(n_exp, n_sample)
+      g_val <- es_val * J
+      g_se_val <- se_val * J
       data.frame(
         dw       = es_val,
         dw_se    = se_val,
@@ -357,10 +412,23 @@
         d        = es_val,
         d_se     = se_val,
         d_ci_lo  = es_val - qnorm(.975) * se_val,
-        d_ci_up  = es_val + qnorm(.975) * se_val
+        d_ci_up  = es_val + qnorm(.975) * se_val,
+        gw       = g_val,
+        gw_se    = g_se_val,
+        gw_ci_lo = g_val - qnorm(.975) * g_se_val,
+        gw_ci_up = g_val + qnorm(.975) * g_se_val,
+        g        = g_val,
+        g_se     = g_se_val,
+        g_ci_lo  = g_val - qnorm(.975) * g_se_val,
+        g_ci_up  = g_val + qnorm(.975) * g_se_val
       )
     },
     "gw" = {
+      # Mirror of the "dw" branch: un-correct by the within-subject J(n - 1) to
+      # recover the paired d, and refuse the correlation/ratio families.
+      J <- .user_within_j(n_exp, n_sample)
+      d_val <- es_val / J
+      d_se_val <- se_val / J
       data.frame(
         gw       = es_val,
         gw_se    = se_val,
@@ -369,7 +437,15 @@
         g        = es_val,
         g_se     = se_val,
         g_ci_lo  = es_val - qnorm(.975) * se_val,
-        g_ci_up  = es_val + qnorm(.975) * se_val
+        g_ci_up  = es_val + qnorm(.975) * se_val,
+        dw       = d_val,
+        dw_se    = d_se_val,
+        dw_ci_lo = d_val - qnorm(.975) * d_se_val,
+        dw_ci_up = d_val + qnorm(.975) * d_se_val,
+        d        = d_val,
+        d_se     = d_se_val,
+        d_ci_lo  = d_val - qnorm(.975) * d_se_val,
+        d_ci_up  = d_val + qnorm(.975) * d_se_val
       )
     },
     NULL
@@ -415,14 +491,49 @@
 #' This function is a generic function allowing to include any crude effect size measure value + variance.
 #' Importantly, when the \code{user_es_original_measure_crude} is one of the known measures
 #' (d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, loghr, r, z, rd, nnt),
-#' conversions towards the other effect size measures are performed.
-#' Otherwise, no conversion is performed (the effect size value + variance you enter is
-#' the value + variance exported by this function) and a warning is issued.
+#' conversions towards other effect size measures are performed -- but not towards
+#' \emph{every} other measure: which targets are reachable depends on the measure entered,
+#' and the combinations that are not identified are listed in the Note below.
+#' For a measure outside that list, no conversion is performed (the effect size value +
+#' variance you enter is the value + variance exported by this function) and a warning is issued.
 #' The sample sizes and baseline risk are used only to perform the conversions.
 #'
 #' For the or/rr/irr/hr measures, the standard error you enter must be on the log scale.
 #' If you indicate the 95% CI bounds instead of the standard error, the log-transformation
 #' is applied automatically.
+#'
+#' @note
+#' The entered measure decides which targets are reachable, and no entered measure
+#' reaches all of them. A target this function cannot build is returned as NA, and
+#' \code{\link{convert_df}} then reports that row in the "Missing ES in input rows"
+#' line of \code{summary()} instead of pooling it (\code{guidance = TRUE} names the
+#' columns that would rescue it). The combinations that return NA are:
+#'
+#' \itemize{
+#'  \item \strong{dw, gw} (within-subject SMD) reach the SMD family only --
+#'    \code{dw}/\code{d} and \code{gw}/\code{g}, related by Hedges' correction on the
+#'    \emph{paired} degrees of freedom \eqn{J(n - 1)} rather than the pooled
+#'    \eqn{J(n_{exp} + n_{nexp} - 2)} an entered \code{d}/\code{g} uses. \code{r},
+#'    \code{z}, \code{logor}, \code{logrr}, \code{nnt} and \code{rd} return NA: the
+#'    point-biserial and Cox maps both assume two independent groups of size
+#'    \code{n_exp} and \code{n_nexp}, so neither is defined for a paired SMD.
+#'  \item \strong{mdw} (within-subject raw mean difference) reaches \code{mdw} and
+#'    \code{md} only. Standardizing it needs the within-subject standardizer, which is
+#'    not an input here; enter the value as \code{md} with \code{n_exp} and
+#'    \code{n_nexp} if the between-group standardization is what is wanted.
+#'  \item \strong{rr, logrr} reach the ratio family (\code{or}, \code{nnt}, \code{rd})
+#'    only, never an SMD or a correlation -- see \code{\link{es_from_rr_se}}.
+#'  \item \strong{rd, nnt} likewise stay inside the binary family (\code{nnt},
+#'    \code{rd}, and \code{or}/\code{rr} when \code{baseline_risk} is supplied).
+#'  \item \strong{irr, logirr, hr, loghr} are carried through unconverted: no other
+#'    measure is identified from a rate or a hazard ratio without the underlying
+#'    time-to-event data.
+#'  \item Any \code{user_es_original_measure_crude} outside the list above is a
+#'    passthrough (value and variance are exported unchanged, with a warning), except
+#'    for \code{measure = "alpha"}, \code{"omega"}, \code{"icc"} or \code{"prop"} under
+#'    a non-identity transform, where the passthrough is refused -- see
+#'    \code{alpha_to_es} above.
+#' }
 #'
 #' @md
 #'
@@ -533,17 +644,32 @@ es_from_user_crude <- function(user_es_original_measure_crude,
   orig_type <- tolower(user_es_original_measure_crude)
   known_types <- .known_es_types()
 
-  # or/rr/irr/hr: se from ci on the log scale
-  ratio_from_ci <- which(orig_type %in% c("or", "rr", "irr", "hr") &
-                          is.na(user_se_crude) &
-                          !is.na(user_ci_lo_crude) & !is.na(user_ci_up_crude) &
-                          user_ci_lo_crude > 0 & user_ci_up_crude > 0)
+  # or/rr/irr/hr: the estimate and the standard error both belong on the log
+  # scale, but they are recovered from the ci under DIFFERENT conditions, so one
+  # gate cannot serve both. The se is derived only when the user left that cell
+  # blank -- a reported log-scale se must never be discarded. The estimate must
+  # be rebuilt on the log scale whenever it is missing and the ci is present,
+  # whatever the se cell holds: the generic block above takes the arithmetic
+  # midpoint of the NATURAL bounds, returning (1.5 + 4)/2 = 2.75 where the
+  # geometric centre of the reported interval is sqrt(1.5 * 4) = 2.449. That
+  # estimate is not the centre of its own ci, yet it sits inside it with an se
+  # exactly consistent with the interval's width, so neither the ES-outside-CI
+  # nor the CI-width-vs-SE check can see it.
+  ratio_ci_ok <- orig_type %in% c("or", "rr", "irr", "hr") &
+                  !is.na(user_ci_lo_crude) & !is.na(user_ci_up_crude) &
+                  user_ci_lo_crude > 0 & user_ci_up_crude > 0
+  ratio_from_ci <- which(ratio_ci_ok &
+                          (is.na(user_se_crude) | is.na(user_es_crude)))
   if (length(ratio_from_ci) > 0) {
     log_lo_raw <- log(user_ci_lo_crude[ratio_from_ci])
     log_up_raw <- log(user_ci_up_crude[ratio_from_ci])
     log_lo <- .ci_lower(log_lo_raw, log_up_raw)
     log_up <- .ci_upper(log_lo_raw, log_up_raw)
-    se_val[ratio_from_ci] <- .ci_width(log_lo, log_up) / (2 * qnorm(.975))
+    se_val[ratio_from_ci] <- ifelse(
+      is.na(user_se_crude[ratio_from_ci]),
+      .ci_width(log_lo, log_up) / (2 * qnorm(.975)),
+      se_val[ratio_from_ci]
+    )
     es_val[ratio_from_ci] <- ifelse(
       is.na(user_es_crude[ratio_from_ci]),
       (log_lo + log_up) / 2,
@@ -571,9 +697,19 @@ es_from_user_crude <- function(user_es_original_measure_crude,
     orig_type[hr_with_se] <- "loghr"
   }
 
+  # Restricted to ratios above 1, the only region where "se > ratio"
+  # discriminates. The predicate compares a LOG-scale se against a NATURAL-scale
+  # ratio; under the mis-entry it is testing (an se left on the natural scale)
+  # the implied log se is s/OR, so below 1 a firing is evidence AGAINST the error
+  # rather than for it. Measured over 300k simulated trials carrying entirely
+  # correct log-scale ses, the unrestricted predicate warned 55.2% of protective
+  # rows (97.9% below OR = 0.2) against 0.00% of rows above 1, while catching the
+  # mis-entry it targets only 21.0% of the time below 1 -- a likelihood ratio of
+  # 0.38 for a firing there. The restriction removes the false alarms and leaves
+  # the half of the check that works untouched.
   ratio_se_check <- which(orig_type %in% c("or", "rr") &
                            !is.na(user_se_crude) & !is.na(user_es_crude) &
-                           user_es_crude > 0 & user_se_crude > user_es_crude)
+                           user_es_crude > 1 & user_se_crude > user_es_crude)
   if (length(ratio_se_check) > 0) {
     warning(paste0(
       "For rows with user_es_original_measure_crude = 'or'/'rr', ",
@@ -635,9 +771,14 @@ es_from_user_crude <- function(user_es_original_measure_crude,
       n_cases = n_cases[idx], n_controls = n_controls[idx],
       baseline_risk = baseline_risk[idx],
       small_margin_prop = small_margin_prop[idx],
-      or_to_rr = or_to_rr, or_to_cor = or_to_cor,
-      smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
-      rr_to_or = rr_to_or
+      # Subset by row, exactly like the numeric arguments above: these five may be
+      # a per-row column merged by convert_df() as well as a dataset-level scalar.
+      # See .user_method_by_row().
+      or_to_rr = .user_method_by_row(or_to_rr, idx, len),
+      or_to_cor = .user_method_by_row(or_to_cor, idx, len),
+      smd_to_cor = .user_method_by_row(smd_to_cor, idx, len),
+      cor_to_smd = .user_method_by_row(cor_to_smd, idx, len),
+      rr_to_or = .user_method_by_row(rr_to_or, idx, len)
     )
 
     if (!is.null(converted)) {
@@ -712,14 +853,49 @@ es_from_user_crude <- function(user_es_original_measure_crude,
 #' This function is a generic function allowing to include any adjusted effect size measure value + variance.
 #' Importantly, when the \code{user_es_original_measure_adj} is one of the known measures
 #' (d, g, md, mdw, dw, gw, or, logor, rr, logrr, irr, logirr, hr, loghr, r, z, rd, nnt),
-#' conversions towards the other effect size measures are performed.
-#' Otherwise, no conversion is performed (the effect size value + variance you enter is
-#' the value + variance exported by this function) and a warning is issued.
+#' conversions towards other effect size measures are performed -- but not towards
+#' \emph{every} other measure: which targets are reachable depends on the measure entered,
+#' and the combinations that are not identified are listed in the Note below.
+#' For a measure outside that list, no conversion is performed (the effect size value +
+#' variance you enter is the value + variance exported by this function) and a warning is issued.
 #' The sample sizes and baseline risk are used only to perform the conversions.
 #'
 #' For the or/rr/irr/hr measures, the standard error you enter must be on the log scale.
 #' If you indicate the 95% CI bounds instead of the standard error, the log-transformation
 #' is applied automatically.
+#'
+#' @note
+#' The entered measure decides which targets are reachable, and no entered measure
+#' reaches all of them. A target this function cannot build is returned as NA, and
+#' \code{\link{convert_df}} then reports that row in the "Missing ES in input rows"
+#' line of \code{summary()} instead of pooling it (\code{guidance = TRUE} names the
+#' columns that would rescue it). The combinations that return NA are:
+#'
+#' \itemize{
+#'  \item \strong{dw, gw} (within-subject SMD) reach the SMD family only --
+#'    \code{dw}/\code{d} and \code{gw}/\code{g}, related by Hedges' correction on the
+#'    \emph{paired} degrees of freedom \eqn{J(n - 1)} rather than the pooled
+#'    \eqn{J(n_{exp} + n_{nexp} - 2)} an entered \code{d}/\code{g} uses. \code{r},
+#'    \code{z}, \code{logor}, \code{logrr}, \code{nnt} and \code{rd} return NA: the
+#'    point-biserial and Cox maps both assume two independent groups of size
+#'    \code{n_exp} and \code{n_nexp}, so neither is defined for a paired SMD.
+#'  \item \strong{mdw} (within-subject raw mean difference) reaches \code{mdw} and
+#'    \code{md} only. Standardizing it needs the within-subject standardizer, which is
+#'    not an input here; enter the value as \code{md} with \code{n_exp} and
+#'    \code{n_nexp} if the between-group standardization is what is wanted.
+#'  \item \strong{rr, logrr} reach the ratio family (\code{or}, \code{nnt}, \code{rd})
+#'    only, never an SMD or a correlation -- see \code{\link{es_from_rr_se}}.
+#'  \item \strong{rd, nnt} likewise stay inside the binary family (\code{nnt},
+#'    \code{rd}, and \code{or}/\code{rr} when \code{baseline_risk} is supplied).
+#'  \item \strong{irr, logirr, hr, loghr} are carried through unconverted: no other
+#'    measure is identified from a rate or a hazard ratio without the underlying
+#'    time-to-event data.
+#'  \item Any \code{user_es_original_measure_adj} outside the list above is a
+#'    passthrough (value and variance are exported unchanged, with a warning), except
+#'    for \code{measure = "alpha"}, \code{"omega"}, \code{"icc"} or \code{"prop"} under
+#'    a non-identity transform, where the passthrough is refused -- see
+#'    \code{alpha_to_es} above.
+#' }
 #'
 #' @md
 #'
@@ -825,16 +1001,25 @@ es_from_user_adj <- function(user_es_original_measure_adj,
   orig_type <- tolower(user_es_original_measure_adj)
   known_types <- .known_es_types()
 
-  ratio_from_ci <- which(orig_type %in% c("or", "rr", "irr", "hr") &
-                          is.na(user_se_adj) &
-                          !is.na(user_ci_lo_adj) & !is.na(user_ci_up_adj) &
-                          user_ci_lo_adj > 0 & user_ci_up_adj > 0)
+  # See es_from_user_crude() above: the se is derived from the ci only when the
+  # user left that cell blank, but the estimate is rebuilt on the log scale
+  # whenever it is missing, so that it is the geometric and not the arithmetic
+  # centre of the reported bounds.
+  ratio_ci_ok <- orig_type %in% c("or", "rr", "irr", "hr") &
+                  !is.na(user_ci_lo_adj) & !is.na(user_ci_up_adj) &
+                  user_ci_lo_adj > 0 & user_ci_up_adj > 0
+  ratio_from_ci <- which(ratio_ci_ok &
+                          (is.na(user_se_adj) | is.na(user_es_adj)))
   if (length(ratio_from_ci) > 0) {
     log_lo_raw <- log(user_ci_lo_adj[ratio_from_ci])
     log_up_raw <- log(user_ci_up_adj[ratio_from_ci])
     log_lo <- .ci_lower(log_lo_raw, log_up_raw)
     log_up <- .ci_upper(log_lo_raw, log_up_raw)
-    se_val[ratio_from_ci] <- .ci_width(log_lo, log_up) / (2 * qnorm(.975))
+    se_val[ratio_from_ci] <- ifelse(
+      is.na(user_se_adj[ratio_from_ci]),
+      .ci_width(log_lo, log_up) / (2 * qnorm(.975)),
+      se_val[ratio_from_ci]
+    )
     es_val[ratio_from_ci] <- ifelse(
       is.na(user_es_adj[ratio_from_ci]),
       (log_lo + log_up) / 2,
@@ -861,9 +1046,11 @@ es_from_user_adj <- function(user_es_original_measure_adj,
     orig_type[hr_with_se] <- "loghr"
   }
 
+  # See es_from_user_crude() above: only above 1 does the comparison of a
+  # log-scale se against a natural-scale ratio carry any information.
   ratio_se_check <- which(orig_type %in% c("or", "rr") &
                            !is.na(user_se_adj) & !is.na(user_es_adj) &
-                           user_es_adj > 0 & user_se_adj > user_es_adj)
+                           user_es_adj > 1 & user_se_adj > user_es_adj)
   if (length(ratio_se_check) > 0) {
     warning(paste0(
       "For rows with user_es_original_measure_adj = 'or'/'rr', ",
@@ -925,9 +1112,14 @@ es_from_user_adj <- function(user_es_original_measure_adj,
       n_cases = n_cases[idx], n_controls = n_controls[idx],
       baseline_risk = baseline_risk[idx],
       small_margin_prop = small_margin_prop[idx],
-      or_to_rr = or_to_rr, or_to_cor = or_to_cor,
-      smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
-      rr_to_or = rr_to_or
+      # Subset by row, exactly like the numeric arguments above: these five may be
+      # a per-row column merged by convert_df() as well as a dataset-level scalar.
+      # See .user_method_by_row().
+      or_to_rr = .user_method_by_row(or_to_rr, idx, len),
+      or_to_cor = .user_method_by_row(or_to_cor, idx, len),
+      smd_to_cor = .user_method_by_row(smd_to_cor, idx, len),
+      cor_to_smd = .user_method_by_row(cor_to_smd, idx, len),
+      rr_to_or = .user_method_by_row(rr_to_or, idx, len)
     )
 
     if (!is.null(converted)) {

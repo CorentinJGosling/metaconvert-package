@@ -185,7 +185,7 @@ literature standard. `compute.es::a.tes/a.fes/a.pes` implement the same Cooper t
 agreement test on the formula, not a validity test against raw data. Only the
 *unbiasedness claim* is false.
 
-Also note **what is NOT broken**: d and its SE shrink by the *same* factor, so the
+Also note **what is not broken**: d and its SE shrink by the *same* factor, so the
 implied z, the p-value, and "does the CI exclude zero" are all exactly right (verified:
 z bias +0.000% at every δ_x). What is wrong is the magnitude (~10% understated at
 δ_x = 1) and the inverse-variance weight (~+26% excess), and it does not wash out —
@@ -239,7 +239,7 @@ cells. And it is **not flagged**: `internal_flags.R:1467` (B1) tests `abs(es) > 
 the **point estimate only**, so `summary(..., flags = TRUE)` prints
 `r = 0.864 [0.650, 1.078]` with an empty flag string.
 
-### What was WRONG in the original diagnosis — do not repeat it
+### What was wrong in the original diagnosis — do not repeat it
 - **B&P 2005 is not the source of this route.** `man/es_from_2x2.Rd` cites
   Cooper/Cochrane/Lipsey/Sedgwick/Altman/Wen and the roxygen says it "relied on the
   implementation of the formulas of the 'metafor' package". B&P 2005 *is* cited at

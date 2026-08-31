@@ -76,10 +76,11 @@ es_variab_from_means_sd <- function(mean_exp, mean_nexp, mean_sd_exp, mean_sd_ne
   es$logcvr <- ifelse(reverse_means_variability, -logcvr, logcvr)
 
   # s2IND2 (equation 16) Senior et al. 2020.
-  # NB: the Var(ln s) term carries a 1/2 factor -- Var(ln s) ~= trigamma((n-1)/2)/4
-  # ~= 0.5 * n/(n-1)^2 for a normal sample -- and the SAME quantity in logvr_se below is
-  # correctly written 1/2 * n/(n-1)^2. Without the 1/2 the lnCVR variance is ~2x too
-  # large (SE ~40% too wide, inverse-variance weights ~2x off).
+  # Note the 1/2 factor on the Var(ln s) term: for a normal sample
+  # Var(ln s) is about trigamma((n-1)/2)/4, which is about 0.5 * n/(n-1)^2, and the
+  # same quantity in logvr_se below is written 1/2 * n/(n-1)^2. Without the 1/2 the
+  # lnCVR variance is about twice too large, making the SE about 40% too wide and the
+  # inverse-variance weights about 2x off.
   es$logcvr_se <- sqrt(
     mean_sd_exp^2 / (n_exp * mean_exp^2) +
     mean_sd_exp^4 / (2 * n_exp^2 * mean_exp^4) +

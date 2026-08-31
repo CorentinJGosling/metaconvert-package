@@ -19,7 +19,7 @@
 #'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
 #'   which to prefer, so this is a deliberate choice and not a technical detail.
 #'   \itemize{
-#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's own SD and the two
 #'       within-group values are subtracted, their variances adding because the arms are independent. This
 #'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
 #'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
@@ -194,13 +194,23 @@ es_from_means_sd_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_sd_exp, m
   es$g_ci_lo <- ifelse(reverse_means_pre_post, -g_ci_up, g_ci_lo)
   es$g_ci_up <- ifelse(reverse_means_pre_post, -g_ci_lo, g_ci_up)
 
+  # The md arithmetic sits outside the SMD kernel, so it needs the kernel's own SD
+  # predicate applied here: a negative SD flips the sign of the -2*r*sd_pre*sd_post
+  # cross term and yields a positive, plausible md_se that is up to 2.2x too large,
+  # while d/g are already NA'd. Zero is kept, because the mean-change wrappers zero
+  # both pre slots by construction (R/internal_guards.R).
+  md_sd_pre_exp <- .nonneg_or_na(mean_pre_sd_exp)
+  md_sd_exp <- .nonneg_or_na(mean_sd_exp)
+  md_sd_pre_nexp <- .nonneg_or_na(mean_pre_sd_nexp)
+  md_sd_nexp <- .nonneg_or_na(mean_sd_nexp)
+
   md_exp <- mean_exp - mean_pre_exp
-  md_var_exp <- (mean_pre_sd_exp^2 + mean_sd_exp^2 -
-    2 * r_pre_post_exp * mean_pre_sd_exp * mean_sd_exp) / n_exp
+  md_var_exp <- (md_sd_pre_exp^2 + md_sd_exp^2 -
+    2 * r_pre_post_exp * md_sd_pre_exp * md_sd_exp) / n_exp
 
   md_nexp <- mean_nexp - mean_pre_nexp
-  md_var_nexp <- (mean_pre_sd_nexp^2 + mean_sd_nexp^2 -
-    2 * r_pre_post_nexp * mean_pre_sd_nexp * mean_sd_nexp) / n_nexp
+  md_var_nexp <- (md_sd_pre_nexp^2 + md_sd_nexp^2 -
+    2 * r_pre_post_nexp * md_sd_pre_nexp * md_sd_nexp) / n_nexp
 
   es$md <- ifelse(reverse_means_pre_post, md_nexp - md_exp, md_exp - md_nexp)
   es$md_se <- sqrt(md_var_exp + md_var_nexp)
@@ -233,7 +243,7 @@ es_from_means_sd_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_sd_exp, m
 #'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
 #'   which to prefer, so this is a deliberate choice and not a technical detail.
 #'   \itemize{
-#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's own SD and the two
 #'       within-group values are subtracted, their variances adding because the arms are independent. This
 #'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
 #'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
@@ -306,10 +316,15 @@ es_from_means_se_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_se_exp, m
   if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(mean_pre_exp))
   r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
+  # A reported standard error must be strictly positive, so a negative one is blanked
+  # before it becomes an SD (R/internal_guards.R). The two BASELINE slots are left to
+  # the weaker >= 0 predicate applied downstream, because es_from_mean_change_se()
+  # passes mean_pre_se = 0 by construction and .positive_or_na() would wipe the whole
+  # mean-change family.
   sd_pre_exp <- mean_pre_se_exp * sqrt(n_exp)
-  sd_exp <- mean_se_exp * sqrt(n_exp)
+  sd_exp <- .positive_or_na(mean_se_exp) * sqrt(n_exp)
   sd_pre_nexp <- mean_pre_se_nexp * sqrt(n_nexp)
-  sd_nexp <- mean_se_nexp * sqrt(n_nexp)
+  sd_nexp <- .positive_or_na(mean_se_nexp) * sqrt(n_nexp)
 
   es <- es_from_means_sd_pre_post(
     mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
@@ -355,7 +370,7 @@ es_from_means_se_pre_post <- function(mean_pre_exp, mean_exp, mean_pre_se_exp, m
 #'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
 #'   which to prefer, so this is a deliberate choice and not a technical detail.
 #'   \itemize{
-#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's own SD and the two
 #'       within-group values are subtracted, their variances adding because the arms are independent. This
 #'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
 #'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
@@ -452,10 +467,13 @@ es_from_means_ci_pre_post <- function(mean_pre_exp, mean_exp,
   df_exp <- n_exp - 1
   df_nexp <- n_nexp - 1
 
-  se_pre_exp <- (mean_pre_ci_up_exp - mean_pre_ci_lo_exp) / (2 * qt(0.975, df_exp))
-  se_exp <- (mean_ci_up_exp - mean_ci_lo_exp) / (2 * qt(0.975, df_exp))
-  se_pre_nexp <- (mean_pre_ci_up_nexp - mean_pre_ci_lo_nexp) / (2 * qt(0.975, df_nexp))
-  se_nexp <- (mean_ci_up_nexp - mean_ci_lo_nexp) / (2 * qt(0.975, df_nexp))
+  # .ci_width() rather than a raw subtraction: a transposed bound describes the same
+  # interval, so it must give the same standard error instead of a negative one that
+  # sign-flips the md cross term downstream (R/internal_guards.R).
+  se_pre_exp <- .ci_width(mean_pre_ci_lo_exp, mean_pre_ci_up_exp) / (2 * qt(0.975, df_exp))
+  se_exp <- .ci_width(mean_ci_lo_exp, mean_ci_up_exp) / (2 * qt(0.975, df_exp))
+  se_pre_nexp <- .ci_width(mean_pre_ci_lo_nexp, mean_pre_ci_up_nexp) / (2 * qt(0.975, df_nexp))
+  se_nexp <- .ci_width(mean_ci_lo_nexp, mean_ci_up_nexp) / (2 * qt(0.975, df_nexp))
 
   es <- es_from_means_se_pre_post(
     mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,

@@ -15,13 +15,13 @@
     diff_max_logor = 2.0, # E3
     overlap_min = 0.85, # E2b
     enable_cross_row = TRUE, # D1/D2
-    # One or more raw-data column names to scope the CROSS-ROW checks by (D1/D2/D3,
-    # G, H, E4/E6/E7). NOT V23, which is a Tier-1 input-data property computed in
-    # .validate_input_data() and is deliberately left dataset-wide.
-    # NULL (default) = whole dataset is one pool, as before.
-    # Set it (e.g. "outcome", or c("outcome","subgroup")) for multivariate / multi-
-    # outcome extraction sheets, where deviations are only meaningful WITHIN a group
-    # of comparable rows. Per-row and cross-method checks are unaffected.
+    # One or more raw-data column names to scope the cross-row checks by (D1/D2/D3,
+    # G, H, E4/E6/E7). This does not cover V23, which is a Tier-1 input-data property
+    # computed in .validate_input_data() and stays dataset-wide.
+    # NULL (the default) treats the whole dataset as one pool.
+    # Set it (for example "outcome", or c("outcome", "subgroup")) for multivariate or
+    # multi-outcome extraction sheets, where deviations are only meaningful within a
+    # group of comparable rows. Per-row and cross-method checks are unaffected.
     flag_group = NULL,
     alpha_max = 0.99, # C7
     icc_max = 0.99, # C8
@@ -43,25 +43,38 @@
     paired_as_indep_tol = 0.07, # V26
     sd_outlier_ratio = 5, # V27/D3
     sd_outlier_smd = FALSE, # V27/D3, off: smd pools mix instrument scales
-    margin_range_min = 0.30 # V35
+    # V29: the band on (max - min)/SD, in multiples of xi(n). The ceiling is scaled
+    # with n inside the check (see V29), because no FLAT multiplier is simultaneously
+    # sensitive below n = 30 and specific above n = 500.
+    range_sd_lo_mult = 0.5, # V29
+    range_sd_hi_mult = 2.5, # V29
+    margin_range_min = 0.30, # V35
+    # V44: floor_position bands. Measured in simulations/studies/11_reliability_se.R
+    # (11e, 20 response distributions x C in {2,3,5,7}): the variance error c is
+    # 1.56-4.28 below 0.20 and 0.92-1.03 above 0.28, and the bands hold across every
+    # category count. Spearman rho(floor_position, c) = -0.96 against -0.16 for the
+    # category count alone, so this is the gate and the category count is not.
+    floor_position_severe = 0.20, # V44
+    floor_position_mild = 0.28 # V44
   )
 }
 
 
 #' Warn about flag_options entries that will not do what the caller expects.
 #'
-#' Two silent failures, both of which leave the user believing they tuned something:
+#' Two failures pass unnoticed, and both leave the user believing they tuned
+#' something:
 #'
-#'  1. A MISSPELLED name. `flag_options` is a plain list merged by name, so
-#'     `alpha_maxx = 0.5` was accepted everywhere and simply never read.
-#'  2. A TIER-1 option passed to `summary()`. The input-data checks run inside
+#'  1. A misspelled name. `flag_options` is a plain list merged by name, so
+#'     `alpha_maxx = 0.5` is accepted everywhere and simply never read.
+#'  2. A Tier-1 option passed to `summary()`. The input-data checks run inside
 #'     `convert_df()`, before `summary()` is ever called, so an option only they
-#'     consume arrives too late. Six options are Tier-1 ONLY and have no effect at
-#'     all this way; `enable_cross_row` and `enable_informational` are read by both
-#'     tiers, so passing them to `summary()` half-works -- it retunes the
-#'     post-computation checks while the input-data ones already ran on the old
+#'     consume arrives too late. Six options are Tier-1 only and have no effect at
+#'     all this way. `enable_cross_row` and `enable_informational` are read by both
+#'     tiers, so passing them to `summary()` half-works: it retunes the
+#'     post-computation checks while the input-data ones have already run on the old
 #'     value. That partial effect is the more confusing of the two, so it is named
-#'     separately rather than lumped in.
+#'     separately.
 #'
 #' Warns rather than errors, matching the package convention for user input: one
 #' mistyped option must not abort an analysis.
@@ -85,7 +98,11 @@
   if (identical(context, "summary")) {
     # read by convert_df() only -- passing them to summary() does nothing
     tier1_only <- c("sd_ratio_max", "sd_ratio_bl_ep_min", "baseline_imbalance_max",
-                    "templated_min_match", "paired_as_indep_tol", "margin_range_min")
+                    "templated_min_match", "paired_as_indep_tol", "margin_range_min",
+                    # V44 and V29 are input-data checks too, and were missing here, so
+                    # passing their thresholds to summary() failed silently.
+                    "floor_position_severe", "floor_position_mild",
+                    "range_sd_lo_mult", "range_sd_hi_mult")
     # read by BOTH tiers -- passing them to summary() retunes only the second
     both_tiers <- c("enable_cross_row", "enable_informational")
 
@@ -109,23 +126,23 @@
 }
 
 
-#' Build a per-row grouping key for the CROSS-ROW checks from opts$flag_group.
+#' Build a per-row grouping key for the cross-row checks from opts$flag_group.
 #'
 #' Returns a length-n character vector used to scope D1/D2/D3, G, H and E4/E6/E7.
-#' V23 is NOT scoped: it is a Tier-1 input-data property evaluated in
+#' V23 is not scoped, being a Tier-1 input-data property evaluated in
 #' .validate_input_data(), which never sees this key.
-#' When flag_group is NULL / absent / names no present column, every row gets
-#' the same key ("__all__") -- i.e. one pool, the pre-existing whole-dataset
-#' behaviour. Rows with an NA in a grouping column fall into a shared "<NA>" level.
+#' When flag_group is NULL, absent, or names no present column, every row gets the
+#' same key ("__all__"), so the whole dataset forms one pool. Rows with an NA in a
+#' grouping column fall into a shared "<NA>" level.
 #'
-#' Multi-column keys are joined with "\r", NOT with the " / " that is shown to the
-#' user: " / " is a sequence a grouping value can itself contain, so joining with it
-#' made distinct rows collide into one pool -- `(g1 = "x / y", g2 = "z")` and
-#' `(g1 = "x", g2 = "y / z")` both produced "x / y / z", silently merging their
-#' D1/D2/D3, G, H, E4 and E6/E7/E8 comparison sets. "\r" cannot occur in a value
-#' read from a spreadsheet cell, so it is collision-proof; it is the same separator
-#' `cmp_key` and `dup_key` already use. .group_label() renders it back as " / " for
-#' display, and every message that shows a key already routes through it.
+#' Multi-column keys are joined with "\r" rather than with the " / " shown to the
+#' user, because a grouping value can itself contain " / ". Joining on it would let
+#' distinct rows collide into one pool: `(g1 = "x / y", g2 = "z")` and
+#' `(g1 = "x", g2 = "y / z")` both produce "x / y / z", merging their D1/D2/D3, G, H,
+#' E4 and E6/E7/E8 comparison sets. "\r" cannot occur in a value read from a
+#' spreadsheet cell, so it is collision-proof, and it is the separator `cmp_key` and
+#' `dup_key` already use. .group_label() renders it back as " / " for display, and
+#' every message that shows a key routes through it.
 #'
 #' @param data data.frame the group column(s) are read from (the raw input data)
 #' @param flag_group NULL, or one or more column names in `data`
@@ -151,12 +168,12 @@
 #' Split rows by group_key, run a cross-row flag function within each group, and
 #' reassemble a length-n list of flag vectors (global row order preserved).
 #'
-#' `fn` receives a vector of GLOBAL row indices for one group and must return a
-#' list of character vectors the same length, in that index order. When more than
-#' one group is present, each emitted flag gets a " (within group '<g>')" suffix
-#' (no "; ", so the downstream flag merge is unaffected) so the reviewer knows the
-#' comparison set. Requires self-contained messages (no absolute row-number
-#' references) -- true for the D-family and G checks.
+#' `fn` receives a vector of global row indices for one group and must return a
+#' list of character vectors of the same length, in that index order. When more than
+#' one group is present, each emitted flag gets a " (within group '<g>')" suffix so
+#' the reviewer knows the comparison set; the suffix contains no "; ", so the
+#' downstream flag merge is unaffected. Messages must be self-contained, with no
+#' absolute row-number references, which holds for the D-family and G checks.
 #'
 #' @param group_key length-n character vector from .build_group_key()
 #' @param n total number of rows
@@ -252,36 +269,53 @@
 }
 
 
+#' Reporting precision of a (value, lower, upper) triplet
+#'
+#' .count_decimals() reads the decimals R actually stores, and R does not store
+#' trailing zeros: a bound printed as 0.90 arrives as 0.9 and is read as 1 dp. Pricing
+#' each member's rounding pad from its own decimals therefore makes V2/V3 behave
+#' differently depending on whether a reported digit happened to be a zero. On a
+#' [0, 1] reliability column the pad becomes +/- 0.05, wider than most real CI
+#' half-widths, so an arithmetically impossible interval survives validation while the
+#' identical error one digit over is caught and the row removed.
+#'
+#' A study printing 0.85 and 0.86 is printing to 2 dp, so its 0.90 is 0.90 and not
+#' 0.9. Take the precision of the most precisely printed member of the triplet as the
+#' row's reporting precision, and build every pad from that one number.
+#'
+#' @param val,lo,up numeric scalars (the point estimate and its two bounds)
+#' @return integer, the number of decimals the rounding error is priced at
+#' @noRd
+.triplet_precision <- function(val, lo, up) {
+  max(.count_decimals(val), .count_decimals(lo), .count_decimals(up))
+}
+
+
 #' Input columns whose presence means a row feeds an r_pre_post-consuming route
 #'
-#' A row is "r-consuming" when it carries pre/post, mean-change or paired data, i.e.
-#' when it reaches one of the 19 exported routes that take \code{r_pre_post_exp} /
-#' \code{r_pre_post_nexp}. Those routes impute \code{r_pre_post} when the user leaves
-#' it blank, which is a substantive assumption: under the change-SD standardizers
-#' (\code{morris_dz}, \code{cooper}/\code{morris_drm}) the assumed correlation scales
-#' the POINT estimate, not merely the SE.
+#' A row is "r-consuming" when it carries pre/post, mean-change or paired data, that
+#' is, when it reaches one of the 19 exported routes that take \code{r_pre_post_exp}
+#' or \code{r_pre_post_nexp}. Those routes impute \code{r_pre_post} when the user
+#' leaves it blank, which is a substantive assumption: under the change-SD
+#' standardizers (\code{morris_dz}, \code{cooper}/\code{morris_drm}) the assumed
+#' correlation scales the point estimate, not merely the SE.
 #'
-#' This is the single source of truth for that test. It is consumed twice in
-#' \code{convert_df()} -- by the \code{verbose} note and by flag V6 (which also sets
-#' the \code{r_defaulted} attribute that drives the \code{(r-sensitive: ...)}
-#' annotations on A6/E2/E2b in \code{summary()}). Those two call sites previously
-#' carried separate hardcoded lists which had drifted: the V6 copy named seven columns
-#' that do not exist (\code{mean_post_exp}, \code{mean_post_nexp}, three
-#' \code{*_single_group} names, and unsuffixed \code{paired_t}/\code{paired_f}), so
-#' paired-t/F rows -- the rows where the assumed r moves the point estimate -- were
-#' filtered out by \code{intersect(., colnames(x))} and silently never flagged.
+#' This is the single source of truth for that test. \code{convert_df()} consumes it
+#' twice, for the \code{verbose} note and for flag V6, which also sets the
+#' \code{r_defaulted} attribute driving the \code{(r-sensitive: ...)} annotations on
+#' A6/E2/E2b in \code{summary()}. Keeping one list matters because
+#' \code{intersect(., colnames(x))} drops any name that does not exist, so a list
+#' naming a column that was never created fails quietly rather than erroring.
 #'
-#' NOTE ON SINGLE-GROUP ROUTES: there are no \code{*_single_group} columns. The
-#' single-group entry points reuse the \code{_exp} columns (see the
-#' \code{es_from_*_single_group} calls in \code{convert_df()}), so they are already
-#' covered here.
+#' Single-group routes: there are no \code{*_single_group} columns. The single-group
+#' entry points reuse the \code{_exp} columns (see the \code{es_from_*_single_group}
+#' calls in \code{convert_df()}), so they are already covered here.
 #'
-#' NOTE ON ENDPOINT COLUMNS: \code{mean_exp}/\code{mean_sd_exp} are deliberately
-#' EXCLUDED. They are populated on ordinary two-group rows that never touch an
-#' r-consuming route, so keying on them would make the note and V6 fire on data with
-#' no pre/post component at all. Baseline (\code{mean_pre_*}), change
-#' (\code{mean_change_*}) and paired (\code{paired_*}) columns are the discriminating
-#' signal.
+#' Endpoint columns: \code{mean_exp} and \code{mean_sd_exp} are excluded on purpose.
+#' They are populated on ordinary two-group rows that never touch an r-consuming
+#' route, so keying on them would make the note and V6 fire on data with no pre/post
+#' component at all. The discriminating signal is the baseline (\code{mean_pre_*}),
+#' change (\code{mean_change_*}) and paired (\code{paired_*}) columns.
 #'
 #' @return character vector of column names
 #' @noRd
@@ -346,6 +380,10 @@
     "mean_change_sd_exp", "mean_change_sd_nexp",
     "ancova_mean_sd_exp", "ancova_mean_sd_nexp", "ancova_mean_sd_pooled",
     "md_sd", "ancova_md_sd",
+    # Regression standardisers. A negative sd_dv sign-flips d/g through
+    # es_from_beta_std() while d_se stays positive, which is the exact failure class
+    # the input guards exist to close, and neither column was checked here.
+    "sd_dv", "sd_iv",
     # SEs
     "mean_se_exp", "mean_se_nexp", "mean_pre_se_exp", "mean_pre_se_nexp",
     "mean_change_se_exp", "mean_change_se_nexp",
@@ -394,15 +432,26 @@
     list(val = "loghr",            lo = "loghr_ci_lo",            up = "loghr_ci_up",            scale = "additive"),
     # Risk difference (additive scale)
     list(val = "rd",        lo = "rd_ci_lo",        up = "rd_ci_up",        scale = "additive"),
-    # omega is the one measure whose standard error is derived ENTIRELY from the
-    # reported interval (there is no (n, k) variance for it), so an unvalidated CI
-    # is an unvalidated WEIGHT. Without this entry a transposed interval, a point
-    # estimate outside its own interval, and bounds outside [0, 1] all produced a
-    # plausible omega with a wrong SE and an empty flag string -- and .ci_lower()/
+    # omega is the one measure whose standard error comes entirely from the reported
+    # interval, since there is no (n, k) variance for it, so an unvalidated CI is an
+    # unvalidated weight. Without this entry a transposed interval, a point estimate
+    # outside its own interval, or bounds outside [0, 1] would each produce a
+    # plausible omega with a wrong SE and an empty flag string. .ci_lower() and
     # .ci_upper() absorb the transposition, so this is the last chance to notice.
-    list(val = "omega",     lo = "omega_ci_lo",     up = "omega_ci_up",     scale = "additive"),
-    list(val = "icc",       lo = "icc_ci_lo",       up = "icc_ci_up",       scale = "additive"),
-    list(val = "cronbach_alpha", lo = "cronbach_alpha_ci_lo", up = "cronbach_alpha_ci_up", scale = "additive"),
+    #
+    # keep_val: what V3 ("value outside its own CI") destroys. Everywhere else the
+    # interval is the row's only dispersion source, so a value that contradicts it
+    # leaves nothing usable and the whole triplet goes. The three reliability
+    # coefficients are the exception: each has an interval-FREE standard error (the
+    # (n, k) closed form for alpha and icc; se = NA, row visible but unpooled, for
+    # omega), so refusing the interval alone keeps a study whose weight then comes
+    # from n and k, which no mis-transcription of the interval can corrupt. V2 is not
+    # given this treatment: an inverted interval cannot even be read bound-for-bound,
+    # and a transposition that severe usually means the whole block was taken off the
+    # wrong row, so the coefficient is not above suspicion either.
+    list(val = "omega",     lo = "omega_ci_lo",     up = "omega_ci_up",     scale = "additive", keep_val = TRUE),
+    list(val = "icc",       lo = "icc_ci_lo",       up = "icc_ci_up",       scale = "additive", keep_val = TRUE),
+    list(val = "cronbach_alpha", lo = "cronbach_alpha_ci_lo", up = "cronbach_alpha_ci_up", scale = "additive", keep_val = TRUE),
     # Regression coefficient (additive scale)
     list(val = "linreg_b",  lo = "linreg_b_ci_lo",  up = "linreg_b_ci_up",  scale = "additive"),
     # Natural-scale ratios (exp scale - inherently asymmetric CIs)
@@ -440,11 +489,39 @@
                                   templated_min_match = 3,
                                   measure = NULL,
                                   paired_as_indep_tol = 0.07,
+                                  floor_position_severe = 0.20,
+                                  floor_position_mild = 0.28,
                                   margin_range_min = 0.30,
+                                  alpha_se_source = "closed_form",
+                                  omega_se_source = "reported",
+                                  range_sd_lo_mult = 0.5,
+                                  range_sd_hi_mult = 2.5,
+                                  flag_group = NULL,
                                   correct_inputs = TRUE) {
   n <- nrow(x)
   row_issues <- vector("list", n)
   for (i in seq_len(n)) row_issues[[i]] <- character(0)
+
+  # Comparison sets for the Tier-1 CROSS-ROW checks (V35, V36, V37, V38, V39, V42,
+  # V43), scoped by flag_group exactly as the Tier-2 ones are by .by_group(). Every
+  # one of those messages asserts a fact about "the rest of the pool", so computing
+  # them over the whole dataset states a pool composition the user has explicitly told
+  # the package is wrong -- and for the majority-guarded checks (V37, V42) grouping is
+  # the very remedy their own comments describe: two strata each with a constant k
+  # have no minority to flag, while their union does.
+  #
+  # V23 stays deliberately dataset-wide: it looks for a block of numbers cloned from
+  # one paper into another, and confining that search to one outcome or subgroup would
+  # hide the case it exists for.
+  v_group_key <- .build_group_key(x, flag_group, n = n)
+  v_groups <- split(seq_len(n), v_group_key)
+  v_multi <- length(v_groups) > 1L
+  # The same suffix .by_group() appends, for the same reason. It contains no "; ", so
+  # the downstream flag merge is unaffected, and it is appended AFTER the message's own
+  # leading quoted column name, so .v_flag_matches_scope() still routes on that.
+  v_grp_note <- function(gk) {
+    if (v_multi) paste0(" (within group '", .group_label(names(v_groups)[gk]), "')") else ""
+  }
 
   # Check non-negative columns
   for (col in .positive_columns()) {
@@ -510,18 +587,34 @@
     # alpha can be negative, only > 1 impossible (V25 warns on negatives)
     list(col = "cronbach_alpha",  lo = -Inf, up = 1, label = "alpha"),
     # omega = (sum lambda)^2 / ((sum lambda)^2 + sum theta) is a square divided by
-    # itself plus a sum of variances, so unlike alpha it is structurally NON-NEGATIVE
-    # -- there is no measurement pattern that produces a negative omega, and a
-    # 1.34M-run simulation found 0 negative omega_total against 107 negative alphas.
-    # So the lower bound is 0, not -Inf (which is alpha's, because a negative average
-    # inter-item covariance really can drive alpha below zero -- see V25). Before this,
-    # omega = -0.12 sailed through every check and was pooled with a positive SE and
-    # an empty flags column. The UPPER bound stays 1: an estimate above it is a
-    # Heywood case, which es_from_omega() preserves on the raw scale.
+    # itself plus a sum of variances, so unlike alpha it is structurally non-negative.
+    # No measurement pattern produces a negative omega, and a 1.34M-run simulation
+    # found no negative omega_total against 107 negative alphas. Its lower bound is
+    # therefore 0, rather than the -Inf alpha gets, since a negative average inter-item
+    # covariance really can drive alpha below zero (see V25). The upper bound stays 1:
+    # an estimate above it is a Heywood case, which es_from_omega() preserves on the
+    # raw scale.
     list(col = "omega",           lo = 0,    up = 1, label = "omega"),
     # icc bounded below by -1/(k-1) >= -1
     list(col = "icc",             lo = -1, up = 1, label = "ICC"),
     list(col = "prop",            lo = 0, up = 1, label = "proportion"),
+    # Arm-level proportions consumed by es_from_2x2_prop()
+    list(col = "prop_cases_exp",  lo = 0, up = 1, label = "proportion"),
+    list(col = "prop_cases_nexp", lo = 0, up = 1, label = "proportion"),
+    # Reliability CI bounds. The point estimate is bounded here; the bounds it is read
+    # between were not, so a mistyped bound reached the SE cascade unchecked.
+    list(col = "icc_ci_lo",       lo = -1, up = 1, label = "ICC CI bound"),
+    list(col = "icc_ci_up",       lo = -1, up = 1, label = "ICC CI bound"),
+    # Pre-post correlations: a correlation, and consumed as one by 19 routes
+    list(col = "r_pre_post_exp",  lo = -1, up = 1, label = "correlation"),
+    list(col = "r_pre_post_nexp", lo = -1, up = 1, label = "correlation"),
+    # small_margin_prop is the SMALLER of the two 2x2 margin proportions, so its domain
+    # is (0, 0.5]: at 0 the Bonett correction divides by zero and above 0.5 it is not
+    # the smaller margin at all, which silently flips the sign of the correlation and
+    # returns a negative standard error. open_lo because this list is otherwise
+    # inclusive and 0 is not admissible here.
+    list(col = "small_margin_prop", lo = 0, up = 0.5, open_lo = TRUE,
+         label = "small margin proportion"),
     list(col = "pearson_r",       lo = -1, up = 1, label = "correlation"),
     list(col = "spearman_r",      lo = -1, up = 1, label = "correlation"),
     # phi is a 2x2 correlation coefficient in [-1, 1]; an out-of-range value
@@ -556,13 +649,16 @@
   for (bc in .bounded_columns) {
     if (!bc$col %in% colnames(x)) next
     vals <- x[[bc$col]]
-    bad <- which(!is.na(vals) & (vals < bc$lo | vals > bc$up))
+    lo_bad <- if (isTRUE(bc$open_lo)) vals <= bc$lo else vals < bc$lo
+    bad <- which(!is.na(vals) & (lo_bad | vals > bc$up))
     if (length(bad) > 0) {
       # Describe the valid range; one-sided when a bound is infinite
       range_txt <- if (is.infinite(bc$lo)) {
         sprintf("<= %g", bc$up)
       } else if (is.infinite(bc$up)) {
         sprintf(">= %g", bc$lo)
+      } else if (isTRUE(bc$open_lo)) {
+        sprintf("(%g, %g]", bc$lo, bc$up)
       } else {
         sprintf("[%g, %g]", bc$lo, bc$up)
       }
@@ -605,14 +701,13 @@
     }
   }
 
-  # V32: eta-squared must lie in [0, 1). A value >= 1 makes the Cohen's d
-  # conversion diverge -- d = 2*sqrt(eta2 / (1 - eta2)) for a raw eta-squared,
-  # and the implied ANCOVA F = eta2 * df / (1 - eta2) for an adjusted one -- so
-  # such a row is set to missing (correct_inputs = TRUE) or flagged (FALSE).
-  # Negatives are already caught by the non-negative-column check above. A
-  # large-but-valid eta-squared that implies a huge SMD is surfaced downstream
-  # by the post-computation Large-SMD check, so no separate plausibility tier is
-  # added here.
+  # V32: eta-squared must lie in [0, 1). A value >= 1 makes the Cohen's d conversion
+  # diverge, whether through d = 2*sqrt(eta2 / (1 - eta2)) for a raw eta-squared or
+  # through the implied ANCOVA F = eta2 * df / (1 - eta2) for an adjusted one, so such
+  # a row is set to missing (correct_inputs = TRUE) or flagged (FALSE). Negatives are
+  # already caught by the non-negative-column check above. A large but valid
+  # eta-squared that implies a huge SMD is surfaced downstream by the
+  # post-computation Large-SMD check, so no separate plausibility tier is added here.
   for (col in c("etasq", "etasq_adj")) {
     if (!col %in% colnames(x)) next
     vals <- x[[col]]
@@ -634,54 +729,139 @@
     }
   }
 
-  # V40: a reliability coefficient of EXACTLY 1 has no transform, so the row is
-  # dropped -- but silently, which is the failure this whole family exists to prevent.
-  # V11 bounds alpha at (-Inf, 1] and omega/icc at [0, 1] INCLUSIVE, so 1.00 passes
-  # validation; the route then NAs it against a strict `< 1` gate with no message, and
-  # es_guidance reports "No partial input data found" on a fully populated row.
-  # Contrast alpha = 1.02, one rounding step away, which IS explained. alpha = 1.00 is
-  # a routine printed value (short subscales, or a paper rounding .996).
+  # ICC facts every ICC-scoped check below needs, computed once and above the first
+  # of them. icc_measure_ok and icc_type_eff used to be local to V31, which sits
+  # below V40 and V41 -- and both of those need them: V40 to know whether the route
+  # actually drops a 1.00, V41 to know that its single-measures floor does not apply
+  # to an average-measures value.
   #
-  # Warn-only and scale-aware: on the raw scale 1.00 is a perfectly usable boundary
-  # value (es = 1, se = 0), so this fires only where the transform is undefined.
+  # icc_measure_ok scopes the ICC-named checks to an ICC run. Tier-1 checks key on
+  # which columns exist rather than on the requested measure, so a COSMIN-style sheet
+  # holding alpha, omega and ICC side by side (one sheet, several properties, one pool
+  # per property) would otherwise carry ICC pooling advice into every run. A NULL or
+  # empty measure leaves direct callers unaffected.
+  icc_measure_ok <- is.null(measure) || !nzchar(measure) || identical(measure, "icc")
+  # .normalise_icc_type() rather than bare string equality: es_from_icc() resolves ten
+  # spellings to "agreement" ("Agreement", "ICC(2,1)", "absolute agreement", "two-way
+  # random", ...), and comparing the raw cell against the literal "agreement" matches
+  # only two of them. convert_df() normalises the column as well, but this call is kept
+  # so that direct callers of .validate_input_data() get the same answer from one
+  # definition across three call sites. warn = FALSE because es_from_icc() owns the
+  # user-facing warning.
+  icc_type_eff <- if ("icc_type" %in% colnames(x)) {
+    tt <- as.character(x[["icc_type"]])
+    tt[is.na(tt)] <- "agreement"
+    .normalise_icc_type(tt, warn = FALSE)
+  } else {
+    rep("agreement", nrow(x))
+  }
+  icc_k_col <- if ("n_measurements" %in% colnames(x)) {
+    suppressWarnings(as.numeric(x[["n_measurements"]]))
+  } else {
+    rep(NA_real_, nrow(x))
+  }
+  icc_is_avg_col <- if ("icc" %in% colnames(x)) {
+    !is.na(x[["icc"]]) & .icc_is_average(icc_type_eff)
+  } else {
+    rep(FALSE, nrow(x))
+  }
+
+  # V40: a reliability coefficient of exactly 1 has no transform, so the row is
+  # dropped, and without this flag it is dropped without a message. V11 bounds alpha
+  # at (-Inf, 1] and omega/icc at [0, 1] inclusive, so 1.00 passes validation; the
+  # route then NAs it against a strict `< 1` gate, and es_guidance reports "No partial
+  # input data found" on a fully populated row. Compare alpha = 1.02, one rounding
+  # step away, which does get explained. alpha = 1.00 is a routine printed value, from
+  # a short subscale or from a paper rounding .996.
+  #
+  # Warn-only and ROUTE-aware. Whether 1.00 survives is a property of the route, not
+  # of the transform, and the three routes disagree:
+  #
+  #   es_from_cronbach_alpha()  keeps 1 on "raw" AND "hakstian_whalen", drops it on
+  #                             "bonett"            (R/es_from_ALPHA.R, valid_es)
+  #   es_from_omega()           keeps 1 on "raw" only
+  #                                                 (R/es_from_OMEGA.R, transformable)
+  #   es_from_icc()             drops it on EVERY scale, its gate icc < 1 being
+  #                             scale-independent   (R/es_from_ICC.R, valid_es)
+  #
+  # A single "skip the raw scale" short-circuit gets two of the three wrong. It stays
+  # silent on an ICC of 1.00 that really does vanish -- the unexplained drop this flag
+  # exists to prevent -- and it fires on a hakstian_whalen alpha of 1.00 that is in
+  # fact retained at es = 1, se = 0, telling the user the row left the pool while the
+  # co-emitted "[INVALID] SE is zero" on the same row says it did not. The
+  # "log(0) is undefined" parenthetical is likewise true only of the Bonett transform:
+  # 1 - (1 - a)^(1/3) has no logarithm and is perfectly defined at a = 1.
+  #
+  # If either route changes its boundary convention, this table has to change with it.
   for (rel1 in list(c("cronbach_alpha", "alpha", "alpha"),
                     c("omega", "omega", "omega"),
                     c("icc", "ICC", "icc"))) {
     cl <- rel1[1]; lab <- rel1[2]; which_scale <- rel1[3]
     if (!cl %in% colnames(x)) next
-    sc <- switch(which_scale, "alpha" = alpha_to_es, "omega" = omega_to_es, icc_to_es)
-    if (identical(as.character(sc), "raw")) next
+    if (identical(which_scale, "icc") && !icc_measure_ok) next
+    sc <- as.character(switch(which_scale, "alpha" = alpha_to_es,
+                              "omega" = omega_to_es, icc_to_es))
+    drops <- switch(which_scale,
+                    "alpha" = identical(sc, "bonett"),
+                    "omega" = !identical(sc, "raw"),
+                    TRUE)                    # icc: no scale keeps the boundary
+    if (!drops) next
+    why <- if (identical(sc, "bonett")) {
+      "has no bonett transform (log(0) is undefined)"
+    } else if (identical(which_scale, "omega")) {
+      sprintf("is refused on the %s scale by es_from_omega(), which admits the boundary on raw only", sc)
+    } else {
+      "is refused by es_from_icc() on every analysis scale, its validity gate icc < 1 being scale-independent"
+    }
+    # Only name a rescuing scale where one exists.
+    remedy <- switch(which_scale,
+                     "alpha" = " - or set alpha_to_es to raw or hakstian_whalen, where 1 is a usable boundary",
+                     "omega" = " - or set omega_to_es to raw, where 1 is a usable boundary",
+                     "")
     v1 <- suppressWarnings(as.numeric(x[[cl]]))
     for (i in which(!is.na(v1) & v1 == 1)) {
       row_issues[[i]] <- c(row_issues[[i]], sprintf(
-        paste0("[UNUSUAL] '%s' = 1 exactly. A perfect %s has no %s transform ",
-               "(log(0) is undefined), so this row yields no effect size and drops out ",
-               "of the pool. Verify the value - a reported 1.00 is usually a rounded ",
-               "0.99x - or set the analysis scale to 'raw', where 1 is a usable boundary"),
-        cl, lab, as.character(sc)))
+        paste0("[UNUSUAL] '%s' = 1 exactly. A perfect %s %s, so this row yields no ",
+               "effect size and drops out of the pool. Verify the value - a reported ",
+               "1.00 is usually a rounded 0.99x%s"),
+        cl, lab, why, remedy))
     }
   }
 
-  # V41: the ICC's lower bound depends on k. An ICC is bounded below by -1/(k - 1),
-  # not by -1: with k measurements the negative correlation has to be shared among
-  # k - 1 other measurements, so k = 3 cannot go below -0.5 and k = 6 cannot go below
-  # -0.2. V11's .bounded_columns entry uses the loose -1 (its own comment states the
-  # correct bound, and the code did not implement it) because that list holds STATIC
-  # scalar bounds and this one varies per row -- so this is a separate check, exactly
-  # as V32 and V34 are for values inside the V11 range but still non-identified.
+  # V41: the ICC's lower bound depends on k. An ICC is bounded below by -1/(k - 1)
+  # rather than by -1, because with k measurements a negative correlation has to be
+  # shared among the k - 1 others, so k = 3 cannot go below -0.5 and k = 6 cannot go
+  # below -0.2. V11's .bounded_columns entry uses the loose -1 because that list holds
+  # static scalar bounds and this one varies per row, so V41 is a separate check, in
+  # the same way that V32 and V34 handle values inside the V11 range that are still
+  # non-identified.
   #
-  # It matters because the SE carries (1 + (k-1)rho), which SHRINKS as rho goes
+  # It matters because the SE carries (1 + (k-1)rho), which shrinks as rho goes
   # negative: icc = -0.8 at k = 3 gives se = 0.0495 against 0.2144 for an ordinary
-  # icc = 0.8, i.e. 18.8x the meta-analytic weight for an arithmetically impossible
-  # value. k = 2 is unaffected -- there -1/(k-1) is exactly -1, so the common
-  # test-retest case behaves as before.
+  # icc = 0.8, which is 18.8x the meta-analytic weight for an arithmetically
+  # impossible value. k = 2 is unaffected, since -1/(k-1) is exactly -1 there, so the
+  # common test-retest case is unchanged.
+  #
+  # The floor is the bound on a SINGLE-measurement ICC and must not be applied to an
+  # average-measures one. For an ICC(2,k)/ICC(3,k) the reported quantity is rho_k, and
+  # the inverse Spearman-Brown map rho_1 = rho_k / (k - (k-1) rho_k) sends every rho_k
+  # in [-1, 1] to a rho_1 at or above -1/(2k-1), which is above -1/(k-1); so no
+  # in-range average-measures ICC can violate the single-measures floor. V41 was
+  # declaring such values "[INVALID] Impossible ICC" and, under the default
+  # correct_inputs = TRUE, destroying a number the route itself computes correctly --
+  # the row losing at the same time the [INFO] step-down note it would otherwise have
+  # carried, which is the contradictory-flag pair the V41/V25 interlock exists to
+  # avoid. V41's own justification does not transfer either: the stepped-down
+  # rho_1 >= -1/(2k-1) bounds the (1 + (k-1)rho) SE factor at >= k/(2k-1) >= 0.5, so
+  # at most ~4x weight inflation rather than the 18.8x the single-measures case gives.
   icc_below_floor <- rep(FALSE, nrow(x))
   if ("icc" %in% colnames(x) && "n_measurements" %in% colnames(x)) {
     icc_v <- x[["icc"]]
     k_v   <- suppressWarnings(as.numeric(x[["n_measurements"]]))
     floor_v <- -1 / (k_v - 1)
     icc_below_floor <- !is.na(icc_v) & !is.na(k_v) & is.finite(k_v) & k_v >= 2 &
-      icc_v >= -1 & icc_v < floor_v          # >= -1: below that is V11's job
+      icc_v >= -1 & icc_v < floor_v &        # >= -1: below that is V11's job
+      !icc_is_avg_col                        # average-measures: a different bound
     for (i in which(icc_below_floor)) {
       msg <- sprintf(
         "[INVALID] Impossible ICC for %g measurements: 'icc' = %g is below the lower bound -1/(k-1) = %g",
@@ -698,9 +878,9 @@
   for (rel in list(c("cronbach_alpha", "alpha"), c("icc", "ICC"))) {
     if (!rel[1] %in% colnames(x)) next
     neg <- which(!is.na(x[[rel[1]]]) & x[[rel[1]]] < 0)
-    # An ICC below -1/(k-1) is NOT "mathematically possible", so V25 must not say so
-    # about it -- that would be the same self-contradictory pair of flags on one row
-    # that the tied direction-conflict case was fixed for. V41 has already spoken.
+    # An ICC below -1/(k-1) is not mathematically possible, so V25 must not describe
+    # it as such; emitting both would put two contradictory flags on one row. V41 has
+    # already reported it.
     if (identical(rel[1], "icc")) neg <- neg[!icc_below_floor[neg]]
     for (i in neg) {
       row_issues[[i]] <- c(row_issues[[i]],
@@ -709,45 +889,26 @@
     }
   }
 
-  # V31: agreement-type ICC rows use a one-way variance approximation that
-  # assumes negligible between-rater variance -- the SE is anti-conservative
-  # when raters differ systematically (informational, always active, like
-  # V18/V21). icc_type = NA or an absent column resolves to the package
-  # default "agreement".
+  # V31: agreement-type ICC rows use a one-way variance approximation that assumes
+  # negligible between-rater variance, so the SE is anti-conservative when raters
+  # differ systematically. Informational and always active, like V18 and V21. An
+  # icc_type of NA, or an absent column, resolves to the package default "agreement".
   #
-  # Scoped to measure = "icc". This note is about the ICC SE, so it has no
-  # business on an alpha or omega run -- and a COSMIN-style extraction sheet
-  # that holds alpha, omega and ICC columns side by side (one sheet, several
-  # properties, one pool per property) would otherwise carry it into every run.
-  # Tier-1 checks are keyed on which COLUMNS exist rather than on the requested
-  # measure, so the measure test has to be explicit here, as it already is for
-  # V26. NULL/empty measure keeps the old behaviour for direct callers.
-  icc_measure_ok <- is.null(measure) || !nzchar(measure) || identical(measure, "icc")
+  # Scoped to measure = "icc". The note is about the ICC SE, so it does not belong on
+  # an alpha or omega run, and a COSMIN-style extraction sheet holding alpha, omega
+  # and ICC columns side by side (one sheet, several properties, one pool per
+  # property) would otherwise carry it into every run. Tier-1 checks are keyed on
+  # which columns exist rather than on the requested measure, so the measure test has
+  # to be explicit here, as it already is for V26. A NULL or empty measure leaves
+  # direct callers unaffected.
   if ("icc" %in% colnames(x) && icc_measure_ok) {
-    # .normalise_icc_type(), NOT bare string equality. es_from_icc() resolves ten
-    # spellings to "agreement" ("Agreement", "ICC(2,1)", "absolute agreement",
-    # "two-way random", ...); comparing the raw cell against the literal
-    # "agreement" fired V31 on only two of them, so the rows that GET the
-    # anti-conservative agreement SE were largely the rows not warned about it.
-    # convert_df() now normalises the column too, but this call is kept so direct
-    # callers of .validate_input_data() get the same answer -- one definition,
-    # three call sites. warn = FALSE: es_from_icc() owns the user-facing warning.
-    icc_type_eff <- if ("icc_type" %in% colnames(x)) {
-      tt <- as.character(x[["icc_type"]])
-      tt[is.na(tt)] <- "agreement"
-      .normalise_icc_type(tt, warn = FALSE)
-    } else {
-      rep("agreement", nrow(x))
-    }
-    # Roadmap 1.2 -- average-measures ICC. Resolved FIRST, because whether such a
-    # row survives at all decides whether the V31 SE note below is worth emitting.
-    k_col <- if ("n_measurements" %in% colnames(x)) {
-      suppressWarnings(as.numeric(x[["n_measurements"]]))
-    } else {
-      rep(NA_real_, nrow(x))
-    }
+    # icc_measure_ok, icc_type_eff, icc_k_col and icc_is_avg_col are computed once
+    # above V40, which needs them too. Average-measures ICC is resolved first: whether
+    # such a row survives at all decides whether the V31 SE note below is worth
+    # emitting.
+    k_col    <- icc_k_col
     icc_v    <- x[["icc"]]
-    is_avg   <- !is.na(icc_v) & .icc_is_average(icc_type_eff)
+    is_avg   <- icc_is_avg_col
     can_step <- is_avg & !is.na(k_col) & is.finite(k_col) & k_col >= 2 &
       abs(icc_v) <= 1
     dropped  <- is_avg & !can_step        # es_from_icc() sets these to NA
@@ -770,17 +931,18 @@
         "as if it were single-measures"))
     }
 
-    # V31. .icc_is_agreement(), not == "agreement": an ICC(2,k) row is stepped down
-    # to single-measures and then computed with the SAME one-way agreement SE, so it
-    # needs the same note. Rows dropped just above are excluded -- there is no SE to
-    # be anti-conservative about, and the [INVALID] is the only actionable message.
-    # Roadmap 1.1: escalated [INFO] -> [UNUSUAL]. [INFO] was the right severity while
-    # the note was purely advisory. It is not advisory any more -- under the default
-    # icc_agreement_se = "drop" the row's computed SE is withheld and the row leaves
-    # the pool, so there IS an action for the reviewer (supply the study's own
-    # icc_se / CI, confirm the raters are exchangeable and pass "compute", or record
-    # the row as unpoolable). The measured coverage that justifies it is 0.82 at
-    # n = 20 falling to 0.14 at n = 1000 -- it degrades as studies get bigger.
+    # V31. Use .icc_is_agreement() rather than == "agreement": an ICC(2,k) row is
+    # stepped down to single-measures and then computed with the same one-way
+    # agreement SE, so it needs the same note. Rows dropped just above are excluded,
+    # since there is no SE there to be anti-conservative about and the [INVALID] is
+    # the only actionable message.
+    #
+    # Severity is [INFO], and the exact opening string "[INFO] ICC agreement-type SE"
+    # is pinned by tests_save/checked/test-flags.R. The note is advisory because
+    # icc_agreement_se defaults to "compute": the row keeps its computed SE and stays
+    # in the pool unless the user opts into "drop". The coverage behind the note is
+    # 0.82 at n = 20 falling to 0.14 at n = 1000, so the approximation degrades as
+    # studies get bigger.
     agr <- which(!is.na(icc_v) & .icc_is_agreement(icc_type_eff) & !dropped)
     for (i in agr) {
       row_issues[[i]] <- c(row_issues[[i]],
@@ -799,8 +961,14 @@
     # preserved rather than destroyed.
     both_lu <- which(!is.na(lo) & !is.na(up) & lo > up)
     inverted <- both_lu[vapply(both_lu, function(i) {
-      pad <- 0.5 * 10^(-.count_decimals(lo[i])) + 0.5 * 10^(-.count_decimals(up[i]))
-      lo[i] > up[i] + pad
+      # One precision for the whole triplet (see .triplet_precision): pricing each
+      # bound from its own stored decimals turns a printed 0.90 into 1 dp and inflates
+      # the pad tenfold, which is what let [0.90, 0.86] through while the identical
+      # inversion at [0.91, 0.87] was caught. The 1e-12 keeps the boundary from being
+      # decided by floating point.
+      dp <- .triplet_precision(val[i], lo[i], up[i])
+      pad <- 10^(-dp)
+      lo[i] - up[i] > pad + 1e-12
     }, logical(1))]
     if (length(inverted) > 0) {
       if (correct_inputs) {
@@ -820,29 +988,39 @@
       }
     }
 
-    # V3: Value outside CI (re-read after V2 cleanup) -- rounding-aware. The point
-    # value and the CI bounds may be reported to different decimal precisions, so a
-    # value that merely rounds to a bound (e.g. md = 0.1 [1 dp] vs lo = 0.15 [2 dp],
-    # both consistent with a true md in [0.145, 0.155)) must NOT be destroyed. Flag
-    # (and, under correct_inputs, NA) only when the value lies outside by more than
-    # the combined rounding error of the value and the offending bound.
+    # V3: value outside its CI, re-read after the V2 cleanup, and rounding-aware. The
+    # point value and the CI bounds may be reported to different decimal precisions,
+    # so a value that merely rounds to a bound must not be destroyed: md = 0.1 at 1 dp
+    # and lo = 0.15 at 2 dp are both consistent with a true md in [0.145, 0.155). Flag
+    # the row, and NA it under correct_inputs, only when the value lies outside by
+    # more than the combined rounding error of the value and the offending bound.
     val <- x[[tri$val]]; lo <- x[[tri$lo]]; up <- x[[tri$up]]
     cand <- which(!is.na(val) & !is.na(lo) & !is.na(up) & lo <= up &
                     (val < lo | val > up))
     outside <- cand[vapply(cand, function(i) {
-      re_val <- 0.5 * 10^(-.count_decimals(val[i]))
-      pad_lo <- re_val + 0.5 * 10^(-.count_decimals(lo[i]))
-      pad_up <- re_val + 0.5 * 10^(-.count_decimals(up[i]))
-      (val[i] < lo[i] - pad_lo) || (val[i] > up[i] + pad_up)
+      # Same one-precision-per-triplet rule as V2 above: half a unit in the last place
+      # for the value plus half a unit for the offending bound, both priced at the
+      # triplet's precision.
+      dp <- .triplet_precision(val[i], lo[i], up[i])
+      pad <- 10^(-dp)
+      (val[i] < lo[i] - pad - 1e-12) || (val[i] > up[i] + pad + 1e-12)
     }, logical(1))]
     if (length(outside) > 0) {
       if (correct_inputs) {
-        x[[tri$val]][outside] <- NA_real_
+        # keep_val triplets (see .ci_triplets): refuse the interval, keep the
+        # coefficient, which has an interval-free SE to fall back on.
+        keep_val <- isTRUE(tri$keep_val)
+        if (!keep_val) x[[tri$val]][outside] <- NA_real_
         x[[tri$lo]][outside] <- NA_real_
         x[[tri$up]][outside] <- NA_real_
         for (i in outside) {
-          row_issues[[i]] <- c(row_issues[[i]],
-            sprintf("[INVALID] Value outside CI for '%s' set to missing", tri$val))
+          row_issues[[i]] <- c(row_issues[[i]], if (keep_val) {
+            sprintf(paste0("[INVALID] Value outside CI for '%s': the interval is set to ",
+                           "missing and the coefficient kept, since its standard error ",
+                           "does not have to come from the interval"), tri$val)
+          } else {
+            sprintf("[INVALID] Value outside CI for '%s' set to missing", tri$val)
+          })
         }
       } else {
         for (i in outside) {
@@ -1056,15 +1234,17 @@
     }
   }
 
-  # V33: reported proportion vs its own counts (rounding-aware, warn only, data
-  # preserved -- two independently transcribed values disagree and neither can be
-  # inferred to be the wrong one; both prop routes still compute and the generic
-  # cross-method discordance thresholds are far too coarse on the [0,1] scale to
-  # catch this). V33a: prop != n_cases/n_sample beyond the rounding error of the
-  # reported prop. V33b (GRIM-style, only when n_cases is absent): prop is not
-  # achievable as k/n_sample for ANY integer k, beyond the reported rounding --
-  # the count analogue of the mean-granularity (GRIM) test. Messages carry the
-  # quoted 'prop' so .v_flag_matches_scope routes them to the crude scope only.
+  # V33: reported proportion against its own counts. Rounding-aware and warn only,
+  # with the data preserved, because two independently transcribed values disagree and
+  # neither can be shown to be the wrong one. Both prop routes still compute, and the
+  # generic cross-method discordance thresholds are far too coarse on the [0, 1] scale
+  # to catch this.
+  #
+  # V33a: prop differs from n_cases/n_sample by more than the rounding error of the
+  # reported prop. V33b, which runs only when n_cases is absent, is the count analogue
+  # of the mean-granularity (GRIM) test: prop is not achievable as k/n_sample for any
+  # integer k, again beyond the reported rounding. Messages carry the quoted 'prop' so
+  # .v_flag_matches_scope routes them to the crude scope only.
   if (all(c("prop", "n_sample") %in% colnames(x))) {
     p_v  <- suppressWarnings(as.numeric(x[["prop"]]))
     ns_v <- suppressWarnings(as.numeric(x[["n_sample"]]))
@@ -1220,8 +1400,21 @@
 
   # V29: (max - min)/SD should be near xi(n) = 2*qnorm((n - .375)/(n + .25))
   # (Wan 2014), warn only
-  range_sd_lo_mult <- 0.5
-  range_sd_hi_mult <- 2.5
+  #
+  # The CEILING has to grow with n. xi(n) grows like 2*qnorm(1 - 1/n) while the
+  # studentised range of skewed or heavy-tailed data grows much faster, so a flat 2.5
+  # is not distribution-free: measured over 1000 replicates of error-free data it fires
+  # on 0.000 of every distribution tested at n <= 100, but on 6.0% / 50.2% of
+  # lognormal(sigma = 2) and 2.7% / 16.5% of t(3) samples at n = 200 / 500. Simply
+  # widening it is not the answer either -- a flat 2.5 -> 5 clears those false alarms
+  # through n = 1000 but collapses detection of a genuine SD-as-SE from 0.997 to 0.000
+  # at n = 10 and from 1.000 to 0.806 at n = 30. No flat multiplier is both.
+  #
+  # So: keep the validated 2.5 up to n = 100, and interpolate to 5 by n = 400, where
+  # the heavy-tail false alarms measure 0.000. Detection is untouched, because the
+  # errors this check names inflate the ratio by a factor of sqrt(n) -- about 22 x xi
+  # at n = 500 against a ceiling of 5 x xi -- so the gap between the null and the error
+  # widens far faster than the ceiling does.
   for (arm in .range_arms) {
     if (!all(c(arm$min, arm$max, arm$sd, arm$n) %in% colnames(x))) next
     lo  <- suppressWarnings(as.numeric(x[[arm$min]]))
@@ -1234,19 +1427,41 @@
       xi <- 2 * stats::qnorm((nv[i] - 0.375) / (nv[i] + 0.25))
       if (!is.finite(xi) || xi <= 0) next
       r_obs <- (hi[i] - lo[i]) / sdv[i]
-      if (r_obs < range_sd_lo_mult * xi || r_obs > range_sd_hi_mult * xi) {
+      hi_mult_n <- range_sd_hi_mult * max(1, min(2, sqrt(nv[i] / 100)))
+      if (r_obs < range_sd_lo_mult * xi || r_obs > hi_mult_n * xi) {
         row_issues[[i]] <- c(row_issues[[i]],
-          sprintf("[UNUSUAL] Range/SD ratio implausible for '%s': (max - min)/SD = %.2f (expected ~%.1f for n = %d). Possible SD-as-SE, variance-as-SD, or range/IQR mix-up",
-                  arm$sfx, r_obs, xi, as.integer(nv[i])))
+          sprintf("[UNUSUAL] Range/SD ratio implausible for '%s': (max - min)/SD = %.2f (expected ~%.1f for n = %d, accepted band %.1f to %.1f). Possible SD-as-SE, variance-as-SD, or range/IQR mix-up",
+                  arm$sfx, r_obs, xi, as.integer(nv[i]),
+                  range_sd_lo_mult * xi, hi_mult_n * xi))
       }
     }
   }
 
   # V26: within-subject measure but reported CI matches the independent-groups SE
-  # implied critical value compared to z and t; no assumed r needed. warn only
+  # implied critical value compared to z and t. warn only
+  #
+  # The check is stated as needing no assumed pre-post correlation, and that is true
+  # only above a band. For a CORRECTLY computed paired interval the implied critical
+  # value is qt(.975, n-1) * sqrt(1 - r), which re-enters the z/t band whenever r is
+  # low: measured, it false-fires for r below about 0.135 as n grows and up to r = 0.33
+  # at n = 11, i.e. on exactly the outcomes (biomarkers, single-item VAS, symptom
+  # counts) where a paired analysis is least redundant.
+  #
+  # Remedy taken: where the row supplies its own r_pre_post, reconstruct the paired SE
+  # too and stand down when the reported half-width is ALSO consistent with it -- fire
+  # only when the interval matches the independent-groups SE and does not match the
+  # paired one. Rows that supply no r_pre_post keep the r-free behaviour, since there
+  # is nothing to reconstruct with (defaulting r here would reintroduce the assumption
+  # the check is advertised as not making).
   within_meas <- !is.null(measure) && tolower(measure) %in% c("mdw", "dw", "gw")
   if (within_meas) {
     z_crit <- stats::qnorm(0.975)
+    r_pp_exp  <- if ("r_pre_post_exp" %in% colnames(x)) {
+      suppressWarnings(as.numeric(x[["r_pre_post_exp"]]))
+    } else rep(NA_real_, n)
+    r_pp_nexp <- if ("r_pre_post_nexp" %in% colnames(x)) {
+      suppressWarnings(as.numeric(x[["r_pre_post_nexp"]]))
+    } else rep(NA_real_, n)
     for (sfx in c("crude", "adj")) {
       lo_col <- paste0("user_ci_lo_", sfx)
       up_col <- paste0("user_ci_up_", sfx)
@@ -1268,6 +1483,24 @@
         t_crit <- stats::qt(0.975, ne + nn - 2)
         matches <- (abs(implied_crit - z_crit) / z_crit <= paired_as_indep_tol) ||
                    (abs(implied_crit - t_crit) / t_crit <= paired_as_indep_tol)
+        # Suppress a match that the row's OWN reported correlation explains: with
+        # sd_diff = sqrt(sd1^2 + sd2^2 - 2 r sd1 sd2) the paired SE is sd_diff/sqrt(n)
+        # and a correct paired interval implies qt(.975, n-1) on it.
+        if (isTRUE(matches)) {
+          r_i <- if (!is.na(r_pp_exp[i])) r_pp_exp[i] else r_pp_nexp[i]
+          if (!is.na(r_i) && is.finite(r_i) && abs(r_i) < 1) {
+            var_d <- sde^2 + sdn^2 - 2 * r_i * sde * sdn
+            if (is.finite(var_d) && var_d > 0) {
+              paired_se <- sqrt(var_d) / sqrt(ne)
+              crit_paired <- ((up - lo) / 2) / paired_se
+              t_paired <- stats::qt(0.975, ne - 1)
+              if ((abs(crit_paired - z_crit) / z_crit <= paired_as_indep_tol) ||
+                  (abs(crit_paired - t_paired) / t_paired <= paired_as_indep_tol)) {
+                matches <- FALSE
+              }
+            }
+          }
+        }
         if (isTRUE(matches)) {
           row_issues[[i]] <- c(row_issues[[i]],
             sprintf("[UNUSUAL] Within-subject design (%s) but the reported CI matches an independent-groups SE (n_exp = n_nexp = %g, implied critical value %.2f). Paired pre/post data analysed as two independent groups overestimates the variance - verify the SE formula (a paired/within-subject SE should be used)",
@@ -1333,8 +1566,12 @@
     if (length(flagged) > 0) {
       for (i in flagged) {
         r <- max(sd1[i], sd2[i]) / min(sd1[i], sd2[i])
+        # Quoted: .v_flag_matches_scope() routes on the first quoted token, and with
+        # the names bare it finds none and copies the flag into BOTH scopes -- so the
+        # ancova_mean_sd_* pair landed in flags_crude, where no ANCOVA estimate exists,
+        # and the mean_sd_* pair in flags_adjusted.
         row_issues[[i]] <- c(row_issues[[i]],
-          sprintf("[UNUSUAL] Extreme SD ratio between arms: %s = %g, %s = %g (ratio: %.1f, threshold: %g). Possible variance/SD confusion or extraction error",
+          sprintf("[UNUSUAL] Extreme SD ratio between arms: '%s' = %g, '%s' = %g (ratio: %.1f, threshold: %g). Possible variance/SD confusion or extraction error",
                   pair[1], sd1[i], pair[2], sd2[i], r, sd_ratio_max))
       }
     }
@@ -1350,7 +1587,8 @@
       if (length(identical_rows) > 0) {
         for (i in identical_rows) {
           row_issues[[i]] <- c(row_issues[[i]],
-            sprintf("[INFO] Identical SDs across arms: %s = %s = %g. Verify this is not the pooled or between-group SD",
+            # quoted for the scope-routing reason given at V12 above
+            sprintf("[INFO] Identical SDs across arms: '%s' = '%s' = %g. Verify this is not the pooled or between-group SD",
                     pair[1], pair[2], sd1[i]))
         }
       }
@@ -1372,7 +1610,8 @@
       if (length(identical_rows) > 0) {
         for (i in identical_rows) {
           row_issues[[i]] <- c(row_issues[[i]],
-            sprintf("[INFO] Identical means across arms: %s = %s = %g. Verify this is not a copy-paste error",
+            # quoted for the scope-routing reason given at V12 above
+            sprintf("[INFO] Identical means across arms: '%s' = '%s' = %g. Verify this is not a copy-paste error",
                     pair[1], pair[2], m1[i]))
         }
       }
@@ -1400,7 +1639,10 @@
       q <- sp_pre / sp_post
       if (is.finite(q) && q < sd_ratio_bl_ep_min) {
         row_issues[[i]] <- c(row_issues[[i]],
-          sprintf("[INFO] SD_baseline / SD_endpoint = %.2f (below %.2f). Pre-post SMD formulas (Bonett, d_rm, d_av) target a baseline-SD-standardised estimand structurally different from the ANCOVA-on-endpoint-SD target at this variance regime - choice of estimand non-trivial",
+          # The leading quoted 'mean_pre_sd_exp' is what routes this: it is a
+          # crude-scope pre/post property and has nothing to say about the ANCOVA
+          # estimate, but with no column named at all it was copied into both scopes.
+          sprintf("[INFO] 'mean_pre_sd_exp'/'mean_pre_sd_nexp' over 'mean_sd_exp'/'mean_sd_nexp': SD_baseline / SD_endpoint = %.2f (below %.2f). Pre-post SMD formulas (Bonett, d_rm, d_av) target a baseline-SD-standardised estimand structurally different from the ANCOVA-on-endpoint-SD target at this variance regime - choice of estimand non-trivial",
                   q, sd_ratio_bl_ep_min))
       }
     }
@@ -1450,6 +1692,110 @@
       paste(parts, collapse = " and "), mean_note))
   }
 
+  # V44: floor effect in the response distribution, which is the property that
+  # governs how wrong the (n, k) closed-form reliability variance is.
+  #
+  # It is not the category count. The obvious gate would be "dichotomous items are
+  # bad", but over 20 response distributions (simulations study 11e) the number of
+  # categories has Spearman rho = -0.16 with the variance error c, because what
+  # matters is where the item mass sits rather than how many bins it is cut into.
+  # Three five-point formats alone span c = 0.92 to 1.69. Item skew is never
+  # reported, but a floor effect is visible in the reported total-score mean, and its
+  # standardised position
+  #
+  #     floor_position = (scale_mean / n_items - scale_min) / (n_response_categories - 1)
+  #
+  # has rho = -0.96 and bands identically across C = 2, 3, 5 and 7:
+  #   < 0.20      c = 1.56-4.28, coverage .65-.87
+  #   0.20-0.28   c = 1.08-1.44, coverage .90-.94
+  #   > 0.28      c = 0.92-1.03, coverage .94-.97
+  #
+  # scale_min is required rather than defaulted. A 0-based instrument (PHQ-9, 0-3)
+  # and a 1-based one (Likert, 1-5) differ by 1/(C-1), about 0.25, which spans two
+  # bands, and the origin cannot be inferred from the mean: a moderate PHQ-9 sample
+  # with an item mean of 1.67 reads as floor_position 0.22 under a 1-based assumption
+  # when the truth is 0.56. Defaulting would false-alarm on one of the most common
+  # instruments in the literature, so the check stays silent without scale_min rather
+  # than guessing.
+  #
+  # Warn only, data preserved: a floor effect is a property of the construct in that
+  # population, not an extraction error. What it changes is which outputs to trust,
+  # and the pooled coefficient is not among the casualties. Study 11c found that
+  # pooling with the closed-form variance lands within 0.0095 of oracle-variance
+  # pooling, while I2 is inflated by roughly 1 - 1/c even at zero true heterogeneity.
+  if (all(c("scale_mean", "n_items", "n_response_categories", "scale_min") %in% colnames(x))) {
+    rel_present <- rep(FALSE, n)
+    for (cf in c("cronbach_alpha", "omega")) {
+      if (cf %in% colnames(x)) rel_present <- rel_present | !is.na(x[[cf]])
+    }
+    # Only the rows whose SE will actually COME from the closed form. A study that
+    # reported its own SE or CI is unaffected by any of this, and flagging it would
+    # be noise.
+    se_reported <- rep(FALSE, n)
+    for (cc in c("cronbach_alpha_se", "cronbach_alpha_ci_lo", "cronbach_alpha_ci_up",
+                 "omega_se", "omega_ci_lo", "omega_ci_up")) {
+      if (cc %in% colnames(x)) se_reported <- se_reported | !is.na(x[[cc]])
+    }
+    # ... and only where the SE-source switch for THAT coefficient asks for it. The
+    # two switches point opposite ways by default -- alpha's closed form is on,
+    # omega's is off -- so this cannot be one flag for the sheet: on the default omega
+    # path there is no closed-form variance computed at all, the row is not even
+    # pooled, and the message would describe a calculation that never happened. Per
+    # coefficient rather than ORed across them, so a sheet holding both reports the
+    # alpha row and stays quiet on the omega one.
+    uses_closed_form <- rep(FALSE, n)
+    for (cf in list(list(col = "cronbach_alpha", src = alpha_se_source,
+                         own = c("cronbach_alpha_se", "cronbach_alpha_ci_lo",
+                                 "cronbach_alpha_ci_up")),
+                    list(col = "omega", src = omega_se_source,
+                         own = c("omega_se", "omega_ci_lo", "omega_ci_up")))) {
+      if (!cf$col %in% colnames(x)) next
+      if (!identical(as.character(cf$src), "closed_form")) next
+      own_se <- rep(FALSE, n)
+      for (cc in cf$own) if (cc %in% colnames(x)) own_se <- own_se | !is.na(x[[cc]])
+      uses_closed_form <- uses_closed_form | (!is.na(x[[cf$col]]) & !own_se)
+    }
+    sm  <- suppressWarnings(as.numeric(x$scale_mean))
+    ki  <- suppressWarnings(as.numeric(x$n_items))
+    ncg <- suppressWarnings(as.numeric(x$n_response_categories))
+    smin <- suppressWarnings(as.numeric(x$scale_min))
+    checkable <- which(rel_present & !se_reported &
+                        !is.na(sm) & !is.na(ki) & !is.na(ncg) & !is.na(smin) &
+                        ki > 0 & ncg > 1)
+    for (i in checkable) {
+      item_mean <- sm[i] / ki[i]
+      smax <- smin[i] + ncg[i] - 1
+      # An item mean outside the scale's own range is an unambiguous transcription
+      # error, either an item mean entered where a total was asked for or the wrong
+      # scale_min. Report that rather than banding a meaningless position.
+      if (item_mean < smin[i] || item_mean > smax) {
+        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+          "[INVALID] Scale mean outside its own range: 'scale_mean'/'n_items' = %.3f is not within [%s, %s] implied by 'scale_min' and 'n_response_categories' - check that 'scale_mean' is the TOTAL score mean and that 'scale_min' is the per-item minimum",
+          item_mean, format(smin[i], scientific = FALSE), format(smax, scientific = FALSE)))
+        next
+      }
+      fp <- (item_mean - smin[i]) / (ncg[i] - 1)
+      if (!is.finite(fp) || fp >= floor_position_mild) next
+      # The out-of-range check above is arithmetic and applies whatever the SE comes
+      # from; the band below is a statement about the closed-form variance only.
+      if (!uses_closed_form[i]) next
+      severe <- fp < floor_position_severe
+      # The message must contain no "; ", because .flag_es_quality splits the merged
+      # flag string on "; " and an internal one would break the flag apart and
+      # mis-route the pieces. The leading quoted 'scale_mean' is required too: the
+      # scope router (.v_flag_matches_scope) reads the first quoted column name to
+      # decide whether a flag belongs to the crude or the adjusted column under
+      # split_adjusted, and a message quoting nothing matches every scope and is
+      # duplicated into both. V23 documents the same rule.
+      row_issues[[i]] <- c(row_issues[[i]], sprintf(
+        "%s Floor effect in the response distribution ('scale_mean' implies a standardised mean position of %.2f, below %.2f). The closed-form (n, k) reliability standard error is anti-conservative here: measured c (true variance / reported variance) = %s, 95%% coverage %s. The POOLED coefficient and its Hartung-Knapp CI are essentially unaffected - what is not trustworthy is I-squared, tau-squared and the prediction interval, since I-squared is inflated by about 1 - 1/c even at zero true heterogeneity",
+        if (severe) "[UNUSUAL]" else "[INFO]",
+        fp, if (severe) floor_position_severe else floor_position_mild,
+        if (severe) "1.6-4.3" else "1.1-1.4",
+        if (severe) "0.65-0.87" else "0.90-0.94"))
+    }
+  }
+
   # V21: standardised baseline imbalance above threshold
   if (all(c("mean_pre_exp", "mean_pre_nexp",
             "mean_pre_sd_exp", "mean_pre_sd_nexp",
@@ -1467,7 +1813,11 @@
         imb <- abs(x$mean_pre_exp[i] - x$mean_pre_nexp[i]) / sp_pre
         if (is.finite(imb) && imb > baseline_imbalance_max) {
           row_issues[[i]] <- c(row_issues[[i]],
-            sprintf("[INFO] |standardised baseline imbalance| = %.2f (above %.2f). Endpoint-only SMD formulas inherit ANCOVA omitted-variable bias of magnitude r * imb_std - ANCOVA-adjusted statistics recommended at this imbalance level",
+            # Leading quoted column for the reason given at V18: this is computed
+            # from the baseline arm means, a crude-scope property, and its own advice
+            # is to prefer the ANCOVA statistics -- so duplicating it into
+            # flags_adjusted told the reader to switch to the estimate in front of them.
+            sprintf("[INFO] 'mean_pre_exp' vs 'mean_pre_nexp': |standardised baseline imbalance| = %.2f (above %.2f). Endpoint-only SMD formulas inherit ANCOVA omitted-variable bias of magnitude r * imb_std - ANCOVA-adjusted statistics recommended at this imbalance level",
                     imb, baseline_imbalance_max))
         }
       }
@@ -1503,8 +1853,18 @@
     } else {
       "cov_outcome_r is missing"
     }
+    # Which residual-SD column actually fired, quoted and leading: this is an
+    # ANCOVA-scope property, and with no quoted column .v_flag_matches_scope() copied
+    # it into flags_crude, where no back-transformation is being performed.
+    which_sd <- "ancova residual SD"
+    for (col_name in ancova_resid_cols) {
+      if (col_name %in% colnames(x) && !is.na(x[[col_name]][i]) && x[[col_name]][i] > 0) {
+        which_sd <- col_name
+        break
+      }
+    }
     row_issues[[i]] <- c(row_issues[[i]], paste0(
-      "[UNUSUAL] ANCOVA residual SD provided but ", why,
+      "[UNUSUAL] '", which_sd, "': ANCOVA residual SD provided but ", why,
       ". Residual SD is conditional on the covariate(s) - without a usable cov_outcome_r the",
       " marginal-scale back-transformation 1/sqrt(1 - R^2) cannot be applied and the",
       " standardized effect size is returned as NA. Supply the pooled within-group",
@@ -1552,60 +1912,62 @@
     }
   }
 
-  # V36: RELIABILITY INDUCTION -- the same reliability coefficient reported by two
-  # DIFFERENT studies.
+  # V36: reliability induction, meaning the same reliability coefficient reported by
+  # two different studies.
   #
   # "Reliability induction" (Vacha-Haase 1998; Vacha-Haase & Thompson 2011) is the
   # central criticism of reliability-generalization work: a primary study reports the
   # alpha printed in the test manual, or in the original validation paper, instead of
-  # computing alpha in its OWN sample. Those rows are not independent estimates of
-  # anything and must not be pooled -- the whole premise of RG is that reliability is a
-  # property of the scores in a sample, not a fixed property of the instrument.
+  # computing alpha in its own sample. Those rows are not independent estimates of
+  # anything and must not be pooled, since the premise of RG is that reliability is a
+  # property of the scores in a sample rather than a fixed property of the instrument.
   #
   # This is V23 applied to the reliability columns, and it needs its own entropy gate.
-  # V23 requires >= templated_min_match NON-INTEGER values in the matched block, which a
-  # reliability block can never supply: it has one continuous column (the coefficient)
-  # and one integer one (n_items). And alpha is usually printed to 2 decimals, where
-  # collisions are common by chance -- there are only ~30 plausible two-decimal values
-  # in [.70, .99], so in a 30-study pool a shared ".87" is unremarkable. Hussey et al.
-  # (2025) make the same point from the other side: alphas pile up at round thresholds.
+  # V23 requires at least templated_min_match non-integer values in the matched block,
+  # which a reliability block can never supply: it has one continuous column (the
+  # coefficient) and one integer column (n_items). Alpha is also usually printed to 2
+  # decimals, where collisions are common by chance, since there are only about 30
+  # plausible two-decimal values in [.70, .99] and a shared ".87" in a 30-study pool is
+  # unremarkable. Hussey et al. (2025) make the same point from the other side: alphas
+  # pile up at round thresholds.
   #
-  # MEASURED FALSE-POSITIVE RATE (roadmap 2.1). Alphas drawn independently from
-  # runif(0.78, 0.93) -- no induction anywhere -- 400 pools per cell, share of pools
-  # containing at least one flag / share of ROWS flagged:
+  # Measured false-positive rate, with alphas drawn independently from
+  # runif(0.78, 0.93) so that no induction is present, over 400 pools per cell. The
+  # figures are the share of pools containing at least one flag, then the share of rows
+  # flagged:
   #
   #     k    2 dp          3 dp          4 dp
   #    10    23.8% / 5.0%  23.0% / 5.0%   4.8% / 1.0%
   #    30    92.0% /15.0%  95.3% /15.8%  26.5% / 1.9%
   #   100   100.0% /41.1% 100.0% /44.1%  95.8% / 6.4%
   #
-  # REPRODUCIBLE, NOT QUOTED: simulations/studies/10_reliability.R,
-  # v36_false_positive_rate(), at a fixed seed. Re-run it before citing these.
+  # These are reproducible rather than quoted: simulations/studies/10_reliability.R,
+  # v36_false_positive_rate(), at a fixed seed. Re-run it before citing them.
   #
-  # Two things follow, and they decide the design.
+  # Two conclusions follow, and they decide the design.
   #
-  # (1) TIGHTENING THE DECIMAL GATE DOES NOT WORK. The roadmap proposed requiring 4
-  #     decimals; at 4 decimals a 100-study pool still flags 95.8% of the time. The
-  #     driver is the pool size, not the precision -- with ~150 plausible 3-decimal
-  #     values in [.78, .93], a 30-study pool has C(30,2)/150 ~ 3 expected collisions,
-  #     so a match is the NORM rather than the exception. The gate is therefore left
-  #     as it is and the MESSAGE was rewritten instead: V36 is a prompt to check the
-  #     primary sources, not a finding, and its count must never be reported as a
-  #     number of induced values.
+  # (1) Tightening the decimal gate does not work. Requiring 4 decimals still flags a
+  #     100-study pool 95.8% of the time. The driver is pool size, not precision: with
+  #     about 150 plausible 3-decimal values in [.78, .93], a 30-study pool has
+  #     C(30,2)/150, roughly 3, expected collisions, so a match is the norm rather
+  #     than the exception. The gate is therefore left as it is and the message is
+  #     worded accordingly: V36 is a prompt to check the primary sources, not a
+  #     finding, and its count must never be reported as a number of induced values.
   #
-  # (2) THE n_sample HALF OF THE GATE EARNS ITS KEEP, which was not obvious. Repeating
-  #     the sweep with non-round sample sizes (runif over 50:500 rather than multiples
-  #     of 50) drops the 2-decimal rate from 23.8 / 92.0 / 100.0% to 1.8 / 5.3 / 49.3%
-  #     at k = 10 / 30 / 100. So clause (b) is not the FP driver -- ROUND sample sizes
-  #     are, because they collide with each other as readily as 2-decimal alphas do.
+  # (2) The n_sample half of the gate earns its place, which was not obvious.
+  #     Repeating the sweep with non-round sample sizes (runif over 50:500 rather than
+  #     multiples of 50) drops the 2-decimal rate from 23.8 / 92.0 / 100.0% to
+  #     1.8 / 5.3 / 49.3% at k = 10 / 30 / 100. Clause (b) is therefore not the driver
+  #     of false positives; round sample sizes are, because they collide with each
+  #     other as readily as 2-decimal alphas do.
   #
   # Two ways to clear the gate, both keyed on genuine improbability rather than on a
   # count of decimals alone:
-  #   (a) the coefficient carries >= 3 decimals -- 0.8734 shared by two independent
-  #       samples is a near-certain copy;
-  #   (b) the coefficient carries >= 2 decimals AND n_sample is identical too -- two
-  #       different studies agreeing on BOTH alpha and N is far stronger evidence than
-  #       either alone, and is the signature of a manual-quoted value.
+  #   (a) the coefficient carries at least 3 decimals, since 0.8734 shared by two
+  #       independent samples is a near-certain copy;
+  #   (b) the coefficient carries at least 2 decimals and n_sample is identical too,
+  #       because two different studies agreeing on both alpha and N is far stronger
+  #       evidence than either alone, and is the signature of a manual-quoted value.
   if (isTRUE(enable_cross_row) && n >= 2) {
     rel_blocks <- list(
       alpha = c(coef = "cronbach_alpha", n = "n_sample"),
@@ -1619,7 +1981,8 @@
       if (!cc %in% colnames(x)) next
       coef_v <- suppressWarnings(as.numeric(x[[cc]]))
       n_v <- if (nc %in% colnames(x)) suppressWarnings(as.numeric(x[[nc]])) else rep(NA_real_, n)
-      ok <- which(is.finite(coef_v))
+      for (gk in seq_along(v_groups)) {           # one pool per flag_group stratum
+      ok <- v_groups[[gk]][is.finite(coef_v[v_groups[[gk]]])]
       if (length(ok) < 2) next
       for (key in unique(coef_v[ok][duplicated(coef_v[ok])])) {
         grp <- ok[coef_v[ok] == key]
@@ -1639,11 +2002,11 @@
                            format(n_v[i], scientific = FALSE))
             hit <- same_n
           } else next
-          row_issues[[i]] <- c(row_issues[[i]], sprintf(
-            # Lead with the QUOTED column name so .v_flag_matches_scope() routes this to
-            # the crude scope only -- the rule V23 documents. Unquoted, the router cannot
-            # identify the column and copies the flag into flags_adjusted, a scope with
-            # no estimates at all for these measures.
+          row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
+            # Lead with the quoted column name so .v_flag_matches_scope() routes
+            # this to the crude scope only, following the rule V23 documents.
+            # Unquoted, the router cannot identify the column and copies the flag into
+            # flags_adjusted, a scope with no estimates at all for these measures.
             paste0("[INFO] Same '%s' (%s) reported by %s, %s. This is a PROMPT TO CHECK ",
                    "THE PRIMARY SOURCES, not evidence of anything: plausible coefficients ",
                    "occupy a narrow band, so in a pool of %d studies coincidental repeats are ",
@@ -1654,39 +2017,42 @@
                    "Induced values are not independent estimates and should not be pooled. ",
                    "Never report the number of these flags as a count of induced values"),
             cc, format(key, scientific = FALSE),
-            paste(.row_ref(hit, sid_r), collapse = ", "), why, n))
+            paste(.row_ref(hit, sid_r), collapse = ", "), why, length(ok)),
+            v_grp_note(gk)))
         }
+      }
       }
     }
   }
 
   # V37: the item count is not constant across a pool that shares one instrument.
   #
-  # A reliability-generalization review is by construction about ONE questionnaire, and
-  # a questionnaire has a fixed number of items. A row whose n_items differs from its
-  # peers is therefore a short form, a different version, or a transcription slip -- and
-  # in all three cases it should not be pooled silently, because k enters the sampling
-  # variance of every transform (Bonett and Hakstian-Whalen alike).
+  # A reliability-generalization review is by construction about one questionnaire,
+  # and a questionnaire has a fixed number of items. A row whose n_items differs from
+  # its peers is therefore a short form, a different version, or a transcription slip,
+  # and in all three cases it should not be pooled without comment, because k enters
+  # the sampling variance of every transform, Bonett and Hakstian-Whalen alike.
   #
-  # Nothing else can see this. n_items is only in .positive_columns() (which checks the
-  # sign), and the SE consequence is far too small for the D2 SE-outlier check: across
-  # ALL k the Bonett SE moves by at most sqrt(2), and an 8-vs-18 mix-up moves it 1.039x,
-  # well under D2 3x gate.
+  # Nothing else can see this. n_items appears only in .positive_columns(), which
+  # checks its sign, and the SE consequence is far too small for the D2 SE-outlier
+  # check: across all k the Bonett SE moves by at most sqrt(2), and an 8-versus-18
+  # mix-up moves it 1.039x, well under D2's 3x gate.
   #
-  # FALSE-POSITIVE GUARD. A review may legitimately span several instruments, in which
-  # case k varies by design and this check is meaningless. So it fires only when there
-  # is a DOMINANT item count -- more than half the rows agreeing -- and then only on the
-  # rows that disagree with it. A pool with no majority k is treated as multi-instrument
-  # and left alone.
+  # False-positive guard: a review may legitimately span several instruments, in which
+  # case k varies by design and this check is meaningless. It therefore fires only when
+  # there is a dominant item count, with more than half the rows agreeing, and then
+  # only on the rows that disagree with it. A pool with no majority k is treated as
+  # multi-instrument and left alone.
   if (isTRUE(enable_cross_row) && n >= 3 && "n_items" %in% colnames(x)) {
     k_v <- suppressWarnings(as.numeric(x[["n_items"]]))
-    ok <- which(is.finite(k_v) & k_v > 0)
-    if (length(ok) >= 3) {
+    for (gk in seq_along(v_groups)) {             # one pool per flag_group stratum
+      ok <- v_groups[[gk]][is.finite(k_v[v_groups[[gk]]]) & k_v[v_groups[[gk]]] > 0]
+      if (length(ok) >= 3) {
       tab <- table(k_v[ok])
       modal_k <- as.numeric(names(tab)[which.max(tab)])
       if (max(tab) > length(ok) / 2 && length(tab) > 1) {
         for (i in ok[k_v[ok] != modal_k]) {
-          row_issues[[i]] <- c(row_issues[[i]], sprintf(
+          row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
             # quoted for the same scope-routing reason as V36 above
             paste0("[UNUSUAL] Item count differs from the rest of the pool: 'n_items' = %s ",
                    "where %d of %d studies report %s. In a reliability-generalization review the ",
@@ -1694,50 +2060,57 @@
                    "extraction error - k enters the sampling variance of every transform, so ",
                    "verify it before pooling"),
             format(k_v[i], scientific = FALSE), max(tab), length(ok),
-            format(modal_k, scientific = FALSE)))
+            format(modal_k, scientific = FALSE)), v_grp_note(gk)))
         }
+      }
       }
     }
   }
 
   # V42: the measurement/rater count is not constant across an ICC pool.
   #
-  # The ICC analogue of V37, and the justification is DELIBERATELY WEAKER, which is why
-  # the majority guard below is load-bearing here rather than a nicety. For alpha the
+  # The ICC analogue of V37, with a weaker justification, which is why the majority
+  # guard below is essential here rather than merely convenient. For alpha the
   # instrument fixes n_items, so any disagreement is a short form or a slip. For an ICC
-  # the number of raters legitimately varies between studies, and for a SINGLE-measures
-  # ICC that is not an estimand problem at all -- k enters the sampling variance, which
+  # the number of raters legitimately varies between studies, and for a single-measures
+  # ICC that is not an estimand problem at all: k enters the sampling variance, which
   # is exactly where it belongs, so a varying k is correctly handled by the SE.
   #
-  # What this catches is the transcription error: a k that disagrees with a pool which
-  # otherwise agrees. In a test-retest review (k = 2 throughout) a stray k = 3 is
+  # What this catches is the transcription error, a k that disagrees with a pool which
+  # otherwise agrees. In a test-retest review at k = 2 throughout, a stray k = 3 is
   # suspicious; in an inter-rater review with genuinely mixed panels there is no
   # majority and the check stays silent by construction.
   #
   # Nothing else can see it. n_measurements is otherwise only sign-checked, and the SE
-  # consequence is well under D2's 3x gate while being far larger than the case V37 was
-  # written for: measured at n = 100, the ICC SE moves 1.26x-2.36x across k = 2..10
-  # depending on rho (1.394x at rho = 0.80, k = 2..6), against 1.039x for an 8-vs-18
+  # consequence sits under D2's 3x gate while being far larger than the case V37 was
+  # written for: at n = 100 the ICC SE moves 1.26x to 2.36x across k = 2..10 depending
+  # on rho (1.394x at rho = 0.80, k = 2..6), against 1.039x for an 8-versus-18
   # item-count mix-up on alpha.
-  if (isTRUE(enable_cross_row) && n >= 3 &&
+  #
+  # Gated on measure for V31's reason: this is ICC advice, and a COSMIN sheet carrying
+  # alpha and icc side by side must not collect it on the alpha run.
+  if (isTRUE(enable_cross_row) && n >= 3 && icc_measure_ok &&
       "n_measurements" %in% colnames(x) && "icc" %in% colnames(x)) {
     km_v <- suppressWarnings(as.numeric(x[["n_measurements"]]))
     icc_p <- suppressWarnings(as.numeric(x[["icc"]]))
-    ok <- which(is.finite(km_v) & km_v >= 2 & is.finite(icc_p))
-    if (length(ok) >= 3) {
+    for (gk in seq_along(v_groups)) {             # one pool per flag_group stratum
+      gidx <- v_groups[[gk]]
+      ok <- gidx[is.finite(km_v[gidx]) & km_v[gidx] >= 2 & is.finite(icc_p[gidx])]
+      if (length(ok) >= 3) {
       tab <- table(km_v[ok])
       modal_k <- as.numeric(names(tab)[which.max(tab)])
       if (max(tab) > length(ok) / 2 && length(tab) > 1) {
         for (i in ok[km_v[ok] != modal_k]) {
-          row_issues[[i]] <- c(row_issues[[i]], sprintf(
+          row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
             paste0("[UNUSUAL] Measurement count differs from the rest of the pool: ",
                    "'n_measurements' = %s where %d of %d studies report %s. k enters the ",
                    "ICC sampling variance directly, so verify it before pooling - and if the ",
                    "designs really do differ, check that the reported ICCs are all ",
                    "single-measurement rather than a mix with average-measures values"),
             format(km_v[i], scientific = FALSE), max(tab), length(ok),
-            format(modal_k, scientific = FALSE)))
+            format(modal_k, scientific = FALSE)), v_grp_note(gk)))
         }
+      }
       }
     }
   }
@@ -1745,27 +2118,30 @@
   # V43: a pool mixing absolute-agreement and consistency ICCs.
   #
   # The ICC analogue of V38, and the strongest member of that family, because here the
-  # arithmetic is BYTE-IDENTICAL: icc_type has no computational effect on the estimate
+  # arithmetic is byte-identical: icc_type has no computational effect on the estimate
   # or the standard error (asserted to 1e-15 in tests_save/checked/test-icc.R), so no
   # numeric check anywhere in the package can reveal the mix. Without this flag such a
   # pool is completely silent.
   #
-  # ICC(2,1) and ICC(3,1) are different estimands. Absolute agreement charges systematic
-  # rater differences against the reliability; consistency does not, so a consistency ICC
-  # is >= the agreement ICC on the same data and averaging them estimates neither.
+  # ICC(2,1) and ICC(3,1) are different estimands. Absolute agreement charges
+  # systematic rater differences against the reliability and consistency does not, so a
+  # consistency ICC is at least as large as the agreement ICC on the same data, and
+  # averaging them estimates neither.
   #
-  # [INFO] and always active, both for V38's reasons: nothing is mis-extracted (each
-  # value is correct for what its study reported), so there is nothing to "verify" and
-  # [UNUSUAL] would misdescribe it -- what is wrong is POOLING them, which is an analyst
+  # [INFO] and always active, for V38's reasons: nothing is mis-extracted, since each
+  # value is correct for what its study reported, so there is nothing to verify and
+  # [UNUSUAL] would misdescribe it. What is wrong is pooling them, which is an analyst
   # choice. And two different types in one pool are different estimands by definition,
-  # so it cannot false-fire.
+  # so the check cannot false-fire.
   #
-  # Compares the MODEL axis only: the "_average" suffix is stripped first, because the
-  # single-vs-average distinction is resolved by the Spearman-Brown step-down (and
-  # reported by its own flag), so an ICC(2,1)/ICC(2,k) pool is not a mixed estimand.
+  # Only the model axis is compared. The "_average" suffix is stripped first, because
+  # the single-versus-average distinction is resolved by the Spearman-Brown step-down
+  # and reported by its own flag, so an ICC(2,1)/ICC(2,k) pool is not a mixed estimand.
   # An absent or NA icc_type resolves to "agreement", the documented default, so a pool
-  # of blanks plus explicit "consistency" rows IS a mix and correctly fires.
-  if (n >= 2 && "icc" %in% colnames(x)) {
+  # of blanks plus explicit "consistency" rows is a genuine mix and correctly fires.
+  #
+  # Gated on measure for V31's reason (see V42 just above).
+  if (n >= 2 && icc_measure_ok && "icc" %in% colnames(x)) {
     icc_p <- suppressWarnings(as.numeric(x[["icc"]]))
     it <- if ("icc_type" %in% colnames(x)) {
       tt <- as.character(x[["icc_type"]])
@@ -1774,13 +2150,16 @@
     } else {
       rep("agreement", nrow(x))
     }
-    it_known <- is.finite(icc_p) & !is.na(it)
+    it_known_all <- is.finite(icc_p) & !is.na(it)
+    for (gk in seq_along(v_groups)) {             # one pool per flag_group stratum
+    it_known <- rep(FALSE, n)
+    it_known[v_groups[[gk]]] <- it_known_all[v_groups[[gk]]]
     present <- unique(it[it_known])
     if (length(present) > 1) {
       lbl <- c(agreement = "absolute agreement, ICC(2,1)",
                consistency = "consistency, ICC(3,1)")
       for (i in which(it_known)) {
-        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+        row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
           paste0("[INFO] Pool mixes ICC estimands: this row is '%s' (%s) while the pool ",
                  "also contains '%s'. Consistency ignores systematic rater differences and ",
                  "absolute agreement charges them against the reliability, so a consistency ",
@@ -1789,86 +2168,96 @@
                  "output reveals this - split the analysis by icc_type, or enter it as a ",
                  "moderator and report the contrast"),
           it[i], unname(lbl[it[i]]),
-          paste(setdiff(present, it[i]), collapse = "', '")))
+          paste(setdiff(present, it[i]), collapse = "', '")), v_grp_note(gk)))
       }
+    }
     }
   }
 
   # V38: a pool mixing different omegas.
   #
-  # omega_type is an ESTIMAND, not a label. omega_total is the proportion of total
-  # score variance due to ALL common factors; omega_hierarchical is the proportion due
-  # to the GENERAL factor alone and is systematically smaller; omega_asymptotic and
+  # omega_type is an estimand, not a label. omega_total is the proportion of total
+  # score variance due to all common factors; omega_hierarchical is the proportion due
+  # to the general factor alone and is systematically smaller; omega_asymptotic and
   # subscale omegas are different quantities again. Averaging them produces a number
   # that estimates none of them.
   #
-  # Severity is [INFO], matching E6/E8: nothing here is mis-extracted, so there is
-  # nothing for the reviewer to "verify" -- [UNUSUAL] would misdescribe it. Both
-  # values are correct; what is wrong is pooling them. That is an analyst choice,
-  # which is what [INFO] marks in this package (cf. E6, E8, V18, V21).
+  # Severity is [INFO], matching E6 and E8: nothing here is mis-extracted, so there is
+  # nothing for the reviewer to verify and [UNUSUAL] would misdescribe it. Both values
+  # are correct; what is wrong is pooling them. That is an analyst choice, which is
+  # what [INFO] marks in this package (compare E6, E8, V18 and V21).
   #
   # This is the omega analogue of E6 (mixed SMD standardizers) and E8 (mixed z
-  # transforms), and it belongs at Tier 1 because it is a property of the INPUT: the
+  # transforms), and it belongs at Tier 1 because it is a property of the input: the
   # estimand is fixed by what the primary study reported, not by any conversion the
-  # package performs. Always active (no enable_cross_row gate) -- unlike the induction
-  # and item-count checks, this one cannot false-fire, since two different omega_type
-  # values in one pool are different estimands by definition.
+  # package performs. It is always active, with no enable_cross_row gate, because
+  # unlike the induction and item-count checks it cannot false-fire: two different
+  # omega_type values in one pool are different estimands by definition.
   if (n >= 2 && "omega_type" %in% colnames(x) && "omega" %in% colnames(x)) {
-    # Compare the ESTIMAND, not its spelling: 'total', 'Total' and 'omega_t' are one
-    # estimand, and flagging them as mixed would be a pure false positive on
-    # capitalisation. Normalise silently -- es_from_omega() already warns about
-    # unrecognised values, and this check must not warn twice.
+    # Compare the estimand rather than its spelling: 'total', 'Total' and 'omega_t'
+    # are one estimand, and flagging them as mixed would be a false positive on
+    # capitalisation alone. Normalise without warning, since es_from_omega() already
+    # warns about unrecognised values and this check must not warn twice.
     ot <- .normalise_omega_type(x[["omega_type"]], warn = FALSE)
     om <- suppressWarnings(as.numeric(x[["omega"]]))
     ot[is.na(ot) & is.finite(om)] <- "total"
     # "unspecified" is now the fallback for an unrecognised omega_type, so it must be
     # excluded here for the same reason V39 excludes it: a value we could not read is
     # not evidence of a mixed estimand, and counting it would fire on any typo.
-    ot_known <- is.finite(om) & !is.na(ot) & ot != "unspecified"
+    ot_known_all <- is.finite(om) & !is.na(ot) & ot != "unspecified"
+    for (gk in seq_along(v_groups)) {             # one pool per flag_group stratum
+    ot_known <- rep(FALSE, n)
+    ot_known[v_groups[[gk]]] <- ot_known_all[v_groups[[gk]]]
     present <- unique(ot[ot_known])
     if (length(present) > 1) {
       for (i in which(ot_known)) {
-        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+        row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
           paste0("[INFO] Pool mixes omega estimands: this row reports omega_type = ",
                  "'%s' while the pool also contains '%s'. omega_total (all common ",
                  "factors) and omega_hierarchical (general factor only) answer different ",
                  "questions and omega_h is systematically smaller, so their average ",
                  "estimates neither - split the analysis by omega_type, or enter it as a ",
                  "moderator and report the contrast"),
-          ot[i], paste(setdiff(present, ot[i]), collapse = "', '")))
+          ot[i], paste(setdiff(present, ot[i]), collapse = "', '")), v_grp_note(gk)))
       }
+    }
     }
   }
 
-  # V39: a pool mixing omega ESTIMATORS.
+  # V39: a pool mixing omega estimators.
   #
   # Omega is not one computation, and which one produced the number moves it far more
-  # than most moderators do. Zinbarg et al. (2006) ran several estimators over identical
-  # data: the first principal component overestimated omega_h by about +0.40 on average,
-  # against about +0.02 for a hierarchical (bifactor) CFA; Revelle & Zinbarg (2009) record
-  # EFA returning omega_h = .04 where CFA returns exactly 0.0 on the same data. A bias of
-  # that size is larger than any moderator effect a reliability-generalization review is
-  # likely to report, so a pool mixing estimators can manufacture a "finding" that is
-  # purely an artefact of which software each author ran.
+  # than most moderators do. Zinbarg et al. (2006) ran several estimators over
+  # identical data: the first principal component overestimated omega_h by about +0.40
+  # on average, against about +0.02 for a hierarchical (bifactor) CFA. Revelle &
+  # Zinbarg (2009) record EFA returning omega_h = .04 where CFA returns exactly 0.0 on
+  # the same data. A bias of that size is larger than any moderator effect a
+  # reliability-generalization review is likely to report, so a pool mixing estimators
+  # can manufacture a finding that is purely an artefact of which software each author
+  # ran.
   #
-  # THE "unspecified" RULE IS THE WHOLE DESIGN. Most primary studies do not name their
-  # estimator, so counting "unspecified" as a level would make this fire on nearly every
-  # real dataset and get tuned out within a week. It fires only when two DIFFERENT KNOWN
-  # estimators coexist -- that is a fact about the data, not about what the reviewer
-  # failed to code. A pool of known + unspecified is silent here (the unspecified rows
-  # are a reporting-quality observation for the review to make, not a mixing error).
+  # The treatment of "unspecified" is the whole design. Most primary studies do not
+  # name their estimator, so counting "unspecified" as a level would make this fire on
+  # nearly every real dataset and be tuned out within a week. It fires only when two
+  # different known estimators coexist, which is a fact about the data rather than
+  # about what the reviewer failed to code. A pool of known plus unspecified stays
+  # silent here; the unspecified rows are a reporting-quality observation for the
+  # review to make, not a mixing error.
   #
-  # Severity is [INFO], matching V38 and its Tier-2 cousins E6/E8: nothing is
-  # mis-extracted and there is nothing to verify -- every value is correct for the
+  # Severity is [INFO], matching V38 and its Tier-2 cousins E6 and E8: nothing is
+  # mis-extracted and there is nothing to verify, since every value is correct for the
   # estimator that produced it. What is wrong is pooling them, an analyst choice.
   if (n >= 2 && "omega_estimator" %in% colnames(x) && "omega" %in% colnames(x)) {
     oe <- .normalise_omega_estimator(x[["omega_estimator"]], warn = FALSE)
     om_v <- suppressWarnings(as.numeric(x[["omega"]]))
-    known <- is.finite(om_v) & !is.na(oe) & oe != "unspecified"
+    known_all <- is.finite(om_v) & !is.na(oe) & oe != "unspecified"
+    for (gk in seq_along(v_groups)) {             # one pool per flag_group stratum
+    known <- rep(FALSE, n)
+    known[v_groups[[gk]]] <- known_all[v_groups[[gk]]]
     present <- unique(oe[known])
     if (length(present) > 1) {
       for (i in which(known)) {
-        row_issues[[i]] <- c(row_issues[[i]], sprintf(
+        row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
           paste0("[INFO] Pool mixes omega estimators: this row was estimated by '%s' ",
                  "while the pool also contains '%s'. The estimator moves omega more than ",
                  "most moderators do - a first principal component overestimates omega_h by ",
@@ -1876,27 +2265,28 @@
                  "- so a mixed pool can produce a moderator effect that is an artefact of ",
                  "which software each author ran. Split by estimator, or enter it as a ",
                  "moderator and report the contrast"),
-          oe[i], paste(setdiff(present, oe[i]), collapse = "', '")))
+          oe[i], paste(setdiff(present, oe[i]), collapse = "', '")), v_grp_note(gk)))
       }
+    }
     }
   }
 
   # V35: 2x2 event rates spanning a wide range in a correlation pool.
   #
-  # This is a DISCLOSURE about the tetrachoric route's precision, not a data error and
-  # not a suggestion to use a different estimand (there is no alternative -- see
-  # ?convert_df on why table_2x2_to_cor is tetrachoric-only).
+  # This is a disclosure about the tetrachoric route's precision, not a data error and
+  # not a suggestion to use a different estimand; there is no alternative, as
+  # ?convert_df explains under table_2x2_to_cor.
   #
   # The tetrachoric is estimated by solving a bivariate-normal probability for rho, and
   # how sharply the data identify rho depends on the margins: dp11/drho at rho = 0.30
-  # falls from 0.167 at a 50% event rate to 0.068 at 10% and 0.016 at 2%, i.e. a ~10x
-  # collapse in identification. Its standard error inflates correspondingly, so a rare-
-  # event study contributes far less precision to an inverse-variance pool than its
-  # sample size suggests. That is correct behaviour -- the information really is not
-  # there -- but in a pool mixing common and rare outcomes it silently concentrates the
-  # weight on the common-outcome studies. Worth stating; nothing to fix.
+  # falls from 0.167 at a 50% event rate to 0.068 at 10% and 0.016 at 2%, a roughly
+  # tenfold collapse in identification. Its standard error inflates correspondingly, so
+  # a rare-event study contributes far less precision to an inverse-variance pool than
+  # its sample size suggests. That is correct behaviour, since the information really
+  # is not there, but in a pool mixing common and rare outcomes it quietly concentrates
+  # the weight on the common-outcome studies. Worth stating; nothing to fix.
   #
-  # Deliberately NOT a phi gate. phi is not offered as an alternative, and margin
+  # This is not a phi gate. phi is not offered as an alternative, and margin
   # heterogeneity is precisely the condition under which phi would be least defensible.
   if (isTRUE(enable_cross_row) && n >= 2 &&
       !is.null(measure) && length(measure) == 1 && measure %in% c("r", "z")) {
@@ -1904,27 +2294,31 @@
     if (all(cell_cols %in% colnames(x))) {
       cm <- suppressWarnings(matrix(as.numeric(as.matrix(x[, cell_cols, drop = FALSE])),
                                     nrow = n, dimnames = list(NULL, cell_cols)))
-      ok2x2 <- rowSums(!is.finite(cm)) == 0 & rowSums(cm) > 0
+      ok2x2_all <- rowSums(!is.finite(cm)) == 0 & rowSums(cm) > 0
+      ev <- rep(NA_real_, n)
+      ev[ok2x2_all] <- (cm[ok2x2_all, "n_cases_exp"] + cm[ok2x2_all, "n_cases_nexp"]) /
+                       rowSums(cm[ok2x2_all, , drop = FALSE])
+      for (gk in seq_along(v_groups)) {           # one pool per flag_group stratum
+      ok2x2 <- rep(FALSE, n)
+      ok2x2[v_groups[[gk]]] <- ok2x2_all[v_groups[[gk]]]
       if (sum(ok2x2) >= 2) {
-        ev <- rep(NA_real_, n)
-        ev[ok2x2] <- (cm[ok2x2, "n_cases_exp"] + cm[ok2x2, "n_cases_nexp"]) /
-                       rowSums(cm[ok2x2, , drop = FALSE])
         rng <- range(ev[ok2x2])
         # Fire only when the pool BOTH spans a wide range and reaches into the region
         # where identification is materially weaker; a pool sitting entirely at 0.3-0.6
         # has nothing to disclose.
         if ((rng[2] - rng[1]) >= margin_range_min && (rng[1] < 0.10 || rng[2] > 0.90)) {
           for (i in which(ok2x2)) {
-            row_issues[[i]] <- c(row_issues[[i]], sprintf(
+            row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
               paste0("[INFO] Event rates across the 2x2 rows span %.2f to %.2f. The ",
                      "tetrachoric correlation is weakly identified at extreme margins ",
                      "(identification falls ~10x from a 50%% to a 2%% event rate), so ",
                      "its standard error inflates there and rare-outcome rows carry ",
                      "less weight than their sample size implies. This row's event ",
                      "rate is %.2f. Correct behaviour, not an extraction error"),
-              rng[1], rng[2], ev[i]))
+              rng[1], rng[2], ev[i]), v_grp_note(gk)))
           }
         }
+      }
       }
     }
   }
@@ -1961,23 +2355,23 @@
 #'
 #' `measure = "z"` is meant to hold one quantity, Fisher's z, so that the column can
 #' be pooled. It does not. The correlation and binary families report
-#' \eqn{z = atanh(r)}; the SMD family under \code{smd_to_cor = "viechtbauer"} (the
-#' default) reports a VARIANCE-STABILISING transform, which is a different function
-#' of the correlation. Measured on the same data at a point-biserial
-#' \eqn{\rho = 0.75}: the route reports z = 1.0925 while \code{atanh()} of its own r
+#' \eqn{z = atanh(r)}, while the SMD family under \code{smd_to_cor = "viechtbauer"}
+#' (the default) reports a variance-stabilising transform, which is a different
+#' function of the correlation. Measured on the same data at a point-biserial
+#' \eqn{\rho = 0.75}, that route reports z = 1.0925 while \code{atanh()} of its own r
 #' is 1.7468.
 #'
-#' NOT to be confused with the estimand difference between \code{viechtbauer} (the
-#' biserial) and \code{lipsey_cooper} (the point-biserial), which is a documented
-#' choice and is what study 01 of the simulation programme measures. This is the
-#' separate fact that the z COLUMN is not \code{atanh()} of the r column on every
-#' route, so a pool mixing families mixes two transforms.
+#' This is not the estimand difference between \code{viechtbauer} (the biserial) and
+#' \code{lipsey_cooper} (the point-biserial), which is a documented choice and is what
+#' study 01 of the simulation programme measures. It is the separate fact that the z
+#' column is not \code{atanh()} of the r column on every route, so a pool mixing
+#' families mixes two transforms.
 #'
-#' DERIVED FROM THE OUTPUT, NOT FROM A LIST OF ROUTE NAMES. Every method frame
-#' carries both \code{r} and \code{z}, so each route is classified by asking whether
-#' its own z equals \code{atanh()} of its own r. A hardcoded map of route names is
-#' exactly the construction that rotted in roadmap item 1.2 (64% of the names it
-#' listed did not exist), and it would silently misclassify any new route.
+#' The classification is derived from the output rather than from a list of route
+#' names. Every method frame carries both \code{r} and \code{z}, so each route is
+#' classified by asking whether its own z equals \code{atanh()} of its own r. A
+#' hardcoded map of route names would misclassify any new route without saying so,
+#' and would drift out of date as route names change.
 #'
 #' @param res the list of per-method data frames built by \code{convert_df()}
 #' @return named character vector, names are \code{info_used} values, entries
@@ -2039,11 +2433,11 @@
       NA_character_
     }
     if (!is.na(sid_i) && nzchar(sid_i)) {
-      # .group_label() here, not the raw study_id: a study_id containing "; "
-      # (e.g. "Huang; 2017") is split by the flag merge, which truncates the
-      # message AND mis-routes the leading fragment -- carrying no quoted column
-      # name, it matches every scope and lands in both crude and adjusted.
-      # Covers V23 (:1379), V36 (:1455) and Category H (:2767) in one place.
+      # Use .group_label() here rather than the raw study_id: a study_id containing
+      # "; ", such as "Huang; 2017", is split by the flag merge, which truncates the
+      # message and mis-routes the leading fragment. That fragment carries no quoted
+      # column name, so it matches every scope and lands in both crude and adjusted.
+      # This covers V23 (:1379), V36 (:1455) and Category H (:2767) in one place.
       sprintf("%s (row %d)", .group_label(sid_i), as.integer(i))
     } else {
       sprintf("row %d", as.integer(i))
@@ -2079,6 +2473,21 @@
 
 
 #########
+
+#' Routes whose nnt / rd output is on a RATE scale rather than a risk scale
+#'
+#' \code{es_from_cases_time()} (Mayne et al. 2006) writes an incidence rate difference
+#' into the \code{rd} columns and a person-time NNT -- a DURATION -- into the
+#' \code{nnt} ones. Neither is a probability: an IRD is events per person-time and is
+#' unbounded, and |NNT| < 1 is ordinary rather than impossible once the denominator is
+#' time. Every risk-scale bound in \code{.flag_bounds_violations()} (B3, B6, B6b) has
+#' to stand down on these rows, and E4 exists to warn that the two scales are in one
+#' pool. One definition, so the three checks and the warning cannot drift apart.
+#'
+#' @return character vector of info_used values
+#' @noRd
+.rate_scale_methods <- function() "cases_time"
+
 
 #' Check for numeric integrity issues (Inf, NaN, negative SE, CI problems)
 #' @param es numeric vector of effect sizes
@@ -2137,24 +2546,44 @@
     }
 
     # A6: ci width vs se
-    # skipped for nnt (discontinuous CI) and exp=TRUE (se stays on the log scale)
-    skip_a6 <- identical(measure, "nnt") || exp
+    #
+    # Skipped for nnt, whose CI is genuinely discontinuous (Altman 1998). NOT skipped
+    # for the exp-displayed ratios: that the SE is on the log scale while the CI is on
+    # the natural one is not a reason to abandon the check, it is the transform to
+    # apply -- log(ci_up) - log(ci_lo) against 2 z se, exactly the back-transform C5,
+    # D1, E3 and E5 already perform in this file. Skipping it left the single most
+    # likely user-input error for OR/RR/IRR/HR, a standard error given on the natural
+    # scale instead of the log scale, with no Tier-2 detector at all, while the
+    # identical mistake on the additive scale was caught.
+    log_scale_a6 <- isTRUE(exp) && !is.null(measure) &&
+      measure %in% c("logor", "logrr", "logirr", "loghr")
+    skip_a6 <- identical(measure, "nnt") || (isTRUE(exp) && !log_scale_a6)
+    if (log_scale_a6 &&
+        (is.na(ci_lo[i]) || is.na(ci_up[i]) ||
+         !is.finite(ci_lo[i]) || !is.finite(ci_up[i]) ||
+         ci_lo[i] <= 0 || ci_up[i] <= 0)) {
+      skip_a6 <- TRUE          # no log-scale width to compare
+    }
     if (!skip_a6 &&
         !is.na(es[i]) && !is.na(se[i]) && !is.na(ci_lo[i]) && !is.na(ci_up[i]) &&
         is.finite(es[i]) && is.finite(se[i]) && is.finite(ci_lo[i]) && is.finite(ci_up[i]) &&
         se[i] > 0 && ci_lo[i] <= ci_up[i]) {
-      ci_width <- ci_up[i] - ci_lo[i]
+      ci_width <- if (log_scale_a6) {
+        log(ci_up[i]) - log(ci_lo[i])
+      } else {
+        ci_up[i] - ci_lo[i]
+      }
       # package CIs: qt for d/g/md/r and dw/gw/mdw, qnorm otherwise
       # user CIs: checked against z width, t width also accepted
       # "rp" builds its CI on the t distribution like the others, but on the
-      # REGRESSION residual df, not N - 2: es_from_linreg_t() uses
+      # regression residual df rather than N - 2: es_from_linreg_t() uses
       # df = n_sample - n_covariates - 2 (R/es_from_REGRESSION.R:249) and
-      # rp +/- qt(.975, df) * rp_se (:268-269). Omitting it from qt_measures made
-      # A6 compare every rp CI against the Wald-z width and fire a pure false
-      # [DISCORDANT] at small n -- measured firing up to N = 23 at 1 covariate,
-      # N = 27 at 3 and N = 37 at 10, i.e. the crossover scales with n_covariates,
-      # so adding "rp" WITHOUT subtracting the covariates just moves the boundary.
-      # "zp" is deliberately excluded: it is built with qnorm (:276-277).
+      # rp +/- qt(.975, df) * rp_se (:268-269). Omitting it from qt_measures makes A6
+      # compare every rp CI against the Wald-z width and fire a false [DISCORDANT] at
+      # small n, up to N = 23 at 1 covariate, N = 27 at 3 and N = 37 at 10. The
+      # crossover scales with n_covariates, so adding "rp" without subtracting the
+      # covariates would only move the boundary. "zp" is excluded because it is built
+      # with qnorm (:276-277).
       qt_measures <- c("d", "g", "dw", "gw", "md", "mdw", "r", "rp")
       n_i <- if (!is.null(n_total)) n_total[i] else NA_real_
       # paired measures: df = n_pairs - 1 (n_total double counts the subjects)
@@ -2184,13 +2613,14 @@
       }
       is_user_es <- !is.null(info_used) && !is.na(info_used[i]) &&
                     grepl("^user_(es|input)", info_used[i])
-      # P7: Glass rows (smd_denom = control/control_robust) build their d/g CIs
-      # on the control-arm df (SMD1 convention), not the pooled N - 2. The Glass df
-      # applies ONLY when the SELECTED estimate actually came from the endpoint-means
-      # family -- the only methods that honour smd_denom. When the hierarchy picked a
-      # non-means method (cohen_d, etasq, t/F, ANCOVA, medians...), the CI is built on
-      # the pooled N - 2 regardless of the smd_denom input column, so keying the Glass
-      # df off the raw input alone would false-fire the A6 CI-width flag on valid rows.
+      # P7: Glass rows (smd_denom = control/control_robust) build their d/g CIs on
+      # the control-arm df, following the SMD1 convention, rather than on the pooled
+      # N - 2. The Glass df applies only when the selected estimate actually came from
+      # the endpoint-means family, the only methods that honour smd_denom. When the
+      # hierarchy picked a non-means method (cohen_d, etasq, t/F, ANCOVA, medians and
+      # so on), the CI is built on the pooled N - 2 regardless of the smd_denom input
+      # column, so keying the Glass df off the raw input alone would false-fire the A6
+      # CI-width flag on valid rows.
       glass_row <- !is_user_es && !is.null(smd_denom) &&
         length(smd_denom) >= i && !is.na(smd_denom[i]) &&
         smd_denom[i] %in% c("control", "control_robust") &&
@@ -2199,15 +2629,15 @@
         info_used[i] %in% c("means_sd", "means_se", "means_ci") &&
         !is.na(n_nexp_i) && is.finite(n_nexp_i) && n_nexp_i > 2
       if (glass_row) t_df <- n_nexp_i - 1
-      # P9: an ADJUSTED row's d/g interval is built by .es_from_d() on
-      # qt(.975, n_exp + n_nexp - 2 - n_cov_ancova), so A6 must expect that df too --
-      # otherwise it compares the row's own CI against a wider-df expectation and
-      # fires [DISCORDANT] on a perfectly consistent interval. The gap only clears the
-      # tolerance at small n (17% against a 10% tolerance at N = 9, q = 3), but it is a
-      # pure false positive when it does. The adjusted routes are exactly those whose
+      # P9: an adjusted row's d/g interval is built by .es_from_d() on
+      # qt(.975, n_exp + n_nexp - 2 - n_cov_ancova), so A6 must expect that df too.
+      # Otherwise it compares the row's own CI against a wider-df expectation and fires
+      # [DISCORDANT] on a perfectly consistent interval. The gap clears the tolerance
+      # only at small n (17% against a 10% tolerance at N = 9, q = 3), but it is a pure
+      # false positive when it does. The adjusted routes are exactly those whose
       # info_used starts with "ancova" or ends in "_adj" (see the es_from_ancova_*,
-      # es_from_cohen_d_adj and es_from_etasq_adj entry points); user-entered rows are
-      # excluded because the source's own CI construction is unknown and is checked
+      # es_from_cohen_d_adj and es_from_etasq_adj entry points). User-entered rows are
+      # excluded, because the source's own CI construction is unknown and is checked
       # against the Wald-z width instead.
       if (!is_user_es && !is.null(info_used) && !is.na(info_used[i]) &&
           grepl("^ancova|_adj$", info_used[i]) &&
@@ -2216,7 +2646,10 @@
           n_cov_ancova[i] > 0 && !is.na(t_df) && t_df - n_cov_ancova[i] > 0) {
         t_df <- t_df - n_cov_ancova[i]
       }
-      if (is_user_es) {
+      if (is_user_es || log_scale_a6) {
+        # log_scale_a6: the package and every source build a ratio CI as
+        # exp(log(es) +/- z se), so the expectation is the Wald-z width on the log
+        # scale and none of the qt_measures df logic applies.
         z_crit <- stats::qnorm(0.975)
       } else if (!is.null(measure) && measure %in% qt_measures &&
                  !is.na(t_df)) {
@@ -2252,6 +2685,60 @@
           ci_width > (1 + tol) * w_welch_min
         # report the closest band edge in the message
         expected_width <- if (ci_width < w_pooled) w_pooled else w_welch_min
+      }
+      # P10: a package-computed `r` CI is NOT r +/- qt se. Both routes that produce one
+      # build a symmetric interval on a z scale and back-transform it, which is
+      # deliberately asymmetric about r and narrower than 2 z se_r:
+      #   .smd_to_cor(), viechtbauer (the default) and lipsey_cooper -- the
+      #     variance-stabilising z with a = sqrt(dnorm(qnorm(p))) / (p(1-p))^(1/4),
+      #     back-transformed as r = tanh(z/a)/a;
+      #   .contingency_to_cor() / .tet_r() -- Fisher's z, back-transformed as tanh().
+      # The gap exceeds A6's own tolerance at small-to-moderate n, so A6 was reporting
+      # a [DISCORDANT] extraction error on 19 of the 170 rows of the package's own
+      # df.haza at measure = "r", all of them correct. Accept either back-transformed
+      # width as an alternative expectation, reconstructing the z-scale SE from r_se by
+      # the same delta map the two routes use (exact for Fisher, 0.1% for the
+      # variance-stabilising one at n = 26). qnorm(.975) rather than the block's own
+      # z_crit, because both intervals are built on the normal quantile whatever df A6
+      # would otherwise have chosen. "rp" is excluded: es_from_linreg_t() really does
+      # build rp +/- qt(.975, n - q - 2) se, so it keeps the t expectation.
+      if (fires_a6 && !is_user_es && identical(measure, "r") &&
+          is.finite(es[i]) && abs(es[i]) < 1 && se[i] > 0) {
+        zc_bt <- stats::qnorm(0.975)
+        alt_widths <- numeric(0)
+        # Fisher / tetrachoric: z = atanh(r), z_se = r_se / (1 - r^2)
+        zs_f <- se[i] / (1 - es[i]^2)
+        if (is.finite(zs_f)) {
+          alt_widths <- c(alt_widths,
+                          tanh(atanh(es[i]) + zc_bt * zs_f) -
+                          tanh(atanh(es[i]) - zc_bt * zs_f))
+        }
+        # Variance-stabilising (viechtbauer): z = a atanh(a r), r = tanh(z/a)/a
+        p_bt <- if (!is.na(n_exp_i) && !is.na(n_nexp_i) &&
+                    is.finite(n_exp_i) && is.finite(n_nexp_i) &&
+                    n_exp_i + n_nexp_i > 0) {
+          n_exp_i / (n_exp_i + n_nexp_i)
+        } else {
+          0.5
+        }
+        if (p_bt > 0 && p_bt < 1) {
+          a_bt <- sqrt(stats::dnorm(stats::qnorm(p_bt))) / (p_bt * (1 - p_bt))^(1 / 4)
+          ar <- a_bt * es[i]
+          if (is.finite(a_bt) && a_bt > 0 && abs(ar) < 1) {
+            z_bt  <- a_bt * atanh(ar)
+            zs_bt <- (a_bt^2 / (1 - ar^2)) * se[i]
+            if (is.finite(zs_bt)) {
+              alt_widths <- c(alt_widths,
+                              (tanh((z_bt + zc_bt * zs_bt) / a_bt) -
+                               tanh((z_bt - zc_bt * zs_bt) / a_bt)) / a_bt)
+            }
+          }
+        }
+        alt_widths <- alt_widths[is.finite(alt_widths) & alt_widths > 0]
+        if (length(alt_widths) &&
+            any(abs(ci_width - alt_widths) / alt_widths <= tol)) {
+          fires_a6 <- FALSE
+        }
       }
       if (fires_a6) {
         matches_t <- FALSE
@@ -2302,6 +2789,17 @@
   flags <- vector("list", n)
   for (i in seq_len(n)) flags[[i]] <- character(0)
 
+  # Rows whose estimate is on the rate scale, not the risk scale (see
+  # .rate_scale_methods): every [-1, 1] / |NNT| >= 1 bound below is a statement about
+  # probabilities and does not apply to them. With info_used absent (direct callers,
+  # tests_save/checked/test-flags.R) nothing is treated as rate-scale, so the risk
+  # bounds keep their pre-existing reach.
+  rate_row <- rep(FALSE, n)
+  if (!is.null(info_used) && length(info_used) > 0) {
+    iu <- rep(as.character(info_used), length.out = n)
+    rate_row <- !is.na(iu) & iu %in% .rate_scale_methods()
+  }
+
   for (i in seq_len(n)) {
     if (is.na(es[i])) next
     msuf <- if (!is.null(info_used)) .method_suffix(info_used[i]) else ""
@@ -2325,23 +2823,20 @@
     # B1b: raw-scale Wald CI escaping [-1, 1] while the point estimate is valid.
     # Same geometry as B7b/B8b for alpha and ICC: r is bounded identically and its
     # interval is built identically (es +/- z*se), so a symmetric Wald interval can
-    # leave the parameter space near |r| = 1 even when r itself is fine. Common on
-    # the tetrachoric route with small off-diagonal cells; B1 above tests only the
-    # point estimate, so without this the bound passes through silently.
+    # leave the parameter space near |r| = 1 even when r itself is fine. B1 above tests
+    # only the point estimate, so without this the bound would pass through unnoticed.
     #
-    # [INFO], not [UNUSUAL], deliberately. The data and the point estimate are sound --
-    # there is nothing to verify and nothing extracted wrongly. This is a property of
-    # the interval metaConvert constructs, so the flag is a disclosure rather than a
-    # request to check the extraction.
+    # [INFO] rather than [UNUSUAL], on purpose. The data and the point estimate are
+    # sound, so there is nothing to verify and nothing extracted wrongly. This is a
+    # property of the interval metaConvert constructs, which makes the flag a
+    # disclosure rather than a request to check the extraction.
     #
-    # NB the reasoning here USED to say the tetrachoric route was the main source and
-    # that "the user has no corrective action available". That is no longer true of the
-    # tetrachoric: its r-scale interval is now the tanh back-transform of the Fisher-z
-    # interval (.tet_r in internal_multiple_formulas.R), which cannot leave (-1, 1) --
-    # measured escape fell from 45.8% of tables to 0.0% with coverage unchanged
-    # (96.1% -> 96.2%). B1b is retained as a backstop for the correlation routes that
-    # still build a symmetric Wald interval on the r scale (the or_to_cor family,
-    # pearson_r and their derivatives), where it remains reachable.
+    # The tetrachoric route does not reach here: its r-scale interval is the tanh
+    # back-transform of the Fisher-z interval (.tet_r in internal_multiple_formulas.R),
+    # which cannot leave (-1, 1). That construction took the escape rate from 45.8% of
+    # tables to 0.0% with coverage unchanged (96.1% -> 96.2%). B1b remains as a
+    # backstop for the correlation routes that still build a symmetric Wald interval on
+    # the r scale: the or_to_cor family, pearson_r and their derivatives.
     if (cor_scale && is.finite(es[i]) && abs(es[i]) <= 1) {
       lo_out <- !is.na(ci_lo[i]) && is.finite(ci_lo[i]) && ci_lo[i] < -1
       up_out <- !is.na(ci_up[i]) && is.finite(ci_up[i]) && ci_up[i] > 1
@@ -2391,7 +2886,11 @@
 
     # B3: NNT magnitude < 1 (mathematically impossible: cannot treat fewer
     # than one person to prevent one event)
-    if (measure == "nnt" && is.finite(es[i]) &&
+    #
+    # True of a RISK-based NNT, where |RD| <= 1 forces |NNT| >= 1, and false of the
+    # person-time NNT es_from_cases_time() computes: there the NNT is a duration, and
+    # any incidence rate difference above one event per unit of time gives |NNT| < 1.
+    if (measure == "nnt" && !rate_row[i] && is.finite(es[i]) &&
         abs(es[i]) < 1 && es[i] != 0) {
       flags[[i]] <- c(flags[[i]],
         paste0("[INVALID] NNT magnitude < 1: NNT = ", round(es[i], 3), msuf))
@@ -2409,16 +2908,29 @@
       br <- if (!is.null(baseline_risk) && length(baseline_risk) >= i) baseline_risk[i] else NA
       brate <- if (!is.null(baseline_rate) && length(baseline_rate) >= i) baseline_rate[i] else NA
 
+      # The bound is SIDED. With the baseline risk BR fixed and the treated risk in
+      # [0, 1], RD = BR - p_t ranges over [BR - 1, BR]: the benefit side is capped at
+      # BR, giving |NNT| >= 1/BR, but the harm side is capped at 1 - BR, giving
+      # |NNH| >= 1/(1 - BR), a completely different number at small BR. Applying the
+      # benefit-side floor to both signs stamped [INVALID] on every NNH between
+      # 1/(1-BR) and 1/BR -- at BR = 0.05 a false window from 1.05 to 20, i.e. on
+      # essentially every appreciable harm signal, including tables the package itself
+      # had just produced.
       if (!is.na(br) && br > 0 && br < 1) {
-        min_nnt <- 1 / br
+        min_nnt <- if (es[i] > 0) 1 / br else 1 / (1 - br)
+        side_txt <- if (es[i] > 0) "baseline_risk" else "1 - baseline_risk"
         if (abs(es[i]) < min_nnt) {
           flags[[i]] <- c(flags[[i]],
             paste0("[INVALID] Minimum possible NNT = ", round(min_nnt, 1),
-                   " (baseline_risk = ", round(br * 100, 1), "%)",
+                   " (", side_txt, " = ",
+                   round(if (es[i] > 0) br * 100 else (1 - br) * 100, 1), "%)",
                    " - reported |NNT| = ", round(abs(es[i]), 3), msuf))
         }
       }
-      if (!is.na(brate) && brate > 0) {
+      # Benefit side only. On the harm side the incidence rate ratio is unbounded
+      # above, so |IRD| is unbounded and a rate-based NNH has no positive lower bound
+      # at all.
+      if (!is.na(brate) && brate > 0 && es[i] > 0) {
         min_nnt_pt <- 1 / brate
         if (abs(es[i]) < min_nnt_pt) {
           flags[[i]] <- c(flags[[i]],
@@ -2430,13 +2942,16 @@
     }
 
     # B6: RD outside [-1, 1]
-    if (measure == "rd" && is.finite(es[i]) && abs(es[i]) > 1) {
+    # Not applied to a rate-scale row: es_from_cases_time() writes an incidence rate
+    # DIFFERENCE into the rd columns, and 3 events per person-year is arithmetically
+    # valid rather than impossible.
+    if (measure == "rd" && !rate_row[i] && is.finite(es[i]) && abs(es[i]) > 1) {
       flags[[i]] <- c(flags[[i]],
         paste0("[INVALID] RD outside [-1, 1]: rd = ", round(es[i], 3), msuf))
     }
 
     # B6b: RD CI bound outside [-1, 1]
-    if (measure == "rd") {
+    if (measure == "rd" && !rate_row[i]) {
       bound_problems <- character(0)
       if (!is.na(ci_lo[i]) && is.finite(ci_lo[i]) && abs(ci_lo[i]) > 1) {
         bound_problems <- c(bound_problems,
@@ -2594,12 +3109,12 @@
                " (threshold: ", opts$n_min, ")"))
     }
 
-    # C7: Near-perfect Cronbach's alpha. Compared on the COEFFICIENT scale, not
-    # the analysis scale: the old `es > 0 && es <= 1` guard is unreachable under
-    # the Bonett default (ln(1 - alpha) is negative for every valid alpha), so
-    # this check was dead exactly where it was needed -- and worse, the Bonett
-    # values that DID satisfy it, (0.99, 1], are strongly NEGATIVE alphas, which
-    # it then announced as "near-perfect".
+    # C7: near-perfect Cronbach's alpha, compared on the coefficient scale rather
+    # than the analysis scale. An `es > 0 && es <= 1` guard is unreachable under the
+    # Bonett default, since ln(1 - alpha) is negative for every valid alpha, so the
+    # check would be dead exactly where it is needed. Worse, the Bonett values that do
+    # satisfy it, (0.99, 1], are strongly negative alphas, which it would then announce
+    # as "near-perfect".
     if (measure == "alpha" && !is.na(es[i]) && is.finite(es[i])) {
       a_raw <- .to_reliability_scale(es[i], alpha_to_es)
       if (is.finite(a_raw) && a_raw > 0 && a_raw <= 1 && a_raw > opts$alpha_max) {
@@ -2699,18 +3214,25 @@
     min_dev <- 0
   } else {
     min_dev <- switch(measure,
-      "d" = , "g" = 1.0, # 1 SD
+      # dw/gw are standardised SMDs in the same SD units as d/g, and rp/zp are on the
+      # same bounded and Fisher scales as r/z, so they inherit the same floors. Falling
+      # through to the 0 default (which the comment below reserves for md/nnt/prop,
+      # whose units are arbitrary) made D1 flag homogeneous dw/gw/rp/zp pools at
+      # deviations the identical code calls non-diagnostic for d/g/r/z. Every sibling
+      # gate -- C1, F1/F2, E1/E3's thresholds, Category G's signed_measures -- already
+      # groups them this way.
+      "d" = , "g" = , "dw" = , "gw" = 1.0, # 1 SD
       "logor" = , "logrr" = , "logirr" = , "loghr" = 1.0, # log scale
-      "r" = 0.3,
-      "z" = 0.5,
+      "r" = , "rp" = 0.3,
+      "z" = , "zp" = 0.5,
       "rd" = 0.3,
       # Reliability coefficients live on a universal bounded scale, so a floor is
-      # meaningful here in a way it is not for md/nnt (arbitrary units). Without one
-      # a 20-study pool whose reported alphas span .91-.93 -- textbook homogeneity --
-      # raised 6 "ES outlier" flags. Values are in ANALYSIS-scale units: on the
-      # Bonett ln(1-x) scale 0.5 is about a .05 swing in the coefficient near .9;
-      # the Hakstian-Whalen scale is roughly 6x tighter, so it gets its own floor.
-      # Override per analysis with flag_options$outlier_min_deviation.
+      # meaningful here in a way it is not for md or nnt, whose units are arbitrary.
+      # Without one, a 20-study pool whose reported alphas span .91-.93, which is
+      # textbook homogeneity, raises 6 "ES outlier" flags. Values are in analysis-scale
+      # units: on the Bonett ln(1-x) scale 0.5 is about a .05 swing in the coefficient
+      # near .9, and the Hakstian-Whalen scale is roughly 6x tighter, so it gets its
+      # own floor. Override per analysis with flag_options$outlier_min_deviation.
       "alpha" = , "icc" = , "omega" = if (identical(rel_scale, "hakstian_whalen")) 0.08 else if (identical(rel_scale, "raw")) 0.05 else 0.5,
       0 # no floor for md, nnt, prop
     )
@@ -2747,12 +3269,12 @@
       expected_se[expected_se == 0] <- NA_real_
       se_for_iqr[has_both] <- se[has_both] / expected_se
     }
-    # Balanced-arms 2/sqrt(N) fallback for rows WITHOUT both arm sizes. This must run
-    # whether or not ANY row had arm sizes: a pure pearson_r/fisher_z/spearman_r d or g
-    # pool carries only n_sample (n_exp/n_nexp stay NA in raw_data), so nesting this inside
-    # if(any(has_both)) left every row with its raw, N-dependent SE and falsely flagged a
-    # legitimately small-N study as an SE outlier. Mirrors the branch-level no_data
-    # fallback in the logOR/logRR branch below.
+    # Balanced-arms 2/sqrt(N) fallback for rows without both arm sizes. This must run
+    # whether or not any row had arm sizes: a pure pearson_r/fisher_z/spearman_r d or g
+    # pool carries only n_sample, leaving n_exp and n_nexp NA in raw_data, so nesting
+    # this inside if(any(has_both)) would leave every row with its raw, N-dependent SE
+    # and falsely flag a legitimately small-N study as an SE outlier. This mirrors the
+    # branch-level no_data fallback in the logOR/logRR branch below.
     not_norm <- !has_both & !is.na(se) & is.finite(se)
     if (any(not_norm)) {
       if (!is.null(n_total)) {
@@ -2770,12 +3292,31 @@
              suffix != "_adjusted") {
     # 2x2 reconstruction accounts for event-rate variation across studies
     # skip adjusted estimates: multivariable SEs are larger than 2x2-implied SEs
-    # 4/sqrt(N) ~ SE_logOR at a 50% event rate (puts fallback rows on the same ~1 scale)
-    balanced_se_const <- 4
+    #
+    # The balanced-event constant is the SE this measure has at a 50% event rate with
+    # equal arms, which is what puts the fallback rows on the reconstruction's ~1
+    # scale: 4/sqrt(N) for logOR (sqrt(4 x 4/N)) and 2/sqrt(N) for logRR
+    # (sqrt(4/N - 2/N + 4/N - 2/N)). Reusing 4 for RR would leave a whole RR pool at
+    # half scale.
+    balanced_se_const <- if (identical(measure, "logrr")) 2 else 4
+    # The reconstruction is OR-only. .estimate_n_from_or_and_n_exp() solves for a table
+    # whose ODDS ratio is or_j and whose Var(logOR) is var_j; handing it a risk ratio
+    # and a Var(logRR) returns cells that are not the study's, and the logRR SE
+    # evaluated on them is not the study's expected SE -- measured normalised SEs of
+    # 0.68 to 14.7 instead of ~1, which both false-flags ordinary low-event-rate trials
+    # and inflates the IQR enough to mask real errors. A 2x2 with arm sizes n1, n2 and
+    # a given RR has OR = RR (n2 - b)/(n1 - a), which is not identified from
+    # (RR, Var(logRR), n1, n2) alone, so there is no correcting the input either; logRR
+    # goes to the balanced-event sqrt(N) fallback, which at least keeps one scale.
+    use_recon <- !identical(measure, "logrr")
     has_data <- !is.na(n_exp) & !is.na(n_nexp) & is.finite(n_exp) & is.finite(n_nexp) &
                 n_exp > 1 & n_nexp > 1 & !is.na(es) & is.finite(es) &
                 !is.na(se) & is.finite(se) & se > 0
-    if (any(has_data)) {
+    if (!use_recon && any(has_data)) {
+      hd <- which(has_data)
+      se_for_iqr[hd] <- se[hd] * sqrt(n_exp[hd] + n_nexp[hd]) / balanced_se_const
+    }
+    if (use_recon && any(has_data)) {
       for (j in which(has_data)) {
         # es is already the natural-scale OR when exp=TRUE
         or_j <- if (on_exp_scale) es[j] else exp(es[j])
@@ -2797,19 +3338,12 @@
                             recon$n_controls_exp[1], recon$n_controls_nexp[1])))) {
           a <- recon$n_cases_exp[1]; b <- recon$n_cases_nexp[1]
           c_val <- recon$n_controls_exp[1]; d <- recon$n_controls_nexp[1]
-          if (measure == "logor") {
-            # logOR SE = sqrt(1/a + 1/b + 1/c + 1/d)
-            cells <- c(a, b, c_val, d)
-            if (any(cells == 0)) cells <- cells + 0.5  # continuity correction
-            exp_se <- sqrt(sum(1 / cells))
-          } else {
-            # logRR SE = sqrt(1/a - 1/(a+c) + 1/b - 1/(b+d))
-            if (a > 0 && b > 0 && (a + c_val) > 0 && (b + d) > 0) {
-              exp_se <- sqrt(1/a - 1/(a + c_val) + 1/b - 1/(b + d))
-            } else {
-              exp_se <- NA_real_
-            }
-          }
+          # logOR SE = sqrt(1/a + 1/b + 1/c + 1/d). Only logOR reaches here: the
+          # solver matches an ODDS ratio and a Var(logOR), so its cells mean nothing
+          # for a risk-ratio pool (see use_recon above).
+          cells <- c(a, b, c_val, d)
+          if (any(cells == 0)) cells <- cells + 0.5  # continuity correction
+          exp_se <- sqrt(sum(1 / cells))
           if (!is.na(exp_se) && exp_se > 0) {
             se_for_iqr[j] <- se[j] / exp_se
           } else {
@@ -2898,8 +3432,33 @@
     }
   }
 
-  # D3 (V27): spread = pooled arm SD or se*sqrt(N); flags SE entered as SD
+  # D3 (V27): spread = pooled arm SD, or the SD implied by the SE; flags SE-as-SD.
   # md/mdw by default, d/g/dw/gw only via sd_outlier_smd (mixed instrument scales)
+  #
+  # sd_outlier_ratio (K) re-measured on the validation-set extractions AFTER the scale
+  # fix below, since the documented calibration predates it. Per pool: k rows, median
+  # spread, and the number of rows firing at each K.
+  #
+  #   41065428-ERROR-MDw  mdw  k= 9  median  7.80   K5: 0   K4.5: 1   min ratio  4.98
+  #   41946661-ERROR-MDw  mdw  k=11  median 68.87   K5: 1   K4.5: 1   min ratio 32.35
+  #   41571219-ERROR-MD   md   k= 5  median  2.90   K5: 0   K4.5: 0   min ratio  1.60
+  #   41977094-SAFE-MD    md   k=11  median 16.21   K5: 0   K4.5: 0   min ratio  3.08
+  #   41313891-ERROR-SMD  g    k=10  median  8.41   K5: 2   K4.5: 2   min ratio  8.47   (opt-in)
+  #   41641880-ERROR-SMD  g    k= 7  median  3.12   K5: 0   K4.5: 0   min ratio  3.13   (opt-in)
+  #   41662125-SAFE-SMD   g    k= 9  median  3.23   K5: 0   K4.5: 1   min ratio  4.93   (opt-in)
+  #
+  # Two facts the old documentation gets wrong. First, the motivating case is NOT
+  # "spread 2.4 against a pool median of 14.2": on the current extraction it is 1.57
+  # against 7.80, a ratio of 4.98 -- which is UNDER the K = 5 gate, so the default-on
+  # branch currently fires on nothing in that pool. Second, the scale fix does not
+  # change it, because 41065428 is within-subject (no n_nexp) and both the old and the
+  # new rule reduce to se * sqrt(n_exp) there.
+  #
+  # Dropping K to 4.5 recovers it at no cost inside the default-on md/mdw scope (both
+  # md pools stay silent, Rosen included) but costs one false alarm in the OPT-IN SMD
+  # scope, on a pool with no known error. That is a behaviour change with a real
+  # trade-off rather than a defect, so the default is left at 5 for the author to
+  # settle; the numbers above are what the decision should be made on.
   sd_default <- c("md", "mdw")
   sd_optin   <- c("d", "g", "dw", "gw")
   sd_apply <- !is.null(measure) &&
@@ -2907,16 +3466,37 @@
      (isTRUE(opts$sd_outlier_smd) && measure %in% sd_optin))
   if (sd_apply) {
     K_sd <- if (!is.null(opts$sd_outlier_ratio)) opts$sd_outlier_ratio else 5
-    # effective N: n_total when available, else n_exp (within-subject: n_nexp NA)
-    n_eff <- if (!is.null(n_total)) n_total else rep(NA_real_, n)
-    if (!is.null(n_exp)) {
-      miss <- (is.na(n_eff) | !is.finite(n_eff)) & !is.na(n_exp) & is.finite(n_exp)
-      n_eff[miss] <- n_exp[miss]
-    }
     pooled_sd <- if (!is.null(sd_exp) && !is.null(sd_nexp)) {
       sqrt((sd_exp^2 + sd_nexp^2) / 2)
     } else rep(NA_real_, n)
-    implied_sd <- if (!is.null(n_eff)) se * sqrt(n_eff) else rep(NA_real_, n)
+    # The SE-implied SD has to come out on the SAME scale as the pooled arm SD, or a
+    # pool where some rows transcribed their arm SDs and some did not is comparing two
+    # quantities. For a two-group md, SE_MD = SD sqrt(1/n1 + 1/n2), so se * sqrt(N) is
+    # 2 x SD at balanced arms, not SD; the inverse is se / sqrt(1/n1 + 1/n2). Three
+    # branches, in order of how much the row tells us:
+    #   both arm sizes  -> se / sqrt(1/n_exp + 1/n_nexp)
+    #   n_exp only      -> se * sqrt(n_exp)      (within-subject: SE = SD_diff/sqrt(n))
+    #   n_total only    -> se * sqrt(n_total)/2  (balanced-arms, mirroring D2's own
+    #                                             2/sqrt(N) fallback)
+    # Omitting the third branch would leave those rows at 2x while the rest sat at 1x,
+    # which is the defect in a new place.
+    implied_sd <- rep(NA_real_, n)
+    if (!is.null(n_exp) && !is.null(n_nexp)) {
+      ok_two <- !is.na(se) & is.finite(se) &
+        !is.na(n_exp) & is.finite(n_exp) & n_exp > 0 &
+        !is.na(n_nexp) & is.finite(n_nexp) & n_nexp > 0
+      implied_sd[ok_two] <- se[ok_two] / sqrt(1 / n_exp[ok_two] + 1 / n_nexp[ok_two])
+    }
+    if (!is.null(n_exp)) {
+      ok_one <- is.na(implied_sd) & !is.na(se) & is.finite(se) &
+        !is.na(n_exp) & is.finite(n_exp) & n_exp > 0
+      implied_sd[ok_one] <- se[ok_one] * sqrt(n_exp[ok_one])
+    }
+    if (!is.null(n_total)) {
+      ok_tot <- is.na(implied_sd) & !is.na(se) & is.finite(se) &
+        !is.na(n_total) & is.finite(n_total) & n_total > 0
+      implied_sd[ok_tot] <- se[ok_tot] * sqrt(n_total[ok_tot]) / 2
+    }
     spread <- ifelse(!is.na(pooled_sd) & is.finite(pooled_sd) & pooled_sd > 0,
                      pooled_sd, implied_sd)
     sp_ok <- !is.na(spread) & is.finite(spread) & spread > 0
@@ -2974,7 +3554,7 @@
   if (!isTRUE(opts$enable_cross_row)) return(flags)
 
   # signed measures only (md/mdw included)
-  signed_measures <- c("d", "g", "dw", "gw", "md", "mdw", "r", "z",
+  signed_measures <- c("d", "g", "dw", "gw", "md", "mdw", "r", "z", "rp", "zp",
                        "logor", "logrr", "logirr", "loghr")
   if (is.null(measure) || !measure %in% signed_measures) return(flags)
 
@@ -3035,11 +3615,11 @@
                    es_label, " = ", round(es[i], 3),
                    ", CI [", round(ci_lo[i], 3), ", ", round(ci_up[i], 3), "]", msuf, ")")
     if (majority == "tie") {
-      # No majority exists, so neither side can be "opposite to" one. The old
-      # wording told BOTH rows of a 1-vs-1 split that they were the outlier
-      # opposing the majority -- a self-contradictory pair of flags. Both rows
-      # still warrant [UNUSUAL]: an evenly split pool is exactly as suspicious,
-      # and there is no basis for preferring either side.
+      # No majority exists, so neither side can be described as opposing one.
+      # Calling both rows of a 1-vs-1 split the outlier would put two contradictory
+      # flags on the same pool. Both rows still warrant [UNUSUAL], since an evenly
+      # split pool is just as suspicious and there is no basis for preferring
+      # either side.
       paste0("[UNUSUAL] Direction conflict: ", core,
              ", and the pool is evenly split (", n_opp,
              " significant row(s) point each way, with no majority direction) - verify the arm/group labels and the extracted value against the primary (likely extraction error or a genuine outlier)")
@@ -3156,18 +3736,18 @@
 
   # Only apply to standardized metrics where SE scales predictably with N.
   #
-  # "rp"/"zp" belong here for the same reason "r"/"z" do -- SE(rp) is
+  # "rp" and "zp" belong here for the same reason "r" and "z" do: SE(rp) is
   # (1 - rp^2)/sqrt(n - q - 3) and SE(zp) is 1/sqrt(n - q - 3), both as predictable
-  # in N as their zero-covariate counterparts. Omitting them made the WHOLE F family
-  # return early on a partial correlation, so F1 and F2 never ran on those rows at
-  # all. Measured consequence at the fall-through defaults the switches below would
-  # otherwise have given them (floor 0.1/sqrt(N), ceiling max(2, 8/sqrt(N))):
-  #   * F2 missed an SD-entered-as-SE error outright -- SE 0.85-0.97 is caught for
-  #     "r" (ceiling 0.6) and passes for "rp" (ceiling 2.0);
-  #   * F1's flat floor does not shrink with (1 - rp^2), so at N = 200, q = 2,
-  #     rp = 0.95 the floor (0.00707) sits ABOVE the true SE (0.00696) -- it would
-  #     have false-fired on a valid row had the family run.
-  # Both are fixed by giving rp/zp the r/z treatment rather than the ratio default.
+  # in N as their zero-covariate counterparts. Omitting them makes the whole F family
+  # return early on a partial correlation, so F1 and F2 never run on those rows at
+  # all. At the fall-through defaults the switches below would otherwise give them
+  # (floor 0.1/sqrt(N), ceiling max(2, 8/sqrt(N))):
+  #   * F2 misses an SD-entered-as-SE error outright, since an SE of 0.85-0.97 is
+  #     caught for "r" (ceiling 0.6) and passes for "rp" (ceiling 2.0);
+  #   * F1's flat floor does not shrink with (1 - rp^2), so at N = 200, q = 2 and
+  #     rp = 0.95 the floor (0.00707) sits above the true SE (0.00696), and would
+  #     false-fire on a valid row if the family ran.
+  # Giving rp and zp the r/z treatment rather than the ratio default avoids both.
   standardized <- c("d", "g", "dw", "gw", "r", "z", "rp", "zp",
                     "logor", "logrr", "loghr", "logirr")
   if (!measure %in% standardized) return(flags)
@@ -3288,8 +3868,7 @@
     opts$dispersion_max_smd  # fallback
   }
 
-  # recompute diff on the log scale when exp = TRUE; dispersion approximated
-  # via delta method (MaxAD(log X) ~ MaxAD(X) / X)
+  # recompute diff and dispersion on the log scale when exp = TRUE
   log_measures <- c("logor", "logrr", "logirr", "loghr")
   on_exp_scale <- isTRUE(exp) && measure %in% log_measures
 
@@ -3320,18 +3899,39 @@
     scale_note <- ""
     if (on_exp_scale) {
       scale_note <- " (log scale)"
-      disp_work <- if (!is.na(dispersion[i]) && is.finite(dispersion[i]) &&
-                       !is.null(es) && !is.na(es[i]) && is.finite(es[i]) &&
-                       es[i] > 0) {
-        dispersion[i] / es[i]
-      } else {
-        NA_real_
-      }
       diff_work <- if (!is.null(min_es) && !is.null(max_es) &&
                        !is.na(min_es[i]) && !is.na(max_es[i]) &&
                        is.finite(min_es[i]) && is.finite(max_es[i]) &&
                        min_es[i] > 0 && max_es[i] > 0) {
         log(max_es[i]) - log(min_es[i])
+      } else {
+        NA_real_
+      }
+      # `dispersion` arrives on the NATURAL scale, and the old delta approximation
+      # divided it by the hierarchy-SELECTED estimate rather than by the median it was
+      # measured around. That is not the quantity the message names, the error factor
+      # median/es_selected is unbounded (measured 1.5x on a realistic 2x2 + means_sd
+      # row, 3.9x on v = c(3, 30)), it runs in both directions -- a large selected
+      # estimate hides a genuine discordance -- and it is not invariant under swapping
+      # the exposure and reference codings, which is the one thing the log scale is
+      # there to give. Two replacements, in order of exactness:
+      #   k = 2: max|v - median(v)| of two values IS half their range, so the log-scale
+      #          dispersion is exactly diff_work/2. This also restores the E1 == E3
+      #          identity at k = 2 that this file documents.
+      #   k > 2: the per-method values are not carried here, so keep a delta form but
+      #          centre it on sqrt(min max), the geometric mean, which is
+      #          reversal-invariant and independent of which estimate was selected.
+      #          (Exactness for k > 2 needs .dispersion_stat(log(v)) computed where the
+      #          per-method values live, in .generate_df().)
+      disp_work <- if (!is.na(n_estimations[i]) && n_estimations[i] == 2 &&
+                       !is.na(diff_work) && is.finite(diff_work)) {
+        diff_work / 2
+      } else if (!is.na(dispersion[i]) && is.finite(dispersion[i]) &&
+                 !is.null(min_es) && !is.null(max_es) &&
+                 !is.na(min_es[i]) && !is.na(max_es[i]) &&
+                 is.finite(min_es[i]) && is.finite(max_es[i]) &&
+                 min_es[i] > 0 && max_es[i] > 0) {
+        dispersion[i] / sqrt(min_es[i] * max_es[i])
       } else {
         NA_real_
       }
@@ -3445,17 +4045,17 @@
   group_key <- .build_group_key(raw_data, opts$flag_group, idx = row_idx_map, n = n)
 
   # ---- Comparison representatives (route view) --------------------------------
-  # Every CROSS-ROW check below assumes one row = one comparison: it compares a
-  # study against its peers. Under main_es = FALSE a comparison occupies one row
-  # per estimation route, so that invariant breaks and the checks silently change
-  # their unit of analysis -- a study with k routes enters the IQR pool k times
-  # (masking its own outlier status), counts k times toward the direction-conflict
+  # Every cross-row check below assumes one row is one comparison, since it compares
+  # a study against its peers. Under main_es = FALSE a comparison occupies one row
+  # per estimation route, which breaks that invariant and changes the checks' unit of
+  # analysis without saying so: a study with k routes enters the IQR pool k times,
+  # masking its own outlier status, counts k times toward the direction-conflict
   # floor, and matches its own study_id k times in the duplication check.
   #
-  # Fix: decide every cross-row property on ONE representative row per
-  # (row_id, scope), then broadcast the verdict back to that comparison's rows.
-  # When main_es = TRUE every row is its own representative, cmp_map is the
-  # identity and this is a no-op -- the default path is bit-for-bit unchanged.
+  # Every cross-row property is therefore decided on one representative row per
+  # (row_id, scope), and the verdict is broadcast back to that comparison's rows.
+  # When main_es = TRUE every row is its own representative, cmp_map is the identity,
+  # and this step does nothing, so the default path is unchanged.
   cmp_key <- paste(res$row_id,
                    if ("adjusted_input" %in% colnames(res)) res$adjusted_input else "",
                    sep = "\r")
@@ -3544,10 +4144,27 @@
   } else {
     NULL
   }
+  # B5's person-time floor needs the rate es_from_cases_time() ACTUALLY used, which is
+  # the baseline_rate column when supplied and n_cases_nexp / time_nexp otherwise
+  # (R/es_from_stand_IRR.R). Reading only the column left every auto-computed row with
+  # no lower bound at all once B3 stopped applying the risk-scale one to it.
   baseline_rate_vec <- if ("baseline_rate" %in% colnames(raw_data)) {
     raw_data$baseline_rate[match(res$row_id, raw_data$row_id)]
   } else {
     NULL
+  }
+  if (all(c("n_cases_nexp", "time_nexp") %in% colnames(raw_data))) {
+    idx_br <- match(res$row_id, raw_data$row_id)
+    cases_n <- suppressWarnings(as.numeric(raw_data$n_cases_nexp[idx_br]))
+    time_n  <- suppressWarnings(as.numeric(raw_data$time_nexp[idx_br]))
+    derived <- ifelse(!is.na(cases_n) & !is.na(time_n) & is.finite(time_n) & time_n > 0,
+                      cases_n / time_n, NA_real_)
+    if (is.null(baseline_rate_vec)) {
+      baseline_rate_vec <- derived
+    } else {
+      miss_br <- is.na(baseline_rate_vec)
+      baseline_rate_vec[miss_br] <- derived[miss_br]
+    }
   }
 
   # covariate count, for the A6 CI-width check: .es_from_d() builds the d/g interval
@@ -3558,9 +4175,9 @@
     NULL
   }
 
-  # Same, for the REGRESSION covariate count: a partial-correlation ("rp") row has
-  # its interval built on qt(.975, n_sample - n_covariates - 2), a DIFFERENT column
-  # from n_cov_ancova and a different df, so A6 needs it separately.
+  # Same, for the regression covariate count: a partial-correlation ("rp") row has
+  # its interval built on qt(.975, n_sample - n_covariates - 2), which is a different
+  # column from n_cov_ancova and a different df, so A6 needs it separately.
   n_covariates_row <- if ("n_covariates" %in% colnames(raw_data)) {
     suppressWarnings(as.numeric(raw_data$n_covariates[match(res$row_id, raw_data$row_id)]))
   } else {
@@ -3621,10 +4238,10 @@
     .flag_cross_row_direction_conflict(esR[idx], ci_loR[idx], ci_upR[idx], opts,
                                        info_usedR[idx], measure, exp)))
 
-  # H: Cross-row study duplication (reads study_id from raw_data;
-  # always pass a length-n vector so f_dup[[i]] is safe downstream). Scoped WITHIN
-  # group_key: sharing a study_id across different groups (e.g. one trial reporting
-  # several outcomes) is expected in multivariate data and must NOT be flagged.
+  # H: cross-row study duplication, reading study_id from raw_data. Always pass a
+  # length-n vector so f_dup[[i]] is safe downstream. Scoped within group_key,
+  # because sharing a study_id across different groups, as when one trial reports
+  # several outcomes, is expected in multivariate data and must not be flagged.
   study_id_vec <- if ("study_id" %in% colnames(raw_data)) {
     as.character(raw_data$study_id[match(res$row_id, raw_data$row_id)])
   } else {
@@ -3659,8 +4276,17 @@
   # (only rows that would actually be pooled together can be "mixed").
   f_nnt_mix <- vector("list", n)
   for (i in seq_len(n)) f_nnt_mix[[i]] <- character(0)
-  if (measure == "nnt" && !is.null(info_used)) {
-    rate_methods <- "cases_time"
+  if (measure %in% c("nnt","rd") && !is.null(info_used)) {
+    rate_methods <- .rate_scale_methods()
+    # The gate covers both measures; the WORDING has to follow the measure, or an rd
+    # pool is told about a mix of "NNT types" it never asked for and never hears the
+    # risk-difference / incidence-rate-difference distinction that is the real hazard.
+    rd_pool <- identical(measure, "rd")
+    head_lbl  <- if (rd_pool) "Mixed difference types" else "Mixed NNT types"
+    rate_sing <- if (rd_pool) "an incidence rate difference (events per person-time)" else "a rate-based (person-time) NNT"
+    risk_sing <- if (rd_pool) "a risk difference (a probability)" else "a risk-based NNT"
+    rate_plur <- if (rd_pool) "incidence rate differences" else "rate-based (person-time) NNTs"
+    risk_plur <- if (rd_pool) "risk differences" else "risk-based NNTs"
     multi_grp <- length(unique(group_key)) > 1L
     for (g in unique(group_key)) {
       gi <- which(group_key == g & !is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
@@ -3674,13 +4300,13 @@
         gtxt <- if (multi_grp) paste0(" (within group '", .group_label(g), "')") else ""
         for (i in gi) {
           is_rate <- info_used[i] %in% rate_methods
-          this_type <- if (is_rate) "rate-based (person-time)" else "risk-based"
-          other_type <- if (is_rate) "risk-based" else "rate-based (person-time)"
+          this_type  <- if (is_rate) rate_sing else risk_sing
+          other_type <- if (is_rate) risk_plur else rate_plur
           msuf <- .method_suffix(info_used[i])
           f_nnt_mix[[i]] <- paste0(
-            "[DISCORDANT] Mixed NNT types: this row uses ", this_type,
-            " NNT", msuf, ", but other rows use ", other_type,
-            " NNT - these have different units and should not be pooled together", gtxt)
+            "[DISCORDANT] ", head_lbl, ": this row is ", this_type, msuf,
+            ", but other rows are ", other_type,
+            " - these have different units and should not be pooled together", gtxt)
         }
       }
     }
@@ -3688,24 +4314,23 @@
 
   # E6: Cross-row SMD standardizer mixing (change-SD vs raw-score-SD metric)
   #
-  # [INFO], not [DISCORDANT]: DISCORDANT is reserved for a single row whose
-  # several input sources disagree with one another. This is a cross-row
-  # property of the pool -- every row may be individually correct.
+  # [INFO] rather than [DISCORDANT], since DISCORDANT is reserved for a single row
+  # whose several input sources disagree with one another. This is a cross-row
+  # property of the pool, and every row may be individually correct.
   #
-  # An SMD standardized by the CHANGE SD (morris_dz on pre/post or mean-change
-  # data) is not on the same scale as an SMD standardized by a raw-score SD:
-  # under equal pre/post SDs, sd_change = sd_raw * sqrt(2(1-r)), so the two
-  # differ by a factor 1/sqrt(2(1-r)) (they coincide only at r = 0.5). The
-  # Cochrane Handbook (v6, section 10.5.2) advises against combining
-  # change-score SMDs with post-intervention SMDs, "because the SDs used in the
-  # standardization reflect different things". The package's own docs say the
-  # same of d_rm vs d_z.
+  # An SMD standardized by the change SD (morris_dz on pre/post or mean-change data)
+  # is not on the same scale as an SMD standardized by a raw-score SD: under equal
+  # pre/post SDs, sd_change = sd_raw * sqrt(2(1-r)), so the two differ by a factor
+  # 1/sqrt(2(1-r)) and coincide only at r = 0.5. The Cochrane Handbook (v6, section
+  # 10.5.2) advises against combining change-score SMDs with post-intervention SMDs,
+  # "because the SDs used in the standardization reflect different things". The
+  # package's own docs say the same of d_rm against d_z.
   #
-  # Rows are classified by the standardizer their info_used + pre_post_to_smd
-  # imply. Endpoint (means_sd etc.), baseline-SD (bonett) and raw-metric d_rm
-  # rows all live on a raw-score SD, so they are pooled into one "raw-score-SD"
-  # class and mixing them raises NOTHING -- d_rm is precisely the transformation
-  # onto that metric. Only morris_dz rows sit on the change-SD metric.
+  # Rows are classified by the standardizer their info_used and pre_post_to_smd
+  # imply. Endpoint (means_sd and similar), baseline-SD (bonett) and raw-metric d_rm
+  # rows all live on a raw-score SD, so they are pooled into one raw-score-SD class
+  # and mixing them raises nothing; d_rm is precisely the transformation onto that
+  # metric. Only morris_dz rows sit on the change-SD metric.
   f_std_mix <- vector("list", n)
   for (i in seq_len(n)) f_std_mix[[i]] <- character(0)
   smd_measures <- c("d", "g", "dw", "gw")
@@ -3766,14 +4391,14 @@
 
   # E7: paired t/F rows coexisting with pooled-standardizer rows
   #
-  # A paired t (or F) statistic identifies each arm's mean_change / sd_change
-  # ratio but NOT the two arms' SD ratio, so the pooled standardizing SD is not
-  # recoverable: these routes necessarily standardize each arm by its own SD and
-  # subtract. When the user has opted into a pooled standardizer (pool_sd = TRUE)
-  # for the rows that CAN be pooled, the two constructions differ whenever a
-  # study's arm SDs differ. Informational: the paired-t rows are not wrong, they
-  # are simply the best obtainable from the reported statistic. Silent under the
-  # default (pool_sd = FALSE), where every row uses the per-arm construction.
+  # A paired t (or F) statistic identifies each arm's mean_change / sd_change ratio
+  # but not the two arms' SD ratio, so the pooled standardizing SD is not
+  # recoverable: these routes have to standardize each arm by its own SD and
+  # subtract. When the user has opted into a pooled standardizer (pool_sd = TRUE) for
+  # the rows that can be pooled, the two constructions differ whenever a study's arm
+  # SDs differ. Informational, because the paired-t rows are not wrong; they are
+  # simply the best obtainable from the reported statistic. Silent under the default
+  # (pool_sd = FALSE), where every row uses the per-arm construction.
   f_paired_t_mix <- vector("list", n)
   for (i in seq_len(n)) f_paired_t_mix[[i]] <- character(0)
   if (isTRUE(opts$enable_cross_row) && measure %in% smd_measures &&
@@ -3784,11 +4409,11 @@
       "mean_change_sd", "mean_change_se", "mean_change_ci", "mean_change_pval"
     )
     valid_idx <- which(!is.na(info_used) & nchar(info_used) > 0 & !is.na(es))
-    # P25: under pool_sd = TRUE the per-arm fallback contradicts the user's
-    # explicit pooling request even when NO pooled-capable row coexists (a pool
-    # made only of paired t/F rows used to be silent); disclose it either way,
-    # with a message that fits each situation. Scoped WITHIN group_key so the
-    # coexistence is decided among rows that would actually be pooled.
+    # P25: under pool_sd = TRUE the per-arm fallback contradicts the user's explicit
+    # pooling request even when no pooled-capable row coexists, so a pool made only
+    # of paired t/F rows is disclosed too, with a message that fits each situation.
+    # Scoped within group_key, so the coexistence is decided among rows that would
+    # actually be pooled.
     multi_grp <- length(unique(group_key)) > 1L
     for (g in unique(group_key[valid_idx])) {
       gsel <- valid_idx[group_key[valid_idx] == g]
@@ -3821,27 +4446,27 @@
 
   # E8: Cross-row z-transform mixing (Fisher's z vs a variance-stabilising z)
   #
-  # [INFO], not [DISCORDANT], and scoped WITHIN group_key -- the same reasoning as
-  # E6 above: every row may be individually correct, and this is a property of the
-  # pool. E6 is the direct precedent and this check deliberately mirrors it.
+  # [INFO] rather than [DISCORDANT], and scoped within group_key, on the same
+  # reasoning as E6 above: every row may be individually correct, and this is a
+  # property of the pool. E6 is the direct precedent and this check mirrors it.
   #
   # measure = "z" is supposed to hold one quantity so the column can be pooled. It
-  # does not. The correlation and binary families report z = atanh(r); the SMD
-  # family under smd_to_cor = "viechtbauer" (the DEFAULT) reports a
-  # variance-stabilising transform, a different function of the correlation.
-  # Measured on identical data at a point-biserial rho = 0.75: that route reports
-  # z = 1.0925 while atanh() of its own r is 1.7468. A review holding both SMD
-  # studies and correlation studies -- the ordinary case for a z meta-analysis --
-  # mixes the two by default, with no user choice involved.
+  # does not. The correlation and binary families report z = atanh(r), while the SMD
+  # family under smd_to_cor = "viechtbauer", the default, reports a
+  # variance-stabilising transform, a different function of the correlation. Measured
+  # on identical data at a point-biserial rho = 0.75, that route reports z = 1.0925
+  # while atanh() of its own r is 1.7468. A review holding both SMD studies and
+  # correlation studies, which is the ordinary case for a z meta-analysis, mixes the
+  # two by default with no user choice involved.
   #
-  # NOT the same thing as the estimand difference between viechtbauer (biserial)
-  # and lipsey_cooper (point-biserial): that is a documented choice about WHICH
-  # correlation to estimate. This is about the column not being atanh() of the r
-  # column on every route.
+  # This is not the estimand difference between viechtbauer (biserial) and
+  # lipsey_cooper (point-biserial), which is a documented choice about which
+  # correlation to estimate. It is about the column not being atanh() of the r column
+  # on every route.
   #
-  # Rows are classified from `z_transform`, built in convert_df() by asking each
-  # route whether its own z equals atanh() of its own r -- never from a hardcoded
-  # list of route names (roadmap 1.2).
+  # Rows are classified from `z_transform`, built in convert_df() by asking each route
+  # whether its own z equals atanh() of its own r, rather than from a hardcoded list
+  # of route names.
   f_ztrans_mix <- vector("list", n)
   for (i in seq_len(n)) f_ztrans_mix[[i]] <- character(0)
   if (isTRUE(opts$enable_cross_row) && measure == "z" &&
@@ -3882,7 +4507,7 @@
   # suppressed with E1-E3 when all rows show min ~ -max
   f_direction <- vector("list", n)
   for (i in seq_len(n)) f_direction[[i]] <- character(0)
-  signed_measures <- c("d", "g", "dw", "gw", "md", "mdw", "r", "z",
+  signed_measures <- c("d", "g", "dw", "gw", "md", "mdw", "r", "z", "rp", "zp",
                        "logor", "logrr", "logirr", "loghr")
   log_measures_e5 <- c("logor", "logrr", "logirr", "loghr")
   on_exp_scale_e5 <- isTRUE(exp) && measure %in% log_measures_e5

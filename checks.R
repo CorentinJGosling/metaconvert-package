@@ -25,7 +25,7 @@ PKG_ROOT <- "c:/Users/coren/Documents/sideprojet/metaConvert"
 ## References au 2026-08-26 (branche dev/2.1.0). Mets-les a jour quand elles bougent
 ## POUR UNE RAISON QUE TU PEUX EXPLIQUER -- un total qui BAISSE sans echec signifie que
 ## des assertions ont cesse de s'executer, pas que tout va bien.
-BASELINE <- c(main = 3859L, archived = 7202L, sims = 792L)
+BASELINE <- c(main = 4538L, archived = 7223L, sims = 957L)
 
 
 .report <- function(label, r, key = NULL) {

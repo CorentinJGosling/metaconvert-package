@@ -1,3 +1,26 @@
+# A ratio effect size (odds ratio, risk ratio) must be strictly positive: it is a ratio
+# of two probabilities or of two odds, so zero and negative values do not exist. Anything
+# else is neutralised to NA. NA in, NA out.
+#
+# This lives beside .positive_or_na() / .baseline_risk_or_na() in spirit (see
+# R/internal_guards.R for the contract) and is applied at every entry point that already
+# guards baseline_risk, for the same reason: the log-scale outputs self-blank (log of a
+# non-positive number is NaN, so logor/d/g/r/z all disappear), but the Grant (2014) risk
+# difference block is pure arithmetic in `or` and stays finite. A log OR typed into the
+# adjacent `or` column -- negative for any protective effect -- therefore returns a
+# fabricated risk difference with a NEGATIVE rd_se/nnt_se and a transposed interval:
+#   es_from_or_se(or = -0.7, logor_se = 0.2, baseline_risk = 0.3)
+#     -> rd = 0.729, rd_se = -0.122, nnt = 1.373, rd_ci_lo = 0.969 > rd_ci_up = 0.489
+#   es_from_rr_se(rr = -0.5, logrr_se = 0.2, baseline_risk = 0.3)
+#     -> rd = 0.45,  rd_se = -0.03
+# and or = 0 is worse still, giving rd = 0.30 with rd_se exactly 0, an infinite
+# inverse-variance weight. The test is `<= 0` rather than the `< 0` used by
+# .positive_columns() precisely because it must catch that zero.
+.ratio_or_na <- function(x) {
+  if (is.null(x) || length(x) == 0) return(x)
+  ifelse(!is.na(x) & (!is.finite(x) | x <= 0), NA_real_, x)
+}
+
 #' Convert an odds ratio value and its standard error into several effect size measures
 #'
 #' @param or odds ratio value
@@ -8,7 +31,7 @@
 #' @param n_exp number of participants in the exposed group
 #' @param n_nexp number of participants in the non-exposed group
 #' @param n_sample total number of participants in the sample
-#' @param baseline_risk proportion of cases in the non-exposed group
+#' @param baseline_risk proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument, and for the risk difference and the NNT). It is never derived from other columns.
 #' @param small_margin_prop smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
@@ -63,15 +86,15 @@
 #' than searched.* All four margins together determine the table exactly: the odds ratio
 #' fixes it through a quadratic, and the reported standard error is not consulted at all.
 #' So supplying \code{n_cases} (or \code{n_controls}, or \code{baseline_risk}) alongside
-#' \code{n_exp}/\code{n_nexp} -- or \code{n_exp}/\code{n_nexp} alongside
-#' \code{n_cases}/\code{n_controls} -- makes the reconstruction exact instead of
+#' \code{n_exp}/\code{n_nexp}, or \code{n_exp}/\code{n_nexp} alongside
+#' \code{n_cases}/\code{n_controls}, makes the reconstruction exact instead of
 #' approximate, and is worth doing whenever the source reports it.
 #'
-#' *(ii) When the two supplied margins are EQUAL, that second margin is required, not
-#' merely helpful.* Rotating a 2x2 table 180 degrees leaves the odds ratio and its
+#' *(ii) When the two supplied margins are equal, that second margin is required rather
+#' than merely helpful.* Rotating a 2x2 table 180 degrees leaves the odds ratio and its
 #' standard error unchanged while swapping the two margins, so at
 #' \code{n_exp == n_nexp} (respectively \code{n_cases == n_controls}) the rotated table
-#' is equally compatible with everything reported -- yet it implies a different risk
+#' is equally compatible with everything reported, yet it implies a different risk
 #' ratio. The search is then exactly tied, and the winner is decided by enumeration
 #' order rather than by the data. In that configuration, and only there, these two
 #' methods now return \code{NA} for the RR with a warning naming the column that would
@@ -260,6 +283,10 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   # and positive while returning a negative standard error and a transposed interval.
   # See R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on or <= 0,
+  # but the Grant risk-difference block does not: it returns a fabricated rd with a
+  # negative rd_se and a transposed CI (and rd_se exactly 0 at or = 0).
+  or <- .ratio_or_na(or)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -374,8 +401,9 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
     rr_ci_up <- .mapply_col(res_rr, 4)
     es$logrr[nn_miss] <- ifelse(reverse_or[nn_miss], -rr_es, rr_es)
     es$logrr_se[nn_miss] <- rr_se
-    # On reverse: negate AND swap the CI bounds (new_lo = -old_up, new_up = -old_lo);
-    # swapping alone left a wrong-signed, inverted interval that did not bracket -logrr.
+    # On reverse, negate and swap the CI bounds (new_lo = -old_up, new_up = -old_lo).
+    # Swapping alone leaves a wrong-signed, inverted interval that does not bracket
+    # -logrr.
     es$logrr_ci_lo[nn_miss] <- ifelse(reverse_or[nn_miss], -rr_ci_up, rr_ci_lo)
     es$logrr_ci_up[nn_miss] <- ifelse(reverse_or[nn_miss], -rr_ci_lo, rr_ci_up)
   }
@@ -385,34 +413,34 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   #
   # Bonett & Price (2005, p. 216) define pmin as "the smallest marginal proportion" of
   # the 2x2 table, i.e. min(p1+, p2+, p+1, p+2). Those four margins are exactly
-  # n_exp, n_nexp, n_cases and n_controls over n_sample. The two margin PAIRS
+  # n_exp, n_nexp, n_cases and n_controls over n_sample. The two margin pairs
   # (n_exp/n_nexp and n_cases/n_controls) each sum to n_sample, so n_sample plus one
-  # member of each pair determines the whole table -- there are four equivalent ways to
+  # member of each pair determines the whole table: there are four equivalent ways to
   # describe it, and all four must work.
   #
-  # The back-fill below is therefore SYMMETRIC. An earlier version derived only
-  # n_nexp from n_exp and n_controls from n_cases, so a user who entered the other
-  # member of either pair fell out of the gate and silently kept the lipsey_cooper
-  # value: for one table (n_exp 40, n_nexp 60, n_cases 30, n_controls 70, n_sample 100,
-  # or 2.5, logor_se 0.2) only n_exp + n_cases gave the bonett r = 0.326978458193; the
-  # other three gave 0.243943602135 / 0.243470956833 / 0.243943602135, bit-identical to
+  # The back-fill below is therefore symmetric. Deriving only n_nexp from n_exp and
+  # n_controls from n_cases would let a user who entered the other member of either
+  # pair fall out of the gate and keep the lipsey_cooper value instead. For one table
+  # (n_exp 40, n_nexp 60, n_cases 30, n_controls 70, n_sample 100, or 2.5,
+  # logor_se 0.2) only n_exp + n_cases gave the bonett r = 0.326978458193; the other
+  # three gave 0.243943602135 / 0.243470956833 / 0.243943602135, bit-identical to
   # or_to_cor = "lipsey_cooper" on the same inputs.
   #
   # n_exp and n_cases are then the ones .or_to_cor() consumes (its c formula names them
   # directly), so the back-filled values, not the raw arguments, go into dat_cor.
   #
-  # Without this, small_margin_prop was a user-entered column with no derivation
-  # anywhere, so a blank cell -- the normal case -- dropped the row out of the gate and
-  # silently left the lipsey_cooper r computed by .es_from_d() above in place. Since
-  # convert_df() defaults to or_to_cor = "bonett", the default method usually did not
-  # run: or = 2, logor_se = 0.2, n_exp = n_nexp = 50, n_cases = 40, n_controls = 60
-  # returned r = 0.1876806337 (lipsey_cooper) where bonett gives 0.2586008221.
-  # Worse, the fall-through was not even stable: because the block below NA's every
-  # non-lipsey_cooper row before refilling only the gated ones, a blank-pmin row
-  # returned NA rather than 0.1876806337 whenever some OTHER row in the same data
-  # frame did carry small_margin_prop -- so a row's own ES depended on another row.
+  # Without this, small_margin_prop is a user-entered column with no derivation
+  # anywhere, so a blank cell, which is the normal case, drops the row out of the gate
+  # and leaves the lipsey_cooper r computed by .es_from_d() above in place. Since
+  # convert_df() defaults to or_to_cor = "bonett", the default method would then
+  # usually not run: or = 2, logor_se = 0.2, n_exp = n_nexp = 50, n_cases = 40,
+  # n_controls = 60 returns r = 0.1876806337 (lipsey_cooper) where bonett gives
+  # 0.2586008221. The fall-through is not even stable, because the block below NA's
+  # every non-lipsey_cooper row before refilling only the gated ones: a blank-pmin row
+  # returns NA rather than 0.1876806337 whenever some other row in the same data frame
+  # does carry small_margin_prop, so a row's own ES would depend on another row.
   #
-  # Margins are taken UNCORRECTED (no +0.5 per cell). That reproduces all three of
+  # Margins are taken uncorrected, with no +0.5 per cell. That reproduces all three of
   # Bonett & Price's worked examples as printed: Ex1 f=(203,186,167,374) -> .333/.048/
   # (.237,.424); Ex2 f=(4,6,1,89) -> .831/.108/(.488,.956); Ex3 f=(143,52,41,164) ->
   # .741/.0446/(.641,.817). The paper's own prose ("computed ... after 0.5 has been
@@ -460,13 +488,13 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 
   # A row that requested a conversion other than "lipsey_cooper" but does not carry that
   # method's inputs keeps the "lipsey_cooper" R/Z computed earlier, and the substitution
-  # is reported. Such a row used to be blanked to NA, which had two consequences. First,
-  # activating the small_margin_prop derivation switched the blanking on for the whole
-  # call, so margin-poor rows that the previous release estimated came back as NA and the
-  # study was lost. Second, the decision was taken INSIDE the `if (length(nn_miss) != 0)`
-  # block, i.e. only when some OTHER row qualified, so one and the same row returned a
+  # is reported. Blanking such a row to NA has two consequences. First, activating the
+  # small_margin_prop derivation switches the blanking on for the whole call, so
+  # margin-poor rows that would otherwise be estimated come back as NA and the study is
+  # lost. Second, taking the decision inside the `if (length(nn_miss) != 0)` block means
+  # it applies only when some other row qualified, so one and the same row returns a
   # number when called alone and NA when called beside an eligible peer.
-  # Note this is read from the RECYCLED column, not the raw argument: with a scalar
+  # Note this is read from the recycled column, not the raw argument: with a scalar
   # or_to_cor, which(or_to_cor != "lipsey_cooper") has length 1 and names only row 1.
   # Restricted to rows that actually have an odds ratio to convert: a row with no OR has
   # no correlation by any method, so it has not "fallen back" to anything.
@@ -487,9 +515,9 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   }
 
   # Both the eligible rows and the fallback rows assign the same eight columns, so the
-  # assignment is written once. On reverse: negate AND swap each CI (new_lo = -old_up,
-  # new_up = -old_lo). For r, tanh is odd so negate-and-swap of the r bounds is correct
-  # even for the asymmetric, z-back-transformed r interval. Swapping alone left
+  # assignment is written once. On reverse, negate and swap each CI (new_lo = -old_up,
+  # new_up = -old_lo). For r, tanh is odd, so negate-and-swap of the r bounds is correct
+  # even for the asymmetric, z-back-transformed r interval. Swapping alone leaves
   # inverted, wrong-signed bounds.
   .assign_cor <- function(es, idx, res) {
     v <- lapply(1:8, function(j) .mapply_col(res, j))
@@ -518,24 +546,25 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
     es <- .assign_cor(es, nn_miss, res_cor)
   }
 
-  # A row that cannot use the conversion it asked for still gets ONE, and WHICH one is a
-  # real choice rather than a leftover. It used to keep the "lipsey_cooper" R/Z that
-  # .es_from_d() had already computed, purely because that value happened to be sitting
-  # there. Measured against the tetrachoric correlation of the underlying table over 1176
-  # coherent 2x2 tables (OR 1.25-8, N 80-1000, 49 margin splits), that is the WORST of the
-  # four options: mean |error| 0.0950, against digby 0.0169, pearson 0.0271, bonett
-  # 0.0084. digby is closer in 1160 of the 1176 cells (98.6%) and wins at every OR and
-  # every N on average; the 16 cells it loses are all at OR >= 5 and it loses by little.
+  # A row that cannot use the conversion it asked for still gets one, and which one is a
+  # real choice rather than a leftover. Keeping the "lipsey_cooper" R/Z that
+  # .es_from_d() had already computed, purely because that value happens to be sitting
+  # there, is the worst of the four options. Measured against the tetrachoric
+  # correlation of the underlying table over 1176 coherent 2x2 tables (OR 1.25-8,
+  # N 80-1000, 49 margin splits): mean |error| 0.0950, against digby 0.0169, pearson
+  # 0.0271 and bonett 0.0084. digby is closer in 1160 of the 1176 cells (98.6%) and
+  # wins at every OR and every N on average; the 16 cells it loses are all at OR >= 5,
+  # and it loses by little.
   #
-  # digby also needs STRICTLY LESS than what it replaces. Its coefficient c = 3/4 is a
-  # constant, so it reads no margins at all, whereas lipsey_cooper needs the arm sizes and
-  # returns NA without them. Measured on `or` + `logor_se` alone: digby 0.2542,
-  # lipsey_cooper NA. So this widens what a margin-poor row can produce instead of
-  # narrowing it -- rows that used to come back empty now carry an estimate.
+  # digby also needs strictly less than what it replaces. Its coefficient c = 3/4 is a
+  # constant, so it reads no margins at all, whereas lipsey_cooper needs the arm sizes
+  # and returns NA without them. Measured on `or` + `logor_se` alone: digby 0.2542,
+  # lipsey_cooper NA. So this widens what a margin-poor row can produce rather than
+  # narrowing it, and rows that would otherwise come back empty carry an estimate.
   #
   # A user who explicitly asks for "lipsey_cooper" is untouched: such rows are excluded
   # from `fallback` by construction, so the rule "do not remove what the user asked for"
-  # (roadmap 1.1) still holds.
+  # still holds.
   if (length(fallback) != 0) {
     res_fb <- .mapply_memo(.or_to_cor,
       or = dat_cor$or[fallback],
@@ -553,10 +582,24 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   treatment_risk <- (or * baseline_risk) / (1 - baseline_risk + or * baseline_risk)
   rd <- baseline_risk - treatment_risk
 
-  es$rd <- ifelse(reverse_or, -rd, rd)
   # delta method
   drd_dor <- baseline_risk * (1 - baseline_risk) / (1 - baseline_risk + or * baseline_risk)^2
   rd_se <- abs(drd_dor) * or * logor_se
+
+  # A derived risk-difference SE of exactly 0 is a zero sampling variance -- an infinite
+  # inverse-variance weight, or an rma() abort. It arises at baseline_risk = 0, where
+  # drd_dor = BR(1 - BR)/denom^2 = 0. Given the delta method own assumption that
+  # baseline_risk is a known constant, rd = 0 IS the correct conditional point estimate
+  # there; what is wrong is shipping it as a poolable row, so the row declines both.
+  # The guard is keyed on the SE and never on rd itself: a genuinely null risk
+  # difference has rd = 0 with a perfectly good standard error and must survive.
+  # baseline_risk = 0 stays legal on the log scale (the rare-disease limit, where the
+  # grant conversions become the identity). See R/internal_guards.R.
+  degenerate_rd <- !is.na(rd_se) & rd_se <= 0
+  rd_se <- .positive_or_na(rd_se)
+  rd <- ifelse(degenerate_rd, NA_real_, rd)
+
+  es$rd <- ifelse(reverse_or, -rd, rd)
   es$rd_se <- rd_se
   es$rd_ci_lo <- es$rd - qnorm(.975) * rd_se
   es$rd_ci_up <- es$rd + qnorm(.975) * rd_se
@@ -566,7 +609,9 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
   es$nnt_se <- ifelse(rd == 0, NA, rd_se / rd^2)
   rd_ci_lo_raw <- rd - qnorm(.975) * rd_se
   rd_ci_up_raw <- rd + qnorm(.975) * rd_se
-  crosses_zero <- (rd_ci_lo_raw < 0 & rd_ci_up_raw > 0) | rd == 0
+  # Non-strict: a bound landing exactly on 0 is still the Altman discontinuity, and
+  # the reciprocal of +0 is a literal Inf where the neighbouring input returns NA.
+  crosses_zero <- (rd_ci_lo_raw <= 0 & rd_ci_up_raw >= 0) | rd == 0
   es$nnt_ci_lo <- ifelse(crosses_zero, NA,
                           ifelse(reverse_or, -1 / rd_ci_lo_raw, 1 / rd_ci_up_raw))
   es$nnt_ci_up <- ifelse(crosses_zero, NA,
@@ -585,7 +630,7 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' @param n_exp number of participants in the exposed group
 #' @param n_nexp number of participants in the non-exposed group
 #' @param n_sample total number of participants in the sample
-#' @param baseline_risk proportion of cases in the non-exposed group (n_cases_nexp / n_nexp is used when missing)
+#' @param baseline_risk proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument, and for the risk difference and the NNT; also identifies the \code{or_to_rr = "metaumbrella_exp"} reconstruction, which is otherwise non-identified when \code{n_exp == n_nexp}). It is never derived from other columns.
 #' @param small_margin_prop smallest margin proportion of the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_or a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
@@ -642,8 +687,8 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' sample size, the median ratio of imputed to true SE is about **1.4**, and it is not
 #' a constant offset: because the flat enumeration weight puts \eqn{1/(n\_cases - 1)}
 #' on the table with one case in the exposed arm, whose \eqn{1/a} term is 1, the
-#' inflation **grows with study size** -- roughly 1.2x in the smallest studies to 2.0x
-#' in the largest, at fixed exposure prevalence.
+#' inflation **grows with study size**, from roughly 1.2x in the smallest studies to
+#' 2.0x in the largest, at fixed exposure prevalence.
 #'
 #' Two consequences worth knowing. An SE 1.4x too wide gives that study about half its
 #' correct inverse-variance weight; and because the inflation is size-dependent rather
@@ -654,7 +699,7 @@ es_from_or_se <- function(or, logor, logor_se, baseline_risk,
 #' \code{\link{es_from_or_se}()}, \code{\link{es_from_or_ci}()} or
 #' \code{\link{es_from_or_pval}()} whenever the source reports a standard error, a
 #' confidence interval or a p-value. \code{\link{convert_df}()} does this
-#' automatically -- when a row reports an SE or a CI, this route is skipped entirely
+#' automatically: when a row reports an SE or a CI, this route is skipped entirely
 #' rather than contributing a dominated second estimate.
 #'
 #' @examples
@@ -680,6 +725,10 @@ es_from_or <- function(or, logor, n_cases, n_controls, n_sample,
   # and positive while returning a negative standard error and a transposed interval.
   # See R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on or <= 0,
+  # but the Grant risk-difference block does not: it returns a fabricated rd with a
+  # negative rd_se and a transposed CI (and rd_se exactly 0 at or = 0).
+  or <- .ratio_or_na(or)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -794,6 +843,10 @@ es_from_or_ci <- function(or, or_ci_lo, or_ci_up, logor, logor_ci_lo, logor_ci_u
   # and positive while returning a negative standard error and a transposed interval.
   # See R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on or <= 0,
+  # but the Grant risk-difference block does not: it returns a fabricated rd with a
+  # negative rd_se and a transposed CI (and rd_se exactly 0 at or = 0).
+  or <- .ratio_or_na(or)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -917,6 +970,10 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
   # and positive while returning a negative standard error and a transposed interval.
   # See R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on or <= 0,
+  # but the Grant risk-difference block does not: it returns a fabricated rd with a
+  # negative rd_se and a transposed CI (and rd_se exactly 0 at or = 0).
+  or <- .ratio_or_na(or)
   if (missing(small_margin_prop)) {
     small_margin_prop <- rep(NA_real_, length(or))
   }
@@ -972,7 +1029,7 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
 #' @param n_exp number of participants in the exposed group
 #' @param n_nexp number of participants in the non-exposed group
 #' @param n_sample total number of participants in the sample
-#' @param baseline_risk proportion of cases in the non-exposed group
+#' @param baseline_risk proportion of cases in the non-exposed group (required for the \code{or_to_rr = "grant"} argument, and for the risk difference and the NNT). It is never derived from other columns.
 #' @param small_margin_prop smallest margin proportion of cases/events in the underlying 2x2 table (a proportion in (0, 0.5])
 #' @param reverse_logreg_t a logical value indicating whether the direction of the generated effect sizes should be flipped.
 #' @param or_to_rr formula used to convert the \code{or} value into a risk ratio (see details).
@@ -1043,6 +1100,11 @@ es_from_logreg_t <- function(or, logor, rr, logrr, logreg_t,
   # and positive while returning a negative standard error and a transposed interval.
   # See R/internal_guards.R.
   baseline_risk <- .baseline_risk_or_na(baseline_risk)
+  # A ratio must be strictly positive. The log-scale outputs self-blank on or <= 0,
+  # but the Grant risk-difference block does not: it returns a fabricated rd with a
+  # negative rd_se and a transposed CI (and rd_se exactly 0 at or = 0).
+  or <- .ratio_or_na(or)
+  rr <- .ratio_or_na(rr)
   if (missing(small_margin_prop)) small_margin_prop <- rep(NA_real_, len)
   if (missing(n_exp)) n_exp <- rep(NA_real_, len)
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, len)

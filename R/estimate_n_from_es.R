@@ -30,16 +30,13 @@
   return(data.frame(n_cases_exp, time_exp, n_cases_nexp, time_nexp))
 }
 
-# NB two further helpers -- .estimate_n_from_or_and_n_cases() and
-# .estimate_n_from_or_and_n_exp() -- were defined here as well until they were
-# removed. They were SHADOWED DEAD CODE: identically-named definitions live in
-# R/internal_multiple_formulas.R, and because DESCRIPTION has no Collate field the
-# files are sourced alphabetically, so internal_multiple_formulas.R ("i") overwrote
-# this file ("e"). Patching the copies here had no effect, and by the end they had
-# drifted: the live versions solve the 2x2 exactly from a second margin, while these
-# still only searched by matching the reported variance. Edit the live copies.
+# Do not define .estimate_n_from_or_and_n_cases() or .estimate_n_from_or_and_n_exp()
+# here. The live definitions are in R/internal_multiple_formulas.R, and because
+# DESCRIPTION has no Collate field the files are sourced alphabetically, so
+# internal_multiple_formulas.R ("i") would overwrite this file ("e"). A copy here is
+# dead code that looks live: patching it has no effect, and the two drift apart.
 #
-# The two helpers below are NOT duplicated and ARE live -- do not remove this file.
+# The two helpers below are not duplicated and are live, so do not remove this file.
 
 #' Estimate the number of cases and controls exposed and non-exposed given the risk ratio
 #'
@@ -86,7 +83,7 @@
   n_cases_exp_sim <- append(n_cases_exp_sim1, n_cases_exp_sim2)
 
   some_zero <- n_cases_exp_sim == 0 | n_controls_exp_sim == 0 | n_cases_nexp_sim == 0 | n_controls_nexp_sim == 0
-  # var(log RR) = 1/a - 1/n1 + 1/c - 1/n2 (arm totals SUBTRACTED); mirrors the fixed
+  # var(log RR) = 1/a - 1/n1 + 1/c - 1/n2, with the arm totals subtracted; mirrors the
   # live copy .metaumbrella_rr_se_to_or in R/internal_multiple_formulas.R. This helper
   # is currently unused, but is kept in sync so a future load-order change cannot
   # silently reintroduce the added-sign bug. (Also drops the old unconditional

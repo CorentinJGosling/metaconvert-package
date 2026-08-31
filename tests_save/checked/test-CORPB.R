@@ -44,8 +44,10 @@ test_that("rpb to Z (viecht)", {
     smd_to_cor = "viechtbauer"
   ), digits = 11)
 
-  expect_equal(unique(es.mcv_r$info_used_crude), "pt_bis_r")
-  expect_equal(unique(es.mcv_mean$info_used_crude), "means_sd")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_r$info_used_crude, "pt_bis_r")
+  # z declined on an out-of-range biserial r -- see helper-z-declined.R
+  expect_route(es.mcv_mean$info_used_crude, "means_sd")
   expect_equal(es.mcv_r$es_crude, es.mcv_mean$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_r$se_crude, es.mcv_mean$se_crude, tolerance = 1e-10)
 })
@@ -130,10 +132,10 @@ test_that("point-bis pval - Reverse", {
                                        smd_to_cor = "viechtbauer", measure = "z"), digits = 11)
   es.mcv_t_z2_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "pt_bis_r_pval",
                                        smd_to_cor = "lipsey_cooper",  measure = "z"), digits = 11)
-  expect_true(all(c(es.mcv_t_d$info_used_crude, es.mcv_t_g$info_used_crude,
+  expect_route(c(es.mcv_t_d$info_used_crude, es.mcv_t_g$info_used_crude,
                     es.mcv_t_or$info_used_crude, es.mcv_t_r1$info_used_crude,
                     es.mcv_t_r2$info_used_crude, es.mcv_t_z1$info_used_crude,
-                    es.mcv_t_z2$info_used_crude) == "pt_bis_r_pval"))
+                    es.mcv_t_z2$info_used_crude), "pt_bis_r_pval")
 
   expect_equal(es.mcv_t_d$es_crude, -es.mcv_t_d_rv$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_t_d$se_crude, es.mcv_t_d_rv$se_crude, tolerance = 1e-10)
@@ -192,10 +194,10 @@ test_that("point-bis - Reverse", {
                                        smd_to_cor = "viechtbauer", measure = "z"), digits = 11)
   es.mcv_t_z2_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "pt_bis_r",
                                        smd_to_cor = "lipsey_cooper",  measure = "z"), digits = 11)
-  expect_true(all(c(es.mcv_t_d$info_used_crude, es.mcv_t_g$info_used_crude,
+  expect_route(c(es.mcv_t_d$info_used_crude, es.mcv_t_g$info_used_crude,
                     es.mcv_t_or$info_used_crude, es.mcv_t_r1$info_used_crude,
                     es.mcv_t_r2$info_used_crude, es.mcv_t_z1$info_used_crude,
-                    es.mcv_t_z2$info_used_crude) == "pt_bis_r"))
+                    es.mcv_t_z2$info_used_crude), "pt_bis_r")
 
   expect_equal(es.mcv_t_d$es_crude, -es.mcv_t_d_rv$es_crude, tolerance = 1e-10)
   expect_equal(es.mcv_t_d$se_crude, es.mcv_t_d_rv$se_crude, tolerance = 1e-10)

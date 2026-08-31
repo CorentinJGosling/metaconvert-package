@@ -7,8 +7,11 @@
 #' useful to any researcher interested in estimating an effect size.
 #'
 #' # Overview of the package
-#' To visualize all the types of input data that can be used to estimate the 22 effect size measures available
-#' in metaConvert, you can use the \code{\link{see_input_data}()} function.
+#' To visualize the types of input data that can be used to estimate an effect size measure, you can use the
+#' \code{\link{see_input_data}()} function. It covers the measures that have raw-data estimation routes, and
+#' rejects by name the ones reachable only through other measures or through user input (the within-group
+#' measures, the partial correlations, and the log-scale aliases). For the complete set of columns across all
+#' measures, use \code{data_extraction_sheet(measure = "all")} instead.
 #'
 #' # Estimate effect sizes
 #' To automatically estimate effect sizes directly from a dataset, you can use the \code{\link{convert_df}()} function.

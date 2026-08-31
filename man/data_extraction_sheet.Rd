@@ -5,8 +5,9 @@
 \title{Data extraction sheet generator}
 \usage{
 data_extraction_sheet(
-  measure = c("d", "g", "md", "dw", "gw", "mdw", "or", "rr", "nnt", "rd", "r", "z",
-    "logvr", "logcvr", "irr", "prop"),
+  measure = c("d", "g", "md", "dw", "gw", "mdw", "r", "z", "rp", "zp", "or", "rr", "irr",
+    "hr", "logor", "logrr", "logirr", "loghr", "logvr", "logcvr", "nnt", "rd", "prop",
+    "alpha", "omega", "icc", "all"),
   type_of_measure = c("natural", "natural+converted"),
   name = "mcv_data_extraction",
   extension = c("data.frame", ".txt", ".csv", ".xlsx"),

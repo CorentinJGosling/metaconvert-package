@@ -19,7 +19,7 @@
 #'   margins (with balanced exposure, max \eqn{|\phi|} is 1.00 at a 50% event rate but
 #'   0.33 at 10% and 0.10 at 1%). Two studies of the same association but different event
 #'   rates therefore report different phi values, so pooling phi manufactures
-#'   heterogeneity that is pure margin artefact -- at a fixed latent correlation of 0.40,
+#'   heterogeneity that is pure margin artefact: at a fixed latent correlation of 0.40,
 #'   \eqn{I^2} for pooled phi rises from 14% to 88% as the primary studies get *larger*,
 #'   because the between-study variance is pinned by the margins while the within-study
 #'   variance falls as \eqn{1/n}. Jacobs & Viechtbauer (2017) make the same point.
@@ -43,7 +43,7 @@
 #'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
 #'   which to prefer, so this is a deliberate choice and not a technical detail.
 #'   \itemize{
-#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's OWN SD and the two
+#'     \item \code{FALSE} (default): each arm's change is standardized by that arm's own SD and the two
 #'       within-group values are subtracted, their variances adding because the arms are independent. This
 #'       is Morris's (2008) \eqn{d_{ppc1}}, from Becker (1988). It makes no assumption that the arms' true
 #'       SDs are equal, and Viechtbauer (see the metafor-project Morris 2008 page) describes it as the more
@@ -55,12 +55,13 @@
 #' @param r_pre_post pre-post correlation across the two groups (use this argument only if the precise correlation in each group is unknown). Note that when this correlation is defaulted rather than reported, the pre/post standard errors and confidence intervals are unreliable: at a true correlation of 0.3 with the default 0.8, the reported pre/post variance is about 68% too small (95% CI coverage ~0.75). Supply \code{r_pre_post_exp}/\code{r_pre_post_nexp} when available, or run a sensitivity analysis over plausible values.
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient
 #'   correlation. Two things differ between the options, and they are independent.
-#'   (1) WHICH CORRELATION: "viechtbauer" (default) estimates the biserial correlation,
-#'   "lipsey_cooper" the point-biserial. (2) WHICH TRANSFORM lands in the \code{z}
-#'   column when \code{measure = "z"}: "lipsey_cooper" reports Fisher's z,
-#'   \code{atanh(r)}, whereas "viechtbauer" reports a VARIANCE-STABILISING transform,
-#'   which is a different function of the correlation -- at a point-biserial
-#'   \eqn{\rho = 0.75} it returns 1.0925 where \code{atanh()} of its own r is 1.7468.
+#'   First, which correlation is estimated: "viechtbauer" (the default) estimates the
+#'   biserial correlation and "lipsey_cooper" the point-biserial. Second, which
+#'   transform lands in the \code{z} column when \code{measure = "z"}: "lipsey_cooper"
+#'   reports Fisher's z, \code{atanh(r)}, whereas "viechtbauer" reports a
+#'   variance-stabilising transform, a different function of the correlation. At a
+#'   point-biserial \eqn{\rho = 0.75} it returns 1.0925 where \code{atanh()} of its own
+#'   r is 1.7468.
 #'   Every other family (\code{pearson_r}, \code{fisher_z}, the OR routes, 2x2) reports
 #'   Fisher's z. So under the default a \code{measure = "z"} review holding both SMD
 #'   studies and correlation studies pools two transforms; flag E8 reports it, and
@@ -70,14 +71,16 @@
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
 #' @param prop_to_es method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).
 #' @param alpha_to_es method used to compute the effect size from Cronbach's alpha. One of "bonett" (default, the variance-stabilising log(1 - alpha) transform), "raw", or "hakstian_whalen" (the cube-root transform Rodriguez & Maeda (2006) recommend and most published reliability-generalization syntheses use; stored in metafor's increasing orientation, matching measure = "AHW"). See \code{\link{es_from_cronbach_alpha}}.
-#' @param omega_to_es method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no PUBLISHED sampling variance in (n, k). The alpha formula is numerically close under a correct unidimensional normal model but 8-26% anti-conservative under ordinal items, mild misspecification, or a hierarchical omega, so the standard error is taken from the reported omega_se or confidence interval instead.
+#' @param omega_to_es method used to compute the effect size from McDonald's omega. One of "bonett" (default), "raw" or "hakstian_whalen" (see \code{\link{es_from_omega}}). Unlike alpha, omega has no published sampling variance in (n, k), so by default the standard error is taken from the reported omega_se or confidence interval; see \code{omega_se_source} to borrow alpha's closed form.
+#' @param alpha_se_source where the standard error of Cronbach's alpha comes from when the study reported neither an SE nor a confidence interval. "closed_form" (default, the pre-existing behaviour) uses the (n, k) formula belonging to the selected \code{alpha_to_es} scale; "reported" refuses it and leaves \code{alpha_se = NA}, so the row stays visible but is left out of the pool. The closed form inherits Bonett's multivariate-normality assumption. Measured on ordinary Likert items it is well calibrated (se_ratio 0.95-1.06, 95% coverage .94-.96), but under a severe floor effect it is ~22% too small (coverage .89) and on dichotomous items ~37% too small (coverage .78, and NOT improving with n). Flag V44 identifies the affected rows from \code{scale_mean} / \code{n_response_categories} / \code{scale_min}.
+#' @param omega_se_source where the standard error of McDonald's omega comes from when the study reported neither an SE nor a confidence interval. "reported" (default) leaves \code{omega_se = NA}, so the row stays visible but unpooled. "closed_form" borrows alpha's (n, k) formula on the selected \code{omega_to_es} scale - which is what every published omega reliability generalisation does, and what metafor's \code{measure = "ABT"} computes, so it is required to reproduce that literature. It is opt-in because switching it on makes previously unpooled rows enter the pool. Simulation support (\code{simulations/studies/11_reliability_se.R}) is for one narrow claim - the closed form is no more wrong for omega than for alpha - and NOT for the broader claim that it is safe for reliability generalisation, where estimator mixture moves omega_h by far more than any variance question.
 #' @param icc_to_es method used to compute the effect size from an ICC. Must be either "bonett" or "raw" (see \code{\link{es_from_icc}}).
 #' @param icc_agreement_se what to do about the closed-form standard error of an absolute-agreement ICC (ICC(2,1)) - which is the default \code{icc_type}, and therefore also what an absent one resolves to. One of:
 #' \itemize{
 #'  \item \bold{"compute"} (default): emit it. This is the pre-existing behaviour and is accurate when the raters are exchangeable (negligible rater variance).
-#'  \item \bold{"drop"}: return \code{NA} for it, so the row is left out of the pool by \code{summary()} instead of entering it over-weighted. A standard error the STUDY reported (\code{icc_se}, or \code{icc_ci_lo}/\code{icc_ci_up}) is kept either way - the option targets the approximation, not the row.
+#'  \item \bold{"drop"}: return \code{NA} for it, so the row is left out of the pool by \code{summary()} instead of entering it over-weighted. A standard error the study itself reported (\code{icc_se}, or \code{icc_ci_lo}/\code{icc_ci_up}) is kept either way, since the option targets the approximation rather than the row.
 #' }
-#' The closed-form standard error is a one-way approximation assuming negligible between-rater variance. With real rater variance its measured 95% CI coverage is 0.82 at n = 20, 0.67 at n = 50, 0.32 at n = 200 and 0.14 at n = 1000: it degrades as studies get BIGGER, because ICC(2,1) inherits the between-rater mean square (k - 1 df) while the reported standard error shrinks like \eqn{1/\sqrt{n}}, so such a row can carry up to 50x too much weight. Agreement rows are flagged by V31 whichever option is used.
+#' The closed-form standard error is a one-way approximation assuming negligible between-rater variance. With real rater variance its measured 95% CI coverage is 0.82 at n = 20, 0.67 at n = 50, 0.32 at n = 200 and 0.14 at n = 1000: it degrades as studies get bigger, because ICC(2,1) inherits the between-rater mean square (k - 1 df) while the reported standard error shrinks like \eqn{1/\sqrt{n}}, so such a row can carry up to 50x too much weight. Agreement rows are flagged by V31 whichever option is used.
 #' The default is \code{"compute"} in 2.1.0 for backward compatibility and is expected to become \code{"drop"} in a future release; set it explicitly if you care which you get.
 #' Consistency ICCs (ICC(3,1)) are unaffected either way: for them the same formula is exact at leading order.
 #' @param yates_chisq a logical value indicating whether the Chi square has been performed using Yates' correction for continuity. Can also be given as a column of the dataset when studies differ (rows left NA use this argument).
@@ -200,10 +203,18 @@
 #' #### Adjusted SMD or MD (\code{measure=c("d", "g", "md")} and \code{selection_auto="adjusted"})
 #' 1. User's input adjusted effect size value
 #' 2. Adjusted SMD value
-#' 3. Estimated marginal means from ANCOVA
-#' 4. F- or t-test value from ANCOVA
-#' 5. Adjusted mean difference from ANCOVA
-#' 6. Estimated marginal means from ANCOVA extracted from a plot
+#' 3. Estimated marginal means from ANCOVA, with a standard deviation
+#' 4. Adjusted mean difference from ANCOVA, with the residual standard deviation
+#' 5. Estimated marginal means from ANCOVA, with a standard error or a confidence interval
+#' 6. F- or t-test value (or partial eta-squared) from ANCOVA
+#' 7. Adjusted mean difference from ANCOVA, with a standard error, a confidence interval or a p-value
+#' 8. Estimated marginal means from ANCOVA extracted from a plot
+#'
+#' Items 3 to 7 are ordered by how much the covariate imbalance attenuates the estimate
+#' (Lai & Kelley 2012). A route handed a standardizer directly (3, 4) is unaffected; one
+#' that must recover it from a reported standard error, confidence interval or test
+#' statistic sets the leverage term to zero and shrinks both the effect size and its
+#' standard error. Item 5 carries half that term, items 6 and 7 the whole of it.
 #'
 #' #### Odds Ratio (\code{measure=c("or")})
 #' 1.	User's input effect size value
@@ -349,6 +360,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                        prop_to_es = "raw",
                        alpha_to_es = "bonett",
                        omega_to_es = "bonett",
+                       alpha_se_source = "closed_form",
+                       omega_se_source = "reported",
                        icc_to_es = "bonett",
                        icc_agreement_se = "compute",
                        correct_inputs = TRUE,
@@ -389,29 +402,61 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   x[.r_defaulted_exp, "r_pre_post_exp"] <- r_pre_post
   x[.r_defaulted_nexp, "r_pre_post_nexp"] <- r_pre_post
 
-  # An unreported r that is silently imputed is a substantive assumption. How it
-  # bites depends on the standardizer: for change-SD methods (morris_dz, cooper/
-  # morris_drm) the assumed r scales the POINT estimate; for baseline-SD (bonett) and
-  # average-SD (morris_dav) the point estimate is r-free and only the SE/CI move.
-  # Warn once, and only for rows that actually feed an r-consuming (pre/post, mean-
-  # change, paired) route -- datasets with no such data never reach the formulas.
+  # An unreported r that is imputed without comment is a substantive assumption. How
+  # it bites depends on the standardizer: for change-SD methods (morris_dz,
+  # cooper/morris_drm) the assumed r scales the point estimate, while for baseline-SD
+  # (bonett) and average-SD (morris_dav) the point estimate is r-free and only the SE
+  # and CI move. Warn once, and only for rows that actually feed an r-consuming route
+  # (pre/post, mean-change or paired), since datasets with no such data never reach
+  # the formulas.
+  #
+  # Arm-aware companion to .rows_with_r_consuming_data(): which rows carry r-consuming
+  # data IN THAT ARM. Each mask must be ANDed with its own arm's .r_defaulted_*, never
+  # ORed blindly: on a single-group row -- and on any two-group row whose pre/post,
+  # mean-change or paired data sits in one arm only -- the absent arm's r_pre_post is
+  # structurally NA, so the plain OR reports an imputation on a row that supplied its
+  # correlation and whose arithmetic used the supplied value. Defined once and called at
+  # both sites, so the verbose note and flag V6 cannot drift apart.
+  .r_consuming_arms <- function(x) {
+    cols <- intersect(.r_consuming_columns(), colnames(x))
+    arm <- function(pattern) {
+      cc <- grep(pattern, cols, value = TRUE)
+      if (length(cc) == 0) return(rep(FALSE, nrow(x)))
+      rowSums(!is.na(x[, cc, drop = FALSE])) > 0
+    }
+    list(exp = arm("_exp$"), nexp = arm("_nexp$"))
+  }
+
   if (verbose) {
     # Single source of truth for "does this row feed an r-consuming route?", shared
     # with flag V6 below. Evaluated here against the input as the user supplied it;
     # V6 re-evaluates it after validation, which may have NA'd an invalid value.
-    .rows_with_pp <- .rows_with_r_consuming_data(x)
-    .n_imputed <- sum((.r_defaulted_exp | .r_defaulted_nexp) & .rows_with_pp)
+    .arms <- .r_consuming_arms(x)
+    .imputed_rows <- (.r_defaulted_exp & .arms$exp) | (.r_defaulted_nexp & .arms$nexp)
+    .n_imputed <- sum(.imputed_rows)
     if (.n_imputed > 0) {
       # Change-SD standardizers make the point estimate itself depend on r; the
       # mean-change and paired-t/F routes are always standardized by the change SD
       # (coerced to cooper), so their point estimates depend on r regardless of the
-      # requested method.
-      .r_scales_point <- pre_post_to_smd %in% c("morris_dz", "morris_drm", "cooper")
+      # requested method. Resolved per row: pre_post_to_smd is one of the method
+      # arguments convert_df reads from a column of the dataset, and that merge (a few
+      # lines below) has not run yet, so the scalar alone would name a standardizer the
+      # affected rows never received.
+      .pp_row <- if ("pre_post_to_smd" %in% colnames(x)) {
+        .m <- as.character(x[, "pre_post_to_smd"])
+        .m[is.na(.m)] <- as.character(pre_post_to_smd)[1]
+        .m
+      } else {
+        rep(as.character(pre_post_to_smd)[1], nrow(x))
+      }
+      .pp_imputed <- sort(unique(.pp_row[.imputed_rows]))
+      .pp_label <- paste0("'", .pp_imputed, "'", collapse = "/")
+      .r_scales_point <- all(.pp_imputed %in% c("morris_dz", "morris_drm", "cooper"))
       .impact <- if (.r_scales_point) {
-        paste0("Under the '", pre_post_to_smd, "' standardizer the assumed\n",
+        paste0("Under the ", .pp_label, " standardizer the assumed\n",
                "  correlation scales the POINT estimate, not only the SE.")
       } else {
-        paste0("Under the '", pre_post_to_smd, "' standardizer the point estimate is\n",
+        paste0("Under the ", .pp_label, " standardizer the point estimate is\n",
                "  r-free and only the SE/CI depend on the assumed correlation; note that\n",
                "  mean-change and paired-t/F rows are standardized by the change SD, whose\n",
                "  POINT estimate does depend on r.")
@@ -426,10 +471,10 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     }
   }
 
-  # unit_type is read in exactly one place, as `unit_type == "sd"`, so EVERY other
-  # value -- a typo included -- silently selects raw units. The argument is rejected
-  # outright; a column only warns, because one bad cell must never abort a whole run
-  # (the convention the dipietrantonj and proportion routes already follow).
+  # unit_type is read in exactly one place, as `unit_type == "sd"`, so every other
+  # value selects raw units, a typo included. The argument is rejected outright; a
+  # column only warns, because one bad cell must never abort a whole run, which is the
+  # convention the dipietrantonj and proportion routes already follow.
   # See R/internal_guards.R.
   .validate_unit_type(unit_type)
 
@@ -520,19 +565,42 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   } else {
     .default_flag_options()$margin_range_min
   }
-  # Normalise the reliability estimand / provenance columns BEFORE validation and
+  floor_pos_severe_val <- if (!is.null(flag_options$floor_position_severe)) {
+    flag_options$floor_position_severe
+  } else {
+    .default_flag_options()$floor_position_severe
+  }
+  floor_pos_mild_val <- if (!is.null(flag_options$floor_position_mild)) {
+    flag_options$floor_position_mild
+  } else {
+    .default_flag_options()$floor_position_mild
+  }
+  range_sd_lo_mult_val <- if (!is.null(flag_options$range_sd_lo_mult)) {
+    flag_options$range_sd_lo_mult
+  } else {
+    .default_flag_options()$range_sd_lo_mult
+  }
+  range_sd_hi_mult_val <- if (!is.null(flag_options$range_sd_hi_mult)) {
+    flag_options$range_sd_hi_mult
+  } else {
+    .default_flag_options()$range_sd_hi_mult
+  }
+  # Normalise the reliability estimand and provenance columns before validation and
   # before they are stored, so the flags, the route and the data.frame the user
   # meta-regresses on all refer to the same levels. Without this, summary() returned
   # the raw strings ("psych", "bifactor CFA") while V39 reported the normalised ones,
   # and rma(mods = ~ omega_estimator) aborted on singleton levels.
+  # .normalise_omega_type() returns NA for NA (unlike .normalise_icc_type() below), so a
+  # blank cell survives this step and V38's own rescue line can still read it as the
+  # documented default rather than as "unspecified".
   if ("omega_type" %in% colnames(x))
     x$omega_type <- .normalise_omega_type(x$omega_type, warn = FALSE)
   if ("omega_estimator" %in% colnames(x))
     x$omega_estimator <- .normalise_omega_estimator(x$omega_estimator, warn = FALSE)
   # icc_type too, for the same reason and one more: V31 keys on this column, and
-  # before normalisation happened here it compared the RAW cell against the literal
+  # without normalisation here it would compare the raw cell against the literal
   # "agreement", so 8 of the 10 spellings that es_from_icc() resolves to agreement
-  # never fired the flag. NA is left as NA -- .normalise_icc_type() would map it to
+  # would never fire the flag. NA is left as NA. .normalise_icc_type() would map it to
   # "agreement", but V31 and es_from_icc() already treat an absent value as the
   # default, and rewriting NA into the column would misreport what the user supplied.
   if ("icc_type" %in% colnames(x)) {
@@ -553,20 +621,39 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                                       icc_to_es = icc_to_es,
                                       omega_to_es = omega_to_es,
                                       paired_as_indep_tol = paired_as_indep_tol_val,
+                                      floor_position_severe = floor_pos_severe_val,
+                                      floor_position_mild = floor_pos_mild_val,
                                       margin_range_min = margin_range_min_val,
+                                      range_sd_lo_mult = range_sd_lo_mult_val,
+                                      range_sd_hi_mult = range_sd_hi_mult_val,
+                                      # The Tier-1 cross-row checks (V35-V43) assert a
+                                      # fact about "the rest of the pool", so they must
+                                      # see the same strata the Tier-2 ones do; and the
+                                      # SE-source switches decide which reliability rows
+                                      # will have an SE at all, which V44 reports on.
+                                      flag_group = flag_options$flag_group,
+                                      alpha_se_source = alpha_se_source,
+                                      omega_se_source = omega_se_source,
                                       correct_inputs = correct_inputs)
   x <- validation$data
 
-  # V6: Flag rows where r_pre_post used the default value AND pre-post data is present.
-  # Reuses .rows_with_pp, computed once above from .r_consuming_columns(). This block
-  # previously carried its own hardcoded list in which 7 of 11 names were not columns
-  # at all, so intersect() dropped them and paired-t/F rows -- the ones where the
-  # assumed r scales the POINT estimate -- never raised V6, never set the r_defaulted
-  # attribute, and never received the (r-sensitive: ...) annotations in summary().
-  .has_pre_post <- .rows_with_r_consuming_data(x)
-  .r_defaulted <- (.r_defaulted_exp | .r_defaulted_nexp) & .has_pre_post
+  # V6: flag rows where r_pre_post used the default value and pre-post data is
+  # present. Reuses .r_consuming_arms(), defined once above over
+  # .r_consuming_columns(). Keeping one list matters here because intersect() drops
+  # any name that is not a column, so a list naming columns that do not exist would
+  # leave paired-t/F rows -- the ones where the assumed r scales the point estimate --
+  # without a V6 flag, without the r_defaulted attribute, and without the
+  # (r-sensitive: ...) annotations in summary().
+  .v6_arms <- .r_consuming_arms(x)
+  .r_defaulted <- (.r_defaulted_exp & .v6_arms$exp) | (.r_defaulted_nexp & .v6_arms$nexp)
   for (i in which(.r_defaulted)) {
-    msg <- sprintf("[INFO] Default r_pre_post = %s used (not provided by user)", r_pre_post[1])
+    # The quoted column name is load-bearing, not decoration: .v_flag_matches_scope()
+    # routes a Tier-1 message on the FIRST quoted token it finds, and returns TRUE for
+    # both scopes when it finds none -- so without it this crude-scope note is copied
+    # into flags_adjusted, where the covariate correlation is cov_outcome_r and
+    # r_pre_post plays no part.
+    msg <- sprintf("[INFO] Default r_pre_post = %s used ('r_pre_post_exp' not provided by user)",
+                   r_pre_post[1])
     if (nzchar(validation$issues[i])) {
       validation$issues[i] <- paste(validation$issues[i], msg, sep = "; ")
     } else {
@@ -588,20 +675,21 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     stop(paste0("'", main_es, "' not in tolerated values for the 'main_es' argument. Should be a logical value (TRUE/FALSE)"))
   }
 
-  # 'es_selected' picks ONE effect size per comparison; 'main_es = FALSE' returns
-  # every estimation route. Combining them previously overwrote each route row
-  # with the same min/max value, leaving the row count inflated k-fold.
+  # 'es_selected' picks one effect size per comparison, whereas 'main_es = FALSE'
+  # returns every estimation route. Combining them without this guard overwrites each
+  # route row with the same min/max value, leaving the row count inflated k-fold.
   if (!main_es && es_selected %in% c("minimum", "maximum")) {
     stop(paste0("'es_selected = \"", es_selected, "\"' selects a single effect size per comparison ",
                 "and is incompatible with 'main_es = FALSE', which returns every estimation route. ",
                 "Use es_selected = 'auto' or 'hierarchy' with main_es = FALSE."))
   }
 
-  # table_2x2_to_cor was previously accepted and SILENTLY IGNORED here: it is commented
-  # out of the per-row method-column loop and of all three es_from_2x2*() call sites, so
-  # convert_df(x, measure = "r", table_2x2_to_cor = "banana") ran without error and
-  # returned byte-identical output. The guard fired only on a direct es_from_2x2() call.
-  # Validate it on this path too, so a typo is reported rather than absorbed.
+  # table_2x2_to_cor is commented out of the per-row method-column loop and of all
+  # three es_from_2x2*() call sites, so without a check here
+  # convert_df(x, measure = "r", table_2x2_to_cor = "banana") would run without error
+  # and return byte-identical output, leaving the guard to fire only on a direct
+  # es_from_2x2() call. Validate it on this path too, so a typo is reported rather
+  # than absorbed.
   if (!all(table_2x2_to_cor %in% c("tetrachoric"))) {
     stop(paste0(
       "'",
@@ -645,26 +733,28 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
 
 
   # OR ----------------------------------------------
-  # es_from_or() is the OR-ALONE route: it has no reported uncertainty to work from, so
-  # it IMPUTES var(logOR) by enumerating every 2x2 compatible with the case/control
+  # es_from_or() is the OR-alone route: it has no reported uncertainty to work from,
+  # so it imputes var(logOR) by enumerating every 2x2 compatible with the case/control
   # margins and averaging (.se_from_or, R/internal_multiple_formulas.R:399). That
-  # average runs ~1.4x wide, and its inflation grows with study size.
+  # average runs about 1.4x wide, and its inflation grows with study size.
   #
-  # On a row that also reports an SE or a CI, this route is therefore a strictly
-  # DOMINATED duplicate of es_from_or_se()/es_from_or_ci(): identical point estimate,
-  # worse variance. Left in, it inflates n_estimations, becomes eligible for selection
-  # under es_selected = "minimum"/"maximum", and enters the Category-E cross-method
-  # dispersion and CI-overlap checks as a spurious second "method". Suppress it there.
+  # On a row that also reports an SE or a CI, this route is therefore a dominated
+  # duplicate of es_from_or_se()/es_from_or_ci(): identical point estimate, worse
+  # variance. Left in, it inflates n_estimations, becomes eligible for selection under
+  # es_selected = "minimum"/"maximum", and enters the Category-E cross-method
+  # dispersion and CI-overlap checks as a spurious second method. Suppress it there.
   #
-  # p-values are deliberately NOT included: the hierarchy ranks es_odds_ratio ABOVE
-  # es_odds_ratio_pval (see or_list_L2 below), so on a pval-only row the marginal
-  # reconstruction is the better source and must still run.
+  # p-values are excluded from the suppression, even though or_list_L2 now ranks
+  # es_odds_ratio_pval above es_odds_ratio: the hierarchy already prefers the exact
+  # p-value SE, so the reconstruction is no longer selected on those rows, and leaving
+  # it running keeps it available as a cross-method comparator (and as a fallback when
+  # the p-value is unusable -- see the or_pval <= 0 guard below).
   #
-  # AND the suppression must never remove a route the USER explicitly asked for. With
-  # es_selected = "hierarchy" and "or" named in `hierarchy`, the marginal reconstruction
-  # is the requested estimator, not a redundant duplicate -- silently dropping it would
-  # leave the row with no estimate at all. Token-matched on the split hierarchy so that
-  # "or_se"/"or_ci" do not count as a request for "or".
+  # The suppression must also never remove a route the user explicitly asked for. With
+  # es_selected = "hierarchy" and "or" named in `hierarchy`, the marginal
+  # reconstruction is the requested estimator rather than a redundant duplicate, and
+  # dropping it would leave the row with no estimate at all. Token-matched on the
+  # split hierarchy so that "or_se" and "or_ci" do not count as a request for "or".
   .or_route_requested <- "or" %in% trimws(strsplit(hierarchy, ">", fixed = TRUE)[[1]])
   .or_uncertainty_reported <- if (.or_route_requested) {
     rep(FALSE, nrow(x))
@@ -698,8 +788,14 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     or_to_rr = or_to_rr, or_to_cor = or_to_cor, reverse_or = reverse_or,
     max_asymmetry = max_asymmetry
   ))
+  # A p-value of 0 -- what "p < 0.001" becomes when it is transcribed as a number --
+  # sends qnorm(p/2) to -Inf and the recovered SE to exactly 0, i.e. an infinite
+  # inverse-variance weight. Harmless while this route ranked below the marginal
+  # reconstruction; it is now the selected one, so neutralise the value here.
+  # (.positive_columns() catches a negative p-value; zero is in range for it.)
+  .or_pval_usable <- with(x, ifelse(!is.na(or_pval) & or_pval <= 0, NA_real_, or_pval))
   es_odds_ratio_pval <- with(x, es_from_or_pval(
-    or = or, logor = logor, or_pval = or_pval, small_margin_prop = small_margin_prop,
+    or = or, logor = logor, or_pval = .or_pval_usable, small_margin_prop = small_margin_prop,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
     n_cases = n_cases, n_controls = n_controls, n_sample = n_sample,
     or_to_rr = or_to_rr, or_to_cor = or_to_cor, reverse_or_pval = reverse_or_pval
@@ -833,19 +929,30 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     )
   )
 
-  # bonett/morris_dav need separate pre/post SDs, use cooper for mean change and paired t/f
-  pre_post_to_smd_restricted <- if (pre_post_to_smd %in% c("bonett", "morris_dav")) {
-    "cooper"
-  } else {
-    pre_post_to_smd
-  }
+  # bonett/morris_dav need separate pre/post SDs, use cooper for mean change and paired
+  # t/f. Resolved PER ROW: pre_post_to_smd is one of the nine method arguments merged
+  # with a per-row column of the same name above, and all 13 receiving routes accept one
+  # method per row (es_from_paired_t -> .paired_t_to_smd, es_from_mean_change_* -> the
+  # kernel), so restricting from the length-1 formal argument discarded the column for
+  # the whole mean-change and paired-t/F family: d_z rows silently got d_rm, which at
+  # r = 0.6 is 11% off in the point estimate and 13% in the SE.
+  pre_post_to_smd_restricted <- ifelse(
+    x[, "pre_post_to_smd"] %in% c("bonett", "morris_dav"),
+    "cooper",
+    x[, "pre_post_to_smd"]
+  )
 
-  # The coercion above silently changes the ESTIMAND for the affected rows: they
-  # are standardized by the change SD (cooper/d_rm) while means_sd_pre_post rows
+  # The coercion above changes the estimand for the affected rows without any other
+  # signal: they are standardized by the change SD (cooper/d_rm) while means_sd_pre_post rows
   # keep the requested baseline-SD (bonett) or average-SD (morris_dav)
   # standardizer. Tell the user whenever data that actually routes through a
   # coerced method is present.
-  if (verbose && !identical(pre_post_to_smd_restricted, pre_post_to_smd)) {
+  # Tested per row now that both sides are length-nrow vectors: the scalar comparison
+  # `!identical(vector, scalar)` would be TRUE on every verbose run, including under
+  # morris_dz, where no coercion happens at all.
+  .coerced_row <- !is.na(x[, "pre_post_to_smd"]) &
+    pre_post_to_smd_restricted != x[, "pre_post_to_smd"]
+  if (verbose && any(.coerced_row)) {
     .coerced_cols <- c(
       "mean_change_exp", "mean_change_nexp", "mean_change_sd_exp",
       "mean_change_sd_nexp", "mean_change_se_exp", "mean_change_se_nexp",
@@ -856,16 +963,20 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     )
     .coerced_cols <- intersect(.coerced_cols, colnames(x))
     .has_coerced_data <- length(.coerced_cols) > 0 &&
-      any(!is.na(x[, .coerced_cols, drop = FALSE]))
+      any(!is.na(x[.coerced_row, .coerced_cols, drop = FALSE]))
     if (.has_coerced_data) {
+      # Name the values actually coerced, not the scalar argument: a sheet may request
+      # a different standardizer on every row.
+      .coerced_lbl <- paste0("'", sort(unique(x[.coerced_row, "pre_post_to_smd"])), "'",
+                             collapse = "/")
       message(
-        "Note: pre_post_to_smd = '", pre_post_to_smd, "' requires separate pre/post SDs, ",
+        "Note: pre_post_to_smd = ", .coerced_lbl, " requires separate pre/post SDs, ",
         "which mean-change and paired t/F data do not carry.\n",
         "  Those rows use 'cooper' (morris_drm: the change SD, rescaled by sqrt(2(1 - r)) ",
         "onto the\n  raw-score metric) instead. Both standardizers are on the raw-score ",
         "scale, so the rows\n  remain combinable, but 'morris_drm' additionally assumes ",
-        "equal pre/post SDs and depends\n  on r_pre_post. Supply pre/post SDs to use '",
-        pre_post_to_smd, "' throughout."
+        "equal pre/post SDs and depends\n  on r_pre_post. Supply pre/post SDs to use ",
+        .coerced_lbl, " throughout."
       )
     }
   }
@@ -1002,7 +1113,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     omega_ci_lo = omega_ci_lo, omega_ci_up = omega_ci_up,
     n_sample = n_sample, n_items = n_items,
     omega_type = omega_type, omega_estimator = omega_estimator,
-    omega_to_es = omega_to_es
+    omega_to_es = omega_to_es, omega_se_source = omega_se_source
   ))
   es_alpha_sg <- with(x, es_from_cronbach_alpha(
     cronbach_alpha = cronbach_alpha, n_sample = n_sample,
@@ -1010,7 +1121,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     cronbach_alpha_se = cronbach_alpha_se,
     cronbach_alpha_ci_lo = cronbach_alpha_ci_lo,
     cronbach_alpha_ci_up = cronbach_alpha_ci_up,
-    alpha_to_es = alpha_to_es
+    alpha_to_es = alpha_to_es, alpha_se_source = alpha_se_source
   ))
 
   # ICC -------------------------------------------------------
@@ -1364,9 +1475,17 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     n_cases = x$n_cases, n_controls = x$n_controls,
     baseline_risk = x$baseline_risk,
     small_margin_prop = x$small_margin_prop,
-    or_to_rr = or_to_rr, or_to_cor = or_to_cor,
-    smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
-    rr_to_or = rr_to_or,
+    # The merged per-row columns, not the scalar arguments: these five are read from
+    # a column of the dataset when one is present (the loop above), and every native
+    # route picks the column up through with(x, ...). These two calls sit outside
+    # with(), so passing the scalars gave every user-input row the dataset default
+    # with no message -- silently substituting, for instance, the biserial correlation
+    # for the point-biserial one the row asked for. .dispatch_user_conversion() takes
+    # a vector or a scalar and subsets it by the row indices each branch keeps
+    # (.user_method_by_row()), so the column arrives aligned.
+    or_to_rr = x$or_to_rr, or_to_cor = x$or_to_cor,
+    smd_to_cor = x$smd_to_cor, cor_to_smd = x$cor_to_smd,
+    rr_to_or = x$rr_to_or,
     alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es,
     omega_to_es = omega_to_es
   )
@@ -1381,9 +1500,10 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     n_cases = x$n_cases, n_controls = x$n_controls,
     baseline_risk = x$baseline_risk,
     small_margin_prop = x$small_margin_prop,
-    or_to_rr = or_to_rr, or_to_cor = or_to_cor,
-    smd_to_cor = smd_to_cor, cor_to_smd = cor_to_smd,
-    rr_to_or = rr_to_or,
+    # The merged per-row columns, as in es_from_user_crude() above.
+    or_to_rr = x$or_to_rr, or_to_cor = x$or_to_cor,
+    smd_to_cor = x$smd_to_cor, cor_to_smd = x$cor_to_smd,
+    rr_to_or = x$rr_to_or,
     alpha_to_es = alpha_to_es, icc_to_es = icc_to_es, prop_to_es = prop_to_es,
     omega_to_es = omega_to_es
   )
@@ -1418,15 +1538,18 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
 
   smd_list_L1 = list(es_cohen_d = es_cohen_d,
                 es_hedges_g = es_hedges_g)
-  # Reported precision (a logOR SE, or a reported CI) outranks es_odds_ratio, whose SE
-  # is *simulated* from the cell marginals (es_from_or) and runs ~1.5x wide. When a study
-  # reports an OR together with a CI/SE AND has n_cases/n_controls, the reported interval
-  # is the more reliable source and must not be discarded for the marginal reconstruction.
-  # This also aligns the OR order with the RR list (es_rr_se, es_rr_ci first).
+  # Reported precision (a logOR SE, a reported CI, or a reported p-value) outranks
+  # es_odds_ratio, whose SE is *simulated* from the cell marginals (es_from_or) and runs
+  # ~1.5x wide. A p-value recovers the SE exactly -- |logOR / qnorm(p/2)| -- so it belongs
+  # with the SE and the CI, not below the reconstruction: on the (40,160,20,180) table the
+  # reconstruction gives 0.4390 against the exact 0.2946, i.e. 2.22x too little weight, and
+  # the inflation grows with study size. This is what the @note on es_from_or() already
+  # tells the user to do. It also aligns the OR order with the RR list
+  # (es_rr_se, es_rr_ci, es_rr_pval first).
   or_list_L2 = list(es_odds_ratio_se = es_odds_ratio_se,
                  es_odds_ratio_ci = es_odds_ratio_ci,
-                 es_odds_ratio = es_odds_ratio,
                  es_odds_ratio_pval = es_odds_ratio_pval,
+                 es_odds_ratio = es_odds_ratio,
                  es_logreg_t = es_logreg_t)
   rr_list_L3 = list(es_rr_se = es_rr_se,
                      es_rr_ci = es_rr_ci,
@@ -1494,18 +1617,25 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                                   es_ancova_t_pval = es_ancova_t_pval,
                                   es_ancova_f_pval = es_ancova_f_pval,
                                   es_etasq_adj = es_etasq_adj)
-  # Ordered by attenuation tier, as md_adjusted_list_L20a/b is. The first three routes
-  # are handed a standardizer directly -- per-arm residual SDs, a marginal pooled SD, or
-  # an adjusted pooled SD -- so their point estimate is unaffected by covariate
-  # imbalance. es_ancova_means_se / _ci must instead recover the standardizer from a
+  # Split by attenuation tier, as md_adjusted_list_L20a/b is, and for the same reason.
+  # L19a's three routes are handed a standardizer directly -- per-arm residual SDs, a
+  # marginal pooled SD, or an adjusted pooled SD -- so their point estimate is unaffected
+  # by covariate imbalance. L19b's two must instead recover the standardizer from a
   # reported SE or CI, which sets the Lai & Kelley leverage term D to zero and attenuates
-  # d and its SE together. es_ancova_means_sd_pooled_adj was previously ranked last,
-  # below both attenuating routes, so summary() preferred the attenuated estimate when
-  # both were available.
-  means_adjusted_list_L19 = list(es_ancova_means_sd = es_ancova_means_sd,
+  # d and its SE together (measured at delta_x = 1, n = 60/60, rho = 0.5: d = 1.0960 for
+  # ancova_means_se against 1.1635 for ancova_md_sd, the closed form
+  # 1/sqrt(1 + n_j*D/4) = 0.941923).
+  #
+  # The split has to be carried into the assembly below, not merely into this list: with
+  # the whole of L19 ranked ahead of md_adjusted_list_L20a, a row reporting adjusted
+  # means with their SEs alongside an adjusted MD with the residual SD had the attenuated
+  # estimate selected while the unattenuated one sat in the same row. L19b carries only
+  # half the D contribution, so it belongs between md_sd and the full-attenuation
+  # statistic routes of L18.
+  means_adjusted_list_L19a = list(es_ancova_means_sd = es_ancova_means_sd,
                              es_ancova_means_sd_pooled = es_ancova_means_sd_pooled,
-                             es_ancova_means_sd_pooled_adj = es_ancova_means_sd_pooled_adj,
-                             es_ancova_means_se = es_ancova_means_se,
+                             es_ancova_means_sd_pooled_adj = es_ancova_means_sd_pooled_adj)
+  means_adjusted_list_L19b = list(es_ancova_means_se = es_ancova_means_se,
                              es_ancova_means_ci = es_ancova_means_ci)
 
   # The adjusted MD routes split into two attenuation tiers under covariate imbalance
@@ -1514,7 +1644,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   # point estimate is unaffected by imbalance. The other three must invert a reported
   # SE / CI / p-value, which was built with the leverage term D = (xbar1-xbar2)^2/SS_x
   # that the wide format cannot carry, so they attenuate d (and its SE) by
-  # 1/sqrt(1 + D/(1/n_exp + 1/n_nexp)) -- the same tier as the ANCOVA test statistics.
+  # 1/sqrt(1 + D/(1/n_exp + 1/n_nexp)), the same tier as the ANCOVA test statistics.
   # They are therefore ranked separately: L20a above ancova_adjusted_list_L18, L20b below.
   md_adjusted_list_L20a = list(es_ancova_md_sd = es_ancova_md_sd)
   md_adjusted_list_L20b = list(es_ancova_md_se = es_ancova_md_se,
@@ -1553,9 +1683,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
 
   SMD_paired = c(means_paired_list_L15, anova_paired_list_L16, md_paired_list_L14)
 
-  SMD_adjusted = c(es_cohen_d_adj_L17, means_adjusted_list_L19, md_adjusted_list_L20a,
-                   ancova_adjusted_list_L18, md_adjusted_list_L20b,
-                   plot_adjusted_L22)
+  SMD_adjusted = c(es_cohen_d_adj_L17, means_adjusted_list_L19a, md_adjusted_list_L20a,
+                   means_adjusted_list_L19b, ancova_adjusted_list_L18,
+                   md_adjusted_list_L20b, plot_adjusted_L22)
 
   OR = c(or_list_L2)
 
@@ -1578,9 +1708,10 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     if (measure %in% c("d", "g", "md")) {
       # OR and the raw 2x2 table (CONT) are the sole gateway into the SMD
       # family via the Cox transform d = log(OR) * sqrt(3)/pi. RD_stand is
-      # NOT used here: RD -> SMD is not identified without an assumed
-      # baseline_risk and its SE is anti-conservative (baseline_risk treated
-      # as a fixed constant). RD keeps its legitimate ratio conversions below.
+      # not used here: RD -> SMD is not identified without an assumed
+      # baseline_risk, and its SE is anti-conservative because baseline_risk
+      # is treated as a fixed constant. RD keeps its legitimate ratio
+      # conversions below.
 
       if (selection_auto == "crude") {
         res = c(USER_crude, SMD_post, SMD_paired, OR,
@@ -1693,7 +1824,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     } else if (measure %in% c("logor", "or")) {
       # Non-auto modes mirror the auto-mode ordering for every measure, so the
       # fallback selection (e.g. hierarchy mode with a default hierarchy) agrees
-      # with es_selected = "auto" -- here, preferring the directly reported OR
+      # with es_selected = "auto": here, preferring the directly reported OR
       # over a reconstructed 2x2.
       res = c(USER_crude, OR, CONT, RR, RD_stand, PHI, COR, SMD_post, USER_adjusted,
               #not used
@@ -1802,10 +1933,17 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   attr(res, "omega_to_es") <- omega_to_es
   attr(res, "icc_to_es") <- icc_to_es
   attr(res, "icc_agreement_se") <- icc_agreement_se
+  # Where a reliability SE is allowed to come from. Stored beside icc_agreement_se so
+  # summary() can see it: which columns a row still needs (the `guidance` output)
+  # depends on it -- under omega_se_source = "closed_form" an SE-less omega is missing
+  # n_sample, under the default "reported" it is missing omega_se, and naming the wrong
+  # one sends the user after a statistic that route cannot use.
+  attr(res, "alpha_se_source") <- alpha_se_source
+  attr(res, "omega_se_source") <- omega_se_source
   attr(res, "prop_to_es") <- prop_to_es
   # standardizer used by the pre/post routes (drives the E6/E7 mixing flags)
   attr(res, "pre_post_to_smd") <- pre_post_to_smd
-  # Which transform each route put in the `z` column -- Fisher's atanh(r) for the
+  # Which transform each route put in the `z` column: Fisher's atanh(r) for the
   # correlation and binary families, a variance-stabilising transform for the SMD
   # family. Derived from the frames themselves rather than from a list of route
   # names, and consumed by the E8 mixing flag. See .z_transform_by_route().
@@ -1823,6 +1961,13 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post = r_pre_post[1], cor_to_smd = cor_to_smd, unit_type = unit_type,
     yates_chisq = yates_chisq, pool_sd = pool_sd, prop_to_es = prop_to_es,
     alpha_to_es = alpha_to_es, omega_to_es = omega_to_es, icc_to_es = icc_to_es,
+    # Where a reliability SE comes from is part of the analysis es_formulas() has to
+    # reproduce: without these three, a re-run silently reverts to the defaults and
+    # prints standard errors the user deliberately refused (alpha_se_source =
+    # "reported", omega_se_source = "reported", icc_agreement_se = "drop" all exist to
+    # leave a row visible but unpooled).
+    alpha_se_source = alpha_se_source, omega_se_source = omega_se_source,
+    icc_agreement_se = icc_agreement_se,
     max_asymmetry = max_asymmetry, correct_inputs = correct_inputs,
     selection_auto = selection_auto
   )

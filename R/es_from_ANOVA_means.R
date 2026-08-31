@@ -17,9 +17,9 @@
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
 #' **The Z returned here is not Fisher's z under the default.** \code{smd_to_cor}
-#' chooses two things at once. It chooses WHICH correlation is estimated --
-#' "viechtbauer" (default) the biserial, "lipsey_cooper" the point-biserial -- and
-#' it chooses WHICH TRANSFORM fills the Z column. "lipsey_cooper" returns Fisher's z,
+#' chooses two things at once. It chooses which correlation is estimated, the biserial
+#' under "viechtbauer" (the default) or the point-biserial under "lipsey_cooper", and
+#' it chooses which transform fills the Z column. "lipsey_cooper" returns Fisher's z,
 #' \eqn{atanh(r)}; "viechtbauer" returns a variance-stabilising transform, which is a
 #' different function of the correlation: at a point-biserial rho = 0.75 it
 #' returns 1.0925 where \eqn{atanh(r)} of its own R is 1.7468.
@@ -85,9 +85,9 @@ es_from_means_sd <- function(mean_exp, mean_sd_exp, mean_nexp, mean_sd_nexp, n_e
   if (length(reverse_means) != n_row) stop("The length of the 'reverse_means' argument is incorrectly specified.")
 
   # smd_denom may be a single value or specified per row (like smd_var / smd_to_cor).
-  # A blank/NA cell defaults to "pooled". Each row is standardised by its OWN choice, so a
-  # mixed column can no longer silently collapse to the first row's value (previously the
-  # match.arg(...[1]) took the first element and applied it to every row).
+  # A blank or NA cell defaults to "pooled". Each row is standardised by its own choice,
+  # so a mixed column cannot collapse to the first row's value, which is what
+  # match.arg(...[1]) would do by taking the first element and applying it to every row.
   smd_denom_in <- as.character(smd_denom)
   if (length(smd_denom_in) == 1) smd_denom_in <- rep(smd_denom_in, n_row)
   if (length(smd_denom_in) != n_row) stop("The length of the 'smd_denom' argument is incorrectly specified.")
@@ -246,9 +246,9 @@ es_from_means_se <- function(mean_exp, mean_se_exp, mean_nexp, mean_se_nexp, n_e
 #' Odds ratio (OR) and correlation coefficients (R/Z) are then converted from the Cohen's d.
 #'
 #' **The Z returned here is not Fisher's z under the default.** \code{smd_to_cor}
-#' chooses two things at once. It chooses WHICH correlation is estimated --
-#' "viechtbauer" (default) the biserial, "lipsey_cooper" the point-biserial -- and
-#' it chooses WHICH TRANSFORM fills the Z column. "lipsey_cooper" returns Fisher's z,
+#' chooses two things at once. It chooses which correlation is estimated, the biserial
+#' under "viechtbauer" (the default) or the point-biserial under "lipsey_cooper", and
+#' it chooses which transform fills the Z column. "lipsey_cooper" returns Fisher's z,
 #' \eqn{atanh(r)}; "viechtbauer" returns a variance-stabilising transform, which is a
 #' different function of the correlation: at a point-biserial rho = 0.75 it
 #' returns 1.0925 where \eqn{atanh(r)} of its own R is 1.7468.

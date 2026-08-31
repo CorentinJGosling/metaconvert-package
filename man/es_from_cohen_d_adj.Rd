@@ -17,7 +17,7 @@ es_from_cohen_d_adj(
 }
 \arguments{
 \item{cohen_d_adj}{Adjusted Cohen's d, standardized on the \strong{marginal} (unadjusted)
-within-group SD -- the scale used throughout the \code{es_from_ancova_*} family, so
+within-group SD, the scale used throughout the \code{es_from_ancova_*} family, so
 that adjusted and unadjusted studies remain poolable. If your source standardized on
 the residual (covariate-adjusted) SD, as software reporting an ANCOVA effect size
 typically does, multiply it by \code{sqrt(1 - cov_outcome_r^2)} first, or use
@@ -30,9 +30,9 @@ covariate(s) (multiple correlation when the model includes several covariates).
 
 Because \code{cohen_d_adj} is already standardized on the \strong{marginal} SD (see
 above), \code{cov_outcome_r} is not used to rescale anything here: it enters the
-sampling variance ONLY, through the \eqn{(1 - R^2)} factor of Cooper's eq. 12.26.
+sampling variance alone, through the \eqn{(1 - R^2)} factor of Cooper's eq. 12.26.
 A mis-specified value therefore leaves the effect size \strong{exactly unchanged} and
-shrinks its standard error, so the p-value moves and the error is visible --
+shrinks its standard error, so the p-value moves and the error is visible;
 the opposite of the residual-SD \code{es_from_ancova_*} routes, where the estimate
 and the SE move by the same factor and cancel. Supplying 0.9 where the truth is 0
 multiplies \code{d_se} by 0.48 and the t statistic by 2.07, roughly quadrupling the
@@ -79,15 +79,15 @@ degrees of freedom become \code{df = n_exp + n_nexp - 2 - n_cov_ancova}, which s
 Hedges' small-sample correction and every t-based confidence interval. And the
 correlation variances inherit the \eqn{(1 - cov\_outcome\_r^2)} shrink above, so
 \code{r_se} and \code{z_se} reflect the precision the covariate adjustment actually
-bought. The correlation POINT estimates are unchanged by \code{n_cov_ancova}: the
+bought. The correlation point estimates are unchanged by \code{n_cov_ancova}: the
 supplied \code{cohen_d_adj} is on the marginal SD scale, so it maps to the marginal
 correlation a two-group study would report. Under
 \code{smd_to_cor = "lipsey_cooper"} that mapping is Cooper's
 \eqn{r = d / \sqrt{d^2 + a}} with \eqn{a = (n\_exp+n\_nexp)^2 / (n\_exp*n\_nexp)},
-which uses the TOTAL sample size and is algebraically \eqn{t / \sqrt{t^2 + N}}. It is
-NOT the sample point-biserial identity \eqn{t / \sqrt{t^2 + N - 2}} -- the
+which uses the total sample size and is algebraically \eqn{t / \sqrt{t^2 + N}}. It is
+not the sample point-biserial identity \eqn{t / \sqrt{t^2 + N - 2}}: the
 \code{n_exp + n_nexp - 2 - n_cov_ancova} degrees of freedom named above set the
-confidence INTERVAL, not the point estimate. The default
+confidence interval, not the point estimate. The default
 \code{smd_to_cor = "viechtbauer"} targets the biserial correlation instead, so it
 does not follow this identity at all: at \code{n_exp = n_nexp = 30} and
 \code{cohen_d_adj = 0.6} the two options return 0.3658 and 0.2873 respectively.

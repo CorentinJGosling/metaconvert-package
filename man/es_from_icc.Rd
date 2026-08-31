@@ -52,7 +52,7 @@ standard error.}
 \item{icc_to_es}{method used to compute the effect size from ICC.
 Must be either \code{"bonett"} or \code{"raw"}.}
 
-\item{agreement_se}{what to do about the CLOSED-FORM standard error of an
+\item{agreement_se}{what to do about the closed-form standard error of an
 absolute-agreement ICC. \code{"compute"} (the default here) emits it;
 \code{"drop"} returns \code{NA} for it, keeping the effect size and any
 standard error the study itself reported. See the coverage table in the
@@ -100,7 +100,7 @@ instead of being symmetrised first;
 The ordering matters because of the coverage problem documented below: for an
 agreement-type ICC the computed standard error is a one-way approximation, so
 wherever the study reported its own uncertainty that is the better source. The
-ICC literature reports intervals routinely (\emph{"ICC 0.94, 95\\% CI 0.86 to
+ICC literature reports intervals routinely (\emph{"ICC 0.94, 95\% CI 0.86 to
 0.98"}), and such a row is now usable even when no sample size is given -
 \code{n_sample} and \code{n_measurements} gate only source 3, not the point
 estimate. A row with none of the three keeps its effect size and gets
@@ -135,7 +135,7 @@ Earlier versions of this page quoted 'around 0.74-0.76', which is not a range
 the estimator occupies at any n and reads as a bounded problem when it is an
 unbounded one.
 
-These figures are REPRODUCIBLE rather than quoted: they come from
+These figures are reproducible rather than quoted: they come from
 \verb{simulations/studies/10_reliability.R}, study \verb{10a_icc_agreement_coverage}, at a
 fixed seed. The same grid includes \code{rater_share = 0}, where the formula's own
 assumption holds and coverage returns to nominal (0.939 / 0.953 / 0.944 / 0.959),
@@ -144,13 +144,13 @@ implementation error.
 
 The exact ICC(2,1) variance requires the rater-variance component, which summary
 data do not report, so an agreement row can enter a pool with up to 50x too much
-weight. Two things follow. Every agreement row is flagged by V31. And the
-approximation can be refused: \code{agreement_se = "drop"} here, or
+weight. Two things follow from that. Every agreement row is flagged by V31, and
+the approximation can be refused: \code{agreement_se = "drop"} here, or
 \code{icc_agreement_se = "drop"} in \code{\link{convert_df}}, returns \code{NA}
-for it so \code{summary()} leaves the row out of the pool rather than
-over-weighting it. A standard error the study itself reported is kept either way -
-the option targets the approximation, not the row - which is why supplying
-\code{icc_se} or a CI is the better fix where the study offers one.
+for it, so \code{summary()} leaves the row out of the pool rather than
+over-weighting it. A standard error the study itself reported is kept either way,
+since the option targets the approximation rather than the row, which is why
+supplying \code{icc_se} or a CI is the better fix where the study offers one.
 
 Both default to \code{"compute"} in 2.1.0, for backward compatibility and because
 the archived reference suite pins the computed value; \code{"drop"} is expected to

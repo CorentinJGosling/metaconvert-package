@@ -2049,7 +2049,16 @@ test_that("[A6] skips for NNT (discontinuous CIs)", {
   expect_false(any(grepl("CI width inconsistent", flags[[1]])))
 })
 
-test_that("[A6] skips when exp=TRUE (mixed scales)", {
+test_that("[A6] runs on the log scale when exp=TRUE (was: skipped)", {
+  # RE-PINNED in 2.1.0, deliberately inverted. This test used to assert that A6 emits
+  # NOTHING here, which was the defect: skipping the whole exp-scale family meant a
+  # user-entered SE on the wrong scale was accepted in silence for or/rr/irr/hr, while
+  # the identical error was caught for d. A6 now transforms back before deciding, so a
+  # natural-scale ES/CI is compared against its log-scale SE on one consistent scale.
+  #
+  # These very inputs are inconsistent, which is why they were chosen: the reported CI
+  # spans log(5.1) - log(1.2) = 1.446915 on the log scale, against 2 * qnorm(.975) * 0.3
+  # = 1.175951 implied by the SE -- 23% wide. Flagging it is the correct outcome.
   flags <- metaConvert:::.flag_numeric_integrity(
     es = c(2.5),   # natural-scale OR
     se = c(0.3),   # log-scale SE
@@ -2058,7 +2067,20 @@ test_that("[A6] skips when exp=TRUE (mixed scales)", {
     measure = "logor",
     exp = TRUE
   )
-  expect_false(any(grepl("CI width inconsistent", flags[[1]])))
+  expect_true(any(grepl("CI width inconsistent", flags[[1]])))
+
+  # ... and a row whose CI and SE agree on the log scale must still pass cleanly, so the
+  # check discriminates rather than firing on every exp-scale row.
+  hw <- qnorm(.975) * 0.3
+  ok <- metaConvert:::.flag_numeric_integrity(
+    es = c(2.5),
+    se = c(0.3),
+    ci_lo = c(exp(log(2.5) - hw)),
+    ci_up = c(exp(log(2.5) + hw)),
+    measure = "logor",
+    exp = TRUE
+  )
+  expect_false(any(grepl("CI width inconsistent", ok[[1]])))
 })
 
 test_that("[A6] tighter tolerance for large N catches 7% deviation", {
