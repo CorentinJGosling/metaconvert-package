@@ -41,6 +41,7 @@ published_table <- function(id) {
     "study09a-result"       = .pub_09a_result,
     "study09a-ranking"      = .pub_09a_ranking,
     "roadmap26-or-to-cor"   = .pub_roadmap26,
+    "rank-disagreement"     = .pub_rank_disagreement,
     stop("no recipe for pinned table '", id, "'"))
   f()
 }
@@ -53,6 +54,7 @@ published_table <- function(id) {
 published_table_ids <- function() {
   c("study09a-result"     = "README.md",
     "study09a-ranking"    = "README.md",
+    "rank-disagreement"   = "README.md",
     "roadmap26-or-to-cor" = "ROADMAP.md")
 }
 
@@ -232,4 +234,69 @@ read_pinned_table <- function(id, path = sim_path("README.md")) {
   x <- gsub("`", "", x)
   x <- gsub("−", "-", x)
   trimws(x)
+}
+
+
+## Do the bias ranking and the coverage ranking agree? -- the table behind the
+## "no single number is trusted" paragraph.
+##
+## THIS EXISTS BECAUSE THE PARAGRAPH IT REPLACES HAD ROTTED IN THREE SEPARATE WAYS, and
+## none of them was detectable: the numbers were quoted in prose, so no recipe recomputed
+## them and no marker tied them to a CSV. It published "08a: -0.59, 09a: -0.23,
+## 09b: -0.29 ... only 3 of 12":
+##
+##   * 08a = -0.59 was right, and is what identifies the intended definition;
+##   * 09a and 09b are POSITIVE (+0.23, +0.21). The sign appears to have been taken from
+##     the sentence's own claim ("weak and sometimes negative") rather than from the data
+##     -- an inversion of the paragraph's whole point, since a positive rho means the two
+##     rankings AGREE in those studies;
+##   * 09b's 0.29 was the magnitude of the pre-tetrachoric-fix aggregate (0.288); 09a's
+##     0.23 matches neither era at the time it was written (0.35 then);
+##   * "3 of 12": the 3 is right, the denominator is 10.
+##
+## THE DEFINITION, recovered from 08a reproducing to the digit and now fixed here:
+##   * every shipped aggregate carrying method/target/bias/coverage, at its highest nrep;
+##   * target = "own", the scale- and estimand-matched target the panels report, so the
+##     comparison is computational error rather than estimand mismatch;
+##   * at least 3 methods -- over 2, a rank correlation is +-1 by construction and says
+##     nothing (this is what excludes 10a and the study-11 pairs);
+##   * per method, mean |bias| across conditions against the MEAN PER-CONDITION
+##     |coverage - 0.95|. Not |mean coverage - 0.95|: a method covering 0.90 in half the
+##     conditions and 1.00 in the rest averages to a flawless 0.95 while being
+##     miscalibrated in every one, which is the distinction the paragraph below the table
+##     draws and the sort column already uses. The two definitions genuinely differ --
+##     on 09a they give 0.07 and 0.23.
+.pub_rank_disagreement <- function() {
+  fs <- list.files(dir_agg(""), pattern = "_nrep[0-9]+[.]csv$", full.names = TRUE)
+  ## highest nrep per study, so 03a/03b are not counted twice
+  key  <- sub("_nrep[0-9]+[.]csv$", "", basename(fs))
+  ## No backreference here on purpose: written as "\1" the replacement is an OCTAL
+  ## ESCAPE, not a capture group, so every nrep parsed to NA and the highest-nrep
+  ## selection below silently degraded to alphabetical order -- which happens to put
+  ## nrep1000 ahead of nrep300, so the result looked correct. Strip both ends instead.
+  nrep <- as.numeric(sub("^.*_nrep", "", sub("[.]csv$", "", basename(fs))))
+  fs   <- fs[order(key, -nrep)][!duplicated(key[order(key, -nrep)])]
+
+  out <- list()
+  for (f in fs) {
+    d <- utils::read.csv(f, stringsAsFactors = FALSE)
+    if (!all(c("method", "target", "bias", "coverage") %in% names(d))) next
+    x <- d[d$target == "own", , drop = FALSE]
+    if (!nrow(x)) next
+    o <- do.call(rbind, lapply(split(x, x$method), function(k) data.frame(
+      m  = k$method[1],
+      b  = mean(abs(k$bias), na.rm = TRUE),
+      cd = mean(abs(k$coverage - 0.95), na.rm = TRUE),
+      stringsAsFactors = FALSE)))
+    if (nrow(o) < 3 || all(is.na(o$cd))) next
+    out[[length(out) + 1]] <- data.frame(
+      study    = sub("_nrep[0-9]+[.]csv$", "", basename(f)),
+      k        = nrow(o),
+      rho      = sprintf("%.2f", round(suppressWarnings(
+                   stats::cor(o$b, o$cd, method = "spearman")), 2)),
+      coincide = if (identical(o$m[which.min(o$b)], o$m[which.min(o$cd)])) "yes" else "no",
+      stringsAsFactors = FALSE)
+  }
+  o <- do.call(rbind, out)
+  o[order(o$study), ]
 }

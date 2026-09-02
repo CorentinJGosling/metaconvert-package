@@ -1293,11 +1293,42 @@ The two orderings genuinely disagree in these data. In study 09a, scored on
 > tied-first on bias, and `bonett` is the reverse — so the two orderings still
 > disagree, which is the point the panel exists to make.
 
-Across the shipped studies the Spearman correlation between mean |bias| and
-|coverage − 0.95| is weak and sometimes negative (08a: −0.59, 09a: −0.23,
-09b: −0.29), and "best on bias" coincides with "best on coverage" in only 3 of 12.
-So no single number is trusted: the Ranking panel prints all of them and the
-selected measure only decides the sort order.
+Across the shipped studies, "best on bias" and "best on coverage" pick the same
+method in only **3 of 10**, and the rank correlation between the two orderings runs
+from −0.89 to +0.89 — it is not reliably positive, and in two studies it is strongly
+negative:
+
+<!-- pinned: rank-disagreement -->
+| study | methods | Spearman \|rho\| | best on bias = best on coverage? |
+|---|---|---|---|
+| `02a_cor_to_smd_GROUPS` | 9 | 0.27 | no |
+| `02b_cor_to_smd_CONT` | 9 | 0.29 | no |
+| `03a_2x2_to_cor_CAT` | 4 | 0.89 | yes |
+| `03b_2x2_to_cor_CONT` | 4 | -0.89 | no |
+| `07a_ancova_to_smd_d` | 4 | 0.60 | no |
+| `07b_ancova_to_smd_g` | 4 | 0.80 | yes |
+| `08a_pre_post_to_smd_d` | 6 | -0.59 | no |
+| `08b_pre_post_to_smd_g` | 6 | 0.24 | yes |
+| `09a_or_to_cor_CONT` | 10 | 0.23 | no |
+| `09b_or_to_cor_CAT` | 10 | 0.21 | no |
+
+Spearman ρ between each method's mean |bias| and its **mean per-condition**
+|coverage − 0.95|, on the `own` target, over the studies carrying at least three
+methods — with two, ρ is ±1 by construction and says nothing. So no single number is
+trusted: the Ranking panel prints all of them and the selected measure only decides
+the sort order.
+
+> **This paragraph used to quote three numbers in prose, and all three had rotted.**
+> It read "08a: −0.59, 09a: −0.23, 09b: −0.29 ... only 3 of 12". Only the first was
+> right. `09a` and `09b` are **positive** (+0.23, +0.21) — the sign appears to have
+> been taken from the sentence's own claim that the correlation is "sometimes
+> negative" rather than from the data, which inverts the point being made, since a
+> positive ρ means the two rankings *agree* in those studies. `09b`'s 0.29 was the
+> magnitude of the pre-tetrachoric-fix aggregate; `09a`'s 0.23 matched neither era
+> when it was written. And "3 of 12" had the right numerator against the wrong
+> denominator. Nothing detected any of it, because prose is not recomputed — which
+> is why the figures are now a pinned table with a recipe in
+> `R/08_published_numbers.R`, like every other published table here.
 
 **The sort column is shown explicitly**, because it is not the deviation of the
 mean beside it. It is the mean deviation *per condition* — a method covering 0.90
