@@ -8,10 +8,13 @@
 #'
 #' # Overview of the package
 #' To visualize the types of input data that can be used to estimate an effect size measure, you can use the
-#' \code{\link{see_input_data}()} function. It covers the measures that have raw-data estimation routes, and
-#' rejects by name the ones reachable only through other measures or through user input (the within-group
-#' measures, the partial correlations, and the log-scale aliases). For the complete set of columns across all
-#' measures, use \code{data_extraction_sheet(measure = "all")} instead.
+#' \code{\link{see_input_data}()} function. Its table is built from the \code{measure = "d"} hierarchy, so
+#' it accepts only the twelve measures that hierarchy reaches ("all", "d", "g", "md", "or", "rr", "nnt",
+#' "r", "z", "logvr", "logcvr", "irr"); any other value is refused with an error naming that supported set.
+#' The eleven measures it does not cover are the within-group family (dw, gw, mdw), the partial-correlation
+#' family (rp, zp), the hazard ratio, the risk difference and the psychometric measures (prop, alpha, omega,
+#' icc). For those, and for the complete set of columns across all measures, use
+#' \code{data_extraction_sheet(measure = "all")} instead.
 #'
 #' # Estimate effect sizes
 #' To automatically estimate effect sizes directly from a dataset, you can use the \code{\link{convert_df}()} function.

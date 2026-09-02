@@ -77,15 +77,22 @@ MAGNITUDE of each arm's change is recoverable and, unless told otherwise, this f
 that both arms moved in the SAME direction. The between-group estimate is formed as
 \eqn{cohen\_d = d\_exp - d\_nexp}; when the control arm actually moved the other way -- it
 deteriorated while the treatment arm improved, an ordinary trial result -- the correct contrast
-is \eqn{|d\_exp| + |d\_nexp|}, so the assumption biases the estimate by \eqn{2|d\_nexp|}. That
-halves it exactly when the two arms' magnitudes are equal, and shrinks it towards zero or
-reverses its sign when the control arm moved more than the treatment arm. The assumption cannot
-be verified from the reported statistic, so no quality flag fires on such a row.
+is \eqn{|d\_exp| + |d\_nexp|}, so the assumption biases the estimate by \eqn{2|d\_nexp|}.
+"Biased by 2|d_nexp|" is not the same as "halved": what the function returns is
+\eqn{\frac{|d\_exp| - |d\_nexp|}{|d\_exp| + |d\_nexp|}}{(|d_exp| - |d_nexp|)/(|d_exp| + |d_nexp|)}
+of the true contrast. It therefore collapses to exactly ZERO when the two arms' magnitudes are
+equal, is halved only in the particular case \eqn{|d\_exp| = 3|d\_nexp|}, and reverses sign when
+the control arm moved more than the treatment arm. Measured on es_from_paired_f() at
+n_exp = n_nexp = 50 and r_pre_post = 0.8: two equal F values of 9 return d = 0 where the true
+contrast is 0.5367; F_exp = 81 against F_nexp = 9 returns 0.5367 against a true 1.0733 (the exact
+halving); and F_exp = 9 against F_nexp = 81 returns -0.5367 against a true +1.0733. The
+assumption cannot be verified from the reported statistic, so no quality flag fires on such a row.
 
 Mark the arm that moved down with \code{reverse_paired_f_pval_exp} /
 \code{reverse_paired_f_pval_nexp}, which flip the sign of that arm's recovered t before the
 contrast is formed. \code{reverse_paired_f_pval} flips the whole contrast instead, so it cannot
-express two arms moving apart. When the signed t values are reported,
+express two arms moving apart. Both per-arm flags are registered input columns, so
+they are usable from \code{\link{convert_df}()} as well as on a direct call. When the signed t values are reported,
 \code{\link{es_from_paired_t}()} needs no such assumption, and the
 \code{\link{es_from_mean_change_pval}()} family carries the direction in the sign of the mean
 change.

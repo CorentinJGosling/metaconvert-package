@@ -167,10 +167,15 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
     g_ci_up[nn_miss] <- smd_pp[, 8]
 
     # The mdw arithmetic sits outside the SMD kernel, so it needs the kernel's own SD
-    # predicate applied here: a negative SD flips the sign of the -2*r*sd_pre*sd_post
-    # cross term and yields a positive, plausible mdw_se that is up to 3x too small,
-    # while dw/gw are already NA'd. Zero is kept, because the mean-change wrappers zero
-    # the pre slot by construction (R/internal_guards.R).
+    # predicate applied here: a negative SD leaves the two squared terms untouched but
+    # flips the sign of the -2*r*sd_pre*sd_post cross term, turning 2*s^2*(1-r) into
+    # 2*s^2*(1+r). The resulting mdw_se is positive and plausible-looking but too
+    # LARGE, by sqrt((1+r)/(1-r)) at equal arm SDs -- exactly 3x at the package's
+    # default r_pre_post = 0.8, 1.73x at r = 0.5, and unbounded as r -> 1 (4.36x at
+    # 0.9). Checked by evaluating the mdw_var line with the guard bypassed:
+    # sd_pre = 4, sd_post = 4, n = 50, r = 0.8 gives 1.073313 against the correct
+    # 0.357771. dw/gw are already NA'd by the kernel. Zero is kept, because the
+    # mean-change wrappers zero the pre slot by construction (R/internal_guards.R).
     mdw_sd_pre <- .nonneg_or_na(mean_pre_sd_exp[nn_miss])
     mdw_sd_post <- .nonneg_or_na(mean_sd_exp[nn_miss])
 

@@ -10,9 +10,9 @@
 #' @details
 #' This function first computes (log) odds ratio (OR), (log) risk ratio (RR) and number needed to treat (NNT)
 #' from the 2x2 table. Note that if a cell is equal to 0, we applied the typical adjustment (add 0.5) to all cells.
-#' This adjustment feeds the OR, the RR, the SMD (D/G) converted from the OR, **and the correlation
-#' coefficients (R/Z)**, which are solved from the corrected table; only the RD and the NNT are
-#' obtained from the raw cell counts.
+#' This adjustment feeds the OR, the RR, and the SMD (D/G) converted from the OR. It does
+#' **not** feed anything else: the RD and the NNT are obtained from the raw cell counts, and so
+#' are the correlation coefficients (R/Z), which are solved from the raw table (see below).
 #' Cohen's d (D) and Hedges' g (G) are then estimated from the OR. The correlation coefficients
 #' (R/Z) are **not** obtained from the OR: they come from the tetrachoric solve on the 2x2 table
 #' itself (see below), which is a different route and returns a different value.
@@ -56,19 +56,43 @@
 #' information can be retrieved here
 #' (https://wviechtb.github.io/metafor/reference/escalc.html#-b-measures-for-two-dichotomous-variables).
 #'
-#' That parity holds **on a table with no zero cell**. On a table with a zero cell it does not, and
-#' the difference is large. 'metafor' deliberately does not apply its \code{add}/\code{to} continuity
-#' correction to \code{"RTET"}, so it returns the boundary maximum-likelihood estimate
-#' (\eqn{r = \pm 1}) with an enormous variance -- its way of reporting that the correlation is not
-#' identified. \emph{metaConvert} solves the +0.5-corrected table instead, so it returns an interior
-#' estimate with an ordinary-looking, finite standard error. That standard error is the sampling SE
-#' \emph{of the shrunk table} and does not account for the shrinkage, so it is anti-conservative for
-#' the value actually reported: on \eqn{a/b/c/d = 0/20/10/10} \emph{metaConvert} gives
-#' \eqn{r = -0.856} with \eqn{SE = 0.113}, against \eqn{r = -1} with \eqn{SE = 149} from 'metafor' --
-#' an inverse-variance weight about 1300 times larger. This is a deliberate choice, not an oversight:
-#' the boundary estimate cannot be pooled. But treat the correlation from any zero-cell table as a
-#' shrunk value whose precision is overstated, and consider excluding such rows or handling them in a
-#' sensitivity analysis.
+#' That parity holds on **every** table, zero cell or not, because the tetrachoric solve is
+#' handed the **raw** cell counts. The +0.5 continuity correction is a ratio-measure device --
+#' it exists because a zero cell makes the OR and the RR undefined -- and it is not applied
+#' here. 'metafor' likewise refuses to apply its \code{add}/\code{to} correction to
+#' \code{"RTET"}, not even under \code{to = "all"}, because the tetrachoric is not undefined on
+#' such a table.
+#'
+#' What a zero-cell table returns is therefore the boundary maximum-likelihood estimate together
+#' with its very large variance -- the pair by which the estimator says the correlation is not
+#' identified by these counts. On \eqn{a/b/c/d = 0/20/10/10},
+#' \code{es_from_2x2(n_cases_exp = 0, n_controls_exp = 20, n_cases_nexp = 10, n_controls_nexp = 10)}
+#' gives \eqn{r = -1} with \eqn{SE = 149.03}, which is exactly
+#' \code{metafor::escalc(measure = "RTET", ai = 0, bi = 20, ci = 10, di = 10)}
+#' (\eqn{v_i = 22209.73}). The \eqn{r = -0.856} with \eqn{SE = 0.113} that some tools report for
+#' this study belongs to the *corrected* table \eqn{0.5/20.5/10.5/10.5}, not to the study's own:
+#' its standard error is that of the shrunk table and takes no account of the shrinkage, so it is
+#' 1313 times smaller than the honest one -- an inverse-variance weight 1.7e6 times larger -- on
+#' a study whose correlation the data cannot pin down.
+#'
+#' Because \eqn{r = \pm 1} makes \eqn{z = atanh(r)} infinite, a boundary row returns \code{NA}
+#' for all four Fisher's z columns and for **both** the R and the Z confidence bounds; the R
+#' point estimate and its SE are kept, so the row stays visible and countable. A boundary r
+#' cannot be pooled -- read it as the "not identified" statement it is, and pool the OR, RR or
+#' RD from the same table, which are all defined there.
+#'
+#' A **perfect-association** table (both off-diagonal cells zero) is the other boundary shape,
+#' and 'metafor' reports it at the opposite extreme:
+#' \code{escalc(measure = "RTET", ai = 25, bi = 0, ci = 0, di = 25)} returns \eqn{r = 1} with
+#' \eqn{v_i = 0} exactly. A zero variance is not a precise estimate; it is the same "not
+#' identified" statement, and exporting it would mean \eqn{r_se = 0}, an infinite
+#' inverse-variance weight that \code{rma()} aborts on. \emph{metaConvert} keeps the point
+#' estimate and declines the variance: \code{es_from_2x2(n_cases_exp = 25, n_controls_exp = 0,}
+#' \code{n_cases_nexp = 0, n_controls_nexp = 25)} returns \eqn{r = 1} with \code{r_se}, both R
+#' bounds and every Z column \code{NA}. The risk difference is refused on the same table for the
+#' same reason -- both arm risks are 0 or 1, so \code{rd_se} would be exactly 0 -- leaving
+#' \code{rd} and \code{nnt} at \code{NA}, while the OR and RR, computed from the +0.5-corrected
+#' table, remain finite (here \eqn{logor = 7.864}, \eqn{SE = 2.020}).
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -170,14 +194,15 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
   # The tetrachoric solve below must see the RAW table, so keep a copy before the cells
   # are corrected in place. The +0.5 is a ratio-measure device: it exists because a zero
   # cell makes the odds ratio and the risk ratio undefined, and @details documents it as
-  # applying to the OR/RR only. metafor deliberately does NOT apply it to measure =
-  # "RTET" (not even under to = "all"), because the tetrachoric is not undefined on such
-  # a table -- its ML lands on the boundary r = +-1 with an enormous variance, which is
-  # how the estimator says the correlation is not identified by these counts. Shrinking
-  # the table first replaces that honest refusal with an interior estimate carrying an
-  # ordinary-looking SE that does not account for the shrinkage: on 0/20/10/10 it
-  # reported r = -0.856 with se = 0.113 against metafor's -1 with se = 149.0, i.e. a
-  # 1313x inverse-variance weight on a study whose correlation the data cannot pin down.
+  # feeding the OR, the RR and the OR-derived SMD only. metafor deliberately does NOT
+  # apply it to measure = "RTET" (not even under to = "all"), because the tetrachoric is
+  # not undefined on such a table -- its ML lands on the boundary r = +-1 with an enormous
+  # variance, which is how the estimator says the correlation is not identified by these
+  # counts. Shrinking the table first would replace that honest refusal with an interior
+  # estimate carrying an ordinary-looking SE that does not account for the shrinkage: on
+  # 0/20/10/10 the corrected table 0.5/20.5/10.5/10.5 gives r = -0.856 with se = 0.113
+  # against the raw table's -1 with se = 149.03 -- an SE 1313x smaller, i.e. a 1.7e6x
+  # inverse-variance weight, on a study whose correlation the data cannot pin down.
   raw_cases_exp     <- n_cases_exp
   raw_controls_exp  <- n_controls_exp
   raw_cases_nexp    <- n_cases_nexp

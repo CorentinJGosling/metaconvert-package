@@ -22,8 +22,9 @@
 # that weaker predicate; see its comment), and .ci_width() takes the width as an
 # absolute value: a transposed interval describes the same interval, so its width
 # is the same and it yields the same result as the correctly ordered one.
-# .ordered_ci() does the matching job for interval bounds that are passed through
-# to the output rather than recomputed from a standard error.
+# .ci_lower() / .ci_upper() (a pmin/pmax pair) do the matching job for interval
+# bounds that are passed through to the output rather than recomputed from a
+# standard error.
 #
 # Route new code through these helpers instead of writing the guard inline. The
 # defect has the same shape on every route that takes a dispersion or an
