@@ -122,7 +122,19 @@ PROVENANCE_FILE <- "PROVENANCE.csv"
   if (!length(study_file) || is.na(study_file)) return(character(0))
   txt <- readLines(study_file, warn = FALSE)
   calls <- unique(unlist(regmatches(txt, gregexpr("es_from_[A-Za-z0-9_]+", txt))))
-  if (!length(calls)) return(character(0))
+  ## A study can also enter the package by a second door: a namespaced call to an
+  ## internal. 10_reliability.R's V36 false-positive sweep calls
+  ## metaConvert:::.validate_input_data() directly and on purpose ("going through
+  ## convert_df() + summary() instead makes the same sweep ~100x slower for an
+  ## identical answer"). The es_from_* seed cannot see that, so
+  ## 10b_v36_false_positive declared es_from_ICC.R and internal_guards.R and NOT
+  ## internal_flags.R -- the file V36 itself lives in. internal_flags.R could be
+  ## rewritten and check_provenance() would still report that aggregate as fresh,
+  ## which is the same failure this function's header describes for the arithmetic
+  ## files, one door along.
+  direct <- unique(sub("^metaConvert:::?", "",
+    unlist(regmatches(txt, gregexpr("metaConvert:::?[.]?[A-Za-z][A-Za-z0-9_.]*", txt)))))
+  if (!length(calls) && !length(direct)) return(character(0))
 
   pkg_root <- normalizePath(sim_path(".."), winslash = "/", mustWork = FALSE)
   r_files <- list.files(file.path(pkg_root, "R"), pattern = "[.]R$", full.names = TRUE)
@@ -137,9 +149,21 @@ PROVENANCE_FILE <- "PROVENANCE.csv"
   owner <- stats::setNames(rep(names(defs), lengths(defs)), unlist(defs))
 
   seed <- unname(names(defs)[vapply(defs, function(d) any(calls %in% d), logical(1))])
-  if (!length(seed)) return(character(0))
 
-  ## close under the call graph
+  ## The DEFINING file of a directly-called internal, and deliberately not its call
+  ## graph. MEASURED: closing .validate_input_data() the way the es_from_* seed is
+  ## closed pulls in 44 of the ~50 files in R/, because the flag layer names most of
+  ## the package. That is the "depend on the whole of R/" design this function's
+  ## header rejects by name -- every aggregate stale on any package commit, so the
+  ## check goes permanently red and is ignored. One file is the smallest record that
+  ## makes a change to the called code visible at all, and it costs nothing: it adds
+  ## internal_flags.R to study 10 and touches no other study (that namespaced call
+  ## is the only one in studies/). Widening this to the full closure is a policy
+  ## change about how noisy check_provenance() may be, not a bug fix.
+  seed_direct <- unname(owner[intersect(direct, names(owner))])
+  if (!length(seed) && !length(seed_direct)) return(character(0))
+
+  ## close under the call graph -- from the es_from_* seed only; see seed_direct above
   have <- seed
   repeat {
     called <- unique(unlist(lapply(have, function(f) {
@@ -152,7 +176,7 @@ PROVENANCE_FILE <- "PROVENANCE.csv"
     if (!length(add)) break
     have <- c(have, add)
   }
-  sort(have)
+  sort(unique(c(have, seed_direct)))
 }
 
 

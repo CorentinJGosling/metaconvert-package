@@ -146,6 +146,32 @@ test_that("the dependency derivation actually finds something", {
   expect_true(any(grepl("es_from_stand_RR[.]R$", .pkg_files_for(s5))))
 })
 
+test_that("a namespaced call to an internal is seeded too", {
+  # The second door into the package. 10_reliability.R's V36 sweep calls
+  # metaConvert:::.validate_input_data() directly rather than going through
+  # convert_df(), so the es_from_* seed cannot see it: study 10 used to declare
+  # es_from_ICC.R and internal_guards.R and NOT internal_flags.R, the file V36 lives
+  # in. The published false-positive rates were certified by a record blind to the
+  # code producing them.
+  s10 <- .study_file_for("10b_v36_false_positive_reps400.csv")
+  expect_true(!is.na(s10))
+  expect_match(readLines(s10, warn = FALSE), "metaConvert:::[.]validate_input_data",
+               all = FALSE)
+  expect_true(any(grepl("internal_flags[.]R$", .pkg_files_for(s10))))
+
+  # ...and only the DEFINING file, not its call graph. Closing internal_flags.R the
+  # way the es_from_* seed is closed reaches 44 of the ~50 files in R/, which is the
+  # "depend on the whole of R/" design the module rejects by name. Keep this well
+  # under that: a set this size means every unrelated package commit marks study 10
+  # stale and the check goes permanently red.
+  expect_lt(length(.pkg_files_for(s10)), 10L)
+
+  # The other studies are untouched by the second seed -- that call is the only
+  # namespaced one in studies/.
+  s1 <- .study_file_for("01a_smd_to_cor_r_nrep1000.csv")
+  expect_false(any(grepl("internal_flags[.]R$", .pkg_files_for(s1))))
+})
+
 test_that("every aggregate maps to exactly one study file", {
   aggs <- list.files(file.path(.sim_root, "data", "aggregated"),
                      pattern = "_nrep[0-9]+[.]csv$", full.names = TRUE)
