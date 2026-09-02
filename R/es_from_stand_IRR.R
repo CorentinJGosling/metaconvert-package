@@ -83,13 +83,28 @@ es_from_cases_time <- function(n_cases_exp, n_cases_nexp, time_exp, time_nexp,
 
   ird <- baseline_rate * (1 - irr)
 
-  es$rd <- ifelse(reverse_irr, -ird, ird)
   # delta method if baseline_rate given, poisson variance otherwise
   ird_se <- ifelse(
     provided_baseline,
     baseline_rate * irr * logirr_se,
     sqrt(n_cases_exp / time_exp^2 + n_cases_nexp / time_nexp^2)
   )
+
+  # A derived rate-difference SE of exactly 0 is a zero sampling variance -- an
+  # infinite inverse-variance weight, or an rma() abort. It is the person-time mirror
+  # of the guard in es_from_2x2(), es_from_or_se() and es_from_rr_se(): here it arises
+  # at baseline_rate = 0, where ird_se = baseline_rate * irr * logirr_se collapses,
+  # and .baseline_risk_or_na() deliberately keeps 0 legal. Given the delta method's own
+  # assumption that the rate is a known constant, ird = 0 IS the correct conditional
+  # point estimate there; what is wrong is shipping it as a poolable row, so the row
+  # declines both. Keyed on the SE and never on ird itself: a genuinely null rate
+  # difference has ird = 0 with a perfectly good standard error and must survive.
+  # See R/internal_guards.R.
+  degenerate_rd <- !is.na(ird_se) & ird_se <= 0
+  ird_se <- .positive_or_na(ird_se)
+  ird <- ifelse(degenerate_rd, NA_real_, ird)
+
+  es$rd <- ifelse(reverse_irr, -ird, ird)
   es$rd_se <- ird_se
   es$rd_ci_lo <- es$rd - qnorm(.975) * ird_se
   es$rd_ci_up <- es$rd + qnorm(.975) * ird_se

@@ -15,40 +15,61 @@
 # so the SE must be propagated by the delta method,
 #     SE(logRR) = |d logRR / d logOR| * logor_se.
 #
-# The derivative is derived analytically from the UNROUNDED root of the exact
-# solve (.solve_2x2_from_or, R/internal_multiple_formulas.R:356). With
-# a = n_cases_exp, b = n_exp - a, c = n_cases - a, d = n_nexp - n_cases + a:
-#     logRR = log(a * n_nexp / (c * n_exp))       => d logRR/da = 1/a + 1/c
-#     logOR = log(a) + log(d) - log(b) - log(c)   => d logOR/da = 1/a+1/b+1/c+1/d
-#     g = (1/a + 1/c) / (1/a + 1/b + 1/c + 1/d)
-# For or = 2, n_exp = 300, n_nexp = 700, n_cases = 200 the quadratic
-#   (1-or) a^2 + [or(n_cases+n_exp) + n_nexp - n_cases] a - or*n_cases*n_exp = 0
-# has feasible root a = 84.793265217496 (b = 215.2067, c = 115.2067,
-# d = 584.7933), giving g = 0.7630761098. Cross-checked against a central
-# numerical derivative of the same solve: 0.7630761105. (Perturbing the
-# EXPORTED route returns exactly 0 because the solved table is rounded to
-# integers, hence the analytic route.) Rounding the table to a = 85 before
-# differentiating gives 0.7628506, 3e-4 away, so the 1e-3 tolerance below
-# accepts either implementation of the fix while excluding today's value.
+# The derivative is the ratio of the two MARGINAL standard errors at the
+# reconstructed table -- Katz over Woolf -- because SE(logOR) and SE(logRR) describe
+# the same product-binomial sampling model:
+#     SE(logOR) = sqrt(1/a + 1/b + 1/c + 1/d)                     (Woolf)
+#     SE(logRR) = sqrt(1/a - 1/n1 + 1/c - 1/n2)                   (Katz et al. 1978)
+#     g = SE(logRR) / SE(logOR)
+# The fixed-margins alternative g = (1/a+1/c)/(1/a+1/b+1/c+1/d) is the CONDITIONAL
+# derivative: it holds the case margin fixed, but that margin is an observed
+# statistic, not a design constant, and unlike for the odds ratio it is not ancillary
+# for the risk ratio. A 4e5-replicate product-binomial Monte Carlo on 90/10 vs 60/40
+# gives SD(logRR) = 0.088867, matching Katz (0.088192) and not the conditional form
+# (0.070767).
+#
+# This block deliberately does NOT hard-code the derivative: an earlier version pinned
+# 0.7630761098, the conditional value, and passed for two reasons that are worth
+# recording. Its configuration is a 20%-event table, where the two forms agree to
+# 0.26%; and the constant was transcribed from the same derivation the code used, so
+# the test could only ever confirm that the code matched itself. The pin below is
+# external instead: when the reported logor_se is exactly the one the reconstructed
+# table implies, the propagated logrr_se must equal metafor's own RR standard error.
 test_that("AUDIT-blocker: or_to_rr metaumbrella_* propagates the reported logor_se into logrr_se", {
-  g <- 0.7630761098  # d logRR / d logOR at the unrounded exact-solve root
-  ses <- c(0.05, 0.2580662, 1.5)
+  skip_if_not_installed("metafor")
+
+  # A table whose event rates are high enough to separate the two candidate
+  # derivatives (they differ by 24% here, against 0.3% at 20% events).
+  a <- 90; b <- 10; cc <- 60; d <- 40
+  n_exp <- a + b; n_nexp <- cc + d
+
+  mf_or <- metafor::escalc(measure = "OR", ai = a, bi = b, ci = cc, di = d)
+  mf_rr <- metafor::escalc(measure = "RR", ai = a, bi = b, ci = cc, di = d)
+  or_hat     <- exp(as.numeric(mf_or$yi))
+  logor_se   <- sqrt(as.numeric(mf_or$vi))
+  target_se  <- sqrt(as.numeric(mf_rr$vi))
 
   for (method in c("metaumbrella_cases", "metaumbrella_exp")) {
-    got <- vapply(ses, function(s) {
-      suppressMessages(suppressWarnings(
-        es_from_or_se(or = 2, logor_se = s, n_exp = 300, n_nexp = 700,
-                      n_cases = 200, n_controls = 800, or_to_rr = method)
-      ))$logrr_se
-    }, numeric(1))
-
-    # The frozen value today is 0.1252935 for all three inputs.
-    expect_equal(got, g * ses, tolerance = 1e-3,
+    got <- suppressMessages(suppressWarnings(
+      es_from_or_se(or = or_hat, logor_se = logor_se,
+                    n_exp = n_exp, n_nexp = n_nexp,
+                    n_cases = a + cc, n_controls = b + d, or_to_rr = method)
+    ))
+    # EXTERNAL pin: the reported SE is exactly the table's own, so the propagation
+    # must reproduce metafor's RR standard error, not merely something proportional.
+    expect_equal(got$logrr_se, target_se, tolerance = 1e-8,
+                 info = paste("or_to_rr =", method))
+    # ... and the same study entered as a 2x2 table must not disagree with itself.
+    tab <- es_from_2x2(n_cases_exp = a, n_controls_exp = b,
+                       n_cases_nexp = cc, n_controls_nexp = d)
+    expect_equal(got$logrr_se, tab$logrr_se, tolerance = 1e-8,
                  info = paste("or_to_rr =", method))
   }
 
-  # Same statement as a scale invariant, independent of the numeric constant:
-  # logrr_se must be linear in logor_se with a zero intercept.
+  # Same statement as a scale invariant, independent of any numeric constant:
+  # logrr_se must be linear in logor_se with a zero intercept. This is the property
+  # the propagation exists to provide -- before it, a 30x range in the reported
+  # logor_se returned a byte-identical logrr_se.
   r1 <- suppressMessages(suppressWarnings(
     es_from_or_se(or = 2, logor_se = 0.05, n_exp = 300, n_nexp = 700,
                   n_cases = 200, n_controls = 800)))
@@ -57,11 +78,10 @@ test_that("AUDIT-blocker: or_to_rr metaumbrella_* propagates the reported logor_
                   n_cases = 200, n_controls = 800)))
   expect_equal(r2$logrr_se / r1$logrr_se, 1.5 / 0.05, tolerance = 1e-6)
 
-  # The CI must be rebuilt from the propagated SE, not left at the crude-table
-  # one: exp(0.545017 +- 1.96*1.1446) comfortably includes 1, so a null OR must
-  # not come back as a significant RR.
-  expect_equal(r2$logrr_ci_up - r2$logrr_ci_lo, 2 * qnorm(.975) * g * 1.5,
-               tolerance = 1e-3)
+  # The CI must be rebuilt from the propagated SE, not left at the crude-table one,
+  # so a null OR cannot come back as a significant RR.
+  expect_equal(r2$logrr_ci_up - r2$logrr_ci_lo, 2 * qnorm(.975) * r2$logrr_se,
+               tolerance = 1e-8)
   expect_gt(r2$logrr_ci_up, 0)
   expect_lt(r2$logrr_ci_lo, 0)
 })

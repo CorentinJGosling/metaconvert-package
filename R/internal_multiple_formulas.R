@@ -156,7 +156,7 @@
     )
 
     # The table gives the POINT estimate; the precision comes from the study, not from
-    # the reconstructed counts. See .rr_from_or_se / .dlogrr_dlogor.
+    # the reconstructed counts. See .rr_from_or_se.
     res <- .rr_from_or_se(calc_meta_cases, contingency_meta_cases, or, logor_se)
 
     return(res)
@@ -189,7 +189,8 @@
     )
 
     # Mirror of the metaumbrella_cases branch above: solved table for the point
-    # estimate, reported logor_se delta-propagated for the SE and the CI.
+    # estimate, reported logor_se rescaled by the table's own SE ratio for the SE and
+    # the CI -- not a delta-method derivative through the reconstruction.
     res <- .rr_from_or_se(calc_meta_exp, contingency_meta_exp, or, logor_se)
 
     return(res)
@@ -432,83 +433,13 @@
 }
 
 
-#' Derivative of log RR with respect to log OR, at the reconstruction's own root
-#'
-#' With all four margins fixed, the odds ratio pins the 2x2 table, so the risk ratio
-#' read off that table carries no information the odds ratio did not already carry.
-#' Its standard error is therefore the delta-method propagation of the reported one,
-#' \eqn{SE(\log RR) = |d \log RR / d \log OR| \cdot SE(\log OR)}, and NOT the sampling
-#' SE of the reconstructed counts -- which is invariant to the reported precision, so
-#' a 30x range in the supplied \code{logor_se} used to return a byte-identical
-#' \code{logrr_se} and a null OR could come back as a significant RR.
-#'
-#' With \eqn{a} = n_cases_exp and the other cells following from the margins
-#' (\eqn{b = n\_exp - a}, \eqn{c = n\_cases - a}, \eqn{d = n\_nexp - n\_cases + a}):
-#' \deqn{\log RR = \log(a \cdot n\_nexp / (c \cdot n\_exp)) \Rightarrow d\log RR/da = 1/a + 1/c}
-#' \deqn{\log OR = \log a + \log d - \log b - \log c \Rightarrow d\log OR/da = 1/a + 1/b + 1/c + 1/d}
-#' and the derivative wanted is the ratio of the two.
-#'
-#' It MUST be evaluated at the UNROUNDED root of the reconstruction quadratic (the same
-#' one \code{\link{.solve_2x2_from_or}} solves, before its integer/half-integer
-#' rounding). Neither of the two obvious shortcuts works: perturbing the exported route
-#' returns EXACTLY 0, because the solved cells are rounded and are invariant to a small
-#' perturbation of the OR -- that would ship \code{logrr_se = 0}, an infinite
-#' meta-analytic weight, strictly worse than the defect it repairs. Evaluating the
-#' closed form at the rounded table is merely imprecise (0.7628506 against 0.7630761 on
-#' the worked case), but there is no reason to accept even that.
-#'
-#' @param or odds ratio, natural scale
-#' @param n_exp,n_nexp,n_cases margins of the reconstructed table
-#'
-#' @return the derivative, or \code{NA_real_} when the quadratic has no feasible root
-#'   or the root leaves a cell non-positive. NA means "fall back to the
-#'   reconstructed-table SE", never "fail".
-#' @noRd
-.dlogrr_dlogor <- function(or, n_exp, n_nexp, n_cases) {
-  if (anyNA(c(or, n_exp, n_nexp, n_cases))) return(NA_real_)
-  if (!is.finite(or) || or <= 0) return(NA_real_)
-  if (!is.finite(n_exp) || !is.finite(n_nexp) || n_exp <= 0 || n_nexp <= 0) return(NA_real_)
-
-  N <- n_exp + n_nexp
-  if (!is.finite(n_cases) || n_cases <= 0 || n_cases >= N) return(NA_real_)
-  n_controls <- N - n_cases
-
-  A <- 1 - or
-  B <- or * (n_cases + n_exp) + n_nexp - n_cases
-  C <- -or * n_cases * n_exp
-
-  a <- if (abs(A) < 1e-12) {
-    # or == 1: independence, the quadratic collapses to a linear equation.
-    if (abs(B) < 1e-12) return(NA_real_)
-    -C / B
-  } else {
-    disc <- B^2 - 4 * A * C
-    if (!is.finite(disc) || disc < 0) return(NA_real_)
-    roots <- c((-B + sqrt(disc)) / (2 * A), (-B - sqrt(disc)) / (2 * A))
-    feas <- roots[is.finite(roots) & roots > 0 & roots < n_exp &
-                  roots < n_cases & (n_controls - n_exp + roots) > 0]
-    if (length(feas) != 1L) return(NA_real_)
-    feas
-  }
-
-  b <- n_exp - a
-  cc <- n_cases - a
-  d <- n_controls - b
-  if (!is.finite(a) || min(a, b, cc, d) <= 0) return(NA_real_)
-
-  num <- 1 / a + 1 / cc
-  den <- num + 1 / b + 1 / d
-  if (!is.finite(num) || !is.finite(den) || den == 0) return(NA_real_)
-  num / den
-}
-
 
 #' Propagate a reported log-OR SE onto the reconstructed log RR
 #'
 #' Keeps the exactly solved table for the POINT estimate and rebuilds the SE and the
 #' confidence interval from the study's own precision. Falls back to the
 #' reconstructed-table quartet whenever \code{logor_se} is missing (the
-#' \code{es_from_or()} imputed-SE route) or the derivative is not computable.
+#' \code{es_from_or()} imputed-SE route) or either table SE is unusable.
 #'
 #' @param calc the \code{es_from_2x2()} result on the reconstructed table
 #' @param tab the reconstructed table (a one-row data.frame of the four cells)
@@ -526,17 +457,37 @@
   # attach a propagated SE to a point estimate the reconstruction could not produce.
   if (length(calc$logrr) != 1L || !is.finite(calc$logrr)) return(fallback)
 
-  # Margins are recovered from the table itself, so the derivative is taken at exactly
-  # the margins the reconstruction used -- whichever rung of the cascade supplied them
-  # -- while the root is re-solved from the REPORTED or, i.e. unrounded.
-  n_exp   <- tab$n_cases_exp + tab$n_controls_exp
-  n_nexp  <- tab$n_cases_nexp + tab$n_controls_nexp
-  n_cases <- tab$n_cases_exp + tab$n_cases_nexp
+  # The derivative wanted is the ratio of the two MARGINAL standard errors at the
+  # reconstructed table -- Katz over Woolf -- because both describe the same
+  # product-binomial sampling model, the one metafor::escalc(measure = "RR"), the
+  # Cochrane Handbook and es_from_2x2() all use. es_from_2x2() has already computed
+  # both on this table, so no separate solve is needed.
+  #
+  # Differentiating through the reconstruction with all four margins held FIXED gives
+  # a different quantity: the conditional SE. The case margin is an observed statistic,
+  # not a design constant, and unlike for the odds ratio it is not ancillary for the
+  # risk ratio, so conditioning on it discards real variability. Measured on
+  # 90/10 vs 60/40, the fixed-margins form returned 0.0710669 where the marginal form
+  # and metafor both return 0.0881917 -- a 1.54x weight inflation, and the same study
+  # entered as a 2x2 table disagreed with itself. The two forms are closest at low event
+  # rates and separate as events become common, which is why a 20%-event test case did
+  # not reveal it: over control rates 0.02-0.25 with RR 0.5-2 and n = 100/500 the worst
+  # relative gap between the two derivatives is 1.80% (at p_ctrl = 0.25, RR = 2,
+  # n = 100), against 24% on the 90/10 vs 60/40 table above. A 4e5-replicate product-binomial Monte
+  # Carlo gives SD(logRR) = 0.088867, against 0.070767 when conditioning on the
+  # observed case margin.
+  #
+  # Linearity in logor_se -- the property this propagation exists to provide -- is
+  # unchanged, the ratio being a constant of the table.
+  if (length(calc$logrr_se) != 1L || !is.finite(calc$logrr_se) || calc$logrr_se <= 0) {
+    return(fallback)
+  }
+  if (length(calc$logor_se) != 1L || !is.finite(calc$logor_se) || calc$logor_se <= 0) {
+    return(fallback)
+  }
 
-  g <- .dlogrr_dlogor(or, n_exp, n_nexp, n_cases)
-  if (length(g) != 1L || is.na(g) || !is.finite(g)) return(fallback)
-
-  se <- abs(g) * logor_se
+  se <- calc$logrr_se * (logor_se / calc$logor_se)
+  if (!is.finite(se) || se <= 0) return(fallback)
   cbind(
     logrr = calc$logrr,
     logrr_se = se,
@@ -1210,8 +1161,23 @@
       r_lo[degenerate] <- NA_real_
       r_up[degenerate] <- NA_real_
       # A non-finite r or vr is not an estimate at all, unlike the boundary pair above.
+      #
+      # vr == 0 is the third boundary shape and it breaks the premise of the paragraph
+      # above. On a PERFECT-ASSOCIATION table -- both off-diagonal cells zero -- the
+      # boundary r does NOT arrive with an enormous vi: escalc(measure = "RTET")
+      # returns vi = 0 exactly. Enumerating every table with cells 0..6 and N >= 4
+      # (2366 tables), vi == 0 occurs on exactly the 66 perfect-association tables and
+      # nowhere else. Keeping that pair would export r = +-1 with r_se = 0, i.e. an
+      # infinite inverse-variance weight, and rma() aborts on it -- which is precisely
+      # what the risk-difference guard in es_from_2x2() already refuses for the same
+      # tables. A zero variance is not a precise estimate, it is the same statement
+      # "not identified" that the enormous-vi shape makes at the other extreme, so it
+      # is declined the same way.
+      # The point estimate is kept, matching the convention used for a reported omega
+      # with no variance source: es present, se = NA, so the row stays visible and
+      # countable while summary() leaves it out of the pool.
       r[!is.finite(r) | !is.finite(vr)] <- NA_real_
-      vr[!is.finite(vr)] <- NA_real_
+      vr[!is.finite(vr) | (!is.na(vr) & vr <= 0)] <- NA_real_
 
       dat <- cbind(r, vr, r_lo, r_up, z, vz, z_lo, z_up)
       return(dat)
@@ -1324,19 +1290,19 @@
   # then exactly 1 (vd_crude below is the same expression .es_from_d() uses). That
   # preserves agreement with metafor's measure = "RBIS" on the rows it applies to.
   #
-  # SCOPE: that "exactly 1" holds only under smd_var = "borenstein" (LS2), the default.
-  # vd_crude below is hard-coded to the LS2 form, whereas .es_from_d() builds its
-  # DEFAULT d_se under whichever convention is in force, so under the opt-in
-  # smd_var = "hedges_olkin" (alias "viechtbauer", metafor's LS) an ordinary crude row
-  # arrives with vd = (leading + (d*J)^2/(2N))/J^2 and gets prec_ratio = 1.0257 at
-  # n = 30/30, d = 0.5 -- inflating both r_se^2 and z_se^2 by a pure estimator-convention
-  # factor (11.6% at N = 16, 5.5% at N = 30, 0.74% at N = 200) and taking z_se^2 off the
-  # stabilised 1/(N - 1). The repair belongs in .es_from_d(), which is the only place
-  # that knows whether d_se was DEFAULTED (in which case the LS2 default is the right
-  # reference) or SUPPLIED by the user (in which case vd must pass through untouched, as
-  # it does today); normalising here would make user-supplied-SE rows depend on smd_var
-  # for the first time. See R/internal_es_from_d.R and the note on the NEWS/cran-comments
-  # "bit-identical to metafor RBIS" sentence, which is likewise a borenstein-only claim.
+  # HISTORICAL NOTE (fixed upstream, in .es_from_d()): vd_crude below is hard-coded to
+  # the LS2 form, and .es_from_d() used to hand over whatever default variance smd_var
+  # had selected. Under the opt-in smd_var = "hedges_olkin" (alias "viechtbauer",
+  # metafor's LS) an ordinary crude row therefore arrived with
+  # vd = (leading + (d*J)^2/(2N))/J^2 and got prec_ratio = 1.0257 at n = 30/30, d = 0.5,
+  # inflating r_se^2 and z_se^2 by a pure estimator-convention factor and taking z_se^2
+  # off the stabilised 1/(N - 1). .es_from_d() now distinguishes a SUPPLIED d_se (passed
+  # through untouched, so a user-reported SE never depends on smd_var) from a DEFAULTED
+  # one (handed over as vd_ls2, the LS2 expression) -- see the note above dat_r in
+  # R/internal_es_from_d.R. So the "exactly 1" above now holds under either setting:
+  # measured at n = 30/30, d = 0.5, r_se and z_se^2 are identical across smd_var,
+  # z_se^2 = 1/(N - 1) = 0.01694915, and r_se^2 = 0.02273584 matches
+  # metafor::escalc(measure = "RBIS") to 15 digits for both.
   vd_crude <- (n_exp + n_nexp) / (n_exp * n_nexp) + d^2 / (2 * (n_exp + n_nexp))
   prec_ratio <- ifelse(!is.na(vd) & is.finite(vd) & !is.na(vd_crude) & vd_crude > 0,
                        vd / vd_crude, 1)
@@ -1417,7 +1383,14 @@
     if (any(saturated)) {
       .notify_once(
         "viechtbauer_biserial_out_of_range",
-        "The biserial correlation of ", sum(saturated), " row(s) falls outside [-1, 1] ",
+        # No count: .smd_to_cor() is called ONE ROW AT A TIME (via mapply in
+        # .es_from_d(), and once per route in convert_df()), so sum(saturated) here is
+        # the count within a single call -- always 1 -- not the number of affected
+        # studies. It read "1 row(s)" on a dataset with 6 distinct saturated studies
+        # across 9 routes. Counting honestly would mean accumulating across routes and
+        # de-duplicating by study, which this scope cannot see; until then the notice
+        # says only what it can support.
+        "One or more rows have a biserial correlation that falls outside [-1, 1] ",
         "under smd_to_cor = \"viechtbauer\" (this happens above |d| of roughly 2.6). ",
         "Their Fisher's z is returned as NA rather than clamped, because a clamped value ",
         "is a function of the group-size split alone and is identical for any two such ",

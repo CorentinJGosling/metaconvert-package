@@ -248,8 +248,13 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
   #    log(1 - .) or (1 - .)^(1/3), so it is excluded on those scales only.
   ci_usable <- if (identical(alpha_to_es, "raw")) rep(TRUE, n) else (ci_lo < 1 & ci_up < 1)
   ci_usable[is.na(ci_usable)] <- FALSE
+  # An interval that does not bracket its own point estimate is self-contradictory, and
+  # its width is not that estimate's precision. es_from_icc() already refuses it; the
+  # two twins did not, so the same input produced an SE here and NA there.
+  contains <- !is.na(cronbach_alpha) & !is.na(ci_lo) & !is.na(ci_up) &
+    cronbach_alpha >= ci_lo & cronbach_alpha <= ci_up
   from_ci <- which(valid_es & se_defined & is.na(alpha_es_se) &
-                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable)
+                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable & contains)
   if (length(from_ci)) {
     alpha_es_se[from_ci] <-
       abs(fwd(ci_up[from_ci]) - fwd(ci_lo[from_ci])) / (2 * qnorm(0.975))

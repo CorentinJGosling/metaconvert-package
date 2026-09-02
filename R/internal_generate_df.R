@@ -529,7 +529,25 @@
   # MaxAD is k-invariant and, because diff_max = 2*dispersion_max for every
   # measure, coincides exactly with E3 at k = 2 while complementing it for k > 2.
   res_dispersion = data.frame(tapply(dat_long$es, dat_long$row_id, .dispersion_stat))
+  # E1's threshold for the log-ratio family is stated on the LOG scale, but under
+  # exp = TRUE the per-method values above are natural-scale ratios, so the MaxAD just
+  # computed is not the quantity that threshold names. It cannot be recovered further
+  # downstream either: a max-absolute-deviation-from-the-median depends on the median,
+  # and the per-method values are not carried past this point -- only their min, max
+  # and MaxAD are. The natural-to-log delta approximation that stood in for it,
+  # MaxAD / sqrt(min * max), is attained at a DIFFERENT element from the log-scale one
+  # in about a fifth of rows, so no scalar divisor can repair it: measured against the
+  # exact statistic it overstates by 24% on a 3-method row (2.897 against 2.332) and
+  # flips roughly 11% of E1 decisions, a quarter of the flags it raises being spurious.
+  # So it is computed here, where the values live, as .dispersion_stat(log(v)).
+  # NA unless every value is positive, which on a ratio scale they are.
+  res_dispersion_log = data.frame(tapply(dat_long$es, dat_long$row_id, function(v) {
+    v <- v[is.finite(v)]
+    if (length(v) < 2 || any(v <= 0)) return(NA_real_)
+    .dispersion_stat(log(v))
+  }))
   dispersion = data.frame(dispersion_es = res_dispersion[,1],
+                          dispersion_es_log = res_dispersion_log[,1],
                           row_id = rownames(res_dispersion))
 
   dat_long = merge(x = dat_long,
@@ -540,12 +558,20 @@
   # happens to share a name with the carrier frame: a column called "blank" or
   # "dat_long" then joins on NA, produces a 0-row result, and crashes summary() on the
   # default path.
+  # Pre-allocate on x, so that both x_transit (which gets the value) and x_empty (rows
+  # with no long-format entry) carry the column and rbind() below still aligns.
+  # dispersion_es is already a column of x by this point; this one is new.
+  if (!paste0("dispersion_es_log", suffix) %in% colnames(x)) {
+    x[, paste0("dispersion_es_log", suffix)] <- NA_real_
+  }
+
   if (main_es == TRUE & nrow(dat_long) != 0) {
     dispersion$row_id = as.numeric(as.character(dispersion$row_id))
     x_transit = merge(x = dispersion[, "row_id", drop = FALSE],
                       y = x, by = "row_id")
     if (nrow(x_transit) == nrow(dispersion) && all(dispersion$row_id == x_transit$row_id)) {
       x_transit[, paste0("dispersion_es", suffix)] <- dispersion$dispersion_es
+      x_transit[, paste0("dispersion_es_log", suffix)] <- dispersion$dispersion_es_log
     } else {
       stop("an error occured when estimating the 'dispersion_es' variable")
     }
@@ -565,6 +591,7 @@
     x_transit[, paste0("es_ci_up", suffix)] <- dat_long$es_ci_up
     x_transit[, paste0("es_ci_lo", suffix)] <- dat_long$es_ci_lo
     x_transit[, paste0("dispersion_es", suffix)] <- dat_long$dispersion_es
+    x_transit[, paste0("dispersion_es_log", suffix)] <- dat_long$dispersion_es_log
 
     x_empty = x[!x$row_id %in% x_transit$row_id, ]
 

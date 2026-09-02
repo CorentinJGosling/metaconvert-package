@@ -67,7 +67,8 @@
 #'
 #' **B.** Second, the formulas implemented in the metaumbrella package can be used
 #' (\code{or_to_rr = "metaumbrella_cases"} or \code{or_to_rr = "metaumbrella_exp"}).
-#' Both reconstruct the 2x2 table the OR came from, then read the RR off it.
+#' Both reconstruct the 2x2 table the OR came from, read the RR point estimate off
+#' it, and then rescale the study's own reported precision onto the log RR.
 #' This argument requires (or + logor_se + n_cases + n_controls) or (or + logor_se + n_exp + n_nexp)
 #' to generate a RR.
 #' More precisely, when the OR value and its standard error, plus either
@@ -78,7 +79,41 @@
 #' in the exposed and non-exposed groups compatible with the actual value of the OR.
 #' Then, the functions select the contingency table whose standard error coincides best with
 #' the standard error reported.
-#' The RR value and its standard are obtained from this estimated contingency table.
+#' The RR **point estimate** is read off this estimated contingency table. Its
+#' **standard error is not**. The table's own \code{logrr_se} is rescaled by the ratio
+#' of the reported to the reconstructed log-OR standard error,
+#' \deqn{logrr\_se = logrr\_se_{table} \times \frac{logor\_se_{reported}}{logor\_se_{table}}}
+#' so that the precision the source study reported -- rather than the precision the
+#' reconstructed counts happen to imply -- governs the weight the converted RR receives.
+#' That multiplier is the ratio of the two **marginal** standard errors at the
+#' reconstructed table (Katz over Woolf); both describe the same product-binomial
+#' sampling model that \code{\link{es_from_2x2}()}, \code{metafor::escalc(measure = "RR")}
+#' and the Cochrane Handbook use. It is a constant of the table, so \code{logrr_se} stays
+#' linear in \code{logor_se}. When the reported standard error is the reconstructed
+#' table's own, all three agree exactly: for the table 90/10 versus 60/40
+#' (\code{or = 6}, \code{logor_se = 0.39086798}),
+#' \code{metafor::escalc(measure = "RR")}, \code{es_from_2x2()} and
+#' \code{es_from_or_se(or_to_rr = "metaumbrella_exp")} all return
+#' \code{logrr_se = 0.08819171}.
+#'
+#' Differentiating through the reconstruction with all four margins held **fixed** --
+#' the conditional standard error, which earlier versions of this function used -- is a
+#' different and systematically smaller quantity, because the case margin is an observed
+#' statistic rather than a design constant and, unlike for the odds ratio, is not
+#' ancillary for the risk ratio. On that same table the fixed-margins form gives
+#' \code{logrr_se = 0.0710669} against the marginal 0.0881917: a 1.54x inflation of the
+#' study's inverse-variance weight, and the same study disagreeing with itself when
+#' entered as a 2x2 table instead of as an OR. A 4e5-replicate product-binomial
+#' simulation of that table gives \eqn{SD(\log RR) \approx 0.089}, i.e. the marginal
+#' value. The two forms coincide to within a fraction of a percent at ordinary 2-25%
+#' event rates and separate as events become common, which is why a low-event test case
+#' does not reveal the difference.
+#'
+#' The RR confidence interval is rebuilt from the rescaled standard error as
+#' \eqn{logrr \pm qnorm(.975) \times logrr\_se}. If no usable standard error is
+#' available -- \code{logor_se} missing, or either standard error at the reconstructed
+#' table non-finite or zero -- the reconstructed table's own RR quartet is returned
+#' unchanged.
 #'
 #' **Two refinements to that search.**
 #'

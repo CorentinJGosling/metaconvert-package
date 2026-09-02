@@ -115,8 +115,13 @@
 
 # Hedges' small-sample correction for the WITHIN-SUBJECT user-input branches.
 #
-# A paired design has one sample, so the correction runs on n - 1, which is what
-# every native pre/post kernel applies (internal_multiple_formulas.R:1757/1790/1817).
+# A paired design has one sample, so the correction runs on n - 1, which is what the
+# native single-group pre/post kernel applies: .single_group_pre_post_to_smd() calls
+# .d_j(n - 1) in its bonett, morris_drm and morris_dz branches (its morris_dav branch
+# uses the Cousineau effective df 2(n - 1)/(1 + r^2) instead), and .paired_t_to_smd()
+# routes through that same kernel. Named rather than line-numbered on purpose: the
+# earlier "internal_multiple_formulas.R:1757/1790/1817" reference had drifted onto an
+# unrelated roxygen block.
 # The between-group "d"/"g" branches below use the pooled J(n_exp + n_nexp - 2)
 # instead; mixing the two inside one gw pool would be wrong by ~0.8% at n = 50
 # (J(49) = 0.98460 against J(98) = 0.99232). n is read from n_exp, the column the
@@ -128,7 +133,13 @@
 .user_within_j <- function(n_exp, n_sample) {
   n <- ifelse(!is.na(n_exp), n_exp, n_sample)
   J <- .d_j(n - 1)
-  ifelse(is.na(J), 1, J)
+  # Two different NAs, and only one of them means "no correction is identified".
+  # A MISSING sample size means J cannot be formed at all, so the entered value is
+  # carried through uncorrected (J = 1), as the "g" branch does. A SUPPLIED sample size
+  # with df <= 1 is a different statement: .d_j() has already warned that Hedges' J is
+  # undefined there, and collapsing that to 1 would silently return an UNCORRECTED gw
+  # while the warning says the row yields NA. Propagate the NA instead.
+  ifelse(is.na(n), 1, J)
 }
 
 # Read a conversion-method argument for the rows a dispatch batch keeps.
@@ -685,6 +696,29 @@ es_from_user_crude <- function(user_es_original_measure_crude,
   }
 
   # natural irr/hr -> log scale
+  # A ratio CI with a non-positive bound cannot yield a log-scale standard error:
+  # log(0) is -Inf, so the quantity does not exist. The block above therefore skips
+  # such a row -- but the generic CI fallback near the top has already put the
+  # NATURAL-scale half-width, (up - lo)/(2*1.96), into se_val, and nothing downstream
+  # distinguishes it from a log-scale one. The row then reaches es_from_or_se(
+  # logor_se = ) / es_from_rr_se(logrr_se = ) with an estimate on the log scale and a
+  # standard error on the natural one, its reported interval silently replaced by a
+  # much wider rebuilt one, and no flag fires: the value sits inside its own interval
+  # (V2/V3), the ratio-scale asymmetry check drops rows it cannot log (V4), and B2b
+  # tests exp(logor_ci_lo), which is positive. Measured: or = 2 with CI [0, 4.5] was
+  # exported as se = 1.14798 = (4.5 - 0)/(2*1.96) and CI [0.211, 18.98].
+  #
+  # The same numbers entered through the or_ci_lo / or_ci_up columns return se = Inf
+  # and two [INVALID] flags, so the only defensible answer here is to refuse the SE as
+  # well: NA leaves the row visible and unpooled, which is the package's convention for
+  # an estimate whose precision could not be recovered.
+  ratio_ci_bad <- orig_type %in% c("or", "rr", "irr", "hr", "logor", "logrr",
+                                   "logirr", "loghr") &
+                   is.na(user_se_crude) &
+                   !is.na(user_ci_lo_crude) & !is.na(user_ci_up_crude) &
+                   !(user_ci_lo_crude > 0 & user_ci_up_crude > 0)
+  if (any(ratio_ci_bad)) se_val[ratio_ci_bad] <- NA_real_
+
   irr_with_se <- which(orig_type == "irr" & !is.na(se_val))
   if (length(irr_with_se) > 0) {
     es_val[irr_with_se] <- log(es_val[irr_with_se])
@@ -1033,6 +1067,30 @@ es_from_user_adj <- function(user_es_original_measure_adj,
                                 ifelse(ot == "irr", "logirr",
                                 ifelse(ot == "hr",  "loghr", ot))))
   }
+
+  # natural irr/hr -> log scale
+  # A ratio CI with a non-positive bound cannot yield a log-scale standard error:
+  # log(0) is -Inf, so the quantity does not exist. The block above therefore skips
+  # such a row -- but the generic CI fallback near the top has already put the
+  # NATURAL-scale half-width, (up - lo)/(2*1.96), into se_val, and nothing downstream
+  # distinguishes it from a log-scale one. The row then reaches es_from_or_se(
+  # logor_se = ) / es_from_rr_se(logrr_se = ) with an estimate on the log scale and a
+  # standard error on the natural one, its reported interval silently replaced by a
+  # much wider rebuilt one, and no flag fires: the value sits inside its own interval
+  # (V2/V3), the ratio-scale asymmetry check drops rows it cannot log (V4), and B2b
+  # tests exp(logor_ci_lo), which is positive. Measured: or = 2 with CI [0, 4.5] was
+  # exported as se = 1.14798 = (4.5 - 0)/(2*1.96) and CI [0.211, 18.98].
+  #
+  # The same numbers entered through the or_ci_lo / or_ci_up columns return se = Inf
+  # and two [INVALID] flags, so the only defensible answer here is to refuse the SE as
+  # well: NA leaves the row visible and unpooled, which is the package's convention for
+  # an estimate whose precision could not be recovered.
+  ratio_ci_bad <- orig_type %in% c("or", "rr", "irr", "hr", "logor", "logrr",
+                                   "logirr", "loghr") &
+                   is.na(user_se_adj) &
+                   !is.na(user_ci_lo_adj) & !is.na(user_ci_up_adj) &
+                   !(user_ci_lo_adj > 0 & user_ci_up_adj > 0)
+  if (any(ratio_ci_bad)) se_val[ratio_ci_bad] <- NA_real_
 
   irr_with_se <- which(orig_type == "irr" & !is.na(se_val))
   if (length(irr_with_se) > 0) {

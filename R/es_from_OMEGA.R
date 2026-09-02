@@ -171,12 +171,21 @@
 #' (a negative estimated error variance) and is not simply a transcription error. It has no
 #' Bonett or Hakstian-Whalen transform, so those scales return \code{NA}; \code{"raw"}
 #' returns the value so it stays inspectable. That escape hatch belongs to this route, not
-#' to the pipeline. \code{\link{convert_df}} bounds \code{omega} at
-#' \eqn{(-\infty, 1]} in Tier-1 validation and, under the default
-#' \code{correct_inputs = TRUE}, sets an out-of-range value to \code{NA} with an
-#' \code{[INVALID]} flag before the route is ever called - deliberately, since a Heywood
-#' omega left on the raw scale would otherwise enter the pool at full weight. To inspect
-#' one through the pipeline, ask for both halves explicitly:
+#' to the pipeline: under the default \code{correct_inputs = TRUE},
+#' \code{\link{convert_df}} sets an out-of-range omega - a Heywood \eqn{\omega > 1}
+#' \emph{or} a negative one - to \code{NA} with an \code{[INVALID] Out-of-range omega}
+#' flag before the route is ever called. Deliberately, since a Heywood omega left on the
+#' raw scale would otherwise enter the pool at full weight.
+#'
+#' The Tier-1 bound is \eqn{[0, 1]}, closed at both ends, with a lower bound of 0 rather
+#' than the \eqn{-\infty} that \code{cronbach_alpha} gets: omega is
+#' \eqn{(\sum \lambda)^2 / ((\sum \lambda)^2 + \sum \theta)}, a square over itself plus
+#' a sum of variances, so it is structurally non-negative, where a negative average
+#' inter-item covariance really can drive alpha below zero. \eqn{\omega = 1} sits on the
+#' closed boundary and passes validation: with \code{omega_to_es = "raw"} and a reported
+#' standard error it is returned unflagged as \code{es = 1} (the Bonett and
+#' Hakstian-Whalen transforms still give \code{NA} there). To inspect an out-of-range
+#' value through the pipeline, ask for both halves explicitly:
 #' \code{convert_df(x, measure = "omega", omega_to_es = "raw", correct_inputs = FALSE)}.
 #' A direct call to \code{es_from_omega()} keeps the value either way.
 #'
@@ -313,8 +322,14 @@ es_from_omega <- function(omega, omega_se, omega_ci_lo, omega_ci_up,
   # perfectly usable. The guard is therefore scale-conditional, so that such a row does
   # not lose its SE and become unpoolable for no reason.
   ci_usable <- if (identical(omega_to_es, "raw")) rep(TRUE, len) else (ci_lo < 1 & ci_up < 1)
+  ci_usable[is.na(ci_usable)] <- FALSE
+  # An interval that does not bracket its own point estimate is self-contradictory, and
+  # its width is not that estimate's precision. es_from_icc() already refuses it; this
+  # twin did not, so the same input produced an SE here and NA there.
+  contains <- !is.na(omega) & !is.na(ci_lo) & !is.na(ci_up) &
+    omega >= ci_lo & omega <= ci_up
   from_ci <- which(transformable & is.na(se) &
-                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable)
+                     !is.na(ci_lo) & !is.na(ci_up) & ci_usable & contains)
   if (length(from_ci)) {
     t_lo <- fwd(ci_lo[from_ci])
     t_up <- fwd(ci_up[from_ci])

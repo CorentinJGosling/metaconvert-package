@@ -112,6 +112,19 @@
                        adjusted, n_cov_ancova, cov_outcome_r, reverse,
                        smd_var = "borenstein") {
   if (missing(d_se)) d_se <- rep(NA_real_, length(d))
+  # A SUPPLIED d_se must be recycled to length(d) before it is used, because the
+  # variance selection below is an ifelse() and ifelse() returns a result the length of
+  # its TEST. With a scalar d_se the test `!is.na(d_se)` is length 1, so rows 2..n of
+  # the selected variance came back NA and g_se was silently blank for every row after
+  # the first. Reachable from es_from_or_se()/es_from_or_ci(), which pass one SE for a
+  # whole vector of d. Recycling here rather than at each call site also matches what
+  # this function already does for smd_var. An incompatible length is an error, not
+  # something to recycle quietly: R's own recycling would pair row i with the wrong SE.
+  if (length(d_se) == 1L && length(d) > 1L) d_se <- rep(d_se, length(d))
+  if (length(d_se) != length(d)) {
+    stop("'d_se' must be length 1 or length(d) (", length(d_se), " vs ", length(d), ")",
+         call. = FALSE)
+  }
   if (missing(n_exp)) n_exp <- rep(NA_real_, length(d))
   if (missing(n_nexp)) n_nexp <- rep(NA_real_, length(d))
   if (missing(n_sample)) n_sample <- rep(NA_real_, length(d))
