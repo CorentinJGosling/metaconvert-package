@@ -31,12 +31,12 @@ Available options:
 \itemize{
 \item \code{smd_max} (default 3): |SMD| above this value is flagged
 \item \code{r_max} (default 0.95): same, for |r|
-\item \code{log_or_max} (default 5): same, for |logOR| and |logRR|
+\item \code{log_or_max} (default 5): same, for the log-ratio family (|logOR|, |logRR|, |logIRR|, |logHR|)
 \item \code{n_min} (default 10): flag sample sizes below this value
 \item \code{iqr_mult} (default 3): IQR multiplier for the cross-row outlier detection
 \item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum absolute deviation of the per-method estimates from their median, for the SMD family (d, g, dw, gw, md, mdw), for r, and for the log-ratio family (logOR, logRR, logIRR, logHR) respectively. Other measures use the SMD value
 \item \code{diff_max_smd} / \code{diff_max_r} / \code{diff_max_logor} (defaults 1.0 / 0.3 / 2.0): maximum min-max ES difference across estimation methods
-\item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
+\item \code{overlap_min} (default 0.85): minimum CI overlap between the min/max estimates (0-1 scale)
 \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
 \item \code{direction_conflict_min} (default 2): number of significantly-positive and significantly-negative studies needed to raise the direction conflict flag (G1)
 \item \code{flag_group} (default NULL): one or more input-column names (e.g. \code{"outcome"} or \code{c("outcome", "subgroup")}) used to scope the cross-row checks (ES/SE/SD outliers, direction conflict, study-duplication, NNT-type and standardizer mixing). With the default \code{NULL} the whole dataset is one pool. Set it for multivariate / multi-outcome data, where a deviation or a repeated \code{study_id} is only meaningful within a group of comparable rows; a study contributing several outcomes is then no longer flagged as a duplicate, and outliers are judged against same-group peers. Per-row and cross-method checks, and the byte-identical templated-data check (V23), are unaffected.

@@ -242,7 +242,7 @@ test_that("AUDIT-scope-V22: ANCOVA-residual-SD note is adjusted-scope only", {
 # "[INFO] Default r_pre_post = %s used (not provided by user)" is appended straight
 # into validation$issues with the column name unquoted, so it too lands in both
 # scopes. r_pre_post is consumed only by the pre/post, mean-change and paired
-# routes (.rows_with_r_consuming_data) -- all crude; the ANCOVA scope's covariate
+# routes (.r_consuming_arms) -- all crude; the ANCOVA scope's covariate
 # correlation is cov_outcome_r, a different column entirely.
 test_that("AUDIT-scope-rprepost: the defaulted-r_pre_post note is crude-scope only", {
   i <- 1L

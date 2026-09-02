@@ -10,7 +10,9 @@ es_from_chisq(
   n_cases,
   n_exp,
   yates_chisq = FALSE,
-  reverse_chisq
+  reverse_chisq,
+  .caller = "es_from_chisq",
+  .info = "chisq"
 )
 }
 \arguments{
@@ -28,6 +30,8 @@ for continuity. When a vector is supplied, each row is back-transformed using
 its own setting. Missing values are treated as \code{FALSE}.}
 
 \item{reverse_chisq}{a logical value indicating whether the direction of generated effect sizes should be flipped.}
+
+\item{.caller, .info}{internal. The name of the entry point the user actually called, and the \code{info_used} its rows will carry. \code{es_from_chisq_pval()} delegates to this function, so without them the phi-family fallback message would name \code{es_from_chisq()} and \code{"chisq"} for a row that used neither.}
 }
 \value{
 This function estimates and converts between several effect size measures.

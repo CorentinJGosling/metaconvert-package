@@ -96,8 +96,11 @@
     "r_pre_post_exp", "r_pre_post_nexp",
     "paired_t_exp", "paired_t_nexp", "reverse_paired_t",
     "paired_t_pval_exp", "paired_t_pval_nexp", "reverse_paired_t_pval",
+    "reverse_paired_t_pval_exp", "reverse_paired_t_pval_nexp",
     "paired_f_exp", "paired_f_nexp", "reverse_paired_f",
+    "reverse_paired_f_exp", "reverse_paired_f_nexp",
     "paired_f_pval_exp", "paired_f_pval_nexp", "reverse_paired_f_pval",
+    "reverse_paired_f_pval_exp", "reverse_paired_f_pval_nexp",
     # plot
     "reverse_plot_means",
     "plot_mean_exp", "plot_mean_nexp",

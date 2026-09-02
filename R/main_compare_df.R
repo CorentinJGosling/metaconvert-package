@@ -45,6 +45,9 @@ compare_df <- function(df_extractor_1, df_extractor_2,
                        tolerance_type = "ratio",
                        output = "html",
                        file_name = "comparison.xlsx") {
+  # An unrecognised value used to fall through every branch and fail later with
+  # "object 'res' not found", which says nothing about the argument that caused it.
+  output <- match.arg(output, c("wide", "long", "html", "html2", "xlsx"))
 
   df_extractor_1 = data.frame(df_extractor_1)
   df_extractor_2 = data.frame(df_extractor_2)
@@ -79,6 +82,27 @@ compare_df <- function(df_extractor_1, df_extractor_2,
 
 
   if (!is.null(ordering_columns)) {
+    # The alignment below matches each dataset's rows to a shared, DE-DUPLICATED list of
+    # key values and assigns them one at a time. A key that repeats therefore selects
+    # several rows for a single destination: base R assigns the first, warns
+    # "replacement element 1 has 2 rows to replace 1 row", and the other rows are
+    # silently dropped from the comparison. The warning is opaque and the data loss is
+    # invisible, so the ambiguity is refused here instead. ordering_columns exists to
+    # line the two sheets up row for row, which a non-unique key cannot do.
+    for (.d in list(df_extractor_1, df_extractor_2)) {
+      .k <- if (length(ordering_columns) > 1) {
+        do.call(paste, c(.d[, ordering_columns, drop = FALSE], sep = "_"))
+      } else .d[, ordering_columns]
+      .dup <- unique(.k[duplicated(.k)])
+      if (length(.dup)) {
+        stop("'ordering_columns' must identify each row uniquely, but ",
+             paste0("'", utils::head(.dup, 5), "'", collapse = ", "),
+             if (length(.dup) > 5) paste0(" (and ", length(.dup) - 5L, " more)") else "",
+             " occur more than once. Add a column that distinguishes them, or drop ",
+             "ordering_columns to compare the sheets in their given row order.",
+             call. = FALSE)
+      }
+    }
     df_extractor_1 = suppressWarnings(df_extractor_1[order(df_extractor_1[, ordering_columns]), cols_retained])
     df_extractor_2 = suppressWarnings(df_extractor_2[order(df_extractor_2[, ordering_columns]), cols_retained])
 
@@ -133,6 +157,12 @@ compare_df <- function(df_extractor_1, df_extractor_2,
   } else if (output == "html") {
     res <- suppressMessages(compareDF::create_output_table(comp, output_type = "html", limit = 5000))
   } else if (output == "html2") {
+    # view_html() drives the RStudio viewer pane; outside RStudio getOption("viewer")
+    # is NULL and calling it raises "attempt to apply non-function".
+    if (is.null(getOption("viewer"))) {
+      stop("output = 'html2' needs the RStudio viewer pane; use output = 'html' instead.",
+           call. = FALSE)
+    }
     res <- suppressMessages(compareDF::view_html(comp))
   } else if (output == "xlsx") {
     if (!grepl(".xlsx", file_name)) {

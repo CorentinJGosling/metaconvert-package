@@ -410,8 +410,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   # (pre/post, mean-change or paired), since datasets with no such data never reach
   # the formulas.
   #
-  # Arm-aware companion to .rows_with_r_consuming_data(): which rows carry r-consuming
-  # data IN THAT ARM. Each mask must be ANDed with its own arm's .r_defaulted_*, never
+  # Which rows carry r-consuming data IN THAT ARM, over .r_consuming_columns().
+  # Each mask must be ANDed with its own arm's .r_defaulted_*, never
   # ORed blindly: on a single-group row -- and on any two-group row whose pre/post,
   # mean-change or paired data sits in one arm only -- the absent arm's r_pre_post is
   # structurally NA, so the plain OR reports an imputation on a row that supplied its
@@ -524,7 +524,9 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   }
 
   # input validation
-  .validate_flag_options(flag_options, context = "convert_df")   # roadmap 2.5
+  # Drop the entries it rejected, so the default really is what gets used.
+  .bad_fo <- .validate_flag_options(flag_options, context = "convert_df")   # roadmap 2.5
+  if (length(.bad_fo)) flag_options <- flag_options[setdiff(names(flag_options), .bad_fo)]
   enable_info <- if (!is.null(flag_options$enable_informational)) {
     flag_options$enable_informational
   } else {
@@ -637,6 +639,27 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
                                       correct_inputs = correct_inputs)
   x <- validation$data
 
+  # V11's bounded-column check may have set an out-of-range r_pre_post to NA, AFTER the
+  # default fill near the top of this function. Such a row is operationally a defaulted
+  # row and must be treated as one, in both directions:
+  #   * it is re-filled here, because otherwise it reaches the es_from_* route with
+  #     r = NA and picks up that route's own formal default (0.8), silently overriding
+  #     the r_pre_post the caller passed to convert_df(). Measured on one row:
+  #     g = 0.0727 under the route default against 0.2887 for the requested r = 0.3.
+  #   * it is folded into .r_defaulted_*, because those masks were computed before the
+  #     invalidation, so the row would otherwise carry r_defaulted = FALSE and get
+  #     neither the V6 note below nor the "(r-sensitive: ...)" annotation summary()
+  #     attaches from attr(res, "r_defaulted").
+  # Inert when correct_inputs = FALSE, which preserves the value instead of NA-ing it.
+  # NOTE: r_pre_post was expanded to one value per row above, so it is INDEXED here,
+  # not recycled.
+  .r_voided_exp  <- is.na(x[, "r_pre_post_exp"])  & !.r_defaulted_exp
+  .r_voided_nexp <- is.na(x[, "r_pre_post_nexp"]) & !.r_defaulted_nexp
+  if (any(.r_voided_exp))  x[.r_voided_exp,  "r_pre_post_exp"]  <- r_pre_post[.r_voided_exp]
+  if (any(.r_voided_nexp)) x[.r_voided_nexp, "r_pre_post_nexp"] <- r_pre_post[.r_voided_nexp]
+  .r_defaulted_exp  <- .r_defaulted_exp  | .r_voided_exp
+  .r_defaulted_nexp <- .r_defaulted_nexp | .r_voided_nexp
+
   # V6: flag rows where r_pre_post used the default value and pre-post data is
   # present. Reuses .r_consuming_arms(), defined once above over
   # .r_consuming_columns(). Keeping one list matters here because intersect() drops
@@ -652,8 +675,17 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     # both scopes when it finds none -- so without it this crude-scope note is copied
     # into flags_adjusted, where the covariate correlation is cov_outcome_r and
     # r_pre_post plays no part.
-    msg <- sprintf("[INFO] Default r_pre_post = %s used ('r_pre_post_exp' not provided by user)",
-                   r_pre_post[1])
+    # Name the arm(s) actually defaulted, not always the exposed one: a row that
+    # supplied r_pre_post_exp and omitted r_pre_post_nexp was told 'r_pre_post_exp'
+    # was not provided, which is false about the user's own data. The crude-scope
+    # column stays FIRST either way, so .v_flag_matches_scope() still routes to
+    # flags_crude.
+    .def_cols <- c(if (.r_defaulted_exp[i]) "r_pre_post_exp",
+                   if (.r_defaulted_nexp[i]) "r_pre_post_nexp")
+    if (!length(.def_cols)) .def_cols <- "r_pre_post_exp"
+    msg <- sprintf("[INFO] Default r_pre_post = %s used (%s not provided by user)",
+                   r_pre_post[1],
+                   paste0("'", .def_cols, "'", collapse = " and "))
     if (nzchar(validation$issues[i])) {
       validation$issues[i] <- paste(validation$issues[i], msg, sep = "; ")
     } else {
@@ -790,10 +822,14 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
   ))
   # A p-value of 0 -- what "p < 0.001" becomes when it is transcribed as a number --
   # sends qnorm(p/2) to -Inf and the recovered SE to exactly 0, i.e. an infinite
-  # inverse-variance weight. Harmless while this route ranked below the marginal
-  # reconstruction; it is now the selected one, so neutralise the value here.
-  # (.positive_columns() catches a negative p-value; zero is in range for it.)
-  .or_pval_usable <- with(x, ifelse(!is.na(or_pval) & or_pval <= 0, NA_real_, or_pval))
+  # inverse-variance weight. Its twin p = 1 is degenerate in the same way and in the
+  # same route: qnorm(1/2) is 0, so the recovered SE is +Inf and the CI is (-Inf, Inf).
+  # Both are neutralised here rather than in .positive_columns(), which sees 0 and 1 as
+  # in range for a probability. Harmless while this route ranked below the marginal
+  # reconstruction; it is now the selected one, so a degenerate p would take the row
+  # while a perfectly good reconstruction SE sat unused beside it.
+  .or_pval_usable <- with(x, ifelse(!is.na(or_pval) & (or_pval <= 0 | or_pval >= 1),
+                                    NA_real_, or_pval))
   es_odds_ratio_pval <- with(x, es_from_or_pval(
     or = or, logor = logor, or_pval = .or_pval_usable, small_margin_prop = small_margin_prop,
     baseline_risk = baseline_risk, n_exp = n_exp, n_nexp = n_nexp,
@@ -1148,6 +1184,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_paired_t_pval = reverse_paired_t_pval,
+    reverse_paired_t_pval_exp = reverse_paired_t_pval_exp,
+    reverse_paired_t_pval_nexp = reverse_paired_t_pval_nexp,
     pre_post_to_smd = pre_post_to_smd_restricted
   ))
 
@@ -1156,6 +1194,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_paired_f = reverse_paired_f,
+    reverse_paired_f_exp = reverse_paired_f_exp,
+    reverse_paired_f_nexp = reverse_paired_f_nexp,
     pre_post_to_smd = pre_post_to_smd_restricted
   ))
 
@@ -1166,6 +1206,8 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_paired_f_pval = reverse_paired_f_pval,
+    reverse_paired_f_pval_exp = reverse_paired_f_pval_exp,
+    reverse_paired_f_pval_nexp = reverse_paired_f_pval_nexp,
     pre_post_to_smd = pre_post_to_smd_restricted
   ))
   # ANOVA, Student t-test  ----------------------------------------------

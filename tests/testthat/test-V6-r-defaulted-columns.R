@@ -18,7 +18,7 @@
 # They were filtered out by intersect(., colnames(x)), so the whole check went
 # silent on paired-t/F rows -- precisely the rows where r moves the point estimate.
 #
-# Both call sites now share .r_consuming_columns() / .rows_with_r_consuming_data().
+# Both call sites now share .r_consuming_columns() / .r_consuming_arms().
 # =============================================================================
 
 # --- helpers ---------------------------------------------------------------

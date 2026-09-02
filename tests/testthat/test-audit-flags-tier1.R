@@ -85,10 +85,22 @@ test_that("AUDIT-918: V40 does not claim a retained hakstian_whalen alpha = 1 wa
   flag <- .tier1_flag(s, "s2")
   es   <- s$es[match("s2", s$study_id)]
 
-  # Either the row really is dropped (es = NA) or the flag must not say it was.
-  # Today it is kept at es = 1, se = 0, AND the flag says it dropped.
-  expect_true(is.na(es) || !grepl("drops out of the pool", flag, fixed = TRUE),
-              info = "V40 asserts a drop that hakstian_whalen does not perform")
+  # es_from_cronbach_alpha()'s se_defined gate refuses the variance at the boundary on
+  # every scale but raw, so hakstian_whalen alpha = 1 DOES leave the pool -- it just
+  # leaves with an estimate attached. V40 must therefore say so on this scale too.
+  #
+  # This was written as a disjunction, "either the row is dropped or the flag must not
+  # say it was". Once the route started dropping the row that passed on the first
+  # branch and stopped testing the flag at all, which is how V40 came to be silent here
+  # without anything failing. Both halves are now asserted separately.
+  expect_true(is.na(es),
+              info = "hakstian_whalen alpha = 1 has no SE, so the row is not poolable")
+  expect_true(grepl("drops out of the pool", flag, fixed = TRUE),
+              info = "V40 must explain the drop on hakstian_whalen, not only on bonett")
+  expect_true(grepl("raw", flag, fixed = TRUE),
+              info = "the remedy must name raw, the only scale that keeps the boundary")
+  expect_false(grepl("hakstian_whalen, where 1 is a usable boundary", flag, fixed = TRUE),
+               info = "the old remedy sent the reader to the scale that swallows the row")
 
   # 1 - (1 - a)^(1/3) is defined at a = 1; the parenthetical is false on this scale.
   expect_false(grepl("log(0) is undefined", flag, fixed = TRUE),

@@ -63,18 +63,33 @@ test_that("V29 stays silent when range and SD are mutually consistent", {
 
 test_that("V29 flags an SD entered as an SE (range/SD explodes)", {
   # True SD 10 for n = 30, but SE = 10/sqrt(30) ~ 1.83 was entered instead.
-  # range 40 / 1.83 ~ 21.9 >> 2.5*xi (~10.2)
+  # range 40 / 1.83 = 21.858.
+  #
+  # V29 gained an assumption-free tier: (max - min)/SD is bounded, for ANY n values
+  # whatever, by sqrt(2(n-1)) above and sqrt(n(n-1)/(floor(n/2)*ceiling(n/2))) below
+  # -- [1.9664, 7.6158] at n = 30. 21.858 is 2.9x the maximum, so this row is not
+  # merely improbable under normality, it is arithmetically impossible, and V29 now
+  # says so. The message therefore no longer carries the older [UNUSUAL]
+  # "implausible ... Possible SD-as-SE" wording, which named a cause the arithmetic
+  # already settles. Detection is asserted on the stable part of the message and the
+  # severity separately, so this block pins strictly more than it used to.
   dat <- data.frame(min_exp = 5, max_exp = 45, mean_sd_exp = 1.83, n_exp = 30)
   res <- metaConvert:::.validate_input_data(dat, verbose = FALSE)
-  expect_true(grepl("\\[UNUSUAL\\] Range/SD ratio implausible for 'exp'", res$issues[1]))
-  expect_true(grepl("SD-as-SE", res$issues[1]))
+  expect_true(grepl("Range/SD ratio", res$issues[1], fixed = TRUE))
+  expect_true(grepl("arithmetically impossible for 'exp'", res$issues[1], fixed = TRUE))
+  expect_true(grepl("\\[INVALID\\]", res$issues[1]))
+  # still warn-only: the SD is preserved for inspection
+  expect_equal(res$data$mean_sd_exp[1], 1.83)
 })
 
 test_that("V29 flags a variance entered as an SD (range/SD collapses)", {
   # True SD 10, but the variance (100) was entered. range 40 / 100 = 0.4 < 0.5*xi (~2.04)
   dat <- data.frame(min_nexp = 5, max_nexp = 45, mean_sd_nexp = 100, n_nexp = 30)
   res <- metaConvert:::.validate_input_data(dat, verbose = FALSE)
-  expect_true(grepl("\\[UNUSUAL\\] Range/SD ratio implausible for 'nexp'", res$issues[1]))
+  # 0.400 is 5x BELOW the arithmetic minimum 1.9664 at n = 30 (see the block above),
+  # so this is reported as impossible rather than implausible.
+  expect_true(grepl("Range/SD ratio", res$issues[1], fixed = TRUE))
+  expect_true(grepl("arithmetically impossible for 'nexp'", res$issues[1], fixed = TRUE))
   # warn-only: SD preserved
   expect_equal(res$data$mean_sd_nexp[1], 100)
 })

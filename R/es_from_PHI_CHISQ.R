@@ -191,6 +191,7 @@ es_from_phi <- function(phi, n_cases, n_exp,
 #'   for continuity. When a vector is supplied, each row is back-transformed using
 #'   its own setting. Missing values are treated as \code{FALSE}.
 #' @param reverse_chisq a logical value indicating whether the direction of generated effect sizes should be flipped.
+#' @param .caller,.info internal. The name of the entry point the user actually called, and the \code{info_used} its rows will carry. \code{es_from_chisq_pval()} delegates to this function, so without them the phi-family fallback message would name \code{es_from_chisq()} and \code{"chisq"} for a row that used neither.
 #'
 #' @details
 #' This function converts a chi-square value (with one degree of freedom)
@@ -230,7 +231,8 @@ es_from_phi <- function(phi, n_cases, n_exp,
 #' es_from_chisq(chisq = 4.21, n_sample = 78, n_cases = 51, n_exp = 50)
 es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
                           yates_chisq = FALSE,
-                          reverse_chisq) {
+                          reverse_chisq,
+                          .caller = "es_from_chisq", .info = "chisq") {
   if (missing(reverse_chisq)) reverse_chisq <- rep(FALSE, length(chisq))
   if (missing(n_sample)) n_sample <- rep(NA, length(chisq))
   if (missing(n_exp)) n_exp <- rep(NA, length(chisq))
@@ -272,7 +274,10 @@ es_from_chisq <- function(chisq, n_sample, n_cases, n_exp,
                   !is.na(n_sample))
   es <- .phi_family_fallback(
     es, r_vec = r_chi, n_sample = n_sample, reverse = reverse_chisq, miss = miss,
-    fn = "es_from_chisq", quantity = "phi = sqrt(chisq/n) itself", info = "chisq"
+    # Labels come from the caller: es_from_chisq_pval() delegates here, and a message
+    # naming es_from_chisq()/"chisq" would send the reader to a function and an
+    # info_used its row never used.
+    fn = .caller, quantity = "phi = sqrt(chisq/n) itself", info = .info
   )
 
   es$info_used <- "chisq"
@@ -338,7 +343,10 @@ es_from_chisq_pval <- function(chisq_pval, n_sample, n_cases, n_exp,
     yates_chisq = yates_chisq,
     n_cases = n_cases,
     n_exp = n_exp,
-    reverse_chisq = reverse_chisq_pval
+    reverse_chisq = reverse_chisq_pval,
+    # so the phi-family fallback message names THIS entry point and this row's
+    # info_used, not the function it happens to delegate through
+    .caller = "es_from_chisq_pval", .info = "chisq_pval"
   )
 
   es$info_used <- "chisq_pval"

@@ -307,10 +307,17 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
   "pre-post correlation in the experimental/exposed group - numeric",
   "pre-post correlation in the non-experimental/non-exposed group - numeric")
 
+  # The per-arm flags exist because a paired t or F carries no sign: when the two arms
+  # move in OPPOSITE directions the whole-contrast flag cannot express it, and the
+  # routes' own @details name these columns as the remedy. They must therefore be
+  # reachable from the wide format, not only from a direct route call.
   cols_paired_statistics = c("reverse_paired_t", "paired_t_exp", "paired_t_nexp",
                              "reverse_paired_t_pval", "paired_t_pval_exp", "paired_t_pval_nexp",
+                             "reverse_paired_t_pval_exp", "reverse_paired_t_pval_nexp",
                              "reverse_paired_f", "paired_f_exp", "paired_f_nexp",
-                             "reverse_paired_f_pval",  "paired_f_pval_exp", "paired_f_pval_nexp")
+                             "reverse_paired_f_exp", "reverse_paired_f_nexp",
+                             "reverse_paired_f_pval",  "paired_f_pval_exp", "paired_f_pval_nexp",
+                             "reverse_paired_f_pval_exp", "reverse_paired_f_pval_nexp")
   inf_paired_statistics = c(
   "whether the direction of the effect size generated from the paired t-tests should be flipped - logical",
   "paired t-test value of the experimental/exposed group - numeric",
@@ -319,14 +326,20 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
   "whether the direction of the effect size generated from the paired t-test p-values should be flipped - logical",
   "p-value of the paired t-test value of the experimental/exposed group - numeric",
   "p-value of the paired t-test value of the non-experimental/non-exposed group - numeric",
+  "whether the experimental/exposed group moved DOWN, for the paired t-test p-value route: a p-value carries no sign, so this is the only way to state that the two arms diverged - logical",
+  "whether the non-experimental/non-exposed group moved DOWN, for the paired t-test p-value route - logical",
 
   "whether the direction of the effect size generated from the paired F-tests should be flipped - logical",
   "paired ANOVA F value of the experimental/exposed group - numeric",
   "paired ANOVA F value of the non-experimental/non-exposed group - numeric",
+  "whether the experimental/exposed group moved DOWN, for the paired F route: an F carries no sign, so this is the only way to state that the two arms diverged - logical",
+  "whether the non-experimental/non-exposed group moved DOWN, for the paired F route - logical",
 
   "whether the direction of the effect size generated from the paired F-tests p-values should be flipped - logical",
   "p-value of the paired ANOVA-F of the experimental/exposed group - numeric",
-  "p-value of the paired ANOVA-F of the non-experimental/non-exposed group - numeric")
+  "p-value of the paired ANOVA-F of the non-experimental/non-exposed group - numeric",
+  "whether the experimental/exposed group moved DOWN, for the paired F p-value route - logical",
+  "whether the non-experimental/non-exposed group moved DOWN, for the paired F p-value route - logical")
 
   cols_prop_single = c("reverse_prop", "prop", "n_cases")
   inf_prop_single = c(

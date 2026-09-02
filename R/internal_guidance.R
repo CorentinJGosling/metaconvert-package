@@ -22,9 +22,12 @@
     ),
 
     # or
+    # es_from_or() reconstructs the table from the CASE margin, not from the arm sizes:
+    # adding n_exp + n_nexp to a bare OR yields no effect size, so guidance that named
+    # them sent the reader somewhere that cannot work.
     or = list(
       specific = list(c("or", "logor")),
-      shared   = c("n_exp", "n_nexp")
+      shared   = c("n_cases", "n_controls")
     ),
     or_se = list(
       specific = list(c("or", "logor"), "logor_se"),
@@ -665,6 +668,15 @@
   prop_sg     <- c("prop_single_group", "prop_single_group_counts")
   partial_cor <- c("linreg_t", "linreg_b_se", "linreg_b_ci", "linreg_b_pval")
 
+  # These measures have NO adjusted scope: every route below writes to the crude
+  # columns only, so an es_guidance_adjusted built from them named inputs that can
+  # never produce an es_adjusted. Returning nothing makes summary() report
+  # "No partial input data found" instead of an unreachable recipe.
+  no_adjusted_scope <- c("dw", "gw", "mdw", "prop", "alpha", "omega", "icc")
+  if (identical(suffix, "_adjusted") && measure %in% no_adjusted_scope) {
+    return(character(0))
+  }
+
   if (measure %in% c("dw", "gw", "mdw")) {
     return(c(within_group, "user_input_crude"))
   } else if (measure == "prop") {
@@ -884,6 +896,19 @@
                       else attr(object, "omega_se_source")
   )
   descriptions <- .method_descriptions()
+
+  # An NNT or an RD from a ratio needs the CONTROL-ARM RISK on top of that ratio's own
+  # inputs: es_from_or_se()/es_from_rr_se() return nnt/rd only when baseline_risk is
+  # supplied, and .baseline_risk_or_na() never derives it. Guidance that omitted it
+  # named a set of columns which, added exactly as instructed, still left es = NA.
+  if (measure %in% c("nnt", "rd")) {
+    ratio_routes <- intersect(
+      c("or", "or_se", "or_ci", "or_pval", "rr", "rr_se", "rr_ci", "rr_pval"),
+      names(method_cols))
+    for (m in ratio_routes) {
+      method_cols[[m]]$shared <- union(method_cols[[m]]$shared, "baseline_risk")
+    }
+  }
 
   methods_to_check <- .get_applicable_methods(measure, suffix)
 

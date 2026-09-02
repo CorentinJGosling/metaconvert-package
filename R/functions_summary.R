@@ -149,12 +149,12 @@
 #' \itemize{
 #'   \item \code{smd_max} (default 3): |SMD| above this value is flagged
 #'   \item \code{r_max} (default 0.95): same, for |r|
-#'   \item \code{log_or_max} (default 5): same, for |logOR| and |logRR|
+#'   \item \code{log_or_max} (default 5): same, for the log-ratio family (|logOR|, |logRR|, |logIRR|, |logHR|)
 #'   \item \code{n_min} (default 10): flag sample sizes below this value
 #'   \item \code{iqr_mult} (default 3): IQR multiplier for the cross-row outlier detection
 #'   \item \code{dispersion_max_smd} / \code{dispersion_max_r} / \code{dispersion_max_logor} (defaults 0.5 / 0.15 / 1.0): maximum absolute deviation of the per-method estimates from their median, for the SMD family (d, g, dw, gw, md, mdw), for r, and for the log-ratio family (logOR, logRR, logIRR, logHR) respectively. Other measures use the SMD value
 #'   \item \code{diff_max_smd} / \code{diff_max_r} / \code{diff_max_logor} (defaults 1.0 / 0.3 / 2.0): maximum min-max ES difference across estimation methods
-#'   \item \code{overlap_min} (default 0.80): minimum CI overlap between the min/max estimates (0-1 scale)
+#'   \item \code{overlap_min} (default 0.85): minimum CI overlap between the min/max estimates (0-1 scale)
 #'   \item \code{enable_cross_row} (default TRUE): enable/disable the cross-row checks
 #'   \item \code{direction_conflict_min} (default 2): number of significantly-positive and significantly-negative studies needed to raise the direction conflict flag (G1)
 #'   \item \code{flag_group} (default NULL): one or more input-column names (e.g. \code{"outcome"} or \code{c("outcome", "subgroup")}) used to scope the cross-row checks (ES/SE/SD outliers, direction conflict, study-duplication, NNT-type and standardizer mixing). With the default \code{NULL} the whole dataset is one pool. Set it for multivariate / multi-outcome data, where a deviation or a repeated \code{study_id} is only meaningful within a group of comparable rows; a study contributing several outcomes is then no longer flagged as a duplicate, and outliers are judged against same-group peers. Per-row and cross-method checks, and the byte-identical templated-data check (V23), are unaffected.
@@ -533,7 +533,9 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
   if (flags) {
     # Roadmap 2.5: a mistyped option name, or a Tier-1 option arriving here after the
     # input-data checks already ran inside convert_df(), used to be accepted in silence.
-    .validate_flag_options(flag_options, context = "summary")
+    # Drop the entries it rejected, so the default really is what gets used.
+    .bad_fo <- .validate_flag_options(flag_options, context = "summary")
+    if (length(.bad_fo)) flag_options <- flag_options[setdiff(names(flag_options), .bad_fo)]
     stored_opts <- attr(object, "flag_options")
     if (is.null(stored_opts)) stored_opts <- .default_flag_options()
     opts <- stored_opts
@@ -677,6 +679,17 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
       ordered <- c(ordered, cols[cols %in% all_cols])
     }
   }
+  # dispersion_es_log* carries E1's exact log-scale statistic from .generate_df(), where
+  # the per-method values live, to the flag layer -- which has already run by this
+  # point. It is not a user-facing diagnostic (dispersion_es is the one es_consistency
+  # reports, on the displayed scale), so it is dropped here rather than appended to the
+  # output by include_raw, which defaults to TRUE.
+  internal_only <- grep("^dispersion_es_log", all_cols, value = TRUE)
+  if (length(internal_only)) {
+    all_cols <- all_cols[!all_cols %in% internal_only]
+    res <- res[, !colnames(res) %in% internal_only, drop = FALSE]
+  }
+
   remaining <- all_cols[!all_cols %in% ordered]
   if (isTRUE(include_raw)) {
     ordered <- c(ordered, remaining)
@@ -819,6 +832,12 @@ summary.metaConvert <- function(object, digits = 3, flags = TRUE, flag_options =
   }
 
   if (!is.null(fx_store)) attr(res, "formulas") <- fx_store
+
+  # The merges above leave row names carried over from intermediate frames ('110',
+  # '210', '88', ...), which are neither the input row numbers nor anything else
+  # meaningful. Flag messages cite positions ("row 52"), so a reader matching a flag to
+  # a printed row was reading two different numbering schemes. NULL restores 1..n.
+  rownames(res) <- NULL
 
   return(res)
 }

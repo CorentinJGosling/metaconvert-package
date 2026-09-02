@@ -258,11 +258,24 @@ test_that("AUDIT-V29-n-aware: the range/SD ceiling spares skewed data at large n
 
   s <- summary(convert_df(d, measure = "md", verbose = FALSE,
                           split_adjusted = FALSE), flags = TRUE)
+  # Match EITHER V29 message. The two error rows carry the sqrt(n) signature, which
+  # pushes the ratio past the arithmetic maximum sqrt(2(n-1)) -- 114 against 31.6 at
+  # n = 500, and above 9.3 against 6.16 at n = 20 -- so they are now reported as
+  # arithmetically impossible rather than merely implausible. That is a strictly
+  # stronger statement about the same rows; asserted separately below.
   fired <- vapply(d$study_id, function(id) {
-    grepl("Range/SD ratio implausible for 'exp'", s$flags[s$study_id == id], fixed = TRUE)
+    grepl("Range/SD ratio", s$flags[s$study_id == id], fixed = TRUE)
   }, logical(1))
 
   expect_false(unname(fired[["skewed_n500"]]))   # error-free skewed cost outcome
   expect_true(unname(fired[["sd_as_se_n500"]]))  # must not be lost to a wider gate
   expect_true(unname(fired[["sd_as_se_n20"]]))   # must not be lost at small n either
+
+  # ...and both are impossible for ANY distribution, not just improbable under normality
+  impossible <- vapply(d$study_id, function(id) {
+    grepl("arithmetically impossible", s$flags[s$study_id == id], fixed = TRUE)
+  }, logical(1))
+  expect_true(unname(impossible[["sd_as_se_n500"]]))
+  expect_true(unname(impossible[["sd_as_se_n20"]]))
+  expect_false(unname(impossible[["skewed_n500"]]))
 })
