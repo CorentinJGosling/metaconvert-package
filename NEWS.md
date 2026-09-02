@@ -42,6 +42,45 @@ What moves, and roughly by how much:
   in several degenerate cases: a negative `sd_dv` in the standardised-regression route, a
   non-positive `or`/`rr`, `baseline_risk = 0`, an impossible 2x2 cell derived from
   proportions, and a risk-difference confidence limit of exactly 0 (which returned Inf).
+- **Risk-ratio standard error converted from an odds ratio** (`or_to_rr =
+  "metaumbrella_cases"`/`"_exp"`, the default): the reported log-OR standard error was
+  carried onto the log RR by differentiating through the table reconstruction with all
+  four margins held *fixed*. That is the conditional standard error, and the case margin
+  is an observed statistic rather than a design constant -- unlike for the odds ratio, it
+  is not ancillary for the risk ratio, so conditioning on it discards real variability.
+  The multiplier is now the ratio of the two *marginal* standard errors at the
+  reconstructed table (Katz over Woolf), which is the product-binomial model
+  `es_from_2x2()`, `metafor::escalc(measure = "RR")` and the Cochrane Handbook all use.
+  On a 90/10 versus 60/40 table the old form returned 0.0711 against 0.0882: a 1.54x
+  inflation of the study's inverse-variance weight, and the same study disagreeing with
+  itself when entered as a 2x2 table instead. The two forms agree to within a fraction of
+  a percent at ordinary 2-25% event rates and separate as events become common.
+- **Hedges' g standard error from an odds ratio reported with one standard error**:
+  `es_from_or_se()`/`es_from_or_ci()` pass a single standard error for a whole vector of
+  d, and the variance selection is an `ifelse()`, which returns a result the length of
+  its *test*. `g_se` was silently `NA` for every row after the first.
+- **Cronbach's alpha and McDonald's omega with a self-contradictory interval**: a
+  confidence interval that does not bracket its own point estimate no longer yields a
+  standard error. `es_from_icc()` already refused it, so the same input previously
+  produced a standard error from two routes and `NA` from the third.
+- **A ratio effect size entered through `user_es_*` with a non-positive confidence
+  bound**: `log(0)` is not finite, so no log-scale standard error exists -- but the
+  natural-scale half-width was being exported in its place, and nothing downstream told
+  the two apart. `or = 2` with a CI of `[0, 4.5]` was returned as `se = 1.148` with a CI
+  of `[0.211, 18.98]`, and no quality flag fired on it. The standard error is now `NA`,
+  leaving the row visible and unpooled.
+- **Within-group `gw` through `user_es_*` with a sample size supplied and `df <= 1`**:
+  Hedges' J is undefined there and the route warns that the row yields `NA`; it was
+  returning an *uncorrected* `gw` instead.
+- **Person-time risk difference and NNT at `baseline_rate = 0`**: the derived standard
+  error collapses to exactly 0 -- an infinite inverse-variance weight. Both are now `NA`.
+  A genuinely null rate difference with a usable standard error is unaffected.
+- **`r_pre_post` rejected by input validation** is re-filled with the value passed to
+  `convert_df()` rather than falling through to each route's own default of 0.8, and is
+  treated as defaulted by the V6 note and the r-sensitivity annotations. Measured on one
+  row: `g = 0.0727` under the route default against `0.2887` for the requested `r = 0.3`.
+- **`or_pval` of exactly 1** joins 0 as unusable: `qnorm(1/2)` is 0, so the recovered
+  standard error is infinite and the interval unbounded.
 
 Diagnostic checks that now behave differently (metaDETECT):
 
@@ -54,6 +93,29 @@ Diagnostic checks that now behave differently (metaDETECT):
 - V26 is suppressed where `r_pre_post` is supplied. Its previous claim to need no assumed
   pre-post correlation was incorrect and is retracted: it false-fires on correctly
   computed paired intervals when that correlation is below roughly 0.15 to 0.35.
+- E1's dispersion statistic for the exponentiated ratio measures is computed exactly on
+  the log scale instead of through a natural-to-log approximation. The approximation is
+  attained at a different element from the exact statistic in about a fifth of rows, so
+  no scalar divisor repairs it; it flipped roughly 11% of E1 decisions.
+- V29 reports the sample-size-inflated ratios as `[INVALID]` "arithmetically impossible"
+  rather than `[UNUSUAL]` "implausible" when they fall outside the assumption-free
+  bounds -- a strictly stronger statement about the same rows.
+- `flag_group` and `enable_cross_row` now reach the Tier-1 cross-row checks (V35-V43) as
+  well as the Tier-2 ones. Passing either to `summary()` alone therefore retunes only
+  half of them, and `summary()` now says so.
+- Invalid `flag_options` values fall back to the documented default. A character
+  threshold previously made every comparison against it `NA`, silently disabling the
+  check the user was trying to tighten, while `NA`, `NULL` or a longer vector aborted the
+  run inside a comparison naming neither the option nor the value.
+- The six per-arm direction columns of the paired t and F routes
+  (`reverse_paired_t_pval_exp`, `reverse_paired_f_exp` and their siblings) are registered
+  inputs and reachable from `convert_df()`. Those routes' own documentation named them as
+  the remedy for two arms moving in opposite directions, but they could previously be
+  reached only by calling the route directly.
+- `es_guidance` no longer names columns that cannot produce an estimate: `es_from_or()`
+  reconstructs from the case margin rather than the arm sizes, an NNT or risk difference
+  from a ratio also needs `baseline_risk`, and `dw`/`gw`/`mdw`/`prop`/`alpha`/`omega`/
+  `icc` have no adjusted scope at all.
 
 - Added the `flag_group` option to group across multiple rows the checks
 performed by metaDETECT
@@ -62,6 +124,17 @@ performed by metaDETECT
 - Improved speed performance of the convert_df() 
 - Improved the reliability paths (alpha/ICC) 
 - Corrected formulas and conversion explanations in the documentation
+- `compare_df()` validates its `output` argument, and refuses a non-unique
+  `ordering_columns` key rather than silently dropping the duplicated rows behind a
+  base-R replacement warning.
+- `summary()` resets row names, so the positions cited in flag messages ("row 52") match
+  the rows as printed.
+- Documentation corrections where the text described code the package no longer runs --
+  chiefly the scope of the +0.5 continuity correction in `es_from_2x2()`, the risk-ratio
+  standard error in `es_from_or_se()`, and the magnitude of the bias the paired t/F
+  routes carry when the two arms move in opposite directions (biased *by* `2|d_nexp|` is
+  not the same as *halved*: the estimate collapses to exactly zero when the two arms'
+  magnitudes are equal).
 
 # metaConvert 2.0.0
 - Implemented the metaDETECT framework of automated checks
