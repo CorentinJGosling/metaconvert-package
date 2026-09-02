@@ -67,15 +67,45 @@ published_table_ids <- function() {
 }
 
 
+## THE SE RATIO IS REPORTED ON THE CELLS WHERE THE ESTIMATE IS IDENTIFIED, and the
+## number of cells where it is not is reported beside it, because a mean over both is
+## a summary of nothing.
+##
+## Since the tetrachoric solve was handed the RAW 2x2 table (it used to receive the
+## +0.5-corrected one, a ratio-measure device that metafor refuses to apply to
+## measure = "RTET"), a table with a zero cell returns the boundary ML estimate
+## r = +-1 together with an enormous variance. That pair IS the estimator saying the
+## correlation is not identified by these counts, and it is what metafor returns on
+## the same table. It is not an error to be averaged away.
+##
+## Two levels of averaging destroy it if it is left in. Within a cell, mod_se is a
+## mean over replications, so one boundary replication carries it to ~1e4 against an
+## empirical SE of 0.2-0.5. Across cells, the published mean then reads 5344.150. And
+## it is not a tail: se_ratio > 2 in 67 of the 120 cells, the median across cells is
+## 861, so no trimmed or median summary recovers it either. The cells concerned are
+## exactly where a reconstructed 2x2 hits a zero cell -- 30/30 at n = 25, 22/30 at
+## n = 50, 3/30 at n = 300; 33/40 at a 10% case rate.
+##
+## The threshold does not reshuffle the comparison, which is the property that makes
+## it reportable rather than arbitrary: it removes 67 cells from 2x2_tetrachoric and
+## 0, 1, 1, 1 from bonett, digby, pearson and lipsey_cooper, moving those four means
+## by at most 0.008. Coverage is taken on the same subset so every column of a row
+## describes the same cells.
+.PUB_09A_SE_USABLE <- 2
+
 .pub_09a_result <- function() {
   d <- .pub_09a_slice()
-  o <- do.call(rbind, lapply(split(d, d$m), function(x) data.frame(
-    method   = x$m[1],
-    mean_abs = round(mean(abs(x$bias), na.rm = TRUE), 4),
-    worst    = round(max(abs(x$bias), na.rm = TRUE), 4),
-    coverage = round(mean(x$coverage, na.rm = TRUE), 3),
-    se_ratio = round(mean(x$se_ratio, na.rm = TRUE), 3),
-    stringsAsFactors = FALSE)))
+  o <- do.call(rbind, lapply(split(d, d$m), function(x) {
+    ok <- !is.na(x$se_ratio) & x$se_ratio <= .PUB_09A_SE_USABLE
+    data.frame(
+      method   = x$m[1],
+      mean_abs = round(mean(abs(x$bias), na.rm = TRUE), 4),
+      worst    = round(max(abs(x$bias), na.rm = TRUE), 4),
+      coverage = round(mean(x$coverage[ok], na.rm = TRUE), 3),
+      se_ratio = round(mean(x$se_ratio[ok], na.rm = TRUE), 3),
+      nonid    = sprintf("%d/%d", sum(!ok), length(ok)),
+      stringsAsFactors = FALSE)
+  }))
   o[order(o$mean_abs), ]
 }
 
@@ -85,12 +115,19 @@ published_table_ids <- function() {
 ## Only the three rows the README prints.
 .pub_09a_ranking <- function() {
   d <- .pub_09a_slice()
-  o <- do.call(rbind, lapply(split(d, d$m), function(x) data.frame(
-    method   = x$m[1],
-    mean_abs = mean(abs(x$bias), na.rm = TRUE),
-    coverage = mean(x$coverage, na.rm = TRUE),
-    worst_cov = min(x$coverage, na.rm = TRUE),
-    stringsAsFactors = FALSE)))
+  ## Same identified-cell subset as .pub_09a_result(), so the two panels cannot say
+  ## different things about the same method. Ranking 2x2_tetrachoric on a coverage
+  ## averaged over cells where its own interval is declaring "not identified" ranks
+  ## it on the width of a refusal.
+  o <- do.call(rbind, lapply(split(d, d$m), function(x) {
+    ok <- !is.na(x$se_ratio) & x$se_ratio <= .PUB_09A_SE_USABLE
+    data.frame(
+      method   = x$m[1],
+      mean_abs = mean(abs(x$bias), na.rm = TRUE),
+      coverage = mean(x$coverage[ok], na.rm = TRUE),
+      worst_cov = min(x$coverage[ok], na.rm = TRUE),
+      stringsAsFactors = FALSE)
+  }))
   o$rank_bias <- rank(o$mean_abs)
   o$rank_cov  <- rank(abs(o$coverage - 0.95))
   shown <- c("2x2_tetrachoric", "bonett", "lipsey_cooper")

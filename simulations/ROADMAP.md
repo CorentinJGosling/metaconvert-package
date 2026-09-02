@@ -538,9 +538,9 @@ the four `or_to_cor` options too, so the position needs stating rather than leav
 implicit. Measured from `09a_or_to_cor_CONT_nrep1000.csv`:
 
 <!-- pinned: roadmap26-or-to-cor -->
-| option | mean \|bias\| vs **own** | vs **population tetrachoric** | worst coverage | margin drift* |
+| option | mean \|bias\| vs **own** | vs **population tetrachoric** | worst coverage† | margin drift* |
 |---|---|---|---|---|
-| `2x2_tetrachoric` (reference) | 0.0163 | 0.0163 | 0.939 | **0.0109** |
+| `2x2_tetrachoric` (reference) | 0.0197 | 0.0197 | 0.821 | **0.0126** |
 | **`bonett`** (default) | 0.0195 | 0.0195 | **0.940** | **0.0212** |
 | `digby` | 0.0201 | 0.0201 | 0.906 | 0.1205 |
 | `pearson` | 0.0223 | 0.0223 | 0.902 | 0.1245 |
@@ -551,6 +551,16 @@ target — i.e. how much the answer moves when only the margins change, at a fix
 correlation. "Worst coverage" is the minimum across all three targets, which is why
 `lipsey_cooper` shows 0.000: it is fine against its own estimand (0.872) and collapses
 against the population tetrachoric.
+
+† `2x2_tetrachoric`'s worst coverage is taken over **all** conditions, including
+the ones in which the tetrachoric is not identified by the counts and the route returns
+the boundary estimate r = ±1 with a very large variance — the behaviour it acquired when
+the solve was handed the raw 2×2 instead of the +0.5-corrected one, and the behaviour
+`metafor` has always had. Over the conditions where it *is* identified its coverage is
+0.951 with a worst case of 0.939, the best of the five; see the note under the study-09
+result table in README.md. This column is a worst-case-across-everything column by
+design — that is why `lipsey_cooper` reads 0.000 — so the unrestricted figure is the
+right one to print here, but it is not a calibration failure.
 
 > **Three cells here were stale; the headline figures were not.** Recomputed from the
 > shipped aggregate: `bonett`'s two bias cells were 0.0185 and are 0.0195 (partly the

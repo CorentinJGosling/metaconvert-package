@@ -743,19 +743,31 @@ convert the OR at all?" is answerable from the same output.
 estimand (so the numbers below are computational error, not estimand mismatch):
 
 <!-- pinned: study09a-result -->
-| method | mean \|bias\| | worst \|bias\| | coverage | SE ratio |
-|---|---|---|---|---|
-| `2x2_tetrachoric` (full table) | 0.0163 | 0.2701 | 0.961 | 1.042 |
-| **`bonett`** | **0.0195** | 0.2848 | 0.964 | 1.061 |
-| `digby` | 0.0201 | 0.2103 | 0.966 | 1.062 |
-| `pearson` | 0.0223 | 0.1865 | 0.965 | 1.062 |
-| `lipsey_cooper` | 0.0231 | 0.1937 | 0.946 | 1.060 |
+| method | mean \|bias\| | worst \|bias\| | coverage | SE ratio | not identified |
+|---|---|---|---|---|---|
+| **`bonett`** | **0.0195** | 0.2848 | 0.964 | 1.061 | 0/120 |
+| `2x2_tetrachoric` (full table) | 0.0197 | **0.1900** | **0.951** | **0.990** | **67/120** |
+| `digby` | 0.0201 | 0.2103 | 0.965 | 1.054 | 1/120 |
+| `pearson` | 0.0223 | 0.1865 | 0.965 | 1.054 | 1/120 |
+| `lipsey_cooper` | 0.0231 | 0.1937 | 0.945 | 1.051 | 1/120 |
+
+Coverage and the SE ratio are taken over the conditions in which the method's estimate
+is **identified**; the last column counts the conditions in which it is not. Only the
+full-2×2 route has any, and it has them by design — see the note below.
 
 `bonett` is the best of the four OR-only options, which supports its promotion to
-the default. The full-2×2 route still wins, so the advice is unchanged: **convert
-the table, not the odds ratio, whenever the table is reported.** Note the margin over
-`digby` is thin — 0.0195 against 0.0201 — so the case for the default rests on the
-margin-dependence result below, not on this average.
+the default. Its 0.0195 against the full-2×2 route's 0.0197 is **not** an ordering:
+comparing the two condition by condition over the 120 cells gives a mean paired
+difference of −0.000186 with a standard error of 0.00263 (t = −0.07), against a
+per-cell Monte Carlo error of about 0.006. The two are tied on this metric, and the
+column is quoted to a precision the data does not support. Where the full-2×2 route
+separates is elsewhere: it has the **smallest worst-case bias** of the five (0.1900),
+and it is the only one whose interval is honestly calibrated where it answers at all
+(SE ratio 0.990 against 1.05–1.06; coverage 0.951 against a nominal 0.95). So the
+advice is unchanged — **convert the table, not the odds ratio, whenever the table is
+reported** — with one caveat the older versions of this table hid, stated below. The
+margin over `digby` is thin — 0.0195 against 0.0201 — so the case for the default
+rests on the margin-dependence result below, not on this average.
 
 > **Two of these cells moved, for two different reasons, and both are worth stating.**
 >
@@ -773,6 +785,38 @@ margin-dependence result below, not on this average.
 > 1.053). Nothing detected it, because nothing tied the prose to the CSV — which is
 > what `data/aggregated/PROVENANCE.csv` now does for the code, and does not yet do for
 > numbers quoted in the text.
+
+> **The `2x2_tetrachoric` row is not comparable with the one this table carried before
+> the tetrachoric fix, and the reason is worth reading before using the route.**
+>
+> The tetrachoric solve used to be handed the **+0.5-corrected** table. That correction
+> is a ratio-measure device — it exists because a zero cell makes an odds ratio
+> undefined — and `metafor` pointedly refuses to apply it to `measure = "RTET"`, not
+> even under `to = "all"`. On a table with a zero cell the tetrachoric maximum
+> likelihood lands on the **boundary**, r = ±1, with an enormous variance, and that
+> pair *is* the estimator reporting that the correlation is not identified by these
+> counts. Correcting the table first replaced that refusal with an interior estimate
+> carrying an ordinary-looking standard error that took no account of the shrinkage:
+> on a/b/c/d = 0/20/10/10 it gave r = −0.856 with SE = 0.113 against `metafor`'s
+> r = −1 with SE = 149.03 — an inverse-variance weight 1.7 million times too large, on
+> a study whose correlation the data cannot pin down. The route is now bit-exact with
+> `metafor` on every table, zero cell or not.
+>
+> So the route did not get worse; it stopped hiding something, and this table has to
+> report the something. In **67 of the 120 conditions** the boundary is reached often
+> enough that an averaged model standard error is meaningless: the mean over all 120
+> is 5344.150, and the median across conditions is 861, so no trimmed or median
+> summary recovers it either. Those conditions are exactly the ones in which a
+> reconstructed 2×2 hits a zero cell — **30/30 at n = 25**, 22/30 at n = 50, 3/30 at
+> n = 300; **33/40 at a 10% case rate**. Restricted to the conditions where the
+> estimate is identified, the route is the best-calibrated of the five. In the others
+> it declines to answer, which is the correct behaviour and means an OR-only method is
+> what you need there.
+>
+> The threshold that separates the two regimes (`se_ratio <= 2`, in
+> `R/08_published_numbers.R`) is not doing the comparison's work: it removes 67
+> conditions from `2x2_tetrachoric` and 0, 1, 1 and 1 from `bonett`, `digby`,
+> `pearson` and `lipsey_cooper`, moving those four means by at most 0.008.
 
 The averages understate the case, because Bonett's correction is a *margin*
 correction and averaging over balanced and unbalanced conditions dilutes it. At
@@ -1231,9 +1275,9 @@ The two orderings genuinely disagree in these data. In study 09a, scored on
 <!-- pinned: study09a-ranking -->
 | method | rank by \|bias\| | coverage | rank by coverage |
 |---|---|---|---|
-| `2x2_tetrachoric` | 1st | 0.961 (worst 0.939) | 2nd |
-| `bonett` | 2nd | 0.964 | 3rd |
-| `lipsey_cooper` | 5th | 0.946 | 1st |
+| `2x2_tetrachoric` | 2nd | 0.951 (worst 0.939) | 1st |
+| `bonett` | 1st | 0.964 | 3rd |
+| `lipsey_cooper` | 5th | 0.945 | 2nd |
 
 > This table previously read "the best method on bias is the *worst* on coverage",
 > with `2x2_tetrachoric` at 0.928 (worst 0.849) and ranked 5th. Those figures matched
@@ -1241,6 +1285,13 @@ The two orderings genuinely disagree in these data. In study 09a, scored on
 > the claim they supported was false on the data as shipped. The disagreement between
 > the two orderings is real and is why the panel prints both; it simply runs the other
 > way round. Ranking is by \|coverage − 0.95\|.
+>
+> Coverage here is the **identified-conditions** figure of the table above, for the
+> reason given in its note: averaging in the conditions where `2x2_tetrachoric`'s
+> interval is declaring "not identified" would rank the method on the width of a
+> refusal. On that basis it is first on coverage (0.951 against a nominal 0.95) and
+> tied-first on bias, and `bonett` is the reverse — so the two orderings still
+> disagree, which is the point the panel exists to make.
 
 Across the shipped studies the Spearman correlation between mean |bias| and
 |coverage − 0.95| is weak and sometimes negative (08a: −0.59, 09a: −0.23,
