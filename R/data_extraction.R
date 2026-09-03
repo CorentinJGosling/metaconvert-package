@@ -540,7 +540,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
     # contrast on the same row. mean_exp and mean_nexp are already spoken for there,
     # so overloading them would make the two analyses collide.
     cols_alpha = c("cronbach_alpha", "cronbach_alpha_se", "cronbach_alpha_ci_lo",
-                   "cronbach_alpha_ci_up", "n_items",
+                   "cronbach_alpha_ci_up", "n_items", "alpha_type",
                    "n_response_categories", "scale_mean", "scale_min")
     inf_alpha = c(
       "Cronbach's alpha reliability coefficient - numeric",
@@ -548,6 +548,7 @@ data_extraction_sheet <- function(measure = c("d", "g", "md", "dw", "gw", "mdw",
       "lower bound of the 95% CI of alpha (natural scale) - numeric",
       "upper bound of the 95% CI of alpha (natural scale) - numeric",
       "number of items in the scale - numeric",
+      "which alpha was computed: 'covariance' (raw alpha, the covariance-matrix form) or 'correlation' (standardised alpha, computed on the correlation matrix). 'raw'/'raw_alpha' and 'std'/'std.alpha'/'standardized' are accepted synonyms, so it can be filled straight from a psych::alpha() printout. Provenance only - it changes no estimate and no standard error - but a pool mixing the two mixes estimands, which nothing numeric can reveal (flag V45) - character",
       "number of response categories per item (e.g. 5 for a 5-point Likert) - numeric",
       "mean of the TOTAL scale score in the sample (not the item mean) - numeric",
       "lowest score a SINGLE item can take (0 or 1; e.g. 1 for a 1-5 Likert, 0 for PHQ-9) - numeric")

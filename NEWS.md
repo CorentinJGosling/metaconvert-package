@@ -112,6 +112,15 @@ Diagnostic checks that now behave differently (metaDETECT):
   inputs and reachable from `convert_df()`. Those routes' own documentation named them as
   the remedy for two arms moving in opposite directions, but they could previously be
   reached only by calling the route directly.
+- New input column `alpha_type`, recording whether a reported Cronbach's alpha is the
+  raw (covariance-matrix) or standardised (correlation-matrix) coefficient, with a new
+  `[INFO]` flag (V45) when a pool mixes the two. They are different coefficients, equal
+  only when the item variances are, and `alpha_type` enters neither the estimate nor the
+  (n, k) standard error -- so nothing numeric could reveal the mix. Accepts `"raw"` /
+  `"std.alpha"` and similar as synonyms for `"covariance"` / `"correlation"`; the stored
+  values name the computation because `alpha_to_es = "raw"` already means the
+  untransformed Bonett scale, an unrelated sense of the same word. Provenance only: it
+  changes no existing result, and a blank is not treated as a level.
 - New opt-in cross-row check `se_outlier_missing_n` (D2c), off by default. The
   sample-size-normalised SE-outlier checks drop a row that reports a standard error but
   no sample size, silently -- nothing separated "checked and found fine" from "never

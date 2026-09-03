@@ -64,6 +64,31 @@ This function estimates the standard error of the Cronbach's alpha.
 Convert Cronbach's alpha into an effect size measure
 }
 \details{
+\strong{Which alpha: the \code{alpha_type} column.} Raw alpha is computed from the
+covariance matrix and standardised alpha from the correlation matrix -- alpha on
+standardised items -- and they coincide only when the item variances are equal,
+diverging as those variances spread. \code{psych::alpha()} prints both
+(\code{raw_alpha} and \code{std.alpha}), so an extractor routinely has the pair in front
+of them. Record which was taken in the \code{alpha_type} column of
+\code{\link{data_extraction_sheet}()}: \code{"covariance"} or \code{"correlation"}, with
+\code{"raw"}/\code{"raw_alpha"} and \code{"std"}/\code{"std.alpha"}/\code{"standardized"}
+accepted as synonyms so it can be filled straight from that printout.
+
+The values name the \emph{computation} rather than the printed label because
+\code{alpha_to_es} already takes \code{"raw"}, where it means the untransformed Bonett
+scale and has nothing to do with raw-versus-standardised alpha. The two would sit in one
+call meaning unrelated things, both valid, so the collision would produce no error -- only
+a wrong reading of your own data.
+
+It is provenance: it changes no estimate and no standard error. Its purpose is that a pool
+mixing the two mixes estimands, and \emph{nothing numeric can reveal that}, since
+\code{alpha_type} enters neither the point estimate nor the \eqn{(n, k)} variance.
+\code{\link{convert_df}()} therefore raises an \code{[INFO]} flag (V45) when two known
+types coexist in one pool, the alpha analogue of the mixed-\code{omega_type} and
+mixed-\code{icc_type} flags. A blank is \strong{not} treated as a level: unlike
+\code{icc_type} there is no package default to fall back on, and most primary reports never
+say which they computed, so resolving blanks would fire the flag on a guess.
+
 \strong{Where the standard error comes from.} Three sources, in this order (the same
 precedence \code{\link{es_from_omega}} and \code{\link{es_from_icc}} use):
 \enumerate{

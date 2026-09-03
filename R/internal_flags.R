@@ -2383,8 +2383,54 @@
     }
   }
 
-  # V35: 2x2 event rates spanning a wide range in a correlation pool.
+  # V45: a pool mixing raw (covariance-matrix) and standardised (correlation-matrix)
+  # alpha. The alpha analogue of V38/V43, and the third member of that family.
   #
+  # They are different coefficients, not two names for one. Raw alpha is computed from
+  # the covariance matrix and standardised alpha from the correlation matrix -- alpha
+  # on standardised items -- and they coincide only when the item variances are equal,
+  # separating as those variances spread. psych::alpha() prints both (raw_alpha and
+  # std.alpha), so an extractor routinely has the pair in front of them with nothing
+  # in the sheet recording which one was taken.
+  #
+  # Nothing numeric can reveal the mix: alpha_type does not enter the point estimate
+  # or the (n, k) closed-form SE, so a pool holding both is silent everywhere else,
+  # exactly as V43 is the only thing that can see an agreement/consistency ICC mix.
+  #
+  # "unspecified" is not a level, following V39 and NOT V43. V43 resolves a blank to
+  # the package default because icc_type HAS one the user accepted by not overriding
+  # it; there is no package default here, the coefficient comes from the study, and
+  # most primary reports never say which they computed. Counting blanks as raw would
+  # make this fire on nearly every real dataset, on a guess, and it would be tuned out.
+  #
+  # [INFO] for V38 and V39's reason: nothing is mis-extracted and there is nothing to
+  # verify, since each value is correct for the matrix that produced it. What is wrong
+  # is pooling them, which is an analyst choice. Always active -- two known types in
+  # one pool are different estimands by definition, so it cannot false-fire.
+  if (n >= 2 && "alpha_type" %in% colnames(x) && "cronbach_alpha" %in% colnames(x)) {
+    at <- .normalise_alpha_type(x[["alpha_type"]], warn = FALSE)
+    al_v <- suppressWarnings(as.numeric(x[["cronbach_alpha"]]))
+    known_all <- is.finite(al_v) & !is.na(at) & at != "unspecified"
+    for (gk in seq_along(v_groups)) {           # one pool per flag_group stratum
+      known <- rep(FALSE, n)
+      known[v_groups[[gk]]] <- known_all[v_groups[[gk]]]
+      present <- unique(at[known])
+      if (length(present) > 1) {
+        for (i in which(known)) {
+          row_issues[[i]] <- c(row_issues[[i]], paste0(sprintf(
+            paste0("[INFO] Pool mixes alpha types: this row reports the %s-matrix ",
+                   "alpha while the pool also contains %s-matrix alpha. Raw and ",
+                   "standardised alpha are different coefficients, equal only when the ",
+                   "item variances are, and alpha_type enters neither the estimate nor ",
+                   "the standard error, so nothing else can see the mix. Split by type, ",
+                   "or enter it as a moderator and report the contrast"),
+            at[i], paste(setdiff(present, at[i]), collapse = " and ")), v_grp_note(gk)))
+        }
+      }
+    }
+  }
+
+  # V35: 2x2 event rates spanning a wide range in a correlation pool.  #
   # This is a disclosure about the tetrachoric route's precision, not a data error and
   # not a suggestion to use a different estimand; there is no alternative, as
   # ?convert_df explains under table_2x2_to_cor.
@@ -3623,7 +3669,7 @@
   # row carrying no usable N is set to NA in se_for_iqr above and leaves the pool
   # SILENTLY -- no flag, no note, nothing separating "checked and fine" from "never
   # checked". MEASURED on the one real odds-ratio pool in the tree
-  # (papers/errors_framework/validation_set/save/42125682-ERROR-OR, Shan et al. 2026,
+  # (papers/errors_framework/validation_set/42125682-ERROR-OR, Shan et al. 2026,
   # PNI and pCR, 6 studies): its forest row 5 (Wang 2025) is a per-1-unit CONTINUOUS
   # logistic coefficient copied into a pool of high-vs-low binary contrasts, it takes
   # the LARGEST weight in the meta-analysis (22.8%) by virtue of an SE 9x tighter than
@@ -3671,13 +3717,9 @@
           if (is.finite(fold) && fold > X) {
             msuf <- if (!is.null(info_used)) .method_suffix(info_used[i]) else ""
             flags[[i]] <- c(flags[[i]], paste0(
-              "[UNUSUAL] SE outlier, unchecked row: SE = ", round(se[i], 3), " is ",
-              round(fold, 1), "x tighter than the cohort median SE (",
-              round(raw_med, 3), "), and this row carries no sample size, so the ",
-              "sample-size-normalised checks skipped it entirely. A precision this far ",
-              "above the pool's, on a row that cannot be checked against it, is the ",
-              "signature of an estimate on a different scale (for example a per-unit ",
-              "regression coefficient pooled with group contrasts)", msuf))
+              "[UNUSUAL] SE outlier, no sample size: SE = ", round(se[i], 3), " is ",
+              round(fold, 1), "x tighter than the cohort median (", round(raw_med, 3),
+              "), and with no N the normalised SE checks skipped this row", msuf))
           }
         }
       }

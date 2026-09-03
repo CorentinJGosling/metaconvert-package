@@ -26,7 +26,7 @@ flags_of <- function(d, ...) {
 
 test_that("D2c is off by default and changes nothing", {
   f <- flags_of(or_pool())
-  expect_false(any(grepl("unchecked row", f)))
+  expect_false(any(grepl("no sample size", f)))
   # ROW 5 is invisible to the normalised checks at ANY threshold -- the property that
   # makes D2c necessary rather than a threshold tweak. Asserted on row 5 alone: at a
   # gate as loose as 2 the normalised checks legitimately flag OTHER rows (a pool
@@ -39,12 +39,12 @@ test_that("D2c is off by default and changes nothing", {
 
 test_that("D2c flags the N-less row whose raw SE is far tighter than the pool", {
   f <- flags_of(or_pool(), se_outlier_missing_n = TRUE)
-  expect_true(grepl("unchecked row", f[5]))
+  expect_true(grepl("no sample size", f[5]))
   expect_match(f[5], "9.4x tighter", fixed = TRUE)
-  expect_match(f[5], "carries no sample size", fixed = TRUE)
+  expect_match(f[5], "with no N the normalised SE checks skipped this row", fixed = TRUE)
   expect_match(f[5], "[UNUSUAL]", fixed = TRUE)
   # nothing else in the pool
-  expect_false(any(grepl("unchecked row", f[-5])))
+  expect_false(any(grepl("no sample size", f[-5])))
 })
 
 test_that("D2c never fires on a row the normalised checks could see", {
@@ -52,13 +52,13 @@ test_that("D2c never fires on a row the normalised checks could see", {
   # of it and leave the verdict to D2/D2b. This is what bounds D2c to rows that are
   # unchecked by construction -- it can add a flag, never change an existing one.
   f <- flags_of(or_pool(tight_n = 303), se_outlier_missing_n = TRUE)
-  expect_false(any(grepl("unchecked row", f)))
+  expect_false(any(grepl("no sample size", f)))
 })
 
 test_that("se_missing_n_ratio governs the fold threshold", {
   # measured raw fold for this row is 9.4x
-  expect_true(grepl("unchecked row",
+  expect_true(grepl("no sample size",
     flags_of(or_pool(), se_outlier_missing_n = TRUE, se_missing_n_ratio = 5)[5]))
-  expect_false(any(grepl("unchecked row",
+  expect_false(any(grepl("no sample size",
     flags_of(or_pool(), se_outlier_missing_n = TRUE, se_missing_n_ratio = 10))))
 })

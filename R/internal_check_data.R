@@ -184,6 +184,7 @@
     "n_response_categories", "scale_mean", "scale_min",
     "omega", "omega_se", "omega_ci_lo", "omega_ci_up", "omega_type", "omega_estimator",
     "icc", "icc_se", "icc_ci_lo", "icc_ci_up", "n_measurements", "icc_type",
+    "alpha_type",
     "discard",
     # multi-arm trial pooling
     "pool_side"
@@ -226,11 +227,18 @@
   expected_cols_type[which(expected_cols == "n_response_categories")] <- "numeric"
   expected_cols_type[which(expected_cols == "scale_mean")] <- "numeric"
   expected_cols_type[which(expected_cols == "scale_min")] <- "numeric"
-  # omega_type is a character estimand label; without this override the automatic
-  # grepl() detection types it numeric and every value becomes NA (same reason
-  # n_items / n_measurements need explicit overrides).
+  # Character estimand/provenance labels. The automatic grepl() detection above types
+  # anything it does not recognise as numeric, so without an override here the column
+  # RAISES on first use -- "Non-numeric characters in column ..." out of the type check
+  # -- naming the column. (An earlier version of this comment said "every value becomes
+  # NA". Measured: it does not. A registered numeric column given text errors; it does
+  # not coerce silently. Loud is the right behaviour, but the error lands on the user,
+  # which is what tests/testthat/test-column-type-declarations.R exists to move to CI:
+  # it derives the expected type from the sheet's own "- character" suffix, so a column
+  # added later is covered without anyone remembering to update it.)
   expected_cols_type[which(expected_cols == "omega_type")] <- "char"
   expected_cols_type[which(expected_cols == "omega_estimator")] <- "char"
+  expected_cols_type[which(expected_cols == "alpha_type")] <- "char"
   expected_cols_type[which(expected_cols == "pool_side")] <- "char"
   # per-row Yates flag for chi-square back-derivation
   expected_cols_type[which(expected_cols == "yates_chisq")] <- "logical"

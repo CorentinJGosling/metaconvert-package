@@ -27,7 +27,32 @@
 #'
 #' @details
 #'
-#' \strong{Where the standard error comes from.} Three sources, in this order (the same
+#' \strong{Which alpha: the \code{alpha_type} column.} Raw alpha is computed from the
+#' covariance matrix and standardised alpha from the correlation matrix -- alpha on
+#' standardised items -- and they coincide only when the item variances are equal,
+#' diverging as those variances spread. \code{psych::alpha()} prints both
+#' (\code{raw_alpha} and \code{std.alpha}), so an extractor routinely has the pair in
+#' front of them. Record which was taken in the \code{alpha_type} column of
+#' \code{\link{data_extraction_sheet}()}: \code{"covariance"} or \code{"correlation"},
+#' with \code{"raw"}/\code{"raw_alpha"} and \code{"std"}/\code{"std.alpha"}/
+#' \code{"standardized"} accepted as synonyms so it can be filled straight from that
+#' printout.
+#'
+#' The values name the \emph{computation} rather than the printed label because
+#' \code{alpha_to_es} already takes \code{"raw"}, where it means the untransformed
+#' Bonett scale and has nothing to do with raw-versus-standardised alpha. The two would
+#' sit in one call meaning unrelated things, both valid, so the collision would produce
+#' no error -- only a wrong reading of your own data.
+#'
+#' It is provenance: it changes no estimate and no standard error. Its purpose is that a
+#' pool mixing the two mixes estimands, and \emph{nothing numeric can reveal that},
+#' since \code{alpha_type} enters neither the point estimate nor the \eqn{(n, k)}
+#' variance. \code{\link{convert_df}()} therefore raises an \code{[INFO]} flag (V45)
+#' when two known types coexist in one pool, the alpha analogue of the mixed-\code{omega_type}
+#' and mixed-\code{icc_type} flags. A blank is \strong{not} treated as a level: unlike
+#' \code{icc_type} there is no package default to fall back on, and most primary reports
+#' never say which they computed, so resolving blanks would fire the flag on a guess.
+#'#' \strong{Where the standard error comes from.} Three sources, in this order (the same
 #' precedence \code{\link{es_from_omega}} and \code{\link{es_from_icc}} use):
 #' \enumerate{
 #'   \item \code{cronbach_alpha_se}, read on the natural scale and delta-mapped onto the
@@ -325,4 +350,51 @@ es_from_cronbach_alpha <- function(cronbach_alpha, n_sample, n_items,
   )
 
   return(result)
+}
+
+# Fold case and map the common synonyms for alpha_type. Same per-row contract as
+# .normalise_omega_estimator(): this arrives from a data column, so an unrecognised
+# value warns and falls back rather than aborting the run.
+#
+# THE VALUES NAME THE COMPUTATION, not the printed label, and that is deliberate.
+# alpha_to_es already takes "raw", where it means the untransformed Bonett scale and
+# has nothing to do with raw-vs-standardised alpha. "alpha_to_es = raw" beside
+# "alpha_type = raw" would be two unrelated meanings in one call, both valid, so
+# nobody would get an error -- just a wrong reading of their own data. Naming the
+# matrix the coefficient was computed from removes the collision: raw alpha is the
+# covariance-matrix form, standardised alpha the correlation-matrix one. The labels
+# extractors actually see (psych::alpha prints raw_alpha and std.alpha) are accepted
+# as synonyms, so the column can be filled straight from the source.
+#
+# The fallback is "unspecified" rather than "covariance", following
+# .normalise_omega_estimator() and NOT .normalise_icc_type(). icc_type resolves a
+# blank to the package default because there is one the user is deemed to have
+# accepted; there is no package default alpha here -- the coefficient comes from the
+# study. Most primary reports do not say which they computed, and resolving those to
+# a level would let V45 fire on a guess.
+.normalise_alpha_type <- function(x, warn = TRUE) {
+  raw <- as.character(x)
+  key <- gsub("[^a-z]", "", tolower(trimws(raw)))
+  map <- c(
+    covariance = "covariance", cov = "covariance", covariancematrix = "covariance",
+    raw = "covariance", rawalpha = "covariance", unstandardized = "covariance",
+    unstandardised = "covariance", cronbach = "covariance", cronbachalpha = "covariance",
+    correlation = "correlation", cor = "correlation", correlationmatrix = "correlation",
+    std = "correlation", stdalpha = "correlation", standardized = "correlation",
+    standardised = "correlation", standardizedalpha = "correlation",
+    standardisedalpha = "correlation",
+    unspecified = "unspecified", unknown = "unspecified", notreported = "unspecified",
+    nr = "unspecified", na = "unspecified", none = "unspecified"
+  )
+  out <- unname(map[key])
+  bad <- which(is.na(out) & !is.na(raw) & nzchar(key))
+  if (length(bad) && isTRUE(warn)) {
+    warning(paste0(
+      "Unrecognised alpha_type value(s): '", paste(unique(raw[bad]), collapse = "', '"),
+      "'. Treated as 'unspecified'. Recognised values are 'covariance' and ",
+      "'correlation' (case-insensitive; 'raw'/'raw_alpha' and ",
+      "'std'/'std.alpha'/'standardized' are accepted as synonyms)."))
+  }
+  out[is.na(out)] <- "unspecified"
+  out
 }
