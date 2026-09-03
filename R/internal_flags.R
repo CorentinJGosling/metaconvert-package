@@ -40,6 +40,12 @@
     outlier_min_deviation = NULL, # D1
     se_outlier_min_ratio = 3, # D2
     se_ratio_extreme = 10, # D2b
+    # D2c: opt-in. Flags a row that carries an SE but no sample size, whose RAW SE is
+    # more than se_ratio_extreme-fold tighter than the pool median. Off by default: it
+    # is the only check comparing un-normalised SEs, and is sound only because it is
+    # confined to rows the normalised checks already dropped.
+    se_outlier_missing_n = FALSE, # D2c
+    se_missing_n_ratio = 5, # D2c fold threshold, on the RAW SE scale
     sd_ratio_max = 10, # V12
     sd_ratio_bl_ep_min = 0.7, # V18
     baseline_imbalance_max = 0.30, # V21
@@ -3606,6 +3612,73 @@
           flags[[i]] <- c(flags[[i]],
             paste0("[UNUSUAL] SE outlier, ratio method: SE = ",
                    round(se[i], 3), " (", cmp, ")", msuf))
+        }
+      }
+    }
+  }
+
+  # D2c: the row D2 and D2b never saw. OPT-IN (se_outlier_missing_n), default FALSE.
+  #
+  # WHY IT EXISTS. D2/D2b compare an SE only after normalising it by sample size, so a
+  # row carrying no usable N is set to NA in se_for_iqr above and leaves the pool
+  # SILENTLY -- no flag, no note, nothing separating "checked and fine" from "never
+  # checked". MEASURED on the one real odds-ratio pool in the tree
+  # (papers/errors_framework/validation_set/save/42125682-ERROR-OR, Shan et al. 2026,
+  # PNI and pCR, 6 studies): its forest row 5 (Wang 2025) is a per-1-unit CONTINUOUS
+  # logistic coefficient copied into a pool of high-vs-low binary contrasts, it takes
+  # the LARGEST weight in the meta-analysis (22.8%) by virtue of an SE 9x tighter than
+  # any sibling, and dropping it moves the pooled OR from 1.90 to 2.21. Every default
+  # check is silent on it, and NO THRESHOLD REACHES IT: at se_ratio_extreme = 2 -- a
+  # gate loose enough to flag half of any pool -- the row is still silent, because it
+  # is not in the pool at all. Supply its N and it becomes an ordinary 1.8% near-miss
+  # (normalised ratio 0.1018 against the 0.1000 D2b requires).
+  #
+  # THE MISSING N IS PART OF THE ERROR SIGNATURE, which is what makes this worth a
+  # check rather than an accepted blind spot: that row has no sample size precisely
+  # because it is a per-unit coefficient with no group counts -- the same fact that
+  # makes it the wrong estimand. The check that should catch it is disabled by the
+  # thing that makes it wrong.
+  #
+  # WHY IT IS SCOPED TO UNNORMALISABLE ROWS rather than being a general raw-SE
+  # comparison. Raw SEs are comparable only at a common N; a pool mixing n = 50 with
+  # n = 5000 carries a 10x raw spread with nothing wrong in it, which is the whole
+  # reason D2 normalises. Confining this to rows D2 already dropped bounds the exposure
+  # to rows that are unchecked by construction, so it can ADD a flag but can never
+  # change one D2/D2b already raised.
+  #
+  # DEFAULT OFF, because the trade is a judgement call -- though the obvious
+  # alternative lever is measurably worse: lowering se_ratio_extreme from 10 to 9 over
+  # the 22 validation-set pool-passes adds two flags, one of them in a SAFE pool
+  # (41977094 forest row 8), and still does not reach this row.
+  if (isTRUE(opts$se_outlier_missing_n) && length(se_iqr_valid) >= 4) {
+    se_raw_pool <- se[!is.na(se_for_iqr) & is.finite(se_for_iqr) &
+                      !is.na(se) & is.finite(se) & se > 0]
+    if (length(se_raw_pool) >= 4) {
+      raw_med <- stats::median(se_raw_pool)
+      # D2c carries its OWN fold threshold rather than reusing se_ratio_extreme.
+      # se_ratio_extreme governs a NORMALISED ratio; this compares RAW SEs, so the
+      # two are not the same quantity and a shared number would be a coincidence.
+      # Measured: the motivating row's raw fold is 9.4x, so reusing 10 misses it by
+      # 6% -- the same near-miss as D2b, one scale along. Calibration below.
+      X <- if (!is.null(opts$se_missing_n_ratio)) opts$se_missing_n_ratio else 5
+      if (!is.na(raw_med) && raw_med > 0) {
+        for (i in seq_len(n)) {
+          # only rows the normalised checks could not see, and only with a usable SE
+          if (!is.na(se_for_iqr[i])) next
+          if (is.na(se[i]) || !is.finite(se[i]) || se[i] <= 0) next
+          if (any(grepl("SE outlier", flags[[i]]))) next
+          fold <- raw_med / se[i]
+          if (is.finite(fold) && fold > X) {
+            msuf <- if (!is.null(info_used)) .method_suffix(info_used[i]) else ""
+            flags[[i]] <- c(flags[[i]], paste0(
+              "[UNUSUAL] SE outlier, unchecked row: SE = ", round(se[i], 3), " is ",
+              round(fold, 1), "x tighter than the cohort median SE (",
+              round(raw_med, 3), "), and this row carries no sample size, so the ",
+              "sample-size-normalised checks skipped it entirely. A precision this far ",
+              "above the pool's, on a row that cannot be checked against it, is the ",
+              "signature of an estimate on a different scale (for example a per-unit ",
+              "regression coefficient pooled with group contrasts)", msuf))
+          }
         }
       }
     }

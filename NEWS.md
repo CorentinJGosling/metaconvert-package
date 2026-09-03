@@ -112,6 +112,13 @@ Diagnostic checks that now behave differently (metaDETECT):
   inputs and reachable from `convert_df()`. Those routes' own documentation named them as
   the remedy for two arms moving in opposite directions, but they could previously be
   reached only by calling the route directly.
+- New opt-in cross-row check `se_outlier_missing_n` (D2c), off by default. The
+  sample-size-normalised SE-outlier checks drop a row that reports a standard error but
+  no sample size, silently -- nothing separated "checked and found fine" from "never
+  checked", and no threshold reached such a row. When enabled, a dropped row whose raw
+  standard error is more than `se_missing_n_ratio`-fold (default 5) tighter than the
+  pool median is flagged. Confined to rows the normalised checks could not see, so it
+  can add a flag but never change one they raised.
 - `es_guidance` no longer names columns that cannot produce an estimate: `es_from_or()`
   reconstructs from the case margin rather than the arm sizes, an NNT or risk difference
   from a ratio also needs `baseline_risk`, and `dw`/`gw`/`mdw`/`prop`/`alpha`/`omega`/
