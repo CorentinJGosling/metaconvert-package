@@ -120,14 +120,17 @@ test_that("lipsey_cooper still propagates vd and stays Fisher-consistent", {
   expect_equal(e$z_se^2, e$r_se^2 / (1 - e$r^2)^2, tolerance = 1e-8)
 })
 
-test_that("lipsey_cooper r CI uses the same error df as the d/g CI", {
+test_that("lipsey_cooper r CI is the back-transformed z interval", {
+  # Formerly r +/- qt(.975, N - 2 - q) r_se on the r scale -- the one package-computed r
+  # interval still built that way, and one that could leave [-1, 1] at small n. It is
+  # now tanh() of the z interval like every other correlation route.
   n1 <- 15; n2 <- 15; q <- 5
   e <- es_from_ancova_md_sd(ancova_md = 1, ancova_md_sd = 1, cov_outcome_r = 0.3,
                             n_cov_ancova = q, n_exp = n1, n_nexp = n2,
                             smd_to_cor = "lipsey_cooper")
-  half <- qt(.975, df = n1 + n2 - 2 - q) * e$r_se
-  expect_equal(e$r_ci_up - e$r, half, tolerance = 1e-10)
-  expect_equal(e$r - e$r_ci_lo, half, tolerance = 1e-10)
+  expect_equal(c(e$r_ci_lo, e$r_ci_up), tanh(c(e$z_ci_lo, e$z_ci_up)), tolerance = 1e-12)
+  expect_equal(c(e$z_ci_lo, e$z_ci_up), e$z + c(-1, 1) * qnorm(.975) * e$z_se, tolerance = 1e-12)
+  expect_true(abs(e$r_ci_lo) < 1 && abs(e$r_ci_up) < 1)
 })
 
 ## ---------------------------------------------------------------------------

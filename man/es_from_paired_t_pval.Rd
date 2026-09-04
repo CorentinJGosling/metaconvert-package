@@ -12,6 +12,7 @@ es_from_paired_t_pval(
   r_pre_post_exp,
   r_pre_post_nexp,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   pre_post_to_smd = "cooper",
   reverse_paired_t_pval,
   reverse_paired_t_pval_exp,
@@ -32,6 +33,8 @@ es_from_paired_t_pval(
 \item{r_pre_post_nexp}{pre-post correlation in the non-experimental/non-exposed group}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.}
 
 \item{pre_post_to_smd}{formula used to convert the paired t-test value into a SMD (see details).}
 

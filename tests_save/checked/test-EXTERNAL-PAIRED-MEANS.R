@@ -1,3 +1,13 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request. The
+# exception is the cooper / morris_drm blocks, whose Morris & DeShon (2002) oracle is
+# the d-scale variance 2(1-r)/n + d^2/(2n): that is the J^2-outside ("borenstein")
+# convention, so those calls request the default explicitly.
+
 # Long-running file (> 25 s): executed locally and in CI (devtools::test and
 # testthat set NOT_CRAN=true); skipped wholesale on CRAN to respect check-time
 # limits. The fast pre/post files still run on CRAN.
@@ -117,7 +127,7 @@ test_that("MEANS-SD: bonett two-group matches metafor SMCRH (g + g_se) (per-arm 
   se_expected <- sqrt(as.numeric(smc_exp$vi) + as.numeric(smc_nexp$vi))
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
@@ -176,7 +186,7 @@ test_that("MEANS-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) 
   se_expected <- sqrt(var_rm_exp + var_rm_nexp)
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "borenstein", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
@@ -246,7 +256,7 @@ test_that("MEANS-SD: morris_dav two-group matches metafor SMCRPH (g + g_se) (per
   se_expected <- sqrt(as.numeric(mf_exp$vi) + as.numeric(mf_nexp$vi))
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
@@ -322,7 +332,7 @@ test_that("MEANS-SD: morris_dz two-group matches metafor SMCC (d + d_se) (per-ar
                       as.numeric(g_nexp$vi) / J_nexp^2)
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
@@ -390,7 +400,7 @@ test_that("MEANS-SD: raw MD two-group matches metafor MC (md + md_se)", {
   # NB: no pool_sd here -- the raw MD is unstandardized, so it is invariant to
   # pool_sd. This test therefore runs on the DEFAULT (pool_sd = FALSE) and pins
   # that the pooling option never leaks into the MD path.
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
@@ -461,7 +471,7 @@ test_that("MEANS-SD: pooled morris_dz (opt-in pool_sd = TRUE) matches metafor SM
 
   # metaConvert on the OPT-IN pooled path (pool_sd = TRUE passed explicitly --
   # it is no longer the default, so this must be requested)
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
@@ -504,7 +514,7 @@ test_that("MEANS-SD: pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Mo
   res$r_pre_post_nexp <- 0.6
 
   run <- function(...) {
-    summary(convert_df(res,
+    summary(convert_df(smd_var = "hedges_olkin", res,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_sd_pre_post",
@@ -563,7 +573,7 @@ test_that("MEANS-SE: all methods match SD version after SE→SD conversion", {
   for (method in methods) {
     # From SD
     res_sd <- res
-    es_sd <- summary(convert_df(res_sd,
+    es_sd <- summary(convert_df(smd_var = "hedges_olkin", res_sd,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_sd_pre_post",
@@ -579,7 +589,7 @@ test_that("MEANS-SE: all methods match SD version after SE→SD conversion", {
     res_se$mean_pre_sd_nexp <- NULL
     res_se$mean_sd_nexp <- NULL
 
-    es_se <- summary(convert_df(res_se,
+    es_se <- summary(convert_df(smd_var = "hedges_olkin", res_se,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_se_pre_post",
@@ -640,7 +650,7 @@ test_that("MEANS-CI: all methods match SD version after CI→SD conversion", {
   for (method in methods) {
     # From SD
     res_sd <- res
-    es_sd <- summary(convert_df(res_sd,
+    es_sd <- summary(convert_df(smd_var = "hedges_olkin", res_sd,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_sd_pre_post",
@@ -660,7 +670,7 @@ test_that("MEANS-CI: all methods match SD version after CI→SD conversion", {
     res_ci$mean_pre_se_nexp <- NULL
     res_ci$mean_se_nexp <- NULL
 
-    es_ci <- summary(convert_df(res_ci,
+    es_ci <- summary(convert_df(smd_var = "hedges_olkin", res_ci,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_ci_pre_post",

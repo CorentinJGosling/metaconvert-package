@@ -5,12 +5,16 @@
 ## near |r| = 1. B7b/B8b already flag exactly this for alpha and ICC; B1 above tests
 ## only the point estimate, so without B1b the bound passes through silently.
 ##
-## SCOPE CHANGED: the tetrachoric route no longer reaches B1b. Its r-scale interval
-## is now the tanh back-transform of the Fisher-z interval (.tet_r in
+## SCOPE CHANGED TWICE. First the tetrachoric route stopped reaching B1b: its
+## r-scale interval became the tanh back-transform of the Fisher-z interval (.tet_r in
 ## internal_multiple_formulas.R), which cannot leave (-1, 1) -- measured escape fell
 ## from 6.7% of tables to 0.0% with coverage of the true correlation improving from
-## 0.945 to 0.952. B1b is retained for the routes that DO still build a symmetric
-## Wald r interval: es_from_pearson_r() and the or_to_cor family.
+## 0.945 to 0.952. Then EVERY package-computed r interval was switched to that
+## construction (es_from_pearson_r() / fisher_z / spearman, the user r/z branches, and
+## the lipsey_cooper smd_to_cor branch; the OR conversions and the viechtbauer branch
+## already did it), matching cor.test() and metafor's ZCOR + transf.ztor. B1b is now
+## reachable only through a USER-supplied r interval, which is handed back verbatim,
+## and is retained as the backstop for that case.
 ##
 ## This flags; it does not change those intervals.
 
@@ -23,19 +27,35 @@ fires <- function(x) grepl("escapes the parameter space", flag_of(x))
   data.frame(study_id = "s", pearson_r = r, n_sample = n)
 }
 
-test_that("B1b fires when a correlation CI bound escapes [-1, 1]", {
-  # A large r on a small sample: the Wald interval overshoots 1 while r is valid.
+test_that("es_from_pearson_r() builds the back-transformed Fisher interval, which cannot escape", {
+  # A large r on a small sample: the former r +/- qt se overshot 1 while r was valid.
   e <- es_from_pearson_r(pearson_r = 0.97, n_sample = 12)
-  expect_lte(abs(e$r), 1)          # the point estimate itself is valid
-  expect_gt(e$r_ci_up, 1)          # but the interval is not
-  expect_true(fires(.pearson_row(0.97, 12)))
+  expect_lte(abs(e$r), 1)
+  expect_lte(e$r_ci_up, 1)
+  z <- metafor::escalc(measure = "ZCOR", ri = 0.97, ni = 12)
+  bt <- summary(z, transf = metafor::transf.ztor)
+  expect_equal(c(e$r_ci_lo, e$r_ci_up), c(bt$ci.lb, bt$ci.ub), tolerance = 1e-8)
+  expect_false(fires(.pearson_row(0.97, 12)))
+  e2 <- es_from_pearson_r(pearson_r = -0.97, n_sample = 12)
+  expect_gte(e2$r_ci_lo, -1)
+  expect_false(fires(.pearson_row(-0.97, 12)))
+})
+
+.user_row <- function(r, lo, up) {
+  data.frame(study_id = "s", user_es_original_measure_crude = "r", user_es_crude = r,
+             user_ci_lo_crude = lo, user_ci_up_crude = up, n_sample = 12)
+}
+
+test_that("B1b fires when a USER-supplied correlation CI bound escapes [-1, 1]", {
+  x <- .user_row(0.97, 0.85, 1.05)
+  expect_true(fires(x))
   # [INFO], not [UNUSUAL]: nothing was extracted wrongly. It is a disclosure about
-  # the interval metaConvert builds, so there is nothing for the user to verify.
-  # Tested on the B1b token itself -- this row legitimately raises other flags too
-  # (|r| = 0.97 trips the high-correlation check), so the assertion must not be made
-  # against the whole flag string.
+  # the interval, so there is nothing for the user to verify. Tested on the B1b
+  # token itself -- this row legitimately raises other flags too (|r| = 0.97 trips
+  # the high-correlation check), so the assertion must not be made against the whole
+  # flag string.
   b1b <- Filter(function(p) grepl("escapes the parameter space", p),
-                strsplit(flag_of(.pearson_row(0.97, 12)), "; ")[[1]])
+                strsplit(flag_of(x), "; ")[[1]])
   expect_length(b1b, 1)
   expect_match(b1b, "^\\[INFO\\]")
   expect_false(grepl("\\[UNUSUAL\\]", b1b))
@@ -43,11 +63,9 @@ test_that("B1b fires when a correlation CI bound escapes [-1, 1]", {
 })
 
 test_that("B1b catches the lower bound too", {
-  e <- es_from_pearson_r(pearson_r = -0.97, n_sample = 12)
-  expect_lt(e$r_ci_lo, -1)
-  expect_gte(e$r, -1)
-  expect_true(fires(.pearson_row(-0.97, 12)))
-  expect_match(flag_of(.pearson_row(-0.97, 12)), "lower bound is below -1")
+  x <- .user_row(-0.97, -1.05, -0.85)
+  expect_true(fires(x))
+  expect_match(flag_of(x), "lower bound is below -1")
 })
 
 test_that("B1b is silent on well-behaved correlations", {

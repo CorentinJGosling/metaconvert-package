@@ -1,3 +1,10 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request.
+
 test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc1)", {
   # The default is pool_sd = FALSE: each arm's mean change is standardized by
   # its OWN SD, the two within-arm values are subtracted, and their sampling
@@ -44,7 +51,7 @@ test_that("pool_sd=FALSE (the default) yields the per-arm d_ppc1 standardizer re
   r1 <- 0.6; r2 <- 0.7
 
   for (method in c("bonett", "morris_dz", "morris_drm", "morris_dav")) {
-    two_group <- es_from_means_sd_pre_post(
+    two_group <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
       n_exp = n1, n_nexp = n2,
       mean_pre_exp = 20, mean_exp = 28,
       mean_pre_sd_exp = 5, mean_sd_exp = 6,
@@ -55,14 +62,14 @@ test_that("pool_sd=FALSE (the default) yields the per-arm d_ppc1 standardizer re
       pool_sd = FALSE
     )
 
-    arm_exp <- es_from_means_sd_pre_post_single_group(
+    arm_exp <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       n_exp = n1,
       mean_pre_exp = 20, mean_exp = 28,
       mean_pre_sd_exp = 5, mean_sd_exp = 6,
       r_pre_post_exp = r1,
       pre_post_to_smd = method
     )
-    arm_nexp <- es_from_means_sd_pre_post_single_group(
+    arm_nexp <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       n_exp = n2,
       mean_pre_exp = 20, mean_exp = 22,
       mean_pre_sd_exp = 4, mean_sd_exp = 5,
@@ -84,7 +91,7 @@ test_that("pool_sd=FALSE (the default) yields the per-arm d_ppc1 standardizer re
 })
 
 test_that("pool_sd=TRUE produces different results from pool_sd=FALSE", {
-  res_unpooled <- es_from_means_sd_pre_post(
+  res_unpooled <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 6,
@@ -95,7 +102,7 @@ test_that("pool_sd=TRUE produces different results from pool_sd=FALSE", {
     pool_sd = FALSE
   )
 
-  res_pooled <- es_from_means_sd_pre_post(
+  res_pooled <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 6,
@@ -113,7 +120,7 @@ test_that("pool_sd=TRUE produces different results from pool_sd=FALSE", {
 test_that("pool_sd=TRUE with equal groups converges to pool_sd=FALSE for d", {
   # When both groups have identical SDs, n, and r, the pooled and unpooled
   # approaches should give the same d (but not necessarily the same variance)
-  res_unpooled <- es_from_means_sd_pre_post(
+  res_unpooled <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 5,
@@ -124,7 +131,7 @@ test_that("pool_sd=TRUE with equal groups converges to pool_sd=FALSE for d", {
     pool_sd = FALSE
   )
 
-  res_pooled <- es_from_means_sd_pre_post(
+  res_pooled <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 5,
@@ -149,7 +156,7 @@ test_that("pool_sd bonett method: manual formula verification", {
   sd_pre2 <- 4; sd_post2 <- 5
   r1 <- 0.6; r2 <- 0.7
 
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = n1, n_nexp = n2,
     mean_pre_exp = mean_pre1, mean_exp = mean_post1,
     mean_pre_sd_exp = sd_pre1, mean_sd_exp = sd_post1,
@@ -194,7 +201,7 @@ test_that("pool_sd morris_dz method: manual formula verification", {
   sd_pre2 <- 3.5; sd_post2 <- 4.5
   r1 <- 0.5; r2 <- 0.6
 
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = n1, n_nexp = n2,
     mean_pre_exp = mean_pre1, mean_exp = mean_post1,
     mean_pre_sd_exp = sd_pre1, mean_sd_exp = sd_post1,
@@ -242,7 +249,7 @@ test_that("pool_sd morris_dz variance matches metafor::escalc(measure = 'SMD') o
   mc1 <- -12.4; sdc1 <- 6.52
   mc2 <- -3.5; sdc2 <- 10.67
 
-  res <- es_from_mean_change_sd(
+  res <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     n_exp = n1, n_nexp = n2,
     mean_change_exp = mc1, mean_change_sd_exp = sdc1,
     mean_change_nexp = mc2, mean_change_sd_nexp = sdc2,
@@ -290,7 +297,7 @@ test_that("pool_sd morris_drm method: manual formula verification", {
   sd_pre2 <- 3.5; sd_post2 <- 4.5
   r1 <- 0.5; r2 <- 0.6
 
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = n1, n_nexp = n2,
     mean_pre_exp = mean_pre1, mean_exp = mean_post1,
     mean_pre_sd_exp = sd_pre1, mean_sd_exp = sd_post1,
@@ -333,7 +340,7 @@ test_that("pool_sd morris_dav method: manual formula verification", {
   sd_pre2 <- 3.5; sd_post2 <- 4.5
   r1 <- 0.5; r2 <- 0.6
 
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = n1, n_nexp = n2,
     mean_pre_exp = mean_pre1, mean_exp = mean_post1,
     mean_pre_sd_exp = sd_pre1, mean_sd_exp = sd_post1,
@@ -383,7 +390,7 @@ test_that("pool_sd morris_dav method: manual formula verification", {
 })
 
 test_that("pool_sd works through mean change delegation chain", {
-  res_mc <- es_from_mean_change_sd(
+  res_mc <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     n_exp = 36, n_nexp = 35,
     mean_change_exp = 8.4, mean_change_sd_exp = 3.2,
     mean_change_nexp = 2.43, mean_change_sd_nexp = 2.8,
@@ -393,7 +400,7 @@ test_that("pool_sd works through mean change delegation chain", {
   )
 
   # Equivalent pre_post call with mean_pre=0
-  res_pp <- es_from_means_sd_pre_post(
+  res_pp <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 36, n_nexp = 35,
     mean_pre_exp = 0, mean_exp = 8.4,
     mean_pre_sd_exp = 0, mean_sd_exp = 3.2,
@@ -409,7 +416,7 @@ test_that("pool_sd works through mean change delegation chain", {
 })
 
 test_that("pool_sd flows through SE delegation chain", {
-  res <- es_from_mean_change_se(
+  res <- es_from_mean_change_se(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_change_exp = 5, mean_change_se_exp = 1,
     mean_change_nexp = 2, mean_change_se_nexp = 0.8,
@@ -424,7 +431,7 @@ test_that("pool_sd flows through SE delegation chain", {
 })
 
 test_that("pool_sd flows through CI delegation chain", {
-  res <- es_from_mean_change_ci(
+  res <- es_from_mean_change_ci(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_change_exp = 5,
     mean_change_ci_lo_exp = 3, mean_change_ci_up_exp = 7,
@@ -441,7 +448,7 @@ test_that("pool_sd flows through CI delegation chain", {
 })
 
 test_that("pool_sd flows through pval delegation chain", {
-  res <- es_from_mean_change_pval(
+  res <- es_from_mean_change_pval(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_change_exp = 5, mean_change_pval_exp = 0.001,
     mean_change_nexp = 2, mean_change_pval_nexp = 0.05,
@@ -456,7 +463,7 @@ test_that("pool_sd flows through pval delegation chain", {
 })
 
 test_that("pool_sd with very unequal sample sizes", {
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 100, n_nexp = 10,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 6,
@@ -473,7 +480,7 @@ test_that("pool_sd with very unequal sample sizes", {
 })
 
 test_that("pool_sd with very unequal correlations", {
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 50, n_nexp = 50,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 6,
@@ -496,7 +503,7 @@ test_that("pool_sd bonett at the smallest usable N (m = 2) now yields a finite v
   # plug-in form, which contains m/(m - 2) and is therefore undefined at m = 2 --
   # so the package returned NA. The LS form has no such singularity, so a finite
   # (if very wide) variance is now returned. J itself still requires df > 1.
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 2, n_nexp = 2,
     mean_pre_exp = 20, mean_exp = 25,
     mean_pre_sd_exp = 5, mean_sd_exp = 6,
@@ -528,9 +535,9 @@ test_that("pool_sd works through convert_df pipeline", {
     r_pre_post_nexp = c(0.7, 0.5)
   )
 
-  res_unpooled <- convert_df(dat, measure = "g", verbose = FALSE,
+  res_unpooled <- convert_df(smd_var = "hedges_olkin", dat, measure = "g", verbose = FALSE,
                               pre_post_to_smd = "bonett", pool_sd = FALSE)
-  res_pooled <- convert_df(dat, measure = "g", verbose = FALSE,
+  res_pooled <- convert_df(smd_var = "hedges_olkin", dat, measure = "g", verbose = FALSE,
                             pre_post_to_smd = "bonett", pool_sd = TRUE)
 
   sum_unpooled <- summary(res_unpooled)
@@ -544,7 +551,7 @@ test_that("pool_sd works with all 4 methods in pre_post_to_smd", {
   methods <- c("bonett", "morris_dz", "morris_drm", "morris_dav")
 
   for (method in methods) {
-    res <- es_from_means_sd_pre_post(
+    res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
       n_exp = 40, n_nexp = 38,
       mean_pre_exp = 15, mean_exp = 22,
       mean_pre_sd_exp = 4, mean_sd_exp = 5,
@@ -564,7 +571,7 @@ test_that("pool_sd works with all 4 methods in pre_post_to_smd", {
 })
 
 test_that("pool_sd cooper alias works", {
-  res_cooper <- es_from_means_sd_pre_post(
+  res_cooper <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 40, n_nexp = 38,
     mean_pre_exp = 15, mean_exp = 22,
     mean_pre_sd_exp = 4, mean_sd_exp = 5,
@@ -575,7 +582,7 @@ test_that("pool_sd cooper alias works", {
     pool_sd = TRUE
   )
 
-  res_drm <- es_from_means_sd_pre_post(
+  res_drm <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = 40, n_nexp = 38,
     mean_pre_exp = 15, mean_exp = 22,
     mean_pre_sd_exp = 4, mean_sd_exp = 5,

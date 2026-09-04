@@ -1,3 +1,13 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request. The
+# exception is the cooper / morris_drm blocks, whose Morris & DeShon (2002) oracle is
+# the d-scale variance 2(1-r)/n + d^2/(2n): that is the J^2-outside ("borenstein")
+# convention, so those calls request the default explicitly.
+
 # ==============================================================================
 # EXTERNAL VALIDATION: es_from_PAIRED_MC.R
 # ==============================================================================
@@ -63,7 +73,7 @@ test_that("MC-SD: cooper two-group matches Morris & DeShon (2002) (d + d_se) (pe
 
   for (i in 1:nrow(dat)) {
     # metaConvert
-    mc <- es_from_mean_change_sd(
+    mc <- es_from_mean_change_sd(smd_var = "borenstein", 
       mean_change_exp = dat$mean_change_exp[i],
       mean_change_sd_exp = dat$mean_change_sd_exp[i],
       n_exp = dat$n_exp[i],
@@ -134,7 +144,7 @@ test_that("MC-SD: morris_dz two-group matches per-arm metafor SMCC formula (d + 
 
   for (i in 1:nrow(dat)) {
     # metaConvert
-    mc <- es_from_mean_change_sd(
+    mc <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
       mean_change_exp = dat$mean_change_exp[i],
       mean_change_sd_exp = dat$mean_change_sd_exp[i],
       n_exp = dat$n_exp[i],
@@ -151,7 +161,7 @@ test_that("MC-SD: morris_dz two-group matches per-arm metafor SMCC formula (d + 
 
     # DEFAULT GUARD: calling the wrapper WITHOUT pool_sd must reproduce the per-arm
     # (pool_sd = FALSE) result exactly — i.e. the default is the per-arm d_ppc1 path.
-    mc_default <- es_from_mean_change_sd(
+    mc_default <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
       mean_change_exp = dat$mean_change_exp[i],
       mean_change_sd_exp = dat$mean_change_sd_exp[i],
       n_exp = dat$n_exp[i],
@@ -230,7 +240,7 @@ test_that("MC-SD: morris_dz pooled (opt-in pool_sd = TRUE) matches metafor::esca
   for (i in 1:nrow(dat)) {
     # metaConvert, OPT-IN pooled standardizer -- pool_sd = TRUE passed EXPLICITLY
     # (the default is pool_sd = FALSE, the per-arm path guarded in test 1.2).
-    mc <- es_from_mean_change_sd(
+    mc <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
       mean_change_exp = dat$mean_change_exp[i],
       mean_change_sd_exp = dat$mean_change_sd_exp[i],
       n_exp = dat$n_exp[i],
@@ -304,7 +314,7 @@ test_that("MC-SD: raw MD two-group matches metafor MD (md + md_se)", {
 
   for (i in 1:nrow(dat)) {
     # metaConvert
-    mc <- es_from_mean_change_sd(
+    mc <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
       mean_change_exp = dat$mean_change_exp[i],
       mean_change_sd_exp = dat$mean_change_sd_exp[i],
       n_exp = dat$n_exp[i],
@@ -359,7 +369,7 @@ test_that("MC-SD: mean change EXACTLY equals means_sd_pre_post(mean_pre=0)", {
   for (method in methods) {
     for (i in 1:nrow(dat)) {
       # From mean change
-      mc_change <- es_from_mean_change_sd(
+      mc_change <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
         mean_change_exp = dat$mean_change_exp[i],
         mean_change_sd_exp = dat$mean_change_sd_exp[i],
         n_exp = dat$n_exp[i],
@@ -372,7 +382,7 @@ test_that("MC-SD: mean change EXACTLY equals means_sd_pre_post(mean_pre=0)", {
       )
 
       # From pre/post with mean_pre=0
-      mc_prepost <- es_from_means_sd_pre_post(
+      mc_prepost <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
         mean_pre_exp = 0,
         mean_exp = dat$mean_change_exp[i],
         mean_pre_sd_exp = 0,
@@ -430,7 +440,7 @@ test_that("MC-SE: all methods match SD version after SE→SD conversion", {
   for (method in methods) {
     for (i in 1:nrow(dat)) {
       # From SD
-      mc_sd <- es_from_mean_change_sd(
+      mc_sd <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
         mean_change_exp = dat$mean_change_exp[i],
         mean_change_sd_exp = dat$mean_change_sd_exp[i],
         n_exp = dat$n_exp[i],
@@ -443,7 +453,7 @@ test_that("MC-SE: all methods match SD version after SE→SD conversion", {
       )
 
       # From SE
-      mc_se <- es_from_mean_change_se(
+      mc_se <- es_from_mean_change_se(smd_var = "hedges_olkin", 
         mean_change_exp = dat$mean_change_exp[i],
         mean_change_se_exp = dat$mean_change_se_exp[i],
         n_exp = dat$n_exp[i],
@@ -498,7 +508,7 @@ test_that("MC-CI: all methods match SD version after CI→SD conversion", {
   for (method in methods) {
     for (i in 1:nrow(dat)) {
       # From SD
-      mc_sd <- es_from_mean_change_sd(
+      mc_sd <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
         mean_change_exp = dat$mean_change_exp[i],
         mean_change_sd_exp = dat$mean_change_sd_exp[i],
         n_exp = dat$n_exp[i],
@@ -511,7 +521,7 @@ test_that("MC-CI: all methods match SD version after CI→SD conversion", {
       )
 
       # From CI
-      mc_ci <- es_from_mean_change_ci(
+      mc_ci <- es_from_mean_change_ci(smd_var = "hedges_olkin", 
         mean_change_exp = dat$mean_change_exp[i],
         mean_change_ci_lo_exp = dat$mean_change_ci_lo_exp[i],
         mean_change_ci_up_exp = dat$mean_change_ci_up_exp[i],
@@ -565,7 +575,7 @@ test_that("MC-PVAL: all methods match SD version after pval→t→SE→SD conver
   for (method in methods) {
     for (i in 1:nrow(dat)) {
       # From SD
-      mc_sd <- es_from_mean_change_sd(
+      mc_sd <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
         mean_change_exp = dat$mean_change_exp[i],
         mean_change_sd_exp = dat$mean_change_sd_exp[i],
         n_exp = dat$n_exp[i],
@@ -578,7 +588,7 @@ test_that("MC-PVAL: all methods match SD version after pval→t→SE→SD conver
       )
 
       # From p-value
-      mc_pval <- es_from_mean_change_pval(
+      mc_pval <- es_from_mean_change_pval(smd_var = "hedges_olkin", 
         mean_change_exp = dat$mean_change_exp[i],
         mean_change_pval_exp = dat$pval_exp[i],
         mean_change_nexp = dat$mean_change_nexp[i],

@@ -10,6 +10,9 @@
   #     metafor's own default: v_g = 1/n1 + 1/n2 + g^2/(2N), v_d = v_g / cm^2. This
   #     unifies the endpoint/between-group family with the pre/post family.
   # The metafor codes "LS2"/"LS" are kept as accepted synonyms.
+  # The metafor codes are deliberately NOT accepted from users (pinned by
+  # tests_save/checked/test-endpoint-smd-variance.R); internal callers that already
+  # hold a canonical label use .smd_var_canonical() instead.
   lut <- c(
     "borenstein"  = "LS2",
     "hedges_olkin" = "LS", "hedges-olkin" = "LS", "viechtbauer" = "LS"
@@ -26,6 +29,15 @@
       "'borenstein' (the default) or 'hedges_olkin' (alias 'viechtbauer')."
     ), call. = FALSE)
   }
+  out
+}
+
+# Idempotent form for the kernels: a route normalises once and hands the canonical
+# label down, so the kernel must accept "LS"/"LS2" as well as the user-facing names.
+.smd_var_canonical <- function(smd_var) {
+  out <- as.character(smd_var)
+  is_can <- !is.na(out) & out %in% c("LS", "LS2")
+  if (any(!is_can)) out[!is_can] <- .normalize_smd_var(smd_var[!is_can])
   out
 }
 

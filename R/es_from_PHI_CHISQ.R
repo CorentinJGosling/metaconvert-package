@@ -336,6 +336,7 @@ es_from_chisq_pval <- function(chisq_pval, n_sample, n_cases, n_exp,
   if (missing(reverse_chisq_pval)) reverse_chisq_pval <- rep(FALSE, length(chisq_pval))
   reverse_chisq_pval[is.na(reverse_chisq_pval)] <- FALSE
 
+  chisq_pval <- .pval_or_na(chisq_pval, se_from_ratio = FALSE)  # p <= 0 -> chisq = Inf -> NA
   chisq <- stats::qchisq(p = chisq_pval, df = 1, lower.tail = FALSE)
 
   es <- es_from_chisq(

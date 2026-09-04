@@ -111,6 +111,7 @@ es_from_pt_bis_r_pval <- function(pt_bis_r_pval, n_exp, n_nexp,
   if (missing(reverse_pt_bis_r_pval)) reverse_pt_bis_r_pval <- rep(FALSE, length(n_exp))
   reverse_pt_bis_r_pval[is.na(reverse_pt_bis_r_pval)] <- FALSE
 
+  pt_bis_r_pval <- .pval_or_na(pt_bis_r_pval, se_from_ratio = FALSE)  # p <= 0 -> NA
   t <- qt(p = pt_bis_r_pval / 2, df = n_exp + n_nexp - 2, lower.tail = FALSE)
 
   es <- es_from_student_t(

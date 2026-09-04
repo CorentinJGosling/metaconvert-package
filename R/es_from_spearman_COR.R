@@ -139,8 +139,6 @@ es_from_spearman_rho <- function(spearman_r, n_sample,
   # values and their delta-method SEs.
   es$r <- r_p_applied
   es$r_se <- r_se_delta
-  es$r_ci_lo <- r_p_applied - qt(.975, n_sample - 2) * r_se_delta
-  es$r_ci_up <- r_p_applied + qt(.975, n_sample - 2) * r_se_delta
 
   # dz/dr = 1/(1-r^2)
   es$z <- z_applied
@@ -148,6 +146,10 @@ es_from_spearman_rho <- function(spearman_r, n_sample,
   es$z_se <- r_se_delta / (1 - r_bounded^2)
   es$z_ci_lo <- es$z - qnorm(.975) * es$z_se
   es$z_ci_up <- es$z + qnorm(.975) * es$z_se
+  # r interval = back-transformed z interval, as in es_from_pearson_r() (stays in
+  # [-1, 1]; the former r +/- qt r_se did not at small n)
+  es$r_ci_lo <- tanh(es$z_ci_lo)
+  es$r_ci_up <- tanh(es$z_ci_up)
 
   es$info_used <- "spearman_r"
   return(es)

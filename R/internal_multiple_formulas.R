@@ -382,51 +382,56 @@
     feas
   }
 
-  # Rounding: prefer the integer, but do not destroy a corrected table.
+  # Snap to a whole-count table ONLY when that table is consistent with the reported
+  # odds ratio at its printed precision; otherwise keep the exact root.
   #
-  # Rounding to the nearest integer is right for a raw count table whose odds ratio
-  # was reported to a few decimals: the exact root then sits a little off an integer
-  # and rounding recovers it (96.2% exact recovery at 2 dp).
+  # Two populations pull in opposite directions. (i) A reported OR that came from an
+  # integer table but was printed to 2 dp: the exact root is then off by the rounding
+  # of the OR, up to a full case at small ORs (measured over 300 such tables: max
+  # |a - a_true| = 1.01, max |d logRR| = 0.30, 99th percentile 0.10), and snapping to
+  # the integer recovers the table 96% of the time. (ii) A reported OR that no integer
+  # table reproduces -- adjusted, pooled, or simply rounded on margins that do not
+  # admit it: unconditional rounding then replaced OR = 2.00 on margins 40/60, 30/70
+  # with the table 16/24/14/46, whose OR is 2.19, and the RR inherited the 6% error
+  # (log RR 0.539 against 0.477 for the exact root a = 15.54). Continuity-corrected
+  # tables are a third case: their cells are half-integers, and adding 0.5 to all four
+  # cells adds exactly 1 to every margin, so nothing in the inputs reveals them.
   #
-  # It is wrong whenever the reported odds ratio came from a table that had already
-  # received a +0.5 continuity correction, which is what this package emits for a zero
-  # cell and what any analyst reporting a corrected OR supplies. The cells of such a
-  # table are half-integers, and nothing in the margins reveals it, because adding 0.5
-  # to all four cells adds exactly 1 to every margin. Rounding then moves a genuine 0.5
-  # to 1 and the reconstruction is badly wrong: over 900 corrected tables the mean
-  # |error| in log RR was 0.869, and a table was returned at all for only 423 of them.
-  #
-  # The rule below keeps the integer default and takes the half-integer only when the
-  # exact root sits essentially on one, which is the signature of a corrected table
-  # (the quadratic recovers a = 0.5000000000 there). Against the alternatives:
-  #
-  #   rule           integer tables (OR at 2dp)   corrected tables
-  #   round to 1     96.2% exact                  0% exact, err 0.869, 423/900 solved
-  #   round to 0.5   91.8% exact                  100% exact
-  #   no rounding     5.0% exact                  100% exact
-  #   this rule      96.1% exact                  100% exact
-  #
-  # It costs 0.1 percentage points on the ordinary case and removes the failure
-  # entirely on the corrected one.
+  # The rule. Candidates are the integer tables within one case of the root (the
+  # rounding of a small OR at 2 dp can move the root by more than half a case: measured
+  # max |a - a_true| = 1.01), nearest first, plus the half-integer table when the root
+  # sits essentially on one (the corrected-table signature: the quadratic recovers
+  # a = 0.5000000000 there). The first candidate whose OR rounds back to the reported OR
+  # at the reported number of decimals -- i.e. one that COULD be the source of the
+  # printed number -- is taken; otherwise the exact root is kept. Fractional cells are
+  # harmless downstream: the Katz and Woolf variances and metafor::escalc() accept them.
+  dec <- .count_decimals(or)
+  snap <- function(a_s) {
+    if (!is.finite(a_s)) return(NULL)
+    b_s <- n_exp - a_s; c_s <- n_cases - a_s; d_s <- n_controls - b_s
+    if (min(a_s, b_s, c_s, d_s) <= 0) return(NULL)
+    or_s <- (a_s * d_s) / (b_s * c_s)
+    if (is.finite(or_s) && abs(round(or_s, dec) - or) < 1e-9) a_s else NULL
+  }
   frac <- a - floor(a)
   on_half <- is.finite(frac) && abs(frac - 0.5) < 0.02
-  a <- if (on_half) round(a * 2) / 2 else round(a)
+  cand <- if (on_half) round(a * 2) / 2 else numeric(0)
+  ints <- (floor(a) - 1):(ceiling(a) + 1)
+  cand <- c(cand, ints[order(abs(ints - a))])
+  for (a_s in cand) {
+    a_snap <- snap(a_s)
+    if (!is.null(a_snap)) { a <- a_snap; break }
+  }
+
+  # Empty-cell guard. A cell below 0.5 is smaller than any real table can carry, raw
+  # (>= 1) or continuity-corrected (>= 0.5), and its 1/cell variance term would
+  # dominate the Woolf SE. The enumeration has a purpose-built +0.5 branch for those,
+  # so hand them back rather than emit the table.
   b <- n_exp - a
   cc <- n_cases - a
   d <- n_controls - b
-
-  # Zero-cell guard. Rounding can land the solve on a table with an empty cell (2.14%
-  # of solved tables over or in [0.1, 10]). The enumeration below has a purpose-built
-  # +0.5 branch for those, so hand them back to it rather than emitting a cell of 0
-  # that would make var(logOR) infinite.
-  #
-  # A half-integer solution is a corrected table, where a cell of 0.5 is the CORRECTED
-  # value of a legitimate zero and its variance is finite. Requiring >= 1 there would
-  # discard exactly the tables this branch exists to reconstruct, so the guard is
-  # "strictly positive" for those and "at least one whole unit" for integer tables.
   if (!is.finite(a)) return(NULL)
-  if (on_half) { if (min(a, b, cc, d) <= 0) return(NULL) }
-  else if (min(a, b, cc, d) < 1) return(NULL)
+  if (min(a, b, cc, d) < 0.5) return(NULL)
 
   data.frame(n_cases_exp = a, n_cases_nexp = cc,
              n_controls_exp = b, n_controls_nexp = d)
@@ -1426,13 +1431,14 @@
     # with its own r variance. metaConvert uses the consistent value, so the
     # lipsey_cooper z-SE differs from esc for large |d| and agrees with it as d -> 0.
     vz_lipsey <- vd / (d^2 + 1 / (p * (1 - p)))
-    # Same error degrees of freedom as the d/g interval built for this row in
-    # .es_from_d() (n_cov_ancova is 0 on every crude route, so this is a no-op there).
-    df_ci_lipsey <- n_exp + n_nexp - 2 - n_cov_ancova
-    r_lo_lipsey <- r_lipsey - qt(.975, df = df_ci_lipsey) * sqrt(vr_lipsey)
-    r_up_lipsey <- r_lipsey + qt(.975, df = df_ci_lipsey) * sqrt(vr_lipsey)
     z_lo_lipsey <- z_lipsey - qnorm(.975) * sqrt(vz_lipsey)
     z_up_lipsey <- z_lipsey + qnorm(.975) * sqrt(vz_lipsey)
+    # r interval = back-transformed z interval, as on the viechtbauer branch and every
+    # other correlation route. The former r +/- qt(.975, N - 2 - q) sqrt(vr) could
+    # leave [-1, 1] at small n and was the one package-computed r interval built on
+    # the r scale.
+    r_lo_lipsey <- tanh(z_lo_lipsey)
+    r_up_lipsey <- tanh(z_up_lipsey)
 
     res <- cbind(
       r_lipsey, vr_lipsey, r_lo_lipsey, r_up_lipsey,
@@ -1624,7 +1630,7 @@
 #' @param pre_post_to_smd scalar or vector of method names
 #' @return a matrix with the kernel's eight columns, one row per input row
 #' @noRd
-.paired_t_to_smd <- function(paired_t, n, r_pre_post, pre_post_to_smd) {
+.paired_t_to_smd <- function(paired_t, n, r_pre_post, pre_post_to_smd, smd_var = "LS2") {
   k <- max(length(paired_t), length(n), length(r_pre_post), length(pre_post_to_smd))
   rec <- function(x) rep_len(x, k)
   nn <- rec(n)
@@ -1663,7 +1669,8 @@
     mean_post_sd    = 1,
     n               = nn[ok],
     r_pre_post      = rec(r_pre_post)[ok],
-    pre_post_to_smd = rec(pre_post_to_smd)[ok]))
+    pre_post_to_smd = rec(pre_post_to_smd)[ok],
+    smd_var         = rec(smd_var)[ok]))
   if (is.null(dim(res))) res <- matrix(res, nrow = sum(ok), byrow = FALSE)
   out[ok, ] <- res
   storage.mode(out) <- "double"
@@ -1680,7 +1687,7 @@
                              n_exp, n_nexp,
                              r_pre_post_exp, r_pre_post_nexp,
                              pre_post_to_smd,
-                             pool_sd = FALSE) {
+                             pool_sd = FALSE, smd_var = "LS2") {
   # pool_sd = TRUE: standardizing SD pooled across groups (Morris 2008, eq. 9/13)
   if (pool_sd) {
     return(.pooled_pre_post_to_smd(
@@ -1690,7 +1697,7 @@
       mean_nexp = mean_nexp, mean_sd_nexp = mean_sd_nexp,
       n_exp = n_exp, n_nexp = n_nexp,
       r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
-      pre_post_to_smd = pre_post_to_smd
+      pre_post_to_smd = pre_post_to_smd, smd_var = smd_var
     ))
   }
 
@@ -1698,14 +1705,14 @@
     mean_pre = mean_pre_exp, mean_post = mean_exp,
     mean_pre_sd = mean_pre_sd_exp, mean_post_sd = mean_sd_exp,
     n = n_exp, r_pre_post = r_pre_post_exp,
-    pre_post_to_smd = pre_post_to_smd
+    pre_post_to_smd = pre_post_to_smd, smd_var = smd_var
   )
 
   res_nexp <- .single_group_pre_post_to_smd(
     mean_pre = mean_pre_nexp, mean_post = mean_nexp,
     mean_pre_sd = mean_pre_sd_nexp, mean_post_sd = mean_sd_nexp,
     n = n_nexp, r_pre_post = r_pre_post_nexp,
-    pre_post_to_smd = pre_post_to_smd
+    pre_post_to_smd = pre_post_to_smd, smd_var = smd_var
   )
 
   d_final <- res_exp[,"d"] - res_nexp[,"d"]
@@ -1758,7 +1765,8 @@
 #'   - d_z:    exactly metafor::escalc(measure = "SMD", vtype = "LS") on the change
 #'             scores (Hedges 1981), a published two-group variance.
 #'   - d_rm:   d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13, a definition),
-#'             so Var(d_rm) = 2(1-r)*Var(d_z) for known r.
+#'             so Var(d_rm) = 2(1-r)*Var(d_z) for known r -- on BOTH smd_var conventions
+#'             now that every branch builds its variance through .pre_post_var().
 #'   - d_av:   partly Bonett (2008) eq. 19 (two-group mixed design, all-four-SD
 #'             standardizer). Only the fourth-moment g^2 coefficient comes from eq. 19,
 #'             and it is reproduced exactly: eq. 19's first bracket
@@ -1802,10 +1810,11 @@
                                      mean_nexp, mean_sd_nexp,
                                      n_exp, n_nexp,
                                      r_pre_post_exp, r_pre_post_nexp,
-                                     pre_post_to_smd) {
+                                     pre_post_to_smd, smd_var = "LS2") {
   if (pre_post_to_smd == "cooper") {
     pre_post_to_smd <- "morris_drm"
   }
+  smd_var <- .smd_var_canonical(smd_var)
 
   r_pre_post_exp <- .guard_r_pre_post(r_pre_post_exp)
   r_pre_post_nexp <- .guard_r_pre_post(r_pre_post_nexp)
@@ -1859,9 +1868,8 @@
     g <- d * J
 
     T1 <- (sd_change_pooled^2 / sd_pooled^2) * T_change
-    var_g <- T1 + g^2 / (2 * N)
-    # g = J*d with J a deterministic constant, so Var(d) = Var(g)/J^2 exactly.
-    var_d <- var_g / J^2
+    v <- .pre_post_var(L = T1, C = 1 / (2 * N), d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
 
   } else if (pre_post_to_smd == "morris_dz") {
     # Change-score metric. Once the change SD is pooled across arms this is exactly
@@ -1873,8 +1881,8 @@
     d <- mean_diff / sd_pooled
     g <- d * J
 
-    var_g <- T_change + g^2 / (2 * N)
-    var_d <- var_g / J^2
+    v <- .pre_post_var(L = T_change, C = 1 / (2 * N), d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
 
   } else if (pre_post_to_smd == "morris_drm") {
     # Raw-score metric: d_rm = d_z * sqrt(2(1-r)) (Caldwell & Vigotsky 2020 eq. 13).
@@ -1888,8 +1896,8 @@
     g <- d * J
 
     T1 <- 2 * (1 - r_avg) * T_change
-    var_g <- T1 + g^2 / (2 * N)
-    var_d <- var_g / J^2
+    v <- .pre_post_var(L = T1, C = 1 / (2 * N), d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
 
   } else if (pre_post_to_smd == "morris_dav") {
     # Morris (2008) d_ppc3: standardizer = quadratic mean of the pre and post SDs,
@@ -1920,8 +1928,8 @@
     fm_nexp <- mean_pre_sd_nexp^4 + mean_sd_nexp^4 +
                2 * r_pre_post_nexp^2 * mean_pre_sd_nexp^2 * mean_sd_nexp^2
     g2_coef <- (fm_exp / (n_exp - 1) + fm_nexp / (n_nexp - 1)) / (32 * sd_pooled^4)
-    var_g <- T1 + g^2 * g2_coef
-    var_d <- var_g / J^2
+    v <- .pre_post_var(L = T1, C = g2_coef, d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
   }
 
   # CI on the pooled standardizer df (N - 2 = m) for every branch. dav's Cousineau
@@ -1956,14 +1964,37 @@
 #' @return matrix with columns: d, var_d, d_ci_lo, d_ci_up, g, var_g, g_ci_lo, g_ci_up
 #'
 #' @noRd
+# Sampling variance on the two conventions the package offers through `smd_var`, from
+# a branch's leading term L and its g^2 coefficient C (var_g = L + g^2 C is the
+# metafor / Hedges-Olkin "LS" form):
+#   LS  ("hedges_olkin"): var_g = L + g^2 C, var_d = var_g / J^2   -- metafor SMCC/SMCR/
+#                         SMCRH/SMCRPH bit-exact
+#   LS2 ("borenstein"):   var_d = L + d^2 C, var_g = J^2 var_d     -- Borenstein (2009),
+#                         CMA; the two-group default in .es_from_d()
+# Before this the pre/post branches were split between the two: morris_drm carried
+# the LS2 form while morris_dz, bonett and morris_dav carried LS, so at r = 0.5 the
+# drm and dz branches returned the SAME estimate with SEs differing by 19% at n = 5,
+# and neither honoured the smd_var the two-group routes already read.
+.pre_post_var <- function(L, C, d, g, J, smd_var) {
+  if (identical(smd_var, "LS")) {
+    var_g <- L + g^2 * C
+    var_d <- var_g / J^2
+  } else {
+    var_d <- L + d^2 * C
+    var_g <- J^2 * var_d
+  }
+  list(var_d = var_d, var_g = var_g)
+}
+
 .single_group_pre_post_to_smd <- function(mean_pre, mean_post,
                                            mean_pre_sd, mean_post_sd,
                                            n, r_pre_post,
-                                           pre_post_to_smd) {
+                                           pre_post_to_smd, smd_var = "LS2") {
   # "cooper" alias kept for direct internal calls
   if (pre_post_to_smd == "cooper") {
     pre_post_to_smd <- "morris_drm"
   }
+  smd_var <- .smd_var_canonical(smd_var)
 
   r_pre_post <- .guard_r_pre_post(r_pre_post)
 
@@ -1996,10 +2027,11 @@
     d <- (mean_post - mean_pre) / sd_std
     g <- d * J
 
-    # metafor SMCRH heteroscedastic variance formula (Bonett 2008)
-    # var = sd_change^2 / (sd1i^2 * (n-1)) + g^2 / (2 * (n-1))
-    var_g <- var_change / (sd_std^2 * (n - 1)) + g^2 / (2 * (n - 1))
-    var_d <- var_g / (J^2)
+    # metafor SMCRH heteroscedastic variance formula (Bonett 2008), on the LS form:
+    # var_g = sd_change^2 / (sd1i^2 * (n-1)) + g^2 / (2 * (n-1)); LS2 puts J^2 outside.
+    v <- .pre_post_var(L = var_change / (sd_std^2 * (n - 1)), C = 1 / (2 * (n - 1)),
+                       d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
 
     d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
     d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
@@ -2029,9 +2061,11 @@
     d <- (mean_post - mean_pre) / sd_diff * sqrt(2 * (1 - r_pre_post))
     g <- d * J
 
-    # Viechtbauer corrected formula
-    var_d <- 2 * (1 - r_pre_post) / n + d^2 / (2 * n)
-    var_g <- J^2 * var_d
+    # LS: metafor SMCR, var_g = 2(1-r)/n + g^2/(2n) = 2(1-r) * Var(g_z) exactly;
+    # LS2: J^2 * (2(1-r)/n + d^2/(2n)) (Borenstein).
+    v <- .pre_post_var(L = 2 * (1 - r_pre_post) / n, C = 1 / (2 * n),
+                       d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
 
     d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
     d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
@@ -2056,10 +2090,9 @@
     d <- (mean_post - mean_pre) / sd_diff
     g <- d * J
 
-    # metafor SMCC variance formula (uses corrected g, not d)
-    # var = 1/n + g^2/(2n)
-    var_g <- 1 / n + g^2 / (2 * n)
-    var_d <- var_g / (J^2)
+    # LS: metafor SMCC, var_g = 1/n + g^2/(2n); LS2: J^2 * (1/n + d^2/(2n)).
+    v <- .pre_post_var(L = 1 / n, C = 1 / (2 * n), d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
 
     d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
     d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
@@ -2101,8 +2134,10 @@
     sd_diff2 <- mean_pre_sd^2 + mean_post_sd^2 -
       .pre_post_cross(r_pre_post, mean_pre_sd, mean_post_sd)
     fm <- mean_pre_sd^4 + mean_post_sd^4 + 2 * r_pre_post^2 * mean_pre_sd^2 * mean_post_sd^2
-    var_g <- sd_diff2 / (sd_av^2 * (n - 1)) + g^2 * fm / (8 * sd_av^4 * (n - 1))
-    var_d <- var_g / (J^2)
+    v <- .pre_post_var(L = sd_diff2 / (sd_av^2 * (n - 1)),
+                       C = fm / (8 * sd_av^4 * (n - 1)),
+                       d = d, g = g, J = J, smd_var = smd_var)
+    var_d <- v$var_d; var_g <- v$var_g
 
     d_ci_lo <- d - sqrt(var_d) * qt(.975, n - 1)
     d_ci_up <- d + sqrt(var_d) * qt(.975, n - 1)
@@ -2142,19 +2177,22 @@
 # All arguments must be per-row vectors of the same length. Unlike mapply, this does
 # not recycle a scalar, so every call site passes rep(x, length.out = n).
 .cor_to_smd_vec <- function(r, r_se, unit_increase_iv, sd_iv, unit_type,
-                            n_sample, cor_to_smd) {
+                            n_sample, cor_to_smd, n_exp = NULL, n_nexp = NULL) {
   n <- length(r)
   out <- matrix(NA_real_, nrow = n, ncol = 2)
   meth <- as.character(cor_to_smd)
+  # Arm sizes are used only where the CALLER supplied both (never the n_sample / 2
+  # back-fill), so rows carrying n_sample alone are bit-identical to before.
+  if (is.null(n_exp)) n_exp <- rep(NA_real_, n)
+  if (is.null(n_nexp)) n_nexp <- rep(NA_real_, n)
+  n_exp <- rep_len(n_exp, n); n_nexp <- rep_len(n_nexp, n)
 
   for (m in unique(meth[!is.na(meth)])) {
     i <- which(meth == m)
     out[i, ] <- if (m == "viechtbauer") {
       # transf.rtod output is the g; d is backed out as g / J. See the rationale
       # (and the simulation that settles it) in .cor_to_smd() below.
-      rg <- metafor::conv.delta(yi = r[i], vi = r_se[i]^2,
-                                transf = metafor::transf.rtod,
-                                var.names = c("g", "g_var"))
+      rg <- .rtod_delta(r[i], r_se[i]^2, n_exp[i], n_nexp[i])
       J <- .d_j(n_sample[i] - 2)
       cbind(rg$g / J, sqrt(rg$g_var / J^2))
     } else if (m == "cooper") {
@@ -2173,9 +2211,39 @@
   out
 }
 
+# metafor::conv.delta(transf = transf.rtod), with the arm sizes handed to transf.rtod
+# on the rows that have them.
+#
+# transf.rtod treats its input as a BISERIAL correlation and, without n1i/n2i, maps it
+# back to d at a 50/50 split (hi = 4, p = 0.5). That is the exact inverse of
+# .smd_to_cor()'s viechtbauer branch only at balanced arms: the forward map uses the
+# real p, so a d computed at 20/80 and returned through this route came back 6.6% too
+# small, and 15.9% too small at 10/90, even though es_from_pearson_r() had received
+# n_exp and n_nexp (they were consumed by the SE and J only). With n1i/n2i the round
+# trip is exact (metafor::transf.rtod(r_bis, n1i, n2i) returns the original d to 15
+# digits). Rows without both arm sizes keep the balanced form, unchanged.
+.rtod_delta <- function(r, vr, n_exp, n_nexp) {
+  has_arms <- !is.na(n_exp) & !is.na(n_nexp) & n_exp > 0 & n_nexp > 0
+  out <- data.frame(g = rep(NA_real_, length(r)), g_var = rep(NA_real_, length(r)))
+  if (any(!has_arms)) {
+    bal <- metafor::conv.delta(yi = r[!has_arms], vi = vr[!has_arms],
+                               transf = metafor::transf.rtod,
+                               var.names = c("g", "g_var"))
+    out$g[!has_arms] <- bal$g; out$g_var[!has_arms] <- bal$g_var
+  }
+  if (any(has_arms)) {
+    arm <- metafor::conv.delta(yi = r[has_arms], vi = vr[has_arms],
+                               transf = metafor::transf.rtod,
+                               n1i = n_exp[has_arms], n2i = n_nexp[has_arms],
+                               var.names = c("g", "g_var"))
+    out$g[has_arms] <- arm$g; out$g_var[has_arms] <- arm$g_var
+  }
+  out
+}
+
 .cor_to_smd <- function(r, r_se,
                         unit_increase_iv, sd_iv, unit_type,
-                        n_sample, cor_to_smd) {
+                        n_sample, cor_to_smd, n_exp = NA_real_, n_nexp = NA_real_) {
   if (cor_to_smd == "mathur") {
     increase <- ifelse(unit_type == "sd",
                        unit_increase_iv * sd_iv,
@@ -2205,9 +2273,7 @@
     # denominator induces in a directly computed d, so applying J on top
     # over-corrects. Neither convention is exactly unbiased; the residual is the
     # uncancelled remainder, and it stays below 0.02 for n >= 25.
-    res_g <- metafor::conv.delta(
-      yi = r, vi = r_se^2, transf = metafor::transf.rtod, var.names = c("g", "g_var")
-    )
+    res_g <- .rtod_delta(r, r_se^2, n_exp, n_nexp)
     J <- .d_j(n_sample - 2)
     res_g$d <- res_g$g / J
     res_g$d_se <- sqrt(res_g$g_var / J^2)

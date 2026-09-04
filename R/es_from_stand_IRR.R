@@ -14,6 +14,10 @@
 #' **The formulas used to obtain the IRR and its standard error** are (Cochrane Handbook, section 6.7.1):
 #' \deqn{logirr = log(\frac{n\_cases\_exp / time\_exp}{n\_cases\_nexp / time\_nexp})}
 #' \deqn{logirr\_se = \sqrt{\frac{1}{n\_cases\_exp} + \frac{1}{n\_cases\_nexp}}}
+#' When either arm has zero events, 0.5 is added to both counts before the ratio and
+#' its standard error are computed (the \code{metafor::escalc(measure = "IRR")}
+#' default, and the rate analogue of the correction applied to a 2x2 table with an
+#' empty cell). The incidence rate difference below is computed on the raw counts.
 #'
 #' **To estimate a person-time NNT** (Mayne et al., 2006), the following formulas are used:
 #' \deqn{ird = baseline\_rate \times (1 - irr)}
@@ -64,8 +68,22 @@ es_from_cases_time <- function(n_cases_exp, n_cases_nexp, time_exp, time_nexp,
   if (missing(baseline_rate)) baseline_rate <- rep(NA_real_, length(n_cases_exp))
 
   # IRR (log scale)
-  logirr_raw <- log((n_cases_exp / time_exp) / (n_cases_nexp / time_nexp))
-  logirr_se <- sqrt(1 / n_cases_exp + 1 / n_cases_nexp)
+  #
+  # Zero events in either arm: +0.5 to BOTH counts, the metafor::escalc(measure =
+  # "IRR") default (add = 1/2, to = "only0") and the rate analogue of the +0.5 the
+  # 2x2 route already applies. Without it log(0) gave logirr = -Inf/+Inf with
+  # se = Inf -- the row reached summary() as es = 0 (or Inf) with an infinite SE and
+  # two [INVALID] flags, and the study was lost instead of contributing the finite
+  # estimate every other tool returns. Measured on 0 vs 14 events over 100/100
+  # person-time: metaConvert -Inf / Inf, metafor -3.36730 / 1.43839. The correction is
+  # confined to the ratio; the rate difference and NNT below use the raw counts, whose
+  # Poisson variance is already finite at a zero count.
+  zero_cell <- !is.na(n_cases_exp) & !is.na(n_cases_nexp) &
+               (n_cases_exp == 0 | n_cases_nexp == 0)
+  cases_exp_irr <- ifelse(zero_cell, n_cases_exp + 0.5, n_cases_exp)
+  cases_nexp_irr <- ifelse(zero_cell, n_cases_nexp + 0.5, n_cases_nexp)
+  logirr_raw <- log((cases_exp_irr / time_exp) / (cases_nexp_irr / time_nexp))
+  logirr_se <- sqrt(1 / cases_exp_irr + 1 / cases_nexp_irr)
 
   es <- data.frame(
     logirr = ifelse(reverse_irr, -logirr_raw, logirr_raw),
@@ -81,7 +99,13 @@ es_from_cases_time <- function(n_cases_exp, n_cases_nexp, time_exp, time_nexp,
 
   irr <- exp(logirr_raw)
 
-  ird <- baseline_rate * (1 - irr)
+  # Sample-derived baseline: the raw rate difference c/t2 - a/t1, which equals
+  # baseline_rate * (1 - irr) on the uncorrected counts and stays finite at a zero
+  # count without borrowing the ratio's +0.5. External baseline: the delta-method
+  # form on the (corrected, hence finite) ratio.
+  ird <- ifelse(provided_baseline,
+                baseline_rate * (1 - irr),
+                n_cases_nexp / time_nexp - n_cases_exp / time_exp)
 
   # delta method if baseline_rate given, poisson variance otherwise
   ird_se <- ifelse(

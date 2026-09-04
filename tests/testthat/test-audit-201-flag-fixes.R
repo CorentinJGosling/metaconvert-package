@@ -77,7 +77,10 @@ test_that("C4 flags a high partial correlation", {
 })
 
 test_that("B1b reports BOTH bounds when both escape, not only the upper one", {
+  # A user-SUPPLIED interval is handed back verbatim; an r entered with an SE alone
+  # now gets the back-transformed Fisher interval, which cannot escape.
   r <- summary(convert_df(data.frame(user_es_crude = 0, user_se_crude = 0.6,
+                                     user_ci_lo_crude = -1.18, user_ci_up_crude = 1.18,
                                      user_es_original_measure_crude = "r",
                                      n_sample = 50),
                           measure = "r", verbose = FALSE), flags = TRUE)
@@ -90,11 +93,19 @@ test_that("B1b reports BOTH bounds when both escape, not only the upper one", {
 test_that("the r-scale checks are unchanged for measure = 'r'", {
   # #42 widens a gate; it must not alter what the gate already did.
   r <- summary(convert_df(data.frame(user_es_crude = 0.98, user_se_crude = 0.05,
+                                     user_ci_lo_crude = 0.88, user_ci_up_crude = 1.08,
                                      user_es_original_measure_crude = "r",
                                      n_sample = 50),
                           measure = "r", verbose = FALSE), flags = TRUE)
   expect_true(fires(r$flags_crude, "escapes the parameter space"))
   expect_true(fires(r$flags_crude, "High correlation: |r| ="))
+  # and an r entered with its SE alone stays inside the parameter space
+  r2 <- summary(convert_df(data.frame(user_es_crude = 0.98, user_se_crude = 0.05,
+                                      user_es_original_measure_crude = "r",
+                                      n_sample = 50),
+                           measure = "r", verbose = FALSE), flags = TRUE)
+  expect_lte(r2$es_ci_up_crude[1], 1)
+  expect_false(fires(r2$flags_crude, "escapes the parameter space"))
 })
 
 

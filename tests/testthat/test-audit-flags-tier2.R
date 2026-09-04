@@ -160,8 +160,11 @@ test_that("AUDIT-555: A6 does not flag a package-built r CI (back-transformed z 
   )
   expect_true(any(grepl("CI width inconsistent with SE", fl_bad[[1]], fixed = TRUE)))
 
+  # es_from_pearson_r() builds the back-transformed Fisher interval on z_se = 1/sqrt(n - 3)
+  # (metafor ZCOR + transf.ztor), not r +/- qt se, and A6 must accept that width too.
   pr <- es_from_pearson_r(pearson_r = 0.5, n_sample = 26)
-  expect_equal(pr$r_ci_up - pr$r_ci_lo, 2 * stats::qt(.975, 24) * pr$r_se, tolerance = 1e-10)
+  expect_equal(c(pr$r_ci_lo, pr$r_ci_up),
+               tanh(atanh(0.5) + c(-1, 1) * stats::qnorm(.975) / sqrt(23)), tolerance = 1e-10)
   fl_pr <- metaConvert:::.flag_numeric_integrity(
     pr$r, pr$r_se, pr$r_ci_lo, pr$r_ci_up,
     info_used = "pearson_r", measure = "r", exp = FALSE,

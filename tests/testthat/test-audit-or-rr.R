@@ -218,12 +218,18 @@ test_that("AUDIT-minor: a derived rd_se of exactly zero is declined, not emitted
   expect_equal(b$logrr, log(0.5), tolerance = 1e-12)
   expect_equal(b$logrr_se, 0.2, tolerance = 1e-12)
 
-  # Verifier-added scope: the 2x2 double-zero table has the identical failure.
+  # The 2x2 double-zero table: the risk difference now takes the same +0.5
+  # correction as the OR and RR (metafor::escalc(measure = "RD") default), so the
+  # zero-variance row no longer arises there -- it returns metafor's finite SE, and
+  # never an rd_se of exactly 0.
   d <- suppressMessages(suppressWarnings(
     es_from_2x2(n_cases_exp = 0, n_controls_exp = 50,
                 n_cases_nexp = 0, n_controls_nexp = 50)))
   expect_false(isTRUE(d$rd_se == 0))
-  expect_true(is.na(d$rd_se))
+  m <- metafor::escalc(measure = "RD", ai = 0, bi = 50, ci = 0, di = 50)
+  expect_equal(d$rd, -as.numeric(m$yi), tolerance = 1e-12)
+  expect_equal(d$rd_se, sqrt(as.numeric(m$vi)), tolerance = 1e-12)
+  expect_gt(d$rd_se, 0)
 })
 
 # --------------------------------------------------------------------------

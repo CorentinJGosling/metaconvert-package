@@ -89,10 +89,12 @@
 #' inverse-variance weight that \code{rma()} aborts on. \emph{metaConvert} keeps the point
 #' estimate and declines the variance: \code{es_from_2x2(n_cases_exp = 25, n_controls_exp = 0,}
 #' \code{n_cases_nexp = 0, n_controls_nexp = 25)} returns \eqn{r = 1} with \code{r_se}, both R
-#' bounds and every Z column \code{NA}. The risk difference is refused on the same table for the
-#' same reason -- both arm risks are 0 or 1, so \code{rd_se} would be exactly 0 -- leaving
-#' \code{rd} and \code{nnt} at \code{NA}, while the OR and RR, computed from the +0.5-corrected
-#' table, remain finite (here \eqn{logor = 7.864}, \eqn{SE = 2.020}).
+#' bounds and every Z column \code{NA}. The OR, RR and RD are computed from the +0.5-corrected
+#' table and remain finite (here \eqn{logor = 7.864}, \eqn{SE = 2.020}); on the raw table both
+#' arm risks are 0 or 1 and \code{rd_se} would be exactly 0. The risk difference takes the
+#' correction exactly as \code{metafor::escalc(measure = "RD")} does by default
+#' (\code{add = 1/2, to = "only0"}): on a table without a zero cell it is computed from the
+#' raw counts.
 #'
 #' @return
 #' This function estimates and converts between several effect size measures.
@@ -173,24 +175,6 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
   n_controls_exp <- ifelse(bad_cell, NA_real_, n_controls_exp)
   n_controls_nexp <- ifelse(bad_cell, NA_real_, n_controls_nexp)
 
-  # rd from raw counts
-  n_exp_raw <- n_cases_exp + n_controls_exp
-  n_nexp_raw <- n_cases_nexp + n_controls_nexp
-  pc_raw <- n_cases_nexp / n_nexp_raw
-  pt_raw <- n_cases_exp / n_exp_raw
-  rd <- pc_raw - pt_raw
-  rd_se <- suppressWarnings(sqrt(pt_raw * (1 - pt_raw) / n_exp_raw + pc_raw * (1 - pc_raw) / n_nexp_raw))
-
-  # A risk-difference SE of exactly 0 is a zero sampling variance -- an infinite
-  # inverse-variance weight, or an rma() abort. On a 2x2 it means a double-zero (or
-  # double-full) table, where both arm variances vanish. metafor never emits such a row
-  # either: escalc(measure = "RD") continuity-corrects it, or returns NA under
-  # drop00 = TRUE. Keyed on the SE and never on rd itself -- a balanced 10/50 vs 10/50
-  # table has rd = 0 with a perfectly good SE and must survive. See R/internal_guards.R.
-  degenerate_rd <- !is.na(rd_se) & rd_se <= 0
-  rd_se <- .positive_or_na(rd_se)
-  rd <- ifelse(degenerate_rd, NA_real_, rd)
-
   # The tetrachoric solve below must see the RAW table, so keep a copy before the cells
   # are corrected in place. The +0.5 is a ratio-measure device: it exists because a zero
   # cell makes the odds ratio and the risk ratio undefined, and @details documents it as
@@ -214,6 +198,28 @@ es_from_2x2 <- function(n_cases_exp, n_cases_nexp,
   n_cases_nexp[zero] <- n_cases_nexp[zero] + 0.5
   n_controls_exp[zero] <- n_controls_exp[zero] + 0.5
   n_controls_nexp[zero] <- n_controls_nexp[zero] + 0.5
+
+  # rd / nnt from the CORRECTED cells, as metafor::escalc(measure = "RD") does by default
+  # (add = 1/2, to = "only0"). Computing the RD on the raw counts left the empty arm with
+  # a variance contribution of exactly 0 -- p(1 - p)/n at p = 0 -- so a 0/59 vs 8/48
+  # table returned se = 0.0468 where metafor returns 0.0490, and the package disagreed
+  # with itself, correcting the same table for OR and RR but not for RD. A table with no
+  # zero cell is untouched (the correction is applied to `zero` rows only).
+  n_exp_rd <- n_cases_exp + n_controls_exp
+  n_nexp_rd <- n_cases_nexp + n_controls_nexp
+  pc_rd <- n_cases_nexp / n_nexp_rd
+  pt_rd <- n_cases_exp / n_exp_rd
+  rd <- pc_rd - pt_rd
+  rd_se <- suppressWarnings(sqrt(pt_rd * (1 - pt_rd) / n_exp_rd + pc_rd * (1 - pc_rd) / n_nexp_rd))
+
+  # A risk-difference SE of exactly 0 is a zero sampling variance -- an infinite
+  # inverse-variance weight, or an rma() abort. With the correction above a double-zero
+  # (or double-full) table no longer reaches it, but the guard is kept: it is keyed on
+  # the SE and never on rd itself -- a balanced 10/50 vs 10/50 table has rd = 0 with a
+  # perfectly good SE and must survive. See R/internal_guards.R.
+  degenerate_rd <- !is.na(rd_se) & rd_se <= 0
+  rd_se <- .positive_or_na(rd_se)
+  rd <- ifelse(degenerate_rd, NA_real_, rd)
   n_exp <- n_cases_exp + n_controls_exp
   n_nexp <- n_cases_nexp + n_controls_nexp
 

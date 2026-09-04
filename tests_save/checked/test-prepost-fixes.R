@@ -1,3 +1,10 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request.
+
 # =============================================================================
 # Coverage for the pre/post & change-score fixes and for the surface the audit
 # found untested: the per-arm (default, pool_sd = FALSE / d_ppc1) vs pooled
@@ -29,7 +36,7 @@ test_that("pooled morris_dz matches escalc SMD on change scores (point + SE)", {
     list(n1 = 12, n2 = 60, m1 = 3.0, s1 = 2.10, m2 = 0.4, s2 = 9.90)
   )
   for (cs in cases) {
-    res <- es_from_mean_change_sd(
+    res <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
       n_exp = cs$n1, n_nexp = cs$n2,
       mean_change_exp = cs$m1, mean_change_sd_exp = cs$s1,
       mean_change_nexp = cs$m2, mean_change_sd_nexp = cs$s2,
@@ -56,7 +63,7 @@ test_that("pooled morris_dz SE is INVARIANT to r_pre_post (no 2(1-r) factor)", {
   # supplied directly here; r plays no part in either the point estimate or the
   # variance. The pre-fix code made the SE swing with r -- this is the sharpest
   # regression guard against reintroducing that factor.
-  mk <- function(r) es_from_mean_change_sd(
+  mk <- function(r) es_from_mean_change_sd(smd_var = "hedges_olkin", 
     n_exp = 29, n_nexp = 34,
     mean_change_exp = -12.4, mean_change_sd_exp = 6.52,
     mean_change_nexp = -3.5, mean_change_sd_nexp = 10.67,
@@ -117,7 +124,7 @@ test_that("default pool_sd = FALSE reproduces the per-arm difference of within-g
   # Regression test OF THE DEFAULT PATH (d_ppc1):
   # g = J(n1-1) * d_rm_exp - J(n2-1) * d_rm_nexp, each arm on its OWN change SD.
   n1 <- 29; n2 <- 34; r <- 0.6
-  res <- es_from_mean_change_sd(
+  res <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     n_exp = n1, n_nexp = n2,
     mean_change_exp = -12.4, mean_change_sd_exp = 6.52,
     mean_change_nexp = -3.5, mean_change_sd_nexp = 10.67,
@@ -153,7 +160,7 @@ test_that("the pooled (opt-in) and per-arm (default) paths coincide when arm SDs
 # 3. Degenerate inputs return NA rather than Inf/NaN
 # -----------------------------------------------------------------------------
 test_that("a zero standardizing SD yields NA, not Inf", {
-  z <- es_from_mean_change_sd(
+  z <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     n_exp = 30, n_nexp = 30,
     mean_change_exp = 5, mean_change_sd_exp = 0,
     mean_change_nexp = 2, mean_change_sd_nexp = 4,
@@ -162,7 +169,7 @@ test_that("a zero standardizing SD yields NA, not Inf", {
   expect_true(is.na(z$d))
   expect_false(isTRUE(is.infinite(z$d)))
 
-  zp <- es_from_mean_change_sd(
+  zp <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     n_exp = 30, n_nexp = 30,
     mean_change_exp = 5, mean_change_sd_exp = 0,
     mean_change_nexp = 2, mean_change_sd_nexp = 0,
@@ -193,17 +200,17 @@ test_that("|r_pre_post| >= 1 yields NA, while r = 0.99 still computes", {
 # 4. Per-row pre_post_to_smd vector (previously fell wholesale into drm)
 # -----------------------------------------------------------------------------
 test_that("a mixed pre_post_to_smd vector is applied per row, not wholesale", {
-  mixed <- es_from_paired_t(
+  mixed <- es_from_paired_t(smd_var = "hedges_olkin", 
     paired_t_exp = c(3, 3), paired_t_nexp = c(1, 1),
     n_exp = c(50, 50), n_nexp = c(50, 50),
     r_pre_post_exp = c(0.6, 0.6), r_pre_post_nexp = c(0.6, 0.6),
     pre_post_to_smd = c("morris_dz", "morris_drm")
   )
-  all_dz <- es_from_paired_t(
+  all_dz <- es_from_paired_t(smd_var = "hedges_olkin", 
     paired_t_exp = 3, paired_t_nexp = 1, n_exp = 50, n_nexp = 50,
     r_pre_post_exp = 0.6, r_pre_post_nexp = 0.6, pre_post_to_smd = "morris_dz"
   )
-  all_drm <- es_from_paired_t(
+  all_drm <- es_from_paired_t(smd_var = "hedges_olkin", 
     paired_t_exp = 3, paired_t_nexp = 1, n_exp = 50, n_nexp = 50,
     r_pre_post_exp = 0.6, r_pre_post_nexp = 0.6, pre_post_to_smd = "morris_drm"
   )
@@ -214,7 +221,7 @@ test_that("a mixed pre_post_to_smd vector is applied per row, not wholesale", {
 })
 
 test_that("a scalar pre_post_to_smd still vectorizes over rows", {
-  res <- es_from_paired_t(
+  res <- es_from_paired_t(smd_var = "hedges_olkin", 
     paired_t_exp = c(3, 2), paired_t_nexp = c(1, 1),
     n_exp = c(50, 40), n_nexp = c(50, 40),
     r_pre_post_exp = c(0.6, 0.6), r_pre_post_nexp = c(0.6, 0.6)
@@ -230,7 +237,7 @@ test_that("paired_t_single_group morris_dz matches escalc(SMCC, ti=)", {
   skip_if_not_installed("metafor")
   for (n in c(15, 50, 120)) {
     t_stat <- 3.2
-    es <- es_from_paired_t_single_group(
+    es <- es_from_paired_t_single_group(smd_var = "hedges_olkin", 
       paired_t_exp = t_stat, n_exp = n, r_pre_post_exp = 0.6,
       pre_post_to_smd = "morris_dz"
     )
@@ -246,11 +253,11 @@ test_that("the paired-t and mean-change routes agree on equivalent inputs (morri
   n <- 60; mean_change <- 4.5; sd_change <- 9.0
   t_stat <- mean_change / (sd_change / sqrt(n))
 
-  via_t <- es_from_paired_t_single_group(
+  via_t <- es_from_paired_t_single_group(smd_var = "hedges_olkin", 
     paired_t_exp = t_stat, n_exp = n, r_pre_post_exp = 0.6,
     pre_post_to_smd = "morris_dz"
   )
-  via_mc <- es_from_mean_change_sd_single_group(
+  via_mc <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change, mean_change_sd_exp = sd_change,
     n_exp = n, r_pre_post_exp = 0.6, pre_post_to_smd = "morris_dz"
   )
@@ -270,11 +277,11 @@ dat_change <- data.frame(
 )
 
 test_that("convert_df threads pool_sd to the mean-change route (not just accepted and dropped)", {
-  pooled <- summary(convert_df(
+  pooled <- summary(convert_df(smd_var = "hedges_olkin", 
     dat_change, measure = "g", main_es = TRUE, verbose = FALSE,
     hierarchy = "mean_change_sd", pool_sd = TRUE
   ), digits = 11)
-  legacy <- summary(convert_df(
+  legacy <- summary(convert_df(smd_var = "hedges_olkin", 
     dat_change, measure = "g", main_es = TRUE, verbose = FALSE,
     hierarchy = "mean_change_sd", pool_sd = FALSE
   ), digits = 11)
@@ -284,7 +291,7 @@ test_that("convert_df threads pool_sd to the mean-change route (not just accepte
   expect_false(isTRUE(all.equal(pooled$es_crude, legacy$es_crude, tolerance = 1e-3)))
 
   # and the pipeline result must equal the wrapper result (no silent drop)
-  direct <- es_from_mean_change_sd(
+  direct <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     n_exp = dat_change$n_exp, n_nexp = dat_change$n_nexp,
     mean_change_exp = dat_change$mean_change_exp,
     mean_change_sd_exp = dat_change$mean_change_sd_exp,
@@ -299,13 +306,13 @@ test_that("convert_df threads pool_sd to the mean-change route (not just accepte
 
 test_that("convert_df messages when bonett/morris_dav is coerced to cooper for change data", {
   expect_message(
-    convert_df(dat_change, measure = "g", main_es = TRUE, verbose = TRUE,
+    convert_df(smd_var = "hedges_olkin", dat_change, measure = "g", main_es = TRUE, verbose = TRUE,
                hierarchy = "mean_change_sd", pre_post_to_smd = "bonett"),
     "requires separate pre/post SDs"
   )
   # ... and stays silent when the requested method is actually usable
   msgs <- capture.output(
-    invisible(convert_df(dat_change, measure = "g", main_es = TRUE, verbose = TRUE,
+    invisible(convert_df(smd_var = "hedges_olkin", dat_change, measure = "g", main_es = TRUE, verbose = TRUE,
                          hierarchy = "mean_change_sd", pre_post_to_smd = "morris_dz")),
     type = "message"
   )
@@ -317,7 +324,7 @@ test_that("convert_df messages when r_pre_post is imputed for rows that use it",
   no_r$r_pre_post_exp <- NA
   no_r$r_pre_post_nexp <- NA
   expect_message(
-    convert_df(no_r, measure = "g", main_es = TRUE, verbose = TRUE,
+    convert_df(smd_var = "hedges_olkin", no_r, measure = "g", main_es = TRUE, verbose = TRUE,
                hierarchy = "mean_change_sd"),
     "r_pre_post was not reported"
   )
@@ -327,7 +334,7 @@ test_that("the r-imputation note does NOT fire on data with no pre/post columns"
   # Guard against the message becoming ambient noise: df.haza carries no
   # pre/post, mean-change or paired data, so no row can consume r_pre_post.
   msgs <- capture.output(
-    invisible(convert_df(df.haza, measure = "g", main_es = TRUE, verbose = TRUE)),
+    invisible(convert_df(smd_var = "hedges_olkin", df.haza, measure = "g", main_es = TRUE, verbose = TRUE)),
     type = "message"
   )
   expect_false(any(grepl("r_pre_post was not reported", msgs)))
@@ -349,7 +356,7 @@ test_that("E6 flags a pool mixing change-SD (morris_dz) rows with endpoint rows"
     mean_change_nexp = c(NA, NA, -3.5), mean_change_sd_nexp = c(NA, NA, 10.67),
     r_pre_post_exp = c(NA, NA, 0.6), r_pre_post_nexp = c(NA, NA, 0.6)
   )
-  res <- summary(convert_df(
+  res <- summary(convert_df(smd_var = "hedges_olkin", 
     mixed, measure = "g", main_es = TRUE, verbose = FALSE,
     hierarchy = "means_sd > mean_change_sd", pre_post_to_smd = "morris_dz"
   ), flags = TRUE)
@@ -372,7 +379,7 @@ test_that("E6 stays silent when every row is on the raw-score-SD metric", {
     mean_change_nexp = c(NA, -3.5), mean_change_sd_nexp = c(NA, 10.67),
     r_pre_post_exp = c(NA, 0.6), r_pre_post_nexp = c(NA, 0.6)
   )
-  res <- summary(convert_df(
+  res <- summary(convert_df(smd_var = "hedges_olkin", 
     mixed, measure = "g", main_es = TRUE, verbose = FALSE,
     hierarchy = "means_sd > mean_change_sd", pre_post_to_smd = "morris_drm"
   ), flags = TRUE)
@@ -388,7 +395,7 @@ test_that("E7 flags paired-t rows sharing a pool with pooled-standardizer rows",
     paired_t_exp = c(NA, 3.1), paired_t_nexp = c(NA, 1.2),
     r_pre_post_exp = c(0.6, 0.6), r_pre_post_nexp = c(0.6, 0.6)
   )
-  res <- summary(convert_df(
+  res <- summary(convert_df(smd_var = "hedges_olkin", 
     mixed, measure = "g", main_es = TRUE, verbose = FALSE,
     hierarchy = "mean_change_sd > paired_t", pool_sd = TRUE,
     flag_options = list(enable_informational = TRUE)

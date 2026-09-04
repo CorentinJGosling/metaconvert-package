@@ -15,6 +15,7 @@ es_from_means_ci_pre_post_single_group(
   r_pre_post_exp = 0.8,
   pre_post_to_smd = "bonett",
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   max_asymmetry = 10,
   reverse_means_pre_post
 )
@@ -39,6 +40,8 @@ es_from_means_ci_pre_post_single_group(
 \item{pre_post_to_smd}{formula used to convert the pre and post means/SD into a SMD (see details).}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.}
 
 \item{max_asymmetry}{percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 

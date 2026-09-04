@@ -1,3 +1,13 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request. The
+# exception is the cooper / morris_drm blocks, whose Morris & DeShon (2002) oracle is
+# the d-scale variance 2(1-r)/n + d^2/(2n): that is the J^2-outside ("borenstein")
+# convention, so those calls request the default explicitly.
+
 # Comprehensive External Validation Tests
 # Validates metaConvert pre-post functions against metafor and esc packages
 # Tests both effect sizes and standard errors across all standardizers
@@ -42,7 +52,7 @@ test_that("bonett two-group matches metafor SMCRH for effect size and SE (legacy
   # metaConvert calculation
   # pool_sd = FALSE: match the per-arm rule the metafor comparator replicates
   # (arm-specific baseline SD as standardizer, then subtract the two arms).
-  result_mc <- es_from_means_sd_pre_post(
+  result_mc <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp, mean_post_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
@@ -99,7 +109,7 @@ test_that("bonett single-group matches metafor SMCRH for effect size and SE", {
   r <- 0.7
 
   # metaConvert
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
@@ -137,7 +147,7 @@ test_that("mean change produces correct MD and SE", {
   n_nexp <- 28
 
   # metaConvert calculation
-  result_mc <- es_from_mean_change_sd(
+  result_mc <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change_exp,
     mean_change_sd_exp = sd_change_exp,
     n_exp = n_exp,
@@ -169,7 +179,7 @@ test_that("cooper standardizer produces valid results matching manual calculatio
   r <- 0.6
 
   # metaConvert
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )
@@ -199,7 +209,7 @@ test_that("Hedges g variance equals Cohen d variance times J²", {
   n <- 30
   r <- 0.6
 
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
@@ -226,7 +236,7 @@ test_that("Cooper SE decreases monotonically as r increases", {
   r_values <- c(0.1, 0.3, 0.5, 0.7, 0.9)
 
   results <- lapply(r_values, function(r) {
-    es_from_means_sd_pre_post_single_group(
+    es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
       mean_pre, mean_post, sd_pre, sd_post, n, r,
       pre_post_to_smd = "cooper"
     )
@@ -257,7 +267,7 @@ test_that("Two-group reduces to single-group when control has zero change", {
   r_nexp <- 0.6
 
   # Two-group
-  result_two <- es_from_means_sd_pre_post(
+  result_two <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp, mean_post_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
@@ -265,7 +275,7 @@ test_that("Two-group reduces to single-group when control has zero change", {
   )
 
   # Single-group (experimental only)
-  result_single <- es_from_means_sd_pre_post_single_group(
+  result_single <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp, mean_post_exp, sd_pre_exp, sd_post_exp,
     n_exp, r_exp,
     pre_post_to_smd = "bonett"
@@ -290,13 +300,13 @@ test_that("mean change from means/SD produces consistent results", {
   sd_change <- sqrt(sd_pre^2 + sd_post^2 - 2 * r * sd_pre * sd_post)
 
   # From means/SD (any standardizer should give same MD)
-  result_means <- es_from_means_sd_pre_post_single_group(
+  result_means <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
 
   # From mean change
-  result_mc <- es_from_mean_change_sd_single_group(
+  result_mc <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n

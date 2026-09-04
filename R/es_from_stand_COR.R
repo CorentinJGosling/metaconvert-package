@@ -41,8 +41,11 @@
 #' 1. **The formula used to estimate the standard error of the Pearson's correlation coefficient** and 95% CI
 #' are (Formula 12.27 in Cooper):
 #' \deqn{R\_se = \sqrt{\frac{(1 - pearson\_r^2)^2}{n\_sample - 1}}}
-#' \deqn{R\_lo = pearson\_r - qt(.975, n\_sample - 2) * R\_se}
-#' \deqn{R\_up = pearson\_r + qt(.975, n\_sample - 2) * R\_se}
+#' \deqn{R\_lo = tanh(Z\_ci\_lo)}
+#' \deqn{R\_up = tanh(Z\_ci\_up)}
+#' The confidence interval of r is the back-transformed Fisher's z interval (the
+#' construction used by \code{cor.test()} and by 'metafor'), so it always lies within
+#' \eqn{[-1, 1]}; a symmetric \eqn{r \pm t \times R\_se} interval does not at small n.
 #'
 #' 2. **The formula used to estimate the Fisher's z** are (Formula 12.28 & 12.29 in Cooper):
 #' \deqn{Z = atanh(r)}
@@ -143,6 +146,12 @@ es_from_pearson_r <- function(pearson_r, sd_iv, n_sample,
   # n_exp = dat$n_exp; n_nexp = dat$n_nexp; cor_to_smd = "viechtbauer";
   # unit_type = "raw_scale"; reverse_pearson_r = rep(FALSE, length(pearson_r))
 
+  # Arm sizes the user actually supplied, kept apart from the n_sample / 2 back-fill
+  # below: the viechtbauer r -> d map (transf.rtod) reads them so that an unbalanced
+  # design is inverted at its own split rather than at 50/50 (see .rtod_delta()).
+  n_exp_supplied <- ifelse(!is.na(n_exp) & !is.na(n_nexp), n_exp, NA_real_)
+  n_nexp_supplied <- ifelse(!is.na(n_exp) & !is.na(n_nexp), n_nexp, NA_real_)
+
   n_sample <- ifelse(is.na(n_sample), n_exp + n_nexp, n_sample)
   n_exp <- ifelse(is.na(n_exp), n_sample / 2, n_exp)
   n_nexp <- ifelse(is.na(n_nexp), n_sample / 2, n_nexp)
@@ -153,6 +162,7 @@ es_from_pearson_r <- function(pearson_r, sd_iv, n_sample,
   dat_cor <- data.frame(
     r = r, r_se = r_se,
     sd_iv = sd_iv, n_sample = n_sample,
+    n_exp = n_exp_supplied, n_nexp = n_nexp_supplied,
     unit_increase_iv = unit_increase_iv,
     unit_type = unit_type,
     cor_to_smd = cor_to_smd
@@ -178,7 +188,8 @@ es_from_pearson_r <- function(pearson_r, sd_iv, n_sample,
       sd_iv = dat_cor$sd_iv[nn_miss],
       unit_increase_iv = dat_cor$unit_increase_iv[nn_miss],
       unit_type = dat_cor$unit_type[nn_miss],
-      cor_to_smd = dat_cor$cor_to_smd[nn_miss]
+      cor_to_smd = dat_cor$cor_to_smd[nn_miss],
+      n_exp = dat_cor$n_exp[nn_miss], n_nexp = dat_cor$n_nexp[nn_miss]
     )
 
     es$d[nn_miss] <- unlist(res_d[, 1])
@@ -189,13 +200,20 @@ es_from_pearson_r <- function(pearson_r, sd_iv, n_sample,
 
   es$r <- r
   es$r_se <- r_se
-  es$r_ci_lo <- r - qt(.975, n_sample - 2) * r_se
-  es$r_ci_up <- r + qt(.975, n_sample - 2) * r_se
 
   es$z <- atanh(r)
   es$z_se <- sqrt(1 / (n_sample - 3))
   es$z_ci_lo <- es$z - qnorm(.975) * es$z_se
   es$z_ci_up <- es$z + qnorm(.975) * es$z_se
+
+  # The r interval is the back-transformed Fisher-z interval, tanh(z +/- 1.96 z_se),
+  # the construction of cor.test(), metafor (measure = "ZCOR" + transf.ztor) and CMA.
+  # The former r +/- qt(.975, n - 2) r_se escaped the parameter space at small n
+  # (r = -0.226, n = 5 gave [-1.736, 1.284]; r = 0.85, n = 8 gave [0.593, 1.107]) and
+  # disagreed with the other correlation routes (the 2x2 tetrachoric, the OR
+  # conversions and the default smd_to_cor branch already back-transform).
+  es$r_ci_lo <- tanh(es$z_ci_lo)
+  es$r_ci_up <- tanh(es$z_ci_up)
 
   es$info_used <- "pearson_r"
   return(es)

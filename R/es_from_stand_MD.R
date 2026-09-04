@@ -240,6 +240,7 @@ es_from_md_pval <- function(md, md_pval, n_exp, n_nexp, smd_to_cor = "viechtbaue
   if (missing(reverse_md)) reverse_md <- rep(FALSE, length(md))
   reverse_md[is.na(reverse_md)] <- FALSE
 
+  md_pval <- .pval_or_na(md_pval)  # p <= 0 or p >= 1: no finite se, see .pval_or_na()
   t <- qt(p = md_pval / 2, df = n_exp + n_nexp - 2, lower.tail = FALSE)
 
   md_se <- abs(md / t)

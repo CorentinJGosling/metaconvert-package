@@ -1,3 +1,10 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request.
+
 # =============================================================================
 # PUBLISHED external anchor: Morris (2008), Table 5.
 #
@@ -44,7 +51,7 @@ datC <- data.frame(
 )
 
 mc_fit <- function(pool_sd) {
-  es_from_means_sd_pre_post(
+  es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = datT$ni, n_nexp = datC$ni,
     mean_pre_exp = datT$m_pre, mean_exp = datT$m_post,
     mean_pre_sd_exp = datT$sd_pre, mean_sd_exp = datT$sd_post,

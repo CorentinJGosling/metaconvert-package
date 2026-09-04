@@ -126,10 +126,12 @@ identified" statement, and exporting it would mean \eqn{r_se = 0}, an infinite
 inverse-variance weight that \code{rma()} aborts on. \emph{metaConvert} keeps the point
 estimate and declines the variance: \code{es_from_2x2(n_cases_exp = 25, n_controls_exp = 0,}
 \code{n_cases_nexp = 0, n_controls_nexp = 25)} returns \eqn{r = 1} with \code{r_se}, both R
-bounds and every Z column \code{NA}. The risk difference is refused on the same table for the
-same reason -- both arm risks are 0 or 1, so \code{rd_se} would be exactly 0 -- leaving
-\code{rd} and \code{nnt} at \code{NA}, while the OR and RR, computed from the +0.5-corrected
-table, remain finite (here \eqn{logor = 7.864}, \eqn{SE = 2.020}).
+bounds and every Z column \code{NA}. The OR, RR and RD are computed from the +0.5-corrected
+table and remain finite (here \eqn{logor = 7.864}, \eqn{SE = 2.020}); on the raw table both
+arm risks are 0 or 1 and \code{rd_se} would be exactly 0. The risk difference takes the
+correction exactly as \code{metafor::escalc(measure = "RD")} does by default
+(\code{add = 1/2, to = "only0"}): on a table without a zero cell it is computed from the
+raw counts.
 }
 \examples{
 es_from_2x2(n_cases_exp = 467, n_cases_nexp = 22087, n_controls_exp = 261, n_controls_nexp = 8761)

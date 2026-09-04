@@ -1,3 +1,10 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request.
+
 # =============================================================================
 # Calibration of the POOLED two-group pre/post variances.
 #
@@ -27,7 +34,7 @@ test_that("pooled morris_dz is BIT-EXACT with escalc(measure = 'SMD') on change 
   grid <- expand.grid(n1 = c(10, 29, 90), n2 = c(10, 34, 90))
   for (i in seq_len(nrow(grid))) {
     n1 <- grid$n1[i]; n2 <- grid$n2[i]
-    res <- es_from_mean_change_sd(
+    res <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
       n_exp = n1, n_nexp = n2,
       mean_change_exp = -12.4, mean_change_sd_exp = 6.52,
       mean_change_nexp = -3.5, mean_change_sd_nexp = 10.67,
@@ -65,7 +72,7 @@ mc_calibrate <- function(n1, n2, r, delta_raw, sd_pre, sd_post, method, nsim = 4
   for (i in seq_len(nsim)) {
     A <- MASS::mvrnorm(n1, c(0, delta_raw), S)
     B <- MASS::mvrnorm(n2, c(0, 0), S)
-    res <- es_from_means_sd_pre_post(
+    res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
       n_exp = n1, n_nexp = n2,
       mean_pre_exp = mean(A[, 1]), mean_exp = mean(A[, 2]),
       mean_pre_sd_exp = sd(A[, 1]), mean_sd_exp = sd(A[, 2]),
@@ -138,7 +145,7 @@ test_that("Var(g) = J^2 * Var(d) holds exactly on every pooled branch", {
   # (the LS2 pattern var_g = J^2 * (leading + d^2/2N)) the g/d relation still holds but
   # the calibration tests above break -- so both are needed.
   for (method in c("bonett", "morris_dz", "morris_drm", "morris_dav")) {
-    r <- es_from_means_sd_pre_post(
+    r <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
       n_exp = 12, n_nexp = 11,
       mean_pre_exp = 10, mean_exp = 16, mean_pre_sd_exp = 4, mean_sd_exp = 5,
       mean_pre_nexp = 10, mean_nexp = 12, mean_pre_sd_nexp = 4, mean_sd_nexp = 5,
@@ -159,7 +166,7 @@ test_that("morris_dav uses the Cousineau (2020) effective df, not N - 2", {
   n1 <- 12; n2 <- 11; r <- 0.5
   m <- n1 + n2 - 2
   nu <- 2 * m / (1 + r^2)
-  res <- es_from_means_sd_pre_post(
+  res <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     n_exp = n1, n_nexp = n2,
     mean_pre_exp = 10, mean_exp = 16, mean_pre_sd_exp = 4, mean_sd_exp = 5,
     mean_pre_nexp = 10, mean_nexp = 12, mean_pre_sd_nexp = 4, mean_sd_nexp = 5,

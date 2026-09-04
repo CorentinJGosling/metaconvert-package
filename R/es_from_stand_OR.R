@@ -1035,6 +1035,8 @@ es_from_or_pval <- function(or, logor, or_pval, baseline_risk, small_margin_prop
   or <- ifelse(is.na(or) & !is.na(logor), exp(logor), or)
   logOR <- suppressWarnings(log(or))
 
+  # p <= 0 and p >= 1 cannot be inverted into a standard error (see .pval_or_na()).
+  or_pval <- .pval_or_na(or_pval)
   z_or <- qnorm(or_pval / 2, lower.tail = FALSE)
   logor_se <- abs(logOR / z_or)
 

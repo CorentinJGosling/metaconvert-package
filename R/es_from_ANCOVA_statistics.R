@@ -208,6 +208,7 @@ es_from_ancova_t_pval <- function(ancova_t_pval, cov_outcome_r, n_cov_ancova, n_
   if (missing(reverse_ancova_t_pval)) reverse_ancova_t_pval <- rep(FALSE, length(ancova_t_pval))
   reverse_ancova_t_pval[is.na(reverse_ancova_t_pval)] <- FALSE
 
+  ancova_t_pval <- .pval_or_na(ancova_t_pval, se_from_ratio = FALSE)  # p <= 0 -> NA
   t_inv <- abs(qt(
     p = ancova_t_pval / 2,
     df = n_exp + n_nexp - 2 - n_cov_ancova,
@@ -285,6 +286,7 @@ es_from_ancova_f_pval <- function(ancova_f_pval, cov_outcome_r, n_cov_ancova, n_
   if (missing(reverse_ancova_f_pval)) reverse_ancova_f_pval <- rep(FALSE, length(ancova_f_pval))
   reverse_ancova_f_pval[is.na(reverse_ancova_f_pval)] <- FALSE
 
+  ancova_f_pval <- .pval_or_na(ancova_f_pval, se_from_ratio = FALSE)  # p <= 0 -> NA
   t_inv <- abs(qt(
     p = ancova_f_pval / 2,
     df = n_exp + n_nexp - 2 - n_cov_ancova,

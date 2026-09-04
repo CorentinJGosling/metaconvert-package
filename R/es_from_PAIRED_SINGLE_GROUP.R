@@ -8,6 +8,7 @@
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param pre_post_to_smd formula used to convert the pre and post means/SD into a SMD (see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param reverse_means_pre_post a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -87,7 +88,7 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
                                                     mean_pre_sd_exp, mean_sd_exp,
                                                     n_exp, r_pre_post_exp = 0.8,
                                                     pre_post_to_smd = "bonett",
-                                                    smd_to_cor = "viechtbauer",
+                                                    smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                                     reverse_means_pre_post) {
   pre_post_to_smd <- .validate_pre_post_to_smd(
     pre_post_to_smd,
@@ -141,7 +142,8 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
     mean_post = mean_exp, mean_post_sd = mean_sd_exp,
     n = n_exp,
     r_pre_post = r_pre_post_exp,
-    pre_post_to_smd = pre_post_to_smd
+    pre_post_to_smd = pre_post_to_smd,
+    smd_var = .normalize_smd_var(smd_var)
   )
 
   if (length(nn_miss) != 0) {
@@ -152,7 +154,8 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
       mean_post_sd = dat_smd_pre_post$mean_post_sd[nn_miss],
       n = dat_smd_pre_post$n[nn_miss],
       r_pre_post = dat_smd_pre_post$r_pre_post[nn_miss],
-      pre_post_to_smd = dat_smd_pre_post$pre_post_to_smd[nn_miss]
+      pre_post_to_smd = dat_smd_pre_post$pre_post_to_smd[nn_miss],
+      smd_var = dat_smd_pre_post$smd_var[nn_miss]
     ))
 
     d[nn_miss] <- smd_pp[, 1]
@@ -189,7 +192,7 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 
   es <- .es_from_d(
     d = d, d_se = d_se, n_exp = n_exp, n_nexp = n_exp,
-    smd_to_cor = smd_to_cor, reverse = reverse_means_pre_post
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_means_pre_post
   )
 
   # replace d/g from .es_from_d by the pre/post values
@@ -223,6 +226,7 @@ es_from_means_sd_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param pre_post_to_smd formula used to convert the pre and post means/SD into a SMD (see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param reverse_means_pre_post a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
 #' @details
@@ -269,7 +273,7 @@ es_from_means_se_pre_post_single_group <- function(mean_pre_exp, mean_exp,
                                                     mean_pre_se_exp, mean_se_exp,
                                                     n_exp, r_pre_post_exp = 0.8,
                                                     pre_post_to_smd = "bonett",
-                                                    smd_to_cor = "viechtbauer",
+                                                    smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                                     reverse_means_pre_post) {
   pre_post_to_smd <- .validate_pre_post_to_smd(
     pre_post_to_smd,
@@ -296,6 +300,7 @@ es_from_means_se_pre_post_single_group <- function(mean_pre_exp, mean_exp,
     n_exp = n_exp,
     r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_means_pre_post = reverse_means_pre_post
   )
@@ -317,6 +322,7 @@ es_from_means_se_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param pre_post_to_smd formula used to convert the pre and post means/SD into a SMD (see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param max_asymmetry percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param reverse_means_pre_post a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
@@ -367,7 +373,7 @@ es_from_means_ci_pre_post_single_group <- function(mean_pre_exp, mean_exp,
                                                     mean_ci_lo_exp, mean_ci_up_exp,
                                                     n_exp, r_pre_post_exp = 0.8,
                                                     pre_post_to_smd = "bonett",
-                                                    smd_to_cor = "viechtbauer",
+                                                    smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                                     max_asymmetry = 10,
                                                     reverse_means_pre_post) {
 
@@ -404,6 +410,7 @@ es_from_means_ci_pre_post_single_group <- function(mean_pre_exp, mean_exp,
     n_exp = n_exp,
     r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_means_pre_post = reverse_means_pre_post
   )
@@ -420,6 +427,7 @@ es_from_means_ci_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 #' @param n_exp number of participants in the group.
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD (\code{"cooper"} by default; \code{"morris_dz"} also accepted, see details).
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
@@ -474,7 +482,7 @@ es_from_means_ci_pre_post_single_group <- function(mean_pre_exp, mean_exp,
 #' )
 es_from_mean_change_sd_single_group <- function(mean_change_exp, mean_change_sd_exp,
                                                  n_exp, r_pre_post_exp = 0.8,
-                                                 smd_to_cor = "viechtbauer",
+                                                 smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                                  pre_post_to_smd = "cooper",
                                                  reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
@@ -497,6 +505,7 @@ es_from_mean_change_sd_single_group <- function(mean_change_exp, mean_change_sd_
     n_exp = n_exp,
     r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_means_pre_post = reverse_mean_change
   )
@@ -513,6 +522,7 @@ es_from_mean_change_sd_single_group <- function(mean_change_exp, mean_change_sd_
 #' @param n_exp number of participants in the group.
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD (\code{"cooper"} by default; \code{"morris_dz"} also accepted, see details).
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
@@ -563,7 +573,7 @@ es_from_mean_change_sd_single_group <- function(mean_change_exp, mean_change_sd_
 #' )
 es_from_mean_change_se_single_group <- function(mean_change_exp, mean_change_se_exp,
                                                  n_exp, r_pre_post_exp = 0.8,
-                                                 smd_to_cor = "viechtbauer",
+                                                 smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                                  pre_post_to_smd = "cooper",
                                                  reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
@@ -586,6 +596,7 @@ es_from_mean_change_se_single_group <- function(mean_change_exp, mean_change_se_
     n_exp = n_exp,
     r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_means_pre_post = reverse_mean_change
   )
@@ -603,6 +614,7 @@ es_from_mean_change_se_single_group <- function(mean_change_exp, mean_change_se_
 #' @param n_exp number of participants in the group.
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD (\code{"cooper"} by default; \code{"morris_dz"} also accepted, see details).
 #' @param max_asymmetry percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
@@ -659,7 +671,7 @@ es_from_mean_change_ci_single_group <- function(mean_change_exp,
                                                  mean_change_ci_lo_exp, mean_change_ci_up_exp,
                                                  n_exp, r_pre_post_exp = 0.8,
                                                  max_asymmetry = 10,
-                                                 smd_to_cor = "viechtbauer",
+                                                 smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                                  pre_post_to_smd = "cooper",
                                                  reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
@@ -684,6 +696,7 @@ es_from_mean_change_ci_single_group <- function(mean_change_exp,
     n_exp = n_exp,
     r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     max_asymmetry = max_asymmetry,
     reverse_means_pre_post = reverse_mean_change
@@ -701,6 +714,7 @@ es_from_mean_change_ci_single_group <- function(mean_change_exp,
 #' @param n_exp number of participants in the group.
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD (\code{"cooper"} by default; \code{"morris_dz"} also accepted, see details).
 #' @param reverse_mean_change a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
@@ -755,7 +769,7 @@ es_from_mean_change_ci_single_group <- function(mean_change_exp,
 #' )
 es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_pval_exp,
                                                    n_exp, r_pre_post_exp = 0.8,
-                                                   smd_to_cor = "viechtbauer",
+                                                   smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                                    pre_post_to_smd = "cooper",
                                                    reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
@@ -770,6 +784,7 @@ es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_p
     func_name = "es_from_mean_change_pval_single_group"
   )
 
+  mean_change_pval_exp <- .pval_or_na(mean_change_pval_exp)  # see .pval_or_na()
   t_stat <- qt(p = mean_change_pval_exp / 2, df = n_exp - 1, lower.tail = FALSE)
   mean_change_se <- abs(mean_change_exp / t_stat)
 
@@ -781,6 +796,7 @@ es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_p
     n_exp = n_exp,
     r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_means_pre_post = reverse_mean_change
   )
@@ -796,6 +812,7 @@ es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_p
 #' @param n_exp number of participants in the group.
 #' @param r_pre_post_exp pre-post correlation within the group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the paired t statistic into a SMD (\code{"cooper"} by default; \code{"morris_dz"} also accepted, see details).
 #' @param reverse_paired_t a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
@@ -862,7 +879,7 @@ es_from_mean_change_pval_single_group <- function(mean_change_exp, mean_change_p
 #'   r_pre_post_exp = 0.7
 #' )
 es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 0.8,
-                                          smd_to_cor = "viechtbauer",
+                                          smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                           pre_post_to_smd = "cooper",
                                           reverse_paired_t) {
   if (missing(reverse_paired_t)) reverse_paired_t <- rep(FALSE, length(paired_t_exp))
@@ -884,7 +901,8 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
   # pre-post routes share one implementation. The n >= 2 guard and the qt(.975, n - 1)
   # intervals come from the kernel too. See .paired_t_to_smd() for how a paired t,
   # which carries no pre/post SDs, is expressed as an equivalent single-group problem.
-  res <- .paired_t_to_smd(paired_t_exp, n_exp, r_pre_post_exp, pre_post_to_smd)
+  res <- .paired_t_to_smd(paired_t_exp, n_exp, r_pre_post_exp, pre_post_to_smd,
+                          smd_var = .normalize_smd_var(smd_var))
 
   d       <- res[, "d"]
   d_var   <- res[, "var_d"]
@@ -904,7 +922,7 @@ es_from_paired_t_single_group <- function(paired_t_exp, n_exp, r_pre_post_exp = 
 
   es <- .es_from_d(
     d = d, d_se = d_se, n_exp = n_exp, n_nexp = n_exp,
-    smd_to_cor = smd_to_cor, reverse = reverse_paired_t
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_paired_t
   )
 
   es$d <- ifelse(reverse_paired_t, -d, d)

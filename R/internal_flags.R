@@ -1523,8 +1523,9 @@
       r_obs <- (hi[i] - lo[i]) / sdv[i]
       hi_mult_n <- range_sd_hi_mult * max(1, min(2, sqrt(nv[i] / 100)))
       # (max - min)/SD has EXACT bounds for any n values whatsoever, independent of
-      # any distribution: it is maximised by one outlier against n-1 equal values and
-      # minimised by a half-and-half two-point split.
+      # any distribution: it is maximised by one value at each extreme with the other
+      # n-2 at the mean (one outlier against n-1 equal values reaches only sqrt(n)) and
+      # minimised by a half-and-half two-point split (David, Hartley & Pearson 1954).
       #   upper  sqrt(2(n-1))          lower  sqrt(n(n-1) / (floor(n/2) ceiling(n/2)))
       # A ratio outside those is not implausible, it is arithmetically impossible, so
       # it is [INVALID] rather than [UNUSUAL]. This matters most at small n, where the
@@ -2844,43 +2845,49 @@
         # report the closest band edge in the message
         expected_width <- if (ci_width < w_pooled) w_pooled else w_welch_min
       }
-      # P10: SOME package-computed `r` CIs are not r +/- qt se. Two constructions
-      # build a symmetric interval on a z scale and back-transform it, which comes out
-      # asymmetric about r and narrower than 2 z se_r:
-      #   .smd_to_cor(), the viechtbauer branch ONLY (it is the default) -- the
-      #     variance-stabilising z with a = sqrt(dnorm(qnorm(p))) / (p(1-p))^(1/4),
-      #     back-transformed as r = tanh(z/a)/a;
-      #   .contingency_to_cor() / .tet_r() -- Fisher's z, back-transformed as tanh().
-      # smd_to_cor = "lipsey_cooper" is NOT one of them, despite building its z the
-      # same way: it returns r +/- qt(.975, n_exp + n_nexp - 2 - n_cov_ancova) *
-      # sqrt(vr_lipsey) on the r scale (R/internal_multiple_formulas.R, the
-      # lipsey_cooper branch), which is exactly the expectation this block has already
-      # formed. Verified: at d = 0.5, n = 30/30 the returned bounds reproduce
-      # r +/- qt(.975, 58) se to the last digit and are symmetric to 0, while the
-      # viechtbauer bounds for the same input miss symmetry by 0.044.
-      # The gap exceeds A6's own tolerance at small-to-moderate n, so A6 was reporting
-      # a [DISCORDANT] extraction error on 19 of the 170 rows of the package's own
-      # df.haza at measure = "r", all of them correct. Accept either back-transformed
-      # width as an alternative expectation, reconstructing the z-scale SE from r_se by
-      # the same delta map the two routes use (exact for Fisher, 0.1% for the
-      # variance-stabilising one at n = 26). This block does not receive smd_to_cor, so
-      # both alternatives are accepted on every package-computed r row; under
-      # lipsey_cooper that is a slight loosening rather than a wrong expectation, since
-      # its own interval already matches the primary qt one. qnorm(.975) rather than
-      # the block's own z_crit, because both back-transformed intervals are built on
-      # the normal quantile whatever df A6 would otherwise have chosen. "rp" is
-      # excluded: es_from_linreg_t() really does build rp +/- qt(.975, n - q - 2) se,
-      # so it keeps the t expectation.
+      # P10: EVERY package-computed `r` CI is a back-transformed z-scale interval,
+      # asymmetric about r and narrower than 2 z se_r, never r +/- qt se:
+      #   es_from_pearson_r() / es_from_fisher_z() / es_from_spearman_rho() and the
+      #     user r/z branches -- Fisher's z, back-transformed as tanh(); pearson/fisher
+      #     build z_se as 1/sqrt(n - 3) (metafor ZCOR), spearman by the delta map;
+      #   .contingency_to_cor() / .tet_r(), .or_to_cor() -- Fisher's z, tanh();
+      #   .smd_to_cor(), viechtbauer branch (the default) -- the variance-stabilising
+      #     z with a = sqrt(dnorm(qnorm(p))) / (p(1-p))^(1/4), r = tanh(z/a)/a;
+      #   .smd_to_cor(), lipsey_cooper branch -- Fisher's z, tanh() (it was the one
+      #     route still returning r +/- qt se on the r scale, and escaped [-1, 1] at
+      #     small n like the former pearson_r interval; both were switched).
+      # The primary qt expectation formed above is therefore never the construction of
+      # a package r row. The gap exceeds A6's own tolerance at small-to-moderate n, so
+      # A6 was reporting a [DISCORDANT] extraction error on 19 of the 170 rows of the
+      # package's own df.haza at measure = "r", all of them correct. Accept any of the
+      # back-transformed widths as an alternative expectation: the Fisher width on the
+      # delta-mapped z SE (exact for the tetrachoric, OR, spearman and lipsey_cooper
+      # routes), the Fisher width on 1/sqrt(n - 3) (pearson_r / fisher_z: at n = 5 the
+      # delta map gives 1/sqrt(n - 1) = 0.50 against 0.71, which fired falsely), and
+      # the variance-stabilising width (0.1% from its delta reconstruction at n = 26).
+      # This block does not receive smd_to_cor or the route, so all alternatives are
+      # accepted on every package-computed r row. qnorm(.975) rather than the block's
+      # own z_crit, because every back-transformed interval is built on the normal
+      # quantile whatever df A6 would otherwise have chosen. "rp" is excluded:
+      # es_from_linreg_t() really does build rp +/- qt(.975, n - q - 2) se, so it keeps
+      # the t expectation.
       if (fires_a6 && !is_user_es && identical(measure, "r") &&
           is.finite(es[i]) && abs(es[i]) < 1 && se[i] > 0) {
         zc_bt <- stats::qnorm(0.975)
         alt_widths <- numeric(0)
-        # Fisher / tetrachoric: z = atanh(r), z_se = r_se / (1 - r^2)
+        # Fisher / tetrachoric / spearman / lipsey_cooper: z = atanh(r), z_se = r_se / (1 - r^2)
         zs_f <- se[i] / (1 - es[i]^2)
         if (is.finite(zs_f)) {
           alt_widths <- c(alt_widths,
                           tanh(atanh(es[i]) + zc_bt * zs_f) -
                           tanh(atanh(es[i]) - zc_bt * zs_f))
+        }
+        # pearson_r / fisher_z: z_se = 1/sqrt(n - 3)
+        if (!is.na(n_i) && is.finite(n_i) && n_i > 3) {
+          zs_n <- 1 / sqrt(n_i - 3)
+          alt_widths <- c(alt_widths,
+                          tanh(atanh(es[i]) + zc_bt * zs_n) -
+                          tanh(atanh(es[i]) - zc_bt * zs_n))
         }
         # Variance-stabilising (viechtbauer): z = a atanh(a r), r = tanh(z/a)/a
         p_bt <- if (!is.na(n_exp_i) && !is.na(n_nexp_i) &&
@@ -3003,9 +3010,11 @@
     # The tetrachoric route does not reach here: its r-scale interval is the tanh
     # back-transform of the Fisher-z interval (.tet_r in internal_multiple_formulas.R),
     # which cannot leave (-1, 1). That construction took the escape rate from 45.8% of
-    # tables to 0.0% with coverage unchanged (96.1% -> 96.2%). B1b remains as a
-    # backstop for the correlation routes that still build a symmetric Wald interval on
-    # the r scale: the or_to_cor family, pearson_r and their derivatives.
+    # tables to 0.0% with coverage unchanged (96.1% -> 96.2%). Every package-computed
+    # r interval is now built that way (pearson_r, fisher_z, spearman, the OR
+    # conversions and both smd_to_cor branches), so B1b is reachable only through a
+    # USER-supplied r interval, which is handed back verbatim: it stays as the
+    # backstop for that case.
     if (cor_scale && is.finite(es[i]) && abs(es[i]) <= 1) {
       lo_out <- !is.na(ci_lo[i]) && is.finite(ci_lo[i]) && ci_lo[i] < -1
       up_out <- !is.na(ci_up[i]) && is.finite(ci_up[i]) && ci_up[i] > 1

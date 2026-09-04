@@ -165,8 +165,12 @@ test_that("AUDIT-blocker: es_formulas() evaluates every conversion parameter tha
   expect_true("smd_denom" %in% metaConvert:::.parameters_for_measure("r"))
 
   # (b) case 1, end to end on the DEFAULT parameter selection: an OR pool built
-  #     from a correlation. cor_to_smd moves the OR 4.073 -> 6.221 (+53%), yet
+  #     from a correlation. cor_to_smd moves the OR 4.026 -> 6.221 (+55%), yet
   #     es_formulas() currently reports 0 rows.
+  #     The viechtbauer value is exp(transf.rtod(r, n1i, n2i) / J(N - 2) * pi/sqrt(3)):
+  #     this row SUPPLIES n_exp = n_nexp = 60, so the r -> d map is inverted at the
+  #     finite-sample h = m/n1 + m/n2 the forward d -> r map uses (see .rtod_delta()),
+  #     not at the balanced-arms constant 4 that gave the former pin of 4.0734.
   d1 <- data.frame(study_id = "A", pearson_r = 0.45, n_sample = 120,
                    n_exp = 60, n_nexp = 60)
   o1 <- suppressMessages(convert_df(d1, measure = "or", verbose = FALSE,
@@ -174,8 +178,12 @@ test_that("AUDIT-blocker: es_formulas() evaluates every conversion parameter tha
   f1 <- as.data.frame(es_formulas(o1, verbose = FALSE, digits = 12))
   expect_gt(nrow(f1), 0L)
   expect_true("cor_to_smd" %in% f1$parameter)
-  expect_equal(pull(f1, "cor_to_smd", "viechtbauer"), 4.07343642244653,
+  expect_equal(pull(f1, "cor_to_smd", "viechtbauer"), 4.02584061437363,
                tolerance = 1e-8)
+  expect_equal(pull(f1, "cor_to_smd", "viechtbauer"),
+               exp(metafor::transf.rtod(0.45, 60, 60) / metaConvert:::.d_j(118) *
+                     pi / sqrt(3)),
+               tolerance = 1e-10)
   expect_equal(pull(f1, "cor_to_smd", "cooper"), 6.22117518089525,
                tolerance = 1e-8)
 

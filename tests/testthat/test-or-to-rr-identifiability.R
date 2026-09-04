@@ -91,22 +91,41 @@ test_that(".solve_2x2_from_or() declines rather than guessing on bad input", {
   expect_null(.solve(2, 0, 50, 20))     # empty arm
 })
 
-test_that(".solve_2x2_from_or() declines when a solved cell would be empty", {
-  # A zero cell makes var(logOR) infinite. The enumeration has a purpose-built +0.5
-  # branch for those, so the solve must hand them back rather than emit the table.
+test_that(".solve_2x2_from_or() declines when a solved cell would be (near-)empty", {
+  # A cell below 0.5 is smaller than any real table carries, raw (>= 1) or
+  # continuity-corrected (>= 0.5), and its 1/cell term would dominate the Woolf
+  # variance. The enumeration has a purpose-built +0.5 branch for those, so the solve
+  # must hand them back rather than emit the table. Cells are otherwise the EXACT
+  # root and may be fractional: the solved table's odds ratio must be the reported one.
   set.seed(9)
-  zero_cells <- 0
+  small_cells <- 0; checked <- 0
   for (i in 1:400) {
     n1 <- sample(30:200, 1); n2 <- sample(30:200, 1)
     or <- exp(runif(1, log(0.1), log(10)))
     got <- .solve(or, n1, n2, sample(2:(n1 + n2 - 2), 1))
     if (!is.null(got)) {
       cells <- c(got$n_cases_exp, got$n_controls_exp, got$n_cases_nexp, got$n_controls_nexp)
-      if (min(cells) < 1) zero_cells <- zero_cells + 1
+      if (min(cells) < 0.5) small_cells <- small_cells + 1
       expect_true(all(is.finite(cells)))
+      expect_equal(.tab_or(cells[1], cells[2], cells[3], cells[4]), or, tolerance = 1e-10)
+      checked <- checked + 1
     }
   }
-  expect_equal(zero_cells, 0)
+  expect_equal(small_cells, 0)
+  expect_gt(checked, 300)
+})
+
+test_that("the solved table reproduces a REPORTED odds ratio exactly, not a rounded neighbour", {
+  # OR = 2.00 on margins 40/60, 30/70 has no integer table: rounding the root to
+  # 16/24/14/46 gave a table with OR = 2.19 and log RR 0.539; the exact root
+  # a = 15.538 keeps OR = 2 and gives log RR 0.477.
+  got <- .solve(2, 40, 60, 30)
+  expect_equal(.tab_or(got$n_cases_exp, got$n_controls_exp, got$n_cases_nexp, got$n_controls_nexp), 2,
+               tolerance = 1e-12)
+  expect_equal(got$n_cases_exp, (170 - sqrt(170^2 - 4 * 2400)) / 2, tolerance = 1e-12)
+  lrr <- log((got$n_cases_exp / 40) / (got$n_cases_nexp / 60))
+  expect_equal(lrr, 0.4771998608, tolerance = 1e-8)
+  expect_false(isTRUE(all.equal(lrr, 0.5389965007)))   # the rounded-table answer
 })
 
 # --- the cascade ----------------------------------------------------------
@@ -647,14 +666,14 @@ test_that("no row ever returns a finite RR beside a non-finite SE", {
 # 1/50/2/49, giving log RR -0.693 against the true -1.609 -- an error of 0.916.
 # At br = 0.01, 75.8% of study 04's replications carry the correction.
 #
-# The rule now prefers the integer and takes the half-integer only when the exact
-# root sits essentially on one. Measured over 900 tables of each kind:
-#
-#   rule           integer tables (OR at 2dp)   corrected tables
-#   round to 1     96.2% exact                  0% exact, err 0.869, 423/900 solved
-#   round to 0.5   91.8% exact                  100% exact
-#   no rounding     5.0% exact                  100% exact
-#   THIS RULE      96.1% exact                  100% exact
+# The rule is now consistency-gated: a whole-count (or, on the half-integer
+# signature, a corrected) table is taken only if its OR rounds back to the reported
+# OR at the reported precision -- i.e. it could be the source of the printed number.
+# Otherwise the exact root is kept, so a reported OR that no integer table reproduces
+# is no longer replaced by a neighbour with a different OR (see the "reported odds
+# ratio" test above). Measured: integer tables with a 2 dp OR 97.3% exact (residual
+# errors are the ambiguous small-OR cases where two tables round to the same 2 dp
+# value), 3 dp OR 100%, corrected tables 100%.
 # =============================================================================
 
 test_that("a continuity-corrected table is reconstructed exactly, not rounded away", {
@@ -724,7 +743,19 @@ test_that("recovery rates hold on both populations, measured not assumed", {
     hit <- hit + (got$n_cases_exp == a)
   }
   expect_gt(k, 250)
-  expect_gt(hit / k, 0.90)           # measured 0.961; 0.90 leaves Monte Carlo room
+  expect_gt(hit / k, 0.90)           # measured 0.973; 0.90 leaves Monte Carlo room
+
+  # integer tables with a 3 dp OR: the printed number now pins the table
+  hit3 <- k3 <- 0
+  for (i in 1:300) {
+    ne <- sample(20:200, 1); nn <- sample(20:200, 1)
+    a <- sample(2:(ne - 2), 1); c <- sample(2:(nn - 2), 1)
+    got <- .solve(round(.tab_or(a, ne - a, c, nn - c), 3), ne, nn, a + c)
+    if (is.null(got)) next
+    k3 <- k3 + 1
+    hit3 <- hit3 + (got$n_cases_exp == a)
+  }
+  expect_equal(hit3, k3)
 })
 
 test_that("es_from_or_se() end-to-end on a corrected table gives the right RR", {

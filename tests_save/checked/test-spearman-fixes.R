@@ -162,8 +162,18 @@ test_that("P15: n_exp/n_nexp without n_sample falls back to n_exp + n_nexp (viec
 
   expect_equal(res_arms$r_se, res_full$r_se, tolerance = 1e-10)
   expect_equal(res_arms$z_se, res_full$z_se, tolerance = 1e-10)
-  expect_equal(res_arms$d_se, res_full$d_se, tolerance = 1e-10)
-  expect_equal(res_arms$g_se, res_full$g_se, tolerance = 1e-10)
+  # d / g and their SEs are NOT expected to coincide: supplied arm sizes are handed to
+  # transf.rtod (n1i / n2i), which inverts the biserial at h = m/n1 + m/n2 rather than
+  # at the balanced-arms constant 4, so the arms call is pinned to that oracle and the
+  # n_sample-only call to the constant-4 one.
+  rp_arms <- .orc_rp(0.55)
+  expect_equal(res_arms$g, metafor::transf.rtod(rp_arms, 50, 50), tolerance = 1e-10)
+  expect_equal(res_full$g, metafor::transf.rtod(rp_arms), tolerance = 1e-10)
+  expect_equal(res_arms$g_se,
+               sqrt(metafor::conv.delta(yi = rp_arms, vi = .orc_r_se_delta(0.55, 100)^2,
+                                        transf = metafor::transf.rtod, n1i = 50, n2i = 50,
+                                        var.names = c("g", "gv"))$gv),
+               tolerance = 1e-10)
   expect_equal(res_arms$r_ci_lo, res_full$r_ci_lo, tolerance = 1e-10)
   expect_equal(res_arms$r_ci_up, res_full$r_ci_up, tolerance = 1e-10)
   expect_equal(res_arms$z_ci_lo, res_full$z_ci_lo, tolerance = 1e-10)

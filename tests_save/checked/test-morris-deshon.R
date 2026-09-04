@@ -1,3 +1,13 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request. The
+# exception is the cooper / morris_drm blocks, whose Morris & DeShon (2002) oracle is
+# the d-scale variance 2(1-r)/n + d^2/(2n): that is the J^2-outside ("borenstein")
+# convention, so those calls request the default explicitly.
+
 # Tests for Morris & DeShon (2002) standardizers
 # Validates morris_dz, morris_dav, and morris_drm implementations
 
@@ -22,7 +32,7 @@ test_that("morris_dz formula matches Morris & DeShon (2002) equation 8", {
   d_z_expected <- (mean_post - mean_pre) / sd_diff_expected
 
   # Calculate using metaConvert
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -54,14 +64,14 @@ test_that("morris_dz point estimate depends on r through sd_diff", {
   sd_post <- 12
   n <- 30
 
-  result_r05 <- es_from_means_sd_pre_post_single_group(
+  result_r05 <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = 0.5,
     pre_post_to_smd = "morris_dz"
   )
 
-  result_r08 <- es_from_means_sd_pre_post_single_group(
+  result_r08 <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = 0.8,
@@ -98,7 +108,7 @@ test_that("morris_dav point estimate is the average-SD SMD; variance is metafor 
   d_av_expected <- (mean_post - mean_pre) / sd_av_expected
 
   # Calculate using metaConvert
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -136,7 +146,7 @@ test_that("morris_dav recommended by Morris 2008", {
   n <- 14
   r <- 0.44
 
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -162,14 +172,14 @@ test_that("cooper equals morris_drm (they are aliases)", {
   n <- 10
   r <- 0.89
 
-  result_cooper <- es_from_means_sd_pre_post_single_group(
+  result_cooper <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
     pre_post_to_smd = "cooper"
   )
 
-  result_morris_drm <- es_from_means_sd_pre_post_single_group(
+  result_morris_drm <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
@@ -190,7 +200,7 @@ test_that("morris_drm variance matches Morris 2000 formula", {
   n <- 25
   r <- 0.7
 
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
@@ -212,21 +222,21 @@ test_that("Method ordering: d_z typically smallest, d_rm largest (when r > 0)", 
   n <- 40
   r <- 0.6
 
-  result_dz <- es_from_means_sd_pre_post_single_group(
+  result_dz <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
     pre_post_to_smd = "morris_dz"
   )
 
-  result_dav <- es_from_means_sd_pre_post_single_group(
+  result_dav <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
     pre_post_to_smd = "morris_dav"
   )
 
-  result_drm <- es_from_means_sd_pre_post_single_group(
+  result_drm <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
@@ -249,14 +259,14 @@ test_that("When sd_pre = sd_post, d_av equals average of d_z and d_bonett concep
   n <- 30
   r <- 0.5
 
-  result_dav <- es_from_means_sd_pre_post_single_group(
+  result_dav <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
     pre_post_to_smd = "morris_dav"
   )
 
-  result_bonett <- es_from_means_sd_pre_post_single_group(
+  result_bonett <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
@@ -299,7 +309,7 @@ test_that("Morris 2007 Table 1 dppc2 ~ morris_dav (per-arm standardizer, pool_sd
 
   r <- 0.64
 
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre_t,
     mean = mean_post_t,
     mean_pre_sd_exp = sd_pre_t,
@@ -332,7 +342,7 @@ test_that("Morris 2007 dppc2 is reproduced exactly by bonett + pool_sd = TRUE", 
   mean_pre_c <- 24.9; sd_pre_c <- 4.1; mean_post_c <- 25.3; sd_post_c <- 3.3; n_c <- 42
   r <- 0.64
 
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
     mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t, n_exp = n_t,
     mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
@@ -374,7 +384,7 @@ test_that("Hedges g properly corrects Morris standardizers", {
   }
 
   for (method in c("morris_dz", "morris_dav", "morris_drm")) {
-    result <- es_from_means_sd_pre_post_single_group(
+    result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -409,7 +419,7 @@ test_that("Confidence intervals properly computed for all Morris methods", {
   r <- 0.55
 
   for (method in c("morris_dz", "morris_dav", "morris_drm")) {
-    result <- es_from_means_sd_pre_post_single_group(
+    result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -453,7 +463,7 @@ test_that("Morris methods work for two-group paired designs (per-arm standardize
   r <- 0.7
 
   for (method in c("morris_dz", "morris_dav", "morris_drm")) {
-    result <- es_from_means_sd_pre_post(
+    result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre_t,
       mean = mean_post_t,
       mean_pre_sd_exp = sd_pre_t,
@@ -525,7 +535,7 @@ test_that("morris_dz correct for two-group design (per-arm standardizer, pool_sd
   se_d_z_expected <- sqrt(var_d_z_t + var_d_z_c)
 
   # metaConvert calculation
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre_t,
     mean_exp = mean_post_t,
     mean_pre_sd_exp = sd_pre_t,
@@ -561,7 +571,7 @@ test_that("morris_dz two-group OPT-IN pooled standardizer (pool_sd = TRUE) match
   mean_pre_c <- 32; mean_post_c <- 34; sd_pre_c <- 9;  sd_post_c <- 10; n_c <- 25
   r <- 0.7
 
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
     mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t, n_exp = n_t,
     mean_pre_nexp = mean_pre_c, mean_nexp = mean_post_c,
@@ -641,7 +651,7 @@ test_that("morris_dz two-group with different correlations (per-arm standardizer
   d_z_expected <- d_z_t - d_z_c
 
   # metaConvert
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
     mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t,
     n_exp = n_t, r_pre_post_exp = r_t,
@@ -714,7 +724,7 @@ test_that("morris_dav correct for two-group design (per-arm standardizer, pool_s
   se_d_av_expected <- sqrt(var_d_av_t + var_d_av_c)
 
   # metaConvert
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
     mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t,
     n_exp = n_t, r_pre_post_exp = r_t,
@@ -759,7 +769,7 @@ test_that("morris_dav two-group robust to variance heterogeneity (per-arm standa
   d_av_expected <- d_av_t - d_av_c
 
   # metaConvert
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre_t, mean_exp = mean_post_t,
     mean_pre_sd_exp = sd_pre_t, mean_sd_exp = sd_post_t,
     n_exp = n_t, r_pre_post_exp = r_t,
@@ -824,7 +834,7 @@ test_that("morris_dz variance increases as r decreases", {
   r_values <- c(0, 0.3, 0.5, 0.7, 0.9)
 
   results <- lapply(r_values, function(r) {
-    es_from_means_sd_pre_post_single_group(
+    es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -869,7 +879,7 @@ test_that("morris_dav variance formula correct across r values", {
   r_values <- c(0, 0.3, 0.5, 0.7, 0.9)
 
   results <- lapply(r_values, function(r) {
-    es_from_means_sd_pre_post_single_group(
+    es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -918,7 +928,7 @@ test_that("morris_drm (cooper) variance formula correct across r values", {
   r_values <- c(0, 0.3, 0.5, 0.7, 0.9, 0.99)
 
   results <- lapply(r_values, function(r) {
-    es_from_means_sd_pre_post_single_group(
+    es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -953,7 +963,7 @@ test_that("morris standardizers with r=0 (independent measures)", {
   r <- 0
 
   for (method in c("morris_dz", "morris_dav", "morris_drm")) {
-    result <- es_from_means_sd_pre_post_single_group(
+    result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -979,7 +989,7 @@ test_that("morris standardizers with r=0.99 (near-perfect correlation)", {
   r <- 0.99
 
   for (method in c("morris_dz", "morris_dav", "morris_drm")) {
-    result <- es_from_means_sd_pre_post_single_group(
+    result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -992,14 +1002,14 @@ test_that("morris standardizers with r=0.99 (near-perfect correlation)", {
   }
 
   # morris_dav and morris_drm should have very small SE when r=0.99
-  result_dav <- es_from_means_sd_pre_post_single_group(
+  result_dav <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,
     pre_post_to_smd = "morris_dav"
   )
 
-  result_r05 <- es_from_means_sd_pre_post_single_group(
+  result_r05 <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = 0.5,
@@ -1020,7 +1030,7 @@ test_that("morris standardizers with extreme SD heterogeneity", {
   r <- 0.6
 
   for (method in c("morris_dz", "morris_dav", "morris_drm")) {
-    result <- es_from_means_sd_pre_post_single_group(
+    result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre_exp = mean_pre, mean_exp = mean_post,
       mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
       n_exp = n, r_pre_post_exp = r,
@@ -1036,7 +1046,7 @@ test_that("morris standardizers with extreme SD heterogeneity", {
   }
 
   # morris_dav recommended for this scenario (Morris 2008)
-  result_dav <- es_from_means_sd_pre_post_single_group(
+  result_dav <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre, mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre, mean_sd_exp = sd_post,
     n_exp = n, r_pre_post_exp = r,

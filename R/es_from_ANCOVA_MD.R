@@ -336,6 +336,7 @@ es_from_ancova_md_pval <- function(ancova_md, ancova_md_pval,
   if (length(reverse_ancova_md) == 1) reverse_ancova_md = c(rep(reverse_ancova_md, length(ancova_md)))
   if (length(reverse_ancova_md) != length(ancova_md)) stop("The length of the 'reverse_ancova_md' argument is incorrectly specified.")
 
+  ancova_md_pval <- .pval_or_na(ancova_md_pval)  # see .pval_or_na()
   t <- qt(p = ancova_md_pval / 2,
           df = n_exp + n_nexp - 2 - n_cov_ancova,
           lower.tail = FALSE)

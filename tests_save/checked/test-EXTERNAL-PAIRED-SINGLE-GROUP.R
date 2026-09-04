@@ -1,3 +1,13 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request. The
+# exception is the cooper / morris_drm blocks, whose Morris & DeShon (2002) oracle is
+# the d-scale variance 2(1-r)/n + d^2/(2n): that is the J^2-outside ("borenstein")
+# convention, so those calls request the default explicitly.
+
 # Long-running file (> 25 s): executed locally and in CI (devtools::test and
 # testthat set NOT_CRAN=true); skipped wholesale on CRAN to respect check-time
 # limits. The fast pre/post files still run on CRAN.
@@ -89,7 +99,7 @@ test_that("MEANS-SD-SG: bonett single-group matches metafor SMCRH (g + g_se)", {
   )
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post_single_group",
@@ -138,7 +148,7 @@ test_that("MEANS-SD-SG: cooper single-group matches Morris & DeShon 2002 (d + d_
   )
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "borenstein", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post_single_group",
@@ -186,7 +196,7 @@ test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRPH (g + g_se
   )
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post_single_group",
@@ -236,7 +246,7 @@ test_that("MEANS-SD-SG: morris_dav single-group matches metafor SMCRPH manual (d
   )
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post_single_group",
@@ -290,7 +300,7 @@ test_that("MEANS-SD-SG: morris_dz single-group matches metafor SMCC manual (d + 
   )
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post_single_group",
@@ -365,7 +375,7 @@ test_that("MEANS-SD-SG: cooper single-group matches TOSTER (g only)", {
       r_pre_post_exp = cor(pre, post)
     )
 
-    es_mc <- summary(convert_df(res,
+    es_mc <- summary(convert_df(smd_var = "borenstein", res,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_sd_pre_post_single_group",
@@ -417,7 +427,7 @@ test_that("MEANS-SD-SG: morris_dz single-group matches TOSTER (g only)", {
       r_pre_post_exp = cor(pre, post)
     )
 
-    es_mc <- summary(convert_df(res,
+    es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_sd_pre_post_single_group",
@@ -450,7 +460,7 @@ test_that("MEANS-SE-SG: all methods match SD version after SE→SD conversion", 
     )
 
     # From SD
-    es_sd <- summary(convert_df(res_sd,
+    es_sd <- summary(convert_df(smd_var = "hedges_olkin", res_sd,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_sd_pre_post_single_group",
@@ -467,7 +477,7 @@ test_that("MEANS-SE-SG: all methods match SD version after SE→SD conversion", 
     res_se$mean_sd_exp <- NULL
 
     # From SE
-    es_se <- summary(convert_df(res_se,
+    es_se <- summary(convert_df(smd_var = "hedges_olkin", res_se,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_se_pre_post_single_group",
@@ -508,7 +518,7 @@ test_that("MEANS-CI-SG: all methods match SD version after CI→SD conversion", 
     )
 
     # From SD
-    es_sd <- summary(convert_df(res_sd,
+    es_sd <- summary(convert_df(smd_var = "hedges_olkin", res_sd,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_sd_pre_post_single_group",
@@ -529,7 +539,7 @@ test_that("MEANS-CI-SG: all methods match SD version after CI→SD conversion", 
     res_ci$mean_sd_exp <- NULL
 
     # From CI
-    es_ci <- summary(convert_df(res_ci,
+    es_ci <- summary(convert_df(smd_var = "hedges_olkin", res_ci,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "means_ci_pre_post_single_group",
@@ -573,7 +583,7 @@ test_that("MC-SD-SG: cooper matches Morris & DeShon 2002 (d + d_se)", {
   )
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "borenstein", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "mean_change_sd_single_group",
@@ -619,7 +629,7 @@ test_that("MC-SD-SG: morris_dz matches metafor SMCC manual (d + d_se)", {
   )
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "mean_change_sd_single_group",
@@ -668,7 +678,7 @@ test_that("MC-SD-SG: MDw matches metafor MN (mdw + mdw_se)", {
   )
 
   # metaConvert using convert_df - get MDw
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "mean_change_sd_single_group",
@@ -720,7 +730,7 @@ test_that("MC-SD-SG: equivalence with means_sd_pre_post_single_group (mean_pre=0
     )
 
     # From mean change
-    es_mc <- summary(convert_df(res_mc,
+    es_mc <- summary(convert_df(smd_var = "hedges_olkin", res_mc,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "mean_change_sd_single_group",
@@ -744,7 +754,7 @@ test_that("MC-SD-SG: equivalence with means_sd_pre_post_single_group (mean_pre=0
     # degenerate construction for this equivalence check; the centralized
     # input validation would (rightly) zap SD = 0 as a data-entry error, so
     # disable input correction for this synthetic dataset.
-    es_pp <- summary(convert_df(res_pp,
+    es_pp <- summary(convert_df(smd_var = "hedges_olkin", res_pp,
       verbose = FALSE,
       correct_inputs = FALSE,
       es_selected = "hierarchy",
@@ -788,7 +798,7 @@ test_that("MC-SE-SG: all methods match SD version after SE→SD conversion", {
     )
 
     # From SD
-    es_sd <- summary(convert_df(res_sd,
+    es_sd <- summary(convert_df(smd_var = "hedges_olkin", res_sd,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "mean_change_sd_single_group",
@@ -803,7 +813,7 @@ test_that("MC-SE-SG: all methods match SD version after SE→SD conversion", {
     res_se$mean_change_sd_exp <- NULL
 
     # From SE
-    es_se <- summary(convert_df(res_se,
+    es_se <- summary(convert_df(smd_var = "hedges_olkin", res_se,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "mean_change_se_single_group",
@@ -846,7 +856,7 @@ test_that("MC-CI-SG: all methods match SD version after CI→SD conversion", {
     )
 
     # From SD
-    es_sd <- summary(convert_df(res_sd,
+    es_sd <- summary(convert_df(smd_var = "hedges_olkin", res_sd,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "mean_change_sd_single_group",
@@ -863,7 +873,7 @@ test_that("MC-CI-SG: all methods match SD version after CI→SD conversion", {
     res_ci$mean_change_sd_exp <- NULL
 
     # From CI
-    es_ci <- summary(convert_df(res_ci,
+    es_ci <- summary(convert_df(smd_var = "hedges_olkin", res_ci,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "mean_change_ci_single_group",
@@ -906,7 +916,7 @@ test_that("MC-PVAL-SG: all methods match SD version after pval→t→SE→SD con
     )
 
     # From SD
-    es_sd <- summary(convert_df(res_sd,
+    es_sd <- summary(convert_df(smd_var = "hedges_olkin", res_sd,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "mean_change_sd_single_group",
@@ -929,7 +939,7 @@ test_that("MC-PVAL-SG: all methods match SD version after pval→t→SE→SD con
     )
 
     # From pval
-    es_pval <- summary(convert_df(res_pval,
+    es_pval <- summary(convert_df(smd_var = "hedges_olkin", res_pval,
       verbose = FALSE,
       es_selected = "hierarchy",
       hierarchy = "mean_change_pval_single_group",
@@ -974,7 +984,7 @@ test_that("PAIRED-T-SG: cooper matches Morris & DeShon 2002 (d + d_se)", {
   res$paired_t_exp <- mean_diff / (sd_change / sqrt(res$n_exp))
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "borenstein", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "paired_t_single_group",
@@ -1021,7 +1031,7 @@ test_that("PAIRED-T-SG: morris_dz matches metafor escalc(SMCC, ti=) (g + g_se)",
   res$paired_t_exp <- mean_diff / (sd_change / sqrt(res$n_exp))
 
   # metaConvert using convert_df
-  es_mc <- summary(convert_df(res,
+  es_mc <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "paired_t_single_group",

@@ -1,3 +1,13 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request. The
+# exception is the cooper / morris_drm blocks, whose Morris & DeShon (2002) oracle is
+# the d-scale variance 2(1-r)/n + d^2/(2n): that is the J^2-outside ("borenstein")
+# convention, so those calls request the default explicitly.
+
 # Formula Verification Tests Against Primary Literature
 # Validates that metaConvert implementations match published formulas
 # References: Bonett (2008), Cooper (2019), Morris & DeShon (2002)
@@ -46,7 +56,7 @@ test_that("bonett formula matches Bonett (2008) for single-group", {
   se_bonett_manual <- sqrt(var_bonett_manual)
 
   # metaConvert calculation
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -87,7 +97,7 @@ test_that("bonett formula with different r values", {
     var_manual <- var_g_manual / (J^2)
 
     # metaConvert
-    result <- es_from_means_sd_pre_post_single_group(
+    result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
       mean_pre, mean_post, sd_pre, sd_post, n, r,
       pre_post_to_smd = "bonett"
     )
@@ -116,7 +126,7 @@ test_that("bonett formula with variance heterogeneity", {
   var_g_manual <- sd_change^2 / (sd_pre^2 * (n - 1)) + g_manual^2 / (2 * (n - 1))
   var_manual <- var_g_manual / (J^2)
 
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
@@ -176,7 +186,7 @@ test_that("bonett two-group matches Bonett (2008) (per-arm standardizer, the poo
 
   # metaConvert calculation -- pool_sd = FALSE (the default) selects the per-arm rule
   # that the manual calculation above replicates.
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
@@ -219,7 +229,7 @@ test_that("cooper formula matches Morris & DeShon (2002) for single-group", {
   se_rm_manual <- sqrt(var_rm_manual)
 
   # metaConvert calculation
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )
@@ -247,7 +257,7 @@ test_that("cooper formula verified across r values", {
     var_rm_manual <- 2 * (1 - r) / n + d_rm_manual^2 / (2 * n)
 
     # metaConvert
-    result <- es_from_means_sd_pre_post_single_group(
+    result <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
       mean_pre, mean_post, sd_pre, sd_post, n, r,
       pre_post_to_smd = "cooper"
     )
@@ -274,7 +284,7 @@ test_that("cooper r-dependency verification", {
   r_values <- c(0.1, 0.3, 0.5, 0.7, 0.9)
 
   results <- lapply(r_values, function(r) {
-    es_from_means_sd_pre_post_single_group(
+    es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
       mean_pre, mean_post, sd_pre, sd_post, n, r,
       pre_post_to_smd = "cooper"
     )
@@ -329,7 +339,7 @@ test_that("cooper two-group matches Morris & DeShon (2002) (per-arm standardizer
   se_combined <- sqrt(var_rm_exp + var_rm_nexp)
 
   # metaConvert -- pool_sd = FALSE (the default) selects the per-arm rule replicated above.
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "borenstein", 
     mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
@@ -354,7 +364,7 @@ test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc
   n_exp <- 25; n_nexp <- 25; r_exp <- 0.7; r_nexp <- 0.7
 
   call_pp <- function(...) {
-    es_from_means_sd_pre_post(
+    es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
       mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
       mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
       n_exp, n_nexp, r_exp, r_nexp, ...
@@ -400,7 +410,7 @@ test_that("opt-in pooled standardizer (pool_sd = TRUE) divides the between-arm c
   sd_change_nexp <- sqrt(sd_pre_nexp^2 + sd_post_nexp^2 - 2 * r_nexp * sd_pre_nexp * sd_post_nexp)
 
   call_pp <- function(method) {
-    es_from_means_sd_pre_post(
+    es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
       mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
       mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
       n_exp, n_nexp, r_exp, r_nexp, pre_post_to_smd = method,
@@ -457,7 +467,7 @@ test_that("opt-in pooled morris_dz (pool_sd = TRUE) reproduces metafor::escalc(m
     n1i = n_exp, n2i = n_nexp
   )
 
-  result <- es_from_means_sd_pre_post(
+  result <- es_from_means_sd_pre_post(smd_var = "hedges_olkin", 
     mean_pre_exp, mean_exp, sd_pre_exp, sd_post_exp,
     mean_pre_nexp, mean_post_nexp, sd_pre_nexp, sd_post_nexp,
     n_exp, n_nexp, r_exp, r_nexp,
@@ -488,12 +498,12 @@ test_that("morris_drm is exact alias of cooper", {
   n <- 40
   r <- 0.75
 
-  result_cooper <- es_from_means_sd_pre_post_single_group(
+  result_cooper <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )
 
-  result_morris_drm <- es_from_means_sd_pre_post_single_group(
+  result_morris_drm <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "morris_drm"
   )
@@ -524,7 +534,7 @@ test_that("within-group mean difference formula is straightforward difference", 
   se_mdw_manual <- sqrt(var_mdw_manual)
 
   # metaConvert (works for any standardizer)
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
@@ -544,12 +554,12 @@ test_that("bonett equals cooper when sd_pre = sd_post and specific r", {
   n <- 30
   r <- 0.5
 
-  result_bonett <- es_from_means_sd_pre_post_single_group(
+  result_bonett <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd, sd, n, r,
     pre_post_to_smd = "bonett"
   )
 
-  result_cooper <- es_from_means_sd_pre_post_single_group(
+  result_cooper <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd, sd, n, r,
     pre_post_to_smd = "cooper"
   )
@@ -574,7 +584,7 @@ test_that("formulas handle r=0 correctly", {
   r <- 0
 
   # Bonett formula
-  result_bonett <- es_from_means_sd_pre_post_single_group(
+  result_bonett <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
@@ -583,7 +593,7 @@ test_that("formulas handle r=0 correctly", {
   expect_equal(result_bonett$d, d_bonett_manual, tolerance = 1e-10)
 
   # Cooper formula
-  result_cooper <- es_from_means_sd_pre_post_single_group(
+  result_cooper <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )
@@ -602,7 +612,7 @@ test_that("formulas handle r approaching 1", {
   n <- 40
   r <- 0.99
 
-  result_cooper <- es_from_means_sd_pre_post_single_group(
+  result_cooper <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )
@@ -638,7 +648,7 @@ test_that("Hedges g correction factor matches standard formula", {
   sd_post <- 10
   r <- 0.6
 
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
@@ -665,7 +675,7 @@ test_that("Hedges correction more important for small samples", {
 
   # Small sample
   n_small <- 10
-  result_small <- es_from_means_sd_pre_post_single_group(
+  result_small <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n_small, r,
     pre_post_to_smd = "bonett"
   )
@@ -675,7 +685,7 @@ test_that("Hedges correction more important for small samples", {
 
   # Large sample
   n_large <- 200
-  result_large <- es_from_means_sd_pre_post_single_group(
+  result_large <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n_large, r,
     pre_post_to_smd = "bonett"
   )
@@ -701,7 +711,7 @@ test_that("confidence intervals use correct t-distribution", {
   n <- 25
   r <- 0.7
 
-  result <- es_from_means_sd_pre_post_single_group(
+  result <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )

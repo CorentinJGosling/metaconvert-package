@@ -49,6 +49,10 @@ the person-time of disease-free observation in two independent groups.
 \strong{The formulas used to obtain the IRR and its standard error} are (Cochrane Handbook, section 6.7.1):
 \deqn{logirr = log(\frac{n\_cases\_exp / time\_exp}{n\_cases\_nexp / time\_nexp})}
 \deqn{logirr\_se = \sqrt{\frac{1}{n\_cases\_exp} + \frac{1}{n\_cases\_nexp}}}
+When either arm has zero events, 0.5 is added to both counts before the ratio and
+its standard error are computed (the \code{metafor::escalc(measure = "IRR")}
+default, and the rate analogue of the correction applied to a 2x2 table with an
+empty cell). The incidence rate difference below is computed on the raw counts.
 
 \strong{To estimate a person-time NNT} (Mayne et al., 2006), the following formulas are used:
 \deqn{ird = baseline\_rate \times (1 - irr)}

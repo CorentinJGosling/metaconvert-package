@@ -66,7 +66,7 @@
 #'   Fisher's z. So under the default a \code{measure = "z"} review holding both SMD
 #'   studies and correlation studies pools two transforms; flag E8 reports it, and
 #'   \code{smd_to_cor = "lipsey_cooper"} puts the whole pool on Fisher's z.
-#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. The standardizer is selected with \code{smd_denom}, which does change the effect size.
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default) or "hedges_olkin" (alias "viechtbauer"). The two differ by a squared small-sample-correction factor (J^2); "hedges_olkin" is a few percent larger at small samples. This choice affects the standard error only: the effect size itself is identical under both formulas. It governs the two-group SMD routes and, since 2.1.0, every pre/post and paired route as well (all four \code{pre_post_to_smd} standardizers, single-group, two-group and pooled): "hedges_olkin" reproduces \code{metafor}'s \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} variances exactly, "borenstein" applies \eqn{J^2} to the d-scale variance throughout (Borenstein et al. 2009, CMA). The standardizer is selected with \code{smd_denom}, which does change the effect size.
 #' @param smd_denom standardizer for the standardized mean difference. "pooled" (default) uses the pooled endpoint SD (Cohen's d / Hedges' g); "glass" (alias "control") uses the control (non-experimental) endpoint SD (Glass's delta); "glass_robust" (alias "control_robust") is Glass's delta with a heteroscedasticity-consistent sampling variance. Only the endpoint means family (es_from_means_sd/se/ci) honours this argument: rows whose effect size comes from any other method (t/F, cohen_d/hedges_g, eta-squared, point-biserial r, medians/ranges, plots, ANCOVA, raw mean differences) always use the pooled-SD standardizer, and a message lists the scoping when a non-pooled value is requested ("glass_robust" additionally has a single variance form, so smd_var is ignored for it).
 #' @param cor_to_smd formula used to convert a correlation coefficient value into a SMD.
 #' @param prop_to_es method used to compute the effect size from the proportion. Must be either "raw", "logit" or "freeman_tukey" (see \code{\link{es_from_prop_single_group}}).
@@ -927,7 +927,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
       r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
       smd_to_cor = smd_to_cor, reverse_means_pre_post = reverse_means_pre_post,
-      pre_post_to_smd = pre_post_to_smd,
+      pre_post_to_smd = pre_post_to_smd, smd_var = smd_var,
       pool_sd = pool_sd
     )
   )
@@ -942,7 +942,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
       r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
       smd_to_cor = smd_to_cor, reverse_means_pre_post = reverse_means_pre_post,
-      pre_post_to_smd = pre_post_to_smd,
+      pre_post_to_smd = pre_post_to_smd, smd_var = smd_var,
       pool_sd = pool_sd
     )
   )
@@ -959,7 +959,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
       r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
       smd_to_cor = smd_to_cor, reverse_means_pre_post = reverse_means_pre_post,
-      pre_post_to_smd = pre_post_to_smd,
+      pre_post_to_smd = pre_post_to_smd, smd_var = smd_var,
       pool_sd = pool_sd,
       max_asymmetry = max_asymmetry
     )
@@ -1024,7 +1024,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     pool_sd = pool_sd
   ))
   es_mean_change_se <- with(x, es_from_mean_change_se(
@@ -1034,7 +1034,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     pool_sd = pool_sd
   ))
   es_mean_change_ci <- with(x, es_from_mean_change_ci(
@@ -1046,7 +1046,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     pool_sd = pool_sd,
     max_asymmetry = max_asymmetry
   ))
@@ -1057,7 +1057,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_mean_change = reverse_mean_change,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     pool_sd = pool_sd
   ))
 
@@ -1066,7 +1066,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
     mean_pre_sd_exp = mean_pre_sd_exp, mean_sd_exp = mean_sd_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
-    pre_post_to_smd = pre_post_to_smd, smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd, smd_var = smd_var, smd_to_cor = smd_to_cor,
     reverse_means_pre_post = reverse_means_pre_post
   ))
 
@@ -1074,7 +1074,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     mean_pre_exp = mean_pre_exp, mean_exp = mean_exp,
     mean_pre_se_exp = mean_pre_se_exp, mean_se_exp = mean_se_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
-    pre_post_to_smd = pre_post_to_smd, smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd, smd_var = smd_var, smd_to_cor = smd_to_cor,
     reverse_means_pre_post = reverse_means_pre_post
   ))
 
@@ -1083,7 +1083,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     mean_pre_ci_lo_exp = mean_pre_ci_lo_exp, mean_pre_ci_up_exp = mean_pre_ci_up_exp,
     mean_ci_lo_exp = mean_ci_lo_exp, mean_ci_up_exp = mean_ci_up_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
-    pre_post_to_smd = pre_post_to_smd, smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd, smd_var = smd_var, smd_to_cor = smd_to_cor,
     max_asymmetry = max_asymmetry,
     reverse_means_pre_post = reverse_means_pre_post
   ))
@@ -1092,7 +1092,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     mean_change_exp = mean_change_exp, mean_change_sd_exp = mean_change_sd_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     reverse_mean_change = reverse_mean_change
   ))
 
@@ -1100,7 +1100,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     mean_change_exp = mean_change_exp, mean_change_se_exp = mean_change_se_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     reverse_mean_change = reverse_mean_change
   ))
 
@@ -1109,7 +1109,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     mean_change_ci_lo_exp = mean_change_ci_lo_exp, mean_change_ci_up_exp = mean_change_ci_up_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor, max_asymmetry = max_asymmetry,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     reverse_mean_change = reverse_mean_change
   ))
 
@@ -1117,14 +1117,14 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     mean_change_exp = mean_change_exp, mean_change_pval_exp = mean_change_pval_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
     smd_to_cor = smd_to_cor,
-    pre_post_to_smd = pre_post_to_smd_restricted,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var,
     reverse_mean_change = reverse_mean_change
   ))
 
   es_paired_t_sg <- with(x, es_from_paired_t_single_group(
     paired_t_exp = paired_t_exp,
     n_exp = n_exp, r_pre_post_exp = r_pre_post_exp,
-    pre_post_to_smd = pre_post_to_smd_restricted, smd_to_cor = smd_to_cor,
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var, smd_to_cor = smd_to_cor,
     reverse_paired_t = reverse_paired_t
   ))
 
@@ -1174,7 +1174,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
 
     smd_to_cor = smd_to_cor, reverse_paired_t = reverse_paired_t,
-    pre_post_to_smd = pre_post_to_smd_restricted
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var
   ))
 
   es_paired_t_pval <- with(x, es_from_paired_t_pval(
@@ -1186,7 +1186,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     smd_to_cor = smd_to_cor, reverse_paired_t_pval = reverse_paired_t_pval,
     reverse_paired_t_pval_exp = reverse_paired_t_pval_exp,
     reverse_paired_t_pval_nexp = reverse_paired_t_pval_nexp,
-    pre_post_to_smd = pre_post_to_smd_restricted
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var
   ))
 
   es_paired_f <- with(x, es_from_paired_f(paired_f_exp, paired_f_nexp,
@@ -1196,7 +1196,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     smd_to_cor = smd_to_cor, reverse_paired_f = reverse_paired_f,
     reverse_paired_f_exp = reverse_paired_f_exp,
     reverse_paired_f_nexp = reverse_paired_f_nexp,
-    pre_post_to_smd = pre_post_to_smd_restricted
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var
   ))
 
   es_paired_f_pval <- with(x, es_from_paired_f_pval(
@@ -1208,7 +1208,7 @@ convert_df <- function(x, measure = c("d", "g", "md", "dw", "gw", "mdw",
     smd_to_cor = smd_to_cor, reverse_paired_f_pval = reverse_paired_f_pval,
     reverse_paired_f_pval_exp = reverse_paired_f_pval_exp,
     reverse_paired_f_pval_nexp = reverse_paired_f_pval_nexp,
-    pre_post_to_smd = pre_post_to_smd_restricted
+    pre_post_to_smd = pre_post_to_smd_restricted, smd_var = smd_var
   ))
   # ANOVA, Student t-test  ----------------------------------------------
   es_t_student <- with(x, es_from_student_t(

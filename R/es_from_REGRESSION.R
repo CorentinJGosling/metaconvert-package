@@ -571,6 +571,7 @@ es_from_linreg_b_pval <- function(linreg_b, linreg_b_pval,
   unit_type <- .unit_type_or_raw(unit_type, length(linreg_b))
 
   df <- n_sample - n_covariates - 2
+  linreg_b_pval <- .pval_or_na(linreg_b_pval)  # se = |b / t|: p <= 0 or p >= 1 is degenerate
   linreg_t <- qt(1 - linreg_b_pval / 2, df) * sign(linreg_b)
 
   es <- es_from_linreg_t(

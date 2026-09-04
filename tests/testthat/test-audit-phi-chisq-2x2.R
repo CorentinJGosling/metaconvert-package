@@ -102,9 +102,12 @@ test_that("AUDIT-major (390): the +0.5 correction does not reach the tetrachoric
   # The correction must still apply to the OR arm, which is what the Rd documents.
   # log((0.5 * 10.5) / (20.5 * 10.5)) = log(0.5 / 20.5) = -3.7135721. Passes today and
   # must keep passing: the fix is to stop feeding the corrected cells to the solve, not
-  # to drop the correction. Also pins that the RD arm stays on the raw counts.
+  # to drop the correction. The RD arm takes the same correction as the OR/RR arms
+  # (metafor::escalc(measure = "RD") default), so it is pinned to metafor, not raw.
   expect_equal(res1$logor, log(0.5 / 20.5), tolerance = 1e-8)
-  expect_equal(res1$rd, 10 / 20 - 0 / 20, tolerance = 1e-12)
+  rd_m <- metafor::escalc(measure = "RD", ai = 0, bi = 20, ci = 10, di = 10)
+  expect_equal(res1$rd, -as.numeric(rd_m$yi), tolerance = 1e-12)
+  expect_equal(res1$rd_se, sqrt(as.numeric(rd_m$vi)), tolerance = 1e-12)
 })
 
 

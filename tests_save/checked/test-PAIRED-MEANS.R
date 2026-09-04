@@ -1,3 +1,10 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request.
+
 # Long-running file (> 25 s): executed locally and in CI (devtools::test and
 # testthat set NOT_CRAN=true); skipped wholesale on CRAN to respect check-time
 # limits. The fast pre/post files still run on CRAN.
@@ -65,7 +72,7 @@ test_that("D - Means/SD - bonett (default per-arm standardizer, pool_sd = FALSE)
              (-as.numeric(as.character(smc_nexp$yi)) / J_nexp)
   se_vd <- sqrt(smc_exp$vi / (J_exp^2) + smc_nexp$vi / J_nexp^2)
   ## metaconvert
-  es.mcv_d <- summary(convert_df(res,
+  es.mcv_d <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE,
     es_selected = "hierarchy",
     hierarchy = "means_sd_pre_post",
@@ -122,7 +129,7 @@ test_that("D - Means/SD - cooper (legacy per-arm standardizer, pool_sd = FALSE)"
     paired = TRUE, smd_ci = "t")
 
 
-  es.mcv_d <- summary(convert_df(dat,
+  es.mcv_d <- summary(convert_df(smd_var = "hedges_olkin", dat,
                                  verbose = FALSE,
                                  es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
                                  measure = "d",
@@ -181,7 +188,7 @@ test_that("G - Means/SD - bonett (legacy per-arm standardizer, pool_sd = FALSE)"
   smcc_vg <- (-as.numeric(as.character(smc_exp$yi))) - (-as.numeric(as.character(smc_nexp$yi)))
   se_vg <- sqrt(smc_exp$vi + smc_nexp$vi)
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g",
     smd_to_cor = "viechtbauer",
     pre_post_to_smd = "bonett",
@@ -234,7 +241,7 @@ test_that("G - Means/SD - cooper (legacy per-arm standardizer, pool_sd = FALSE)"
     paired = TRUE, smd_ci = "t")
 
 
-  es.mcv_d <- summary(convert_df(dat,
+  es.mcv_d <- summary(convert_df(smd_var = "hedges_olkin", dat,
                                  verbose = FALSE,
                                  es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
                                  measure = "g",
@@ -302,7 +309,7 @@ test_that("G - SE - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
   se_vg <- sqrt(smc_exp$vi + smc_nexp$vi)
 
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g",
     smd_to_cor = "viechtbauer",
     pre_post_to_smd = "bonett",
@@ -375,7 +382,7 @@ test_that("G - CI - bonett (legacy per-arm standardizer, pool_sd = FALSE)", {
   smcc_vg <- (-as.numeric(as.character(smc_exp$yi))) - (-as.numeric(as.character(smc_nexp$yi)))
   se_vg <- sqrt(smc_exp$vi + smc_nexp$vi)
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g",
     smd_to_cor = "viechtbauer",
     pre_post_to_smd = "bonett",
@@ -429,7 +436,7 @@ test_that("MD - SD", {
   se_md <- sqrt(smc_exp_md$vi + smc_nexp_md$vi)
 
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
     measure = "md"
   ), digits = 11)
@@ -487,7 +494,7 @@ test_that("MD - SE", {
   se_md <- sqrt(smc_exp_md$vi + smc_nexp_md$vi)
 
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_se_pre_post",
     measure = "md"
   ), digits = 11)
@@ -554,7 +561,7 @@ test_that("MD - CI", {
   se_md <- sqrt(smc_exp_md$vi + smc_nexp_md$vi)
 
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_ci_pre_post",
     measure = "md"
   ), digits = 11)
@@ -593,11 +600,11 @@ test_that("D - pre/post v change", {
       2 * res$r_pre_post_nexp * res$mean_pre_sd_nexp * res$mean_sd_nexp)
 
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
     pre_post_to_smd = "cooper", measure = "d"
   ), digits = 11)
-  es.mcv_g_c <- summary(convert_df(res,
+  es.mcv_g_c <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd",
     measure = "d"
   ), digits = 11)
@@ -633,11 +640,11 @@ test_that("G - pre/post v change", {
       2 * res$r_pre_post_nexp * res$mean_pre_sd_nexp * res$mean_sd_nexp)
 
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
     pre_post_to_smd = "cooper", measure = "g"
   ), digits = 11)
-  es.mcv_g_c <- summary(convert_df(res,
+  es.mcv_g_c <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd",
     measure = "g"
   ), digits = 11)
@@ -673,11 +680,11 @@ test_that("MD - pre/post v change", {
       2 * res$r_pre_post_nexp * res$mean_pre_sd_nexp * res$mean_sd_nexp)
 
   ## metaconvert
-  es.mcv_g <- summary(convert_df(res,
+  es.mcv_g <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "means_sd_pre_post",
     pre_post_to_smd = "cooper", measure = "md"
   ), digits = 11)
-  es.mcv_g_c <- summary(convert_df(res,
+  es.mcv_g_c <- summary(convert_df(smd_var = "hedges_olkin", res,
     verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd",
     measure = "md"
   ), digits = 11)
@@ -726,55 +733,55 @@ test_that("REVERSE - pre/post - BONNETT", {
   res$reverse_means_pre_post <- FALSE
   dat <- res
 
-  es.mcv_m_sd_md <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_se_md <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_ci_md <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_sd_md <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_se_md <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_ci_md <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
 
-  es.mcv_m_sd_d <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_se_d <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_ci_d <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_sd_d <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_se_d <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_ci_d <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
 
-  es.mcv_m_sd_g <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_se_g <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_ci_g <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_sd_g <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_se_g <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_ci_g <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
 
-  es.mcv_m_sd_r <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_se_r <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_ci_r <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_sd_r <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_se_r <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_ci_r <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
 
-  es.mcv_m_sd_z <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_se_z <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_ci_z <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_sd_z <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_se_z <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_ci_z <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
 
-  es.mcv_m_sd_or <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_se_or <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_ci_or <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_sd_or <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_se_or <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_ci_or <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
 
   dat$reverse_means_pre_post <- TRUE
 
-  es.mcv_m_sd_md_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_se_md_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_ci_md_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_sd_md_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_se_md_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_ci_md_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
 
-  es.mcv_m_sd_d_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_se_d_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_ci_d_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_sd_d_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_se_d_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_ci_d_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
 
-  es.mcv_m_sd_g_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_se_g_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_ci_g_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_sd_g_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_se_g_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_ci_g_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
 
-  es.mcv_m_sd_r_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_se_r_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_ci_r_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_sd_r_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_se_r_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_ci_r_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
 
-  es.mcv_m_sd_z_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_se_z_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_ci_z_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_sd_z_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_se_z_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_ci_z_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
 
-  es.mcv_m_sd_or_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_se_or_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_ci_or_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_sd_or_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_se_or_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_ci_or_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "bonett",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
 
   expect_equal(es.mcv_m_sd_d$info_used_crude, es.mcv_m_sd_d_rv$info_used_crude)
   expect_equal(es.mcv_m_sd_d$es_crude, -es.mcv_m_sd_d_rv$es_crude, tolerance = 1e-10)
@@ -861,55 +868,55 @@ test_that("REVERSE - pre/post - COOPER", {
   res$reverse_means_pre_post <- FALSE
   dat <- res
 
-  es.mcv_m_sd_md <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_se_md <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_ci_md <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_sd_md <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_se_md <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_ci_md <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
 
-  es.mcv_m_sd_d <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_se_d <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_ci_d <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_sd_d <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_se_d <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_ci_d <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
 
-  es.mcv_m_sd_g <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_se_g <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_ci_g <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_sd_g <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_se_g <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_ci_g <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
 
-  es.mcv_m_sd_r <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_se_r <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_ci_r <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_sd_r <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_se_r <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_ci_r <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
 
-  es.mcv_m_sd_z <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_se_z <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_ci_z <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_sd_z <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_se_z <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_ci_z <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
 
-  es.mcv_m_sd_or <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_se_or <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_ci_or <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_sd_or <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_se_or <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_ci_or <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
 
   dat$reverse_means_pre_post <- TRUE
 
-  es.mcv_m_sd_md_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_se_md_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
-  es.mcv_m_ci_md_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_sd_md_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_se_md_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "md"), digits = 11)
+  es.mcv_m_ci_md_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "md"), digits = 11)
 
-  es.mcv_m_sd_d_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_se_d_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
-  es.mcv_m_ci_d_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_sd_d_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_se_d_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "d"), digits = 11)
+  es.mcv_m_ci_d_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "d"), digits = 11)
 
-  es.mcv_m_sd_g_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_se_g_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
-  es.mcv_m_ci_g_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_sd_g_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_se_g_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "g"), digits = 11)
+  es.mcv_m_ci_g_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "g"), digits = 11)
 
-  es.mcv_m_sd_r_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_se_r_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
-  es.mcv_m_ci_r_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_sd_r_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_se_r_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "r"), digits = 11)
+  es.mcv_m_ci_r_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "r"), digits = 11)
 
-  es.mcv_m_sd_z_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_se_z_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
-  es.mcv_m_ci_z_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_sd_z_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_se_z_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "z"), digits = 11)
+  es.mcv_m_ci_z_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "z"), digits = 11)
 
-  es.mcv_m_sd_or_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_se_or_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
-  es.mcv_m_ci_or_rv <- summary(convert_df(dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_sd_or_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_sd_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_se_or_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_se_pre_post", measure = "logor"), digits = 11)
+  es.mcv_m_ci_or_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, pre_post_to_smd = "cooper",es_selected = "hierarchy", hierarchy = "means_ci_pre_post", measure = "logor"), digits = 11)
 
   expect_equal(es.mcv_m_sd_d$info_used_crude, es.mcv_m_sd_d_rv$info_used_crude)
   expect_equal(es.mcv_m_sd_d$es_crude, -es.mcv_m_sd_d_rv$es_crude, tolerance = 1e-10)
@@ -985,21 +992,21 @@ test_that("REVERSE - change - bonett", {
       2 * res$r_pre_post_nexp * res$mean_pre_sd_nexp * res$mean_sd_nexp)
   dat <- res
 
-  es.mcv_m_sd_md <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "md"), digits = 11)
-  es.mcv_m_sd_d <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "d"), digits = 11)
-  es.mcv_m_sd_g <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "g"), digits = 11)
-  es.mcv_m_sd_r <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "r"), digits = 11)
-  es.mcv_m_sd_z <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "z"), digits = 11)
-  es.mcv_m_sd_or <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "logor"), digits = 11)
+  es.mcv_m_sd_md <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "md"), digits = 11)
+  es.mcv_m_sd_d <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "d"), digits = 11)
+  es.mcv_m_sd_g <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "g"), digits = 11)
+  es.mcv_m_sd_r <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "r"), digits = 11)
+  es.mcv_m_sd_z <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "z"), digits = 11)
+  es.mcv_m_sd_or <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "logor"), digits = 11)
 
   dat$reverse_mean_change <- TRUE
 
-  es.mcv_m_sd_md_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "md"), digits = 11)
-  es.mcv_m_sd_d_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "d"), digits = 11)
-  es.mcv_m_sd_g_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "g"), digits = 11)
-  es.mcv_m_sd_r_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "r"), digits = 11)
-  es.mcv_m_sd_z_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "z"), digits = 11)
-  es.mcv_m_sd_or_rv <- summary(convert_df(dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "logor"), digits = 11)
+  es.mcv_m_sd_md_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "md"), digits = 11)
+  es.mcv_m_sd_d_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "d"), digits = 11)
+  es.mcv_m_sd_g_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "g"), digits = 11)
+  es.mcv_m_sd_r_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "r"), digits = 11)
+  es.mcv_m_sd_z_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "z"), digits = 11)
+  es.mcv_m_sd_or_rv <- summary(convert_df(smd_var = "hedges_olkin", dat, verbose = FALSE, es_selected = "hierarchy", hierarchy = "mean_change_sd", measure = "logor"), digits = 11)
 
   expect_equal(es.mcv_m_sd_d$info_used_crude, es.mcv_m_sd_d_rv$info_used_crude)
   expect_equal(es.mcv_m_sd_d$es_crude, -es.mcv_m_sd_d_rv$es_crude, tolerance = 1e-10)

@@ -1,3 +1,13 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request. The
+# exception is the cooper / morris_drm blocks, whose Morris & DeShon (2002) oracle is
+# the d-scale variance 2(1-r)/n + d^2/(2n): that is the J^2-outside ("borenstein")
+# convention, so those calls request the default explicitly.
+
 # External Validation Against metafor, TOSTER Packages
 # Tests effect sizes AND standard errors for all supported standardizers
 # This file systematically documents which methods are validated against which packages
@@ -43,7 +53,7 @@ test_that("metafor::SMCRPH matches morris_dav two-group (ES + SE)", {
   se_exp_metafor <- sqrt(as.numeric(result_mf_exp$vi))
 
   # metaConvert single-group with morris_dav (average SD standardizer)
-  result_mc_exp <- es_from_means_sd_pre_post_single_group(
+  result_mc_exp <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp, mean_post_exp, sd_pre_exp, sd_post_exp, n_exp, r_exp,
     pre_post_to_smd = "morris_dav"
   )
@@ -64,7 +74,7 @@ test_that("metafor::SMCRP matches morris_dav single-group (ES + SE)", {
   n <- 25; r <- 0.7
 
   # metaConvert with morris_dav
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "morris_dav"
   )
@@ -94,7 +104,7 @@ test_that("metafor::MN matches mean change single-group (ES + SE)", {
   n <- 30
 
   # metaConvert
-  result_mc <- es_from_mean_change_sd_single_group(
+  result_mc <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n
@@ -125,7 +135,7 @@ test_that("metafor::MC matches mean change two-group (ES + SE)", {
   n_nexp <- 28
 
   # metaConvert
-  result_mc <- es_from_mean_change_sd(
+  result_mc <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change_exp,
     mean_change_sd_exp = sd_change_exp,
     n_exp = n_exp,
@@ -182,7 +192,7 @@ test_that("metafor::SMD on change scores matches pooled two-group morris_dz (opt
   # handed the change scores as if they were two independent groups -- so metafor
   # is a genuine external comparator here, not a restatement of metaConvert's own
   # formula. pool_sd is passed EXPLICITLY: the package default is pool_sd = FALSE.
-  result_pooled <- es_from_mean_change_sd(
+  result_pooled <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
     mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
     pool_sd = TRUE, pre_post_to_smd = "morris_dz"
@@ -229,14 +239,14 @@ test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc
   mean_change_nexp <- 2.8; sd_change_nexp <- 4.5; n_nexp <- 28
 
   # No pool_sd argument -> whatever the package default is.
-  result_default <- es_from_mean_change_sd(
+  result_default <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
     mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
     pre_post_to_smd = "morris_dz"
   )
 
   # ... must be bit-identical to the EXPLICIT per-arm path.
-  result_perarm <- es_from_mean_change_sd(
+  result_perarm <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
     mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
     pool_sd = FALSE, pre_post_to_smd = "morris_dz"
@@ -250,7 +260,7 @@ test_that("pool_sd defaults to FALSE (per-arm d_ppc1, Becker 1988 / Morris d_ppc
   # 4.5), so d_ppc1 and d_ppc2 target different estimands and the two must
   # genuinely diverge. (They coincide only when the true arm SDs are equal.) This
   # is the assertion that would catch a silent re-flip of the default back to TRUE.
-  result_pooled <- es_from_mean_change_sd(
+  result_pooled <- es_from_mean_change_sd(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change_exp, mean_change_sd_exp = sd_change_exp, n_exp = n_exp,
     mean_change_nexp = mean_change_nexp, mean_change_sd_nexp = sd_change_nexp, n_nexp = n_nexp,
     pool_sd = TRUE, pre_post_to_smd = "morris_dz"
@@ -305,7 +315,7 @@ test_that("metafor::SMCRH matches bonett single-group (ES + SE)", {
   r <- 0.7
 
   # metaConvert with bonett standardizer (uses baseline SD)
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -400,7 +410,7 @@ test_that("TOSTER::smd_calc(rm_correction=TRUE) matches cooper single-group (ES 
   )
 
   # Step 3b: metaConvert using summary statistics (from same data)
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )
@@ -457,7 +467,7 @@ test_that("TOSTER::smd_calc(av) matches morris_dav single-group (ES + SE)", {
 
   # Step 3b: metaConvert using summary statistics (from same data)
   # Use morris_dz to match TOSTER's default dz method
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "morris_dz"
   )
@@ -505,7 +515,7 @@ test_that("TOSTER::smd_calc(z/dz) matches morris_dz single-group (ES + SE)", {
   )
 
   # Step 3b: metaConvert using summary statistics (from same data)
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "morris_dz"
   )
@@ -531,7 +541,7 @@ test_that("cooper matches Morris & DeShon (2002) manual formula (ES + SE)", {
   n <- 30; r <- 0.6
 
   # metaConvert
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "borenstein", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "cooper"
   )
@@ -555,7 +565,7 @@ test_that("bonett matches Bonett (2008) manual formula (ES + SE)", {
   n <- 25; r <- 0.7
 
   # metaConvert
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "bonett"
   )
@@ -585,7 +595,7 @@ test_that("morris_dav matches metafor SMCRP (live escalc + manual formula, ES + 
   n <- 28; r <- 0.68
 
   # metaConvert
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "morris_dav"
   )
@@ -648,7 +658,7 @@ test_that("morris_dz matches metafor SMCC (live escalc + manual formula, ES + SE
   n <- 35; r <- 0.62
 
   # metaConvert
-  result_mc <- es_from_means_sd_pre_post_single_group(
+  result_mc <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre, mean_post, sd_pre, sd_post, n, r,
     pre_post_to_smd = "morris_dz"
   )

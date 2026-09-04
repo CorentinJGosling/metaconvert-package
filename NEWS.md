@@ -81,6 +81,73 @@ What moves, and roughly by how much:
   row: `g = 0.0727` under the route default against `0.2887` for the requested `r = 0.3`.
 - **`or_pval` of exactly 1** joins 0 as unusable: `qnorm(1/2)` is 0, so the recovered
   standard error is infinite and the interval unbounded.
+- **A correlation entered through `user_es_*` with a confidence interval**: the
+  precision is now read on the Fisher-z scale, not the r scale. A correlation CI is
+  almost always `tanh(z +/- 1.96/sqrt(n - 3))` -- asymmetric on the r scale -- and taking
+  its r-scale half-width as the SE and delta-mapping that to z did not return
+  `1/sqrt(n - 3)`: at n = 30 the Fisher's z standard error came out 0.966x (r = .3) to
+  1.067x (r = .9) of the correct value, inverse-variance weights 7% too large to 12%
+  too small, and the z interval was shifted. Transforming the bounds first reproduces
+  `1/sqrt(n - 3)` exactly; the r-scale SE is its delta-method image, and a CI-only
+  point estimate is the centre on the z scale rather than the arithmetic midpoint of
+  the r bounds. A user-supplied SE is untouched.
+- **Incidence rate ratio with zero events in either arm**: `es_from_cases_time()`
+  returned `logirr = -Inf` (or `+Inf`) with `se = Inf`, so the row reached `summary()`
+  as an estimate of 0 with an infinite standard error and was lost. Both counts now
+  receive +0.5 when either is zero, the `metafor::escalc(measure = "IRR")` default and
+  the rate analogue of the correction the 2x2 route already applies: 0 versus 14 events
+  over equal person-time now returns `-3.367 (se 1.438)`, matching metafor. The rate
+  difference and the person-time NNT stay on the raw counts.
+- **`es_from_pearson_r()` / `es_from_fisher_z()` / `es_from_spearman_rho()` with arm
+  sizes**: under `cor_to_smd = "viechtbauer"` (the default) the r -> d map inverted the
+  biserial correlation at a 50/50 split even when `n_exp` and `n_nexp` were supplied
+  (they reached only the standard error and Hedges' J). A d of 0.5 converted to r at
+  20/80 and back came out 0.467 (-6.6%), and 0.421 (-15.9%) at 10/90. Supplied arm sizes
+  are now handed to `metafor::transf.rtod()`, whose inversion is then exact; rows with
+  `n_sample` alone are unchanged. The same applies to a `user_es_*` correlation.
+- **Pre/post and paired standard errors now follow `smd_var` on every branch.** The
+  `morris_drm` branch of the single-group kernel (the default for mean-change and paired
+  t/F data) applied Hedges' J-squared to its whole variance (Borenstein) while the
+  `morris_dz`, `bonett` and `morris_dav` branches used metafor's form, so at
+  `r_pre_post = 0.5` the two raw-score branches returned the same estimate with standard
+  errors differing by 19% at n = 5 and 3% at n = 25, and the documented identity
+  `Var(d_rm) = 2(1 - r) Var(d_z)` did not hold. All four branches, single-group, two-group
+  and pooled, and all 17 pre/post and paired routes now read `smd_var`, as the two-group
+  routes already did: under the default `"borenstein"` every branch is
+  `J^2 (L + d^2 C)`, so the `morris_dz`/`bonett`/`morris_dav` standard errors shrink by J
+  (about 3% at n = 10, under 1% at n = 50); under `"hedges_olkin"` every branch is
+  bit-exact with `metafor::escalc(measure = "SMCC"/"SMCR"/"SMCRH"/"SMCRPH")`.
+- **Confidence intervals of correlations** are the back-transformed Fisher-z interval
+  on every route (`tanh(z +/- 1.96 z_se)`, the construction of `cor.test()`, metafor
+  and CMA). `es_from_pearson_r()`, `es_from_fisher_z()`, `es_from_spearman_rho()`, a
+  `user_es_*` correlation and the `smd_to_cor = "lipsey_cooper"` branch returned
+  `r +/- t se` on the r scale, which leaves [-1, 1] at small n: `r = -0.226, n = 5`
+  gave `[-1.74, 1.28]`, `r = 0.85, n = 8` gave `[0.59, 1.11]`. The other correlation
+  routes already back-transformed. The `[INFO]` "Wald interval escapes the parameter
+  space" flag now fires only on a user-supplied interval, which is handed back as
+  entered.
+- **Odds ratio to risk ratio: the reconstructed 2x2 table is no longer rounded to whole
+  counts unconditionally.** A reported OR of 2.00 on margins 40/60 and 30/70 admits no
+  integer table; rounding replaced it with 16/24/14/46, whose odds ratio is 2.19, and
+  the risk ratio inherited the error (log RR 0.539 against 0.477). A whole-count table
+  is now taken only when its odds ratio rounds back to the reported one at the reported
+  precision -- so a table printed to 2 or 3 decimals is still recovered exactly (97% and
+  100% of the time), a continuity-corrected table still comes back with its
+  half-integer cells, and an adjusted or otherwise non-integer OR keeps the exact root.
+- **Risk difference from a 2x2 table with an empty cell** takes the same +0.5 correction
+  as the odds ratio and the risk ratio, matching `metafor::escalc(measure = "RD")`
+  (`add = 1/2, to = "only0"`). On the raw counts the empty arm contributed exactly 0 to
+  the variance (`0/59` vs `8/48` returned se 0.0468 against metafor's 0.0490), and a
+  double-zero table returned `NA` where metafor returns a finite estimate. Tables
+  without an empty cell are unchanged.
+- **Degenerate p-values on every p-value route**, not only `or_pval`: `p <= 0` (the
+  numeric transcription of "p < .001") inverted to an infinite statistic -- `d = Inf`
+  with `se = Inf` on the t/F/point-biserial/paired-t/chi-square routes -- and `p >= 1`
+  to an infinite standard error on the `rr`, `rd`, `md`, `ancova_md`, `mean_change`
+  and `linreg_b` routes. Both now return `NA`. A `p` of exactly 1 is kept where it is
+  the ordinary boundary `t = 0` / `chi-square = 0` (a null estimate with a finite
+  standard error). The guard lives in the routes, so direct callers get the same
+  behaviour as `convert_df()`.
 
 Diagnostic checks that now behave differently (metaDETECT):
 

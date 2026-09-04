@@ -103,6 +103,11 @@
                  es_val - qnorm(.975) * se_val, NA_real_)
   z_up <- ifelse(additive & !is.na(es_val) & !is.na(se_val),
                  es_val + qnorm(.975) * se_val, NA_real_)
+  # A correlation entered with an SE and no CI: back-transformed Fisher interval
+  # rather than r +/- 1.96 se, which can leave [-1, 1] (see es_from_pearson_r()).
+  is_r <- orig == "r" & !is.na(es_val) & !is.na(se_val) & abs(es_val) < 1
+  z_lo <- ifelse(is_r, tanh(atanh(es_val) - qnorm(.975) * se_val / (1 - es_val^2)), z_lo)
+  z_up <- ifelse(is_r, tanh(atanh(es_val) + qnorm(.975) * se_val / (1 - es_val^2)), z_up)
 
   lo_raw <- ifelse(user_gave_ci, ifelse(natural_ratio, log_lo, user_ci_lo), z_lo)
   up_raw <- ifelse(user_gave_ci, ifelse(natural_ratio, log_up, user_ci_up), z_up)
@@ -111,6 +116,43 @@
   # inverted interval without also emitting a negative SE. See R/internal_guards.R.
   list(lo = .ci_lower(lo_raw, up_raw), up = .ci_upper(lo_raw, up_raw),
        user_gave_ci = user_gave_ci)
+}
+
+# A user-entered correlation with a confidence interval: recover the precision on
+# the Fisher-z scale, not the r scale.
+#
+# A correlation CI is almost always tanh(z +/- 1.96/sqrt(n - 3)) (cor.test, SPSS,
+# metafor), i.e. asymmetric on the r scale. The generic CI fallback takes the r-scale
+# half-width as the SE, and the "r" dispatch branch then delta-maps it to z as
+# r_se / (1 - r^2). That does NOT return 1/sqrt(n - 3): measured at n = 30 the z SE
+# came out 0.966x (r = .3) to 1.067x (r = .9) of the exact value -- inverse-variance
+# weights 7% too large to 12% too small -- and the rebuilt z interval was shifted
+# ([1.070, 1.875] against atanh(bounds) [1.095, 1.849] at r = .9). Transforming the
+# BOUNDS first reproduces 1/sqrt(n - 3) exactly, which is the "CI read at the bounds"
+# rule the omega and ICC routes already apply.
+#
+# The r-scale se stored here is the delta-method image of that z SE, so the "r"
+# branch, which rebuilds z_se as r_se / (1 - r^2), recovers the bound-based z SE
+# unchanged; d/g derived through .cor_to_smd_vec() inherit the corrected r_se too.
+# A missing point estimate is the centre on the z scale, tanh(mean(atanh(bounds))),
+# the correlation analogue of the geometric centre used for the ratio measures.
+# Bounds at or beyond +/-1 have no z image and are left to the generic fallback (and
+# to the B1/V-bounds checks). A user-supplied se is never overwritten.
+.user_cor_from_ci <- function(orig_type, user_es, user_se, user_ci_lo, user_ci_up,
+                              es_val, se_val) {
+  idx <- which(orig_type == "r" &
+                 !is.na(user_ci_lo) & !is.na(user_ci_up) &
+                 abs(user_ci_lo) < 1 & abs(user_ci_up) < 1 &
+                 (is.na(user_se) | is.na(user_es)))
+  if (length(idx) == 0) return(list(es = es_val, se = se_val))
+  z_lo <- .ci_lower(atanh(user_ci_lo[idx]), atanh(user_ci_up[idx]))
+  z_up <- .ci_upper(atanh(user_ci_lo[idx]), atanh(user_ci_up[idx]))
+  es_val[idx] <- ifelse(is.na(user_es[idx]), tanh((z_lo + z_up) / 2), user_es[idx])
+  z_se <- .ci_width(z_lo, z_up) / (2 * qnorm(.975))
+  se_val[idx] <- ifelse(is.na(user_se[idx]),
+                        z_se * (1 - es_val[idx]^2),
+                        se_val[idx])
+  list(es = es_val, se = se_val)
 }
 
 # Hedges' small-sample correction for the WITHIN-SUBJECT user-input branches.
@@ -269,7 +311,10 @@
           sd_iv = NA, unit_increase_iv = NA, unit_type = NA,
           # nn drops the rows with no se or no n, so the method column has to be
           # read at those row indices, not recycled onto the survivors.
-          cor_to_smd = cor_to_smd[nn])
+          cor_to_smd = cor_to_smd[nn],
+          # supplied arm sizes only, never the n_s / 2 back-fill (see .rtod_delta())
+          n_exp = ifelse(!is.na(n_exp[nn]) & !is.na(n_nexp[nn]), n_exp[nn], NA_real_),
+          n_nexp = ifelse(!is.na(n_exp[nn]) & !is.na(n_nexp[nn]), n_nexp[nn], NA_real_))
         d_val[nn] <- unlist(d_res[, 1])
         d_se_val[nn] <- unlist(d_res[, 2])
       }
@@ -280,14 +325,16 @@
 
       es$r <- r
       es$r_se <- r_se_user
-      es$r_ci_lo <- r - qt(.975, n_s - 2) * r_se_user
-      es$r_ci_up <- r + qt(.975, n_s - 2) * r_se_user
       z_val <- atanh(r)
       z_se_val <- r_se_user / (1 - r^2)
       es$z <- z_val
       es$z_se <- z_se_val
       es$z_ci_lo <- z_val - qnorm(.975) * z_se_val
       es$z_ci_up <- z_val + qnorm(.975) * z_se_val
+      # r interval = back-transformed z interval (see es_from_pearson_r()); a
+      # user-supplied r CI is restored verbatim by .user_preserved_ci() afterwards
+      es$r_ci_lo <- tanh(es$z_ci_lo)
+      es$r_ci_up <- tanh(es$z_ci_up)
       es
     },
     "z" = {
@@ -307,7 +354,10 @@
           sd_iv = NA, unit_increase_iv = NA, unit_type = NA,
           # nn drops the rows with no se or no n, so the method column has to be
           # read at those row indices, not recycled onto the survivors.
-          cor_to_smd = cor_to_smd[nn])
+          cor_to_smd = cor_to_smd[nn],
+          # supplied arm sizes only, never the n_s / 2 back-fill (see .rtod_delta())
+          n_exp = ifelse(!is.na(n_exp[nn]) & !is.na(n_nexp[nn]), n_exp[nn], NA_real_),
+          n_nexp = ifelse(!is.na(n_exp[nn]) & !is.na(n_nexp[nn]), n_nexp[nn], NA_real_))
         d_val[nn] <- unlist(d_res[, 1])
         d_se_val[nn] <- unlist(d_res[, 2])
       }
@@ -318,12 +368,12 @@
 
       es$r <- r
       es$r_se <- r_se_user
-      es$r_ci_lo <- r - qt(.975, n_s - 2) * r_se_user
-      es$r_ci_up <- r + qt(.975, n_s - 2) * r_se_user
       es$z <- z_user
       es$z_se <- z_se_user
       es$z_ci_lo <- z_user - qnorm(.975) * z_se_user
       es$z_ci_up <- z_user + qnorm(.975) * z_se_user
+      es$r_ci_lo <- tanh(es$z_ci_lo)
+      es$r_ci_up <- tanh(es$z_ci_up)
       es
     },
     "rd" = {
@@ -712,6 +762,12 @@ es_from_user_crude <- function(user_es_original_measure_crude,
   # and two [INVALID] flags, so the only defensible answer here is to refuse the SE as
   # well: NA leaves the row visible and unpooled, which is the package's convention for
   # an estimate whose precision could not be recovered.
+  # r: the reported interval is read on the Fisher-z scale, not the r scale. See
+  # .user_cor_from_ci().
+  cor_fix <- .user_cor_from_ci(orig_type, user_es_crude, user_se_crude,
+                               user_ci_lo_crude, user_ci_up_crude, es_val, se_val)
+  es_val <- cor_fix$es; se_val <- cor_fix$se
+
   ratio_ci_bad <- orig_type %in% c("or", "rr", "irr", "hr", "logor", "logrr",
                                    "logirr", "loghr") &
                    is.na(user_se_crude) &
@@ -1085,6 +1141,11 @@ es_from_user_adj <- function(user_es_original_measure_adj,
   # and two [INVALID] flags, so the only defensible answer here is to refuse the SE as
   # well: NA leaves the row visible and unpooled, which is the package's convention for
   # an estimate whose precision could not be recovered.
+  # See es_from_user_crude() and .user_cor_from_ci().
+  cor_fix <- .user_cor_from_ci(orig_type, user_es_adj, user_se_adj,
+                               user_ci_lo_adj, user_ci_up_adj, es_val, se_val)
+  es_val <- cor_fix$es; se_val <- cor_fix$se
+
   ratio_ci_bad <- orig_type %in% c("or", "rr", "irr", "hr", "logor", "logrr",
                                    "logirr", "loghr") &
                    is.na(user_se_adj) &

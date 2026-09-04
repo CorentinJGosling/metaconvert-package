@@ -130,6 +130,27 @@
 # Full width of an interval, robust to transposed bounds.
 .ci_width <- function(ci_lo, ci_up) abs(ci_up - ci_lo)
 
+# A p-value that cannot be inverted.
+#
+# p <= 0 -- what "p < .001" becomes when it is transcribed as a number -- sends the
+# inverted statistic to +Inf on every route: the t/F/point-biserial/paired-t routes
+# then return d = Inf with se = Inf, and the ratio routes an se of exactly 0, i.e. an
+# infinite inverse-variance weight. Neutralised on every p-value route, so that the
+# exported routes (called directly by metaumbrella) behave as convert_df() does and
+# do not depend on the caller's own screening.
+#
+# p >= 1 is degenerate only where the standard error is recovered as |estimate / z|:
+# qnorm(1/2) = 0, so se = Inf and the interval is unbounded (or, rr, rd, md,
+# ancova_md, mean_change, linreg_b). On the routes that invert p into a STATISTIC
+# (student t, ANOVA F, ANCOVA t/F, paired t, point-biserial, chi-square) p = 1 is the
+# ordinary boundary t = 0 / chi-square = 0 -- an effect size of exactly zero with a
+# finite standard error -- and is kept; `se_from_ratio = FALSE` selects that case.
+.pval_or_na <- function(p, se_from_ratio = TRUE) {
+  if (is.null(p) || length(p) == 0) return(p)
+  bad <- !is.na(p) & (p <= 0 | (se_from_ratio & p >= 1))
+  ifelse(bad, NA_real_, p)
+}
+
 # Lower / upper bound of an interval, robust to transposed bounds. Used where
 # the bounds are handed straight to the output instead of being rebuilt from a
 # standard error.

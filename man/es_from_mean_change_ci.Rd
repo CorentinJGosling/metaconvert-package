@@ -17,6 +17,7 @@ es_from_mean_change_ci(
   n_nexp,
   max_asymmetry = 10,
   smd_to_cor = "viechtbauer",
+  smd_var = "borenstein",
   pre_post_to_smd = "cooper",
   pool_sd = FALSE,
   reverse_mean_change
@@ -46,6 +47,8 @@ es_from_mean_change_ci(
 \item{max_asymmetry}{A percentage indicating the tolerance before detecting asymmetry in the 95\% CI bounds.}
 
 \item{smd_to_cor}{formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).}
+
+\item{smd_var}{name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.}
 
 \item{pre_post_to_smd}{formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).}
 

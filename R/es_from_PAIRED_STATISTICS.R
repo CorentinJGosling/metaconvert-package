@@ -7,6 +7,7 @@
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_t a logical value indicating whether the direction of generated effect sizes should be flipped.
 #'
@@ -70,7 +71,7 @@
 #' es_from_paired_t(paired_t_exp = 2.1, paired_t_nexp = 4.2, n_exp = 20, n_nexp = 22)
 es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
                              r_pre_post_exp, r_pre_post_nexp,
-                             smd_to_cor = "viechtbauer",
+                             smd_to_cor = "viechtbauer", smd_var = "borenstein",
                              pre_post_to_smd = "cooper",
                              reverse_paired_t) {
   if (missing(reverse_paired_t)) reverse_paired_t <- rep(FALSE, length(paired_t_exp))
@@ -97,8 +98,9 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
   # .single_group_pre_post_to_smd() rather than written out again here, so that the
   # paired-t and mean-change routes return identical SEs by construction rather than by
   # both copies being kept in step.
-  res_exp  <- .paired_t_to_smd(paired_t_exp,  n_exp,  r_pre_post_exp,  pre_post_to_smd)
-  res_nexp <- .paired_t_to_smd(paired_t_nexp, n_nexp, r_pre_post_nexp, pre_post_to_smd)
+  smd_var_k <- .normalize_smd_var(smd_var)
+  res_exp  <- .paired_t_to_smd(paired_t_exp,  n_exp,  r_pre_post_exp,  pre_post_to_smd, smd_var_k)
+  res_nexp <- .paired_t_to_smd(paired_t_nexp, n_nexp, r_pre_post_nexp, pre_post_to_smd, smd_var_k)
 
   d_exp <- res_exp[, "d"];   d_var_exp <- res_exp[, "var_d"]
   d_nexp <- res_nexp[, "d"]; d_var_nexp <- res_nexp[, "var_d"]
@@ -110,7 +112,7 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
 
   es <- .es_from_d(
     d = d, d_se = d_se, n_exp = n_exp, n_nexp = n_nexp,
-    smd_to_cor = smd_to_cor, reverse = reverse_paired_t
+    smd_to_cor = smd_to_cor, smd_var = smd_var, reverse = reverse_paired_t
   )
 
   es$g <- ifelse(reverse_paired_t, g_nexp - g_exp, g_exp - g_nexp)
@@ -131,6 +133,7 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_t_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #' @param reverse_paired_t_pval_exp a logical value indicating that the experimental/exposed group changed in the
@@ -211,7 +214,7 @@ es_from_paired_t <- function(paired_t_exp, paired_t_nexp, n_exp, n_nexp,
 #' es_from_paired_t_pval(paired_t_pval_exp = 0.4, paired_t_pval_nexp = 0.01, n_exp = 19, n_nexp = 22)
 es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, n_nexp,
                                   r_pre_post_exp, r_pre_post_nexp,
-                                  smd_to_cor = "viechtbauer",
+                                  smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                   pre_post_to_smd = "cooper",
                                   reverse_paired_t_pval,
                                   reverse_paired_t_pval_exp,
@@ -231,6 +234,9 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
   if (missing(r_pre_post_exp)) r_pre_post_exp <- rep(0.8, length(paired_t_pval_exp))
   r_pre_post_exp[is.na(r_pre_post_exp)] <- 0.8
 
+  # p <= 0 inverts to t = Inf; p = 1 is the ordinary t = 0 and is kept (see .pval_or_na()).
+  paired_t_pval_exp <- .pval_or_na(paired_t_pval_exp, se_from_ratio = FALSE)
+  paired_t_pval_nexp <- .pval_or_na(paired_t_pval_nexp, se_from_ratio = FALSE)
   paired_t_exp <- qt(p = paired_t_pval_exp / 2, df = n_exp - 1, lower.tail = FALSE)
 
   paired_t_nexp <- qt(p = paired_t_pval_nexp / 2, df = n_nexp - 1, lower.tail = FALSE)
@@ -246,6 +252,7 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
     n_exp = n_exp, n_nexp = n_nexp,
     r_pre_post_exp = r_pre_post_exp, r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_paired_t = reverse_paired_t_pval
   )
@@ -263,6 +270,7 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_f a logical value indicating whether the direction of generated effect sizes should be flipped.
 #' @param reverse_paired_f_exp a logical value indicating that the experimental/exposed group changed in the
@@ -339,7 +347,7 @@ es_from_paired_t_pval <- function(paired_t_pval_exp, paired_t_pval_nexp, n_exp, 
 #' es_from_paired_f(paired_f_exp = 2.1, paired_f_nexp = 4.2, n_exp = 20, n_nexp = 22)
 es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
                              r_pre_post_exp, r_pre_post_nexp,
-                             smd_to_cor = "viechtbauer",
+                             smd_to_cor = "viechtbauer", smd_var = "borenstein",
                              pre_post_to_smd = "cooper",
                              reverse_paired_f,
                              reverse_paired_f_exp,
@@ -376,6 +384,7 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_paired_t = reverse_paired_f
   )
@@ -393,6 +402,7 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the paired t-test value into a SMD (see details).
 #' @param reverse_paired_f_pval a logical value indicating whether the direction of generated effect sizes should be flipped.
 #' @param reverse_paired_f_pval_exp a logical value indicating that the experimental/exposed group changed in the
@@ -473,7 +483,7 @@ es_from_paired_f <- function(paired_f_exp, paired_f_nexp, n_exp, n_nexp,
 #' es_from_paired_f_pval(paired_f_pval_exp = 0.4, paired_f_pval_nexp = 0.01, n_exp = 19, n_nexp = 22)
 es_from_paired_f_pval <- function(paired_f_pval_exp, paired_f_pval_nexp, n_exp, n_nexp,
                                   r_pre_post_exp, r_pre_post_nexp,
-                                  smd_to_cor = "viechtbauer",
+                                  smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                   pre_post_to_smd = "cooper",
                                   reverse_paired_f_pval,
                                   reverse_paired_f_pval_exp,
@@ -503,6 +513,7 @@ es_from_paired_f_pval <- function(paired_f_pval_exp, paired_f_pval_nexp, n_exp, 
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     reverse_paired_t_pval = reverse_paired_f_pval,
     reverse_paired_t_pval_exp = reverse_paired_f_pval_exp,

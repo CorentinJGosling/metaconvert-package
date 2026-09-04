@@ -1,3 +1,10 @@
+# smd_var = "hedges_olkin" on every pre/post call below (2.1.0). These tests pin
+# agreement with metafor's SMCC/SMCR/SMCRH/SMCRPH variances and the Bonett (2008) /
+# Morris & DeShon (2002) formulas, which are the Hedges-Olkin ("LS") form. Since 2.1.0
+# the pre/post routes honour smd_var like the two-group routes, and the package
+# default "borenstein" applies J^2 to the d-scale variance instead; the metafor form is
+# reached with smd_var = "hedges_olkin", which is what these pins now request.
+
 ### Tests for single-group within-group effect sizes (dw, gw, mdw) -----
 # These tests validate the new single-group functions against metafor and TOSTER
 
@@ -38,7 +45,7 @@ test_that("DW - Means/SD - bonett - single group", {
   metafor_se_d <- sqrt(metafor_var_d)
 
   # metaConvert calculation
-  es <- es_from_means_sd_pre_post_single_group(
+  es <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -93,7 +100,7 @@ test_that("GW - Means/SD - bonett - single group", {
   )
 
   # metaConvert calculation
-  es <- es_from_means_sd_pre_post_single_group(
+  es <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -137,7 +144,7 @@ test_that("DW - Means/SD - cooper - single group", {
   )
 
   # metaConvert calculation
-  es <- es_from_means_sd_pre_post_single_group(
+  es <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -183,7 +190,7 @@ test_that("GW - Means/SD - cooper - single group", {
   )
 
   # metaConvert calculation
-  es <- es_from_means_sd_pre_post_single_group(
+  es <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -213,7 +220,7 @@ test_that("DW - Means/SE - bonett - single group", {
   r_pre_post <- 0.6
 
   # Reference calculation using SD function
-  es_sd <- es_from_means_sd_pre_post_single_group(
+  es_sd <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -225,7 +232,7 @@ test_that("DW - Means/SE - bonett - single group", {
   )
 
   # Test SE function
-  es_se <- es_from_means_se_pre_post_single_group(
+  es_se <- es_from_means_se_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_se_exp = se_pre,
@@ -263,7 +270,7 @@ test_that("DW - Means/CI - bonett - single group", {
   ci_up_post <- mean_post + qt(0.975, n - 1) * se_post
 
   # Reference calculation using SD function
-  es_sd <- es_from_means_sd_pre_post_single_group(
+  es_sd <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -275,7 +282,7 @@ test_that("DW - Means/CI - bonett - single group", {
   )
 
   # Test CI function
-  es_ci <- es_from_means_ci_pre_post_single_group(
+  es_ci <- es_from_means_ci_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_ci_lo_exp = ci_lo_pre,
@@ -311,7 +318,7 @@ test_that("DW - Mean Change SD - single group", {
   sd_change <- sqrt(sd_pre^2 + sd_post^2 - 2 * r_pre_post * sd_pre * sd_post)
 
   # Pre-post calculation (Cooper method, which is appropriate for change scores)
-  es_prepost <- es_from_means_sd_pre_post_single_group(
+  es_prepost <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -323,7 +330,7 @@ test_that("DW - Mean Change SD - single group", {
   )
 
   # Mean change calculation
-  es_change <- es_from_mean_change_sd_single_group(
+  es_change <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n,
@@ -349,7 +356,7 @@ test_that("DW - Mean Change SE - single group", {
   r_pre_post <- 0.6
 
   # Reference calculation using SD function
-  es_sd <- es_from_mean_change_sd_single_group(
+  es_sd <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n,
@@ -358,7 +365,7 @@ test_that("DW - Mean Change SE - single group", {
   )
 
   # Test SE function
-  es_se <- es_from_mean_change_se_single_group(
+  es_se <- es_from_mean_change_se_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_se_exp = se_change,
     n_exp = n,
@@ -388,7 +395,7 @@ test_that("DW - Mean Change CI - single group", {
   ci_up <- mean_change + qt(0.975, n - 1) * se_change
 
   # Reference calculation using SD function
-  es_sd <- es_from_mean_change_sd_single_group(
+  es_sd <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n,
@@ -397,7 +404,7 @@ test_that("DW - Mean Change CI - single group", {
   )
 
   # Test CI function
-  es_ci <- es_from_mean_change_ci_single_group(
+  es_ci <- es_from_mean_change_ci_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_ci_lo_exp = ci_lo,
     mean_change_ci_up_exp = ci_up,
@@ -428,7 +435,7 @@ test_that("DW - Mean Change p-value - single group", {
   pval <- 2 * pt(abs(t_stat), df = n - 1, lower.tail = FALSE)
 
   # Reference calculation using SD function
-  es_sd <- es_from_mean_change_sd_single_group(
+  es_sd <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n,
@@ -437,7 +444,7 @@ test_that("DW - Mean Change p-value - single group", {
   )
 
   # Test p-value function
-  es_pval <- es_from_mean_change_pval_single_group(
+  es_pval <- es_from_mean_change_pval_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_pval_exp = pval,
     n_exp = n,
@@ -464,7 +471,7 @@ test_that("REVERSE - Pre-Post - bonett - single group", {
   r_pre_post <- 0.6
 
   # Normal direction
-  es_normal <- es_from_means_sd_pre_post_single_group(
+  es_normal <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -476,7 +483,7 @@ test_that("REVERSE - Pre-Post - bonett - single group", {
   )
 
   # Reversed direction
-  es_reverse <- es_from_means_sd_pre_post_single_group(
+  es_reverse <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -523,7 +530,7 @@ test_that("REVERSE - Pre-Post - cooper - single group", {
   r_pre_post <- 0.6
 
   # Normal direction
-  es_normal <- es_from_means_sd_pre_post_single_group(
+  es_normal <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -535,7 +542,7 @@ test_that("REVERSE - Pre-Post - cooper - single group", {
   )
 
   # Reversed direction
-  es_reverse <- es_from_means_sd_pre_post_single_group(
+  es_reverse <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -569,7 +576,7 @@ test_that("REVERSE - Mean Change - single group", {
   r_pre_post <- 0.6
 
   # Normal direction
-  es_normal <- es_from_mean_change_sd_single_group(
+  es_normal <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n,
@@ -578,7 +585,7 @@ test_that("REVERSE - Mean Change - single group", {
   )
 
   # Reversed direction
-  es_reverse <- es_from_mean_change_sd_single_group(
+  es_reverse <- es_from_mean_change_sd_single_group(smd_var = "hedges_olkin", 
     mean_change_exp = mean_change,
     mean_change_sd_exp = sd_change,
     n_exp = n,
@@ -629,7 +636,7 @@ test_that("MDW - Within-group mean difference - manual verification", {
   expected_mdw_ci_up <- expected_mdw + qt(0.975, n - 1) * expected_mdw_se
 
   # metaConvert calculation
-  es <- es_from_means_sd_pre_post_single_group(
+  es <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,
@@ -659,7 +666,7 @@ test_that("Conversions to OR, R, Z - single group", {
   r_pre_post <- 0.6
 
   # Calculate single-group effect size
-  es <- es_from_means_sd_pre_post_single_group(
+  es <- es_from_means_sd_pre_post_single_group(smd_var = "hedges_olkin", 
     mean_pre_exp = mean_pre,
     mean_exp = mean_post,
     mean_pre_sd_exp = sd_pre,

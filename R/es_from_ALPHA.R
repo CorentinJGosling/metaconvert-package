@@ -52,7 +52,8 @@
 #' and mixed-\code{icc_type} flags. A blank is \strong{not} treated as a level: unlike
 #' \code{icc_type} there is no package default to fall back on, and most primary reports
 #' never say which they computed, so resolving blanks would fire the flag on a guess.
-#'#' \strong{Where the standard error comes from.} Three sources, in this order (the same
+#'
+#' \strong{Where the standard error comes from.} Three sources, in this order (the same
 #' precedence \code{\link{es_from_omega}} and \code{\link{es_from_icc}} use):
 #' \enumerate{
 #'   \item \code{cronbach_alpha_se}, read on the natural scale and delta-mapped onto the

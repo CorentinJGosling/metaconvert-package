@@ -11,6 +11,7 @@
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
 #'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
@@ -90,7 +91,7 @@ es_from_mean_change_sd <- function(mean_change_exp, mean_change_sd_exp,
                                    mean_change_nexp, mean_change_sd_nexp,
                                    r_pre_post_exp, r_pre_post_nexp,
                                    n_exp, n_nexp,
-                                   smd_to_cor = "viechtbauer",
+                                   smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                    pre_post_to_smd = "cooper",
                                    pool_sd = FALSE,
                                    reverse_mean_change) {
@@ -122,6 +123,7 @@ es_from_mean_change_sd <- function(mean_change_exp, mean_change_sd_exp,
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     pool_sd = pool_sd,
     reverse_means_pre_post = reverse_mean_change
@@ -142,6 +144,7 @@ es_from_mean_change_sd <- function(mean_change_exp, mean_change_sd_exp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pre_post_to_smd formula used to convert the mean change into a SMD ("morris_drm" or "morris_dz", see details).
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
 #'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
@@ -210,7 +213,7 @@ es_from_mean_change_se <- function(mean_change_exp, mean_change_se_exp,
                                    mean_change_nexp, mean_change_se_nexp,
                                    r_pre_post_exp, r_pre_post_nexp,
                                    n_exp, n_nexp,
-                                   smd_to_cor = "viechtbauer",
+                                   smd_to_cor = "viechtbauer", smd_var = "borenstein",
                                    pre_post_to_smd = "cooper",
                                    pool_sd = FALSE,
                                    reverse_mean_change) {
@@ -242,6 +245,7 @@ es_from_mean_change_se <- function(mean_change_exp, mean_change_se_exp,
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     pool_sd = pool_sd,
     reverse_means_pre_post = reverse_mean_change
@@ -264,6 +268,7 @@ es_from_mean_change_se <- function(mean_change_exp, mean_change_se_exp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param max_asymmetry A percentage indicating the tolerance before detecting asymmetry in the 95% CI bounds.
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
 #'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
@@ -344,7 +349,7 @@ es_from_mean_change_ci <- function(mean_change_exp,
                                    mean_change_ci_lo_nexp, mean_change_ci_up_nexp,
                                    r_pre_post_exp, r_pre_post_nexp,
                                    n_exp, n_nexp, max_asymmetry = 10,
-                                   smd_to_cor = "viechtbauer", pre_post_to_smd = "cooper",
+                                   smd_to_cor = "viechtbauer", smd_var = "borenstein", pre_post_to_smd = "cooper",
                                    pool_sd = FALSE, reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
   reverse_mean_change[is.na(reverse_mean_change)] <- FALSE
@@ -376,6 +381,7 @@ es_from_mean_change_ci <- function(mean_change_exp,
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     pool_sd = pool_sd,
     max_asymmetry = max_asymmetry,
@@ -399,6 +405,7 @@ es_from_mean_change_ci <- function(mean_change_exp,
 #' @param r_pre_post_exp pre-post correlation in the experimental/exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param r_pre_post_nexp pre-post correlation in the non-experimental/non-exposed group (only used with \code{pre_post_to_smd = "morris_drm"}, see details).
 #' @param smd_to_cor formula used to convert the \code{cohen_d} value into a coefficient correlation (see details).
+#' @param smd_var name of the sampling-variance formula for the standardized mean difference: "borenstein" (default, \eqn{J^2 \times} the d-scale variance, as in Borenstein et al. 2009 and CMA) or "hedges_olkin" (alias "viechtbauer": the metafor \code{SMCC}/\code{SMCR}/\code{SMCRH}/\code{SMCRPH} form, \eqn{leading + g^2 C}). The two differ by \eqn{J^2} on the leading term, a few percent at small n. Affects the standard error only; the estimate is identical. The same argument governs the two-group routes.
 #' @param pool_sd a logical value indicating whether the standardizing SD should be pooled across the two
 #'   groups (default \code{FALSE}). The two options target the same estimand when the arms' true SDs are
 #'   equal (as randomization implies at baseline) and differ otherwise; the literature does not agree on
@@ -473,7 +480,7 @@ es_from_mean_change_pval <- function(mean_change_exp, mean_change_pval_exp,
                                    mean_change_nexp, mean_change_pval_nexp,
                                    r_pre_post_exp, r_pre_post_nexp,
                                    n_exp, n_nexp,
-                                   smd_to_cor = "viechtbauer", pre_post_to_smd = "cooper",
+                                   smd_to_cor = "viechtbauer", smd_var = "borenstein", pre_post_to_smd = "cooper",
                                    pool_sd = FALSE, reverse_mean_change) {
   if (missing(reverse_mean_change)) reverse_mean_change <- rep(FALSE, length(mean_change_exp))
   reverse_mean_change[is.na(reverse_mean_change)] <- FALSE
@@ -489,6 +496,9 @@ es_from_mean_change_pval <- function(mean_change_exp, mean_change_pval_exp,
     func_name = "es_from_mean_change_pval"
   )
 
+  # p <= 0 or p >= 1: no finite se (se = |change / t|), see .pval_or_na()
+  mean_change_pval_exp <- .pval_or_na(mean_change_pval_exp)
+  mean_change_pval_nexp <- .pval_or_na(mean_change_pval_nexp)
   t_exp <- qt(p = mean_change_pval_exp / 2, df = n_exp - 1, lower.tail = FALSE)
   t_nexp <- qt(p = mean_change_pval_nexp / 2, df = n_nexp - 1, lower.tail = FALSE)
 
@@ -509,6 +519,7 @@ es_from_mean_change_pval <- function(mean_change_exp, mean_change_pval_exp,
     r_pre_post_exp = r_pre_post_exp,
     r_pre_post_nexp = r_pre_post_nexp,
     smd_to_cor = smd_to_cor,
+    smd_var = smd_var,
     pre_post_to_smd = pre_post_to_smd,
     pool_sd = pool_sd,
     reverse_means_pre_post = reverse_mean_change

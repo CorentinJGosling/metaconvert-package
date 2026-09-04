@@ -172,7 +172,11 @@ test_that("R to SMD", {
     measure = "COR", ri = pearson_r, ni = n_sample, vtype = "LS", data = dat,
     digits = 12, var.names = c("ri", "vri")
   )
-  dat <- metafor::conv.delta(yi = ri, vi = vri, data = dat, transf = metafor::transf.rtod, var.names = c("yi", "vi"))
+  # These rows SUPPLY n_exp / n_nexp, so the biserial r is inverted at the study's own
+  # split (transf.rtod's n1i / n2i), the inverse of .smd_to_cor()'s forward map; the
+  # balanced-arms constant (no n1i / n2i) is the reference only for n_sample-only rows.
+  dat <- metafor::conv.delta(yi = ri, vi = vri, data = dat, transf = metafor::transf.rtod,
+                             n1i = n_exp, n2i = n_nexp, var.names = c("yi", "vi"))
 
   expect_equal(unique(es.mcv_d$info_used_crude), "pearson_r")
   expect_equal(es.mcv_d$es_crude, as.numeric(dat$yi), tolerance = 1e-10)
@@ -196,7 +200,11 @@ test_that("Z to SMD", {
     measure = "COR", ri = pearson_r, ni = n_sample, vtype = "LS", data = dat,
     digits = 12, var.names = c("ri", "vri")
   )
-  dat <- metafor::conv.delta(yi = ri, vi = vri, data = dat, transf = metafor::transf.rtod, var.names = c("yi", "vi"))
+  # These rows SUPPLY n_exp / n_nexp, so the biserial r is inverted at the study's own
+  # split (transf.rtod's n1i / n2i), the inverse of .smd_to_cor()'s forward map; the
+  # balanced-arms constant (no n1i / n2i) is the reference only for n_sample-only rows.
+  dat <- metafor::conv.delta(yi = ri, vi = vri, data = dat, transf = metafor::transf.rtod,
+                             n1i = n_exp, n2i = n_nexp, var.names = c("yi", "vi"))
 
   expect_equal(unique(es.mcv_d$info_used_crude), "fisher_z")
   expect_equal(es.mcv_d$es_crude, as.numeric(dat$yi), tolerance = 1e-10)

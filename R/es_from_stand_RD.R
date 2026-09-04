@@ -313,6 +313,7 @@ es_from_rd_pval <- function(rd, rd_pval,
   if (missing(reverse_rd_pval)) reverse_rd_pval <- rep(FALSE, length(rd))
   reverse_rd_pval[is.na(reverse_rd_pval)] <- FALSE
 
+  rd_pval <- .pval_or_na(rd_pval)  # p <= 0 or p >= 1: no finite se, see .pval_or_na()
   z_rd <- qnorm(rd_pval / 2, lower.tail = FALSE)
   rd_se <- abs(rd / z_rd)
 

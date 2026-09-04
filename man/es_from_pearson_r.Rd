@@ -60,8 +60,11 @@ are converted from the Cohen's d.
 \item \strong{The formula used to estimate the standard error of the Pearson's correlation coefficient} and 95\% CI
 are (Formula 12.27 in Cooper):
 \deqn{R\_se = \sqrt{\frac{(1 - pearson\_r^2)^2}{n\_sample - 1}}}
-\deqn{R\_lo = pearson\_r - qt(.975, n\_sample - 2) * R\_se}
-\deqn{R\_up = pearson\_r + qt(.975, n\_sample - 2) * R\_se}
+\deqn{R\_lo = tanh(Z\_ci\_lo)}
+\deqn{R\_up = tanh(Z\_ci\_up)}
+The confidence interval of r is the back-transformed Fisher's z interval (the
+construction used by \code{cor.test()} and by 'metafor'), so it always lies within
+\eqn{[-1, 1]}; a symmetric \eqn{r \pm t \times R\_se} interval does not at small n.
 \item \strong{The formula used to estimate the Fisher's z} are (Formula 12.28 & 12.29 in Cooper):
 \deqn{Z = atanh(r)}
 \deqn{Z\_se = \sqrt{\frac{1}{n\_sample - 3}}}

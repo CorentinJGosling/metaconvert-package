@@ -450,6 +450,7 @@ es_from_rr_pval <- function(rr, logrr, rr_pval, baseline_risk,
   # the standard error at all.
   # Measured and pinned in tests/testthat/test-unverified-routes-external.R, which
   # also checks that es_from_or_pval behaves identically, as "mirror" claims.
+  rr_pval <- .pval_or_na(rr_pval)  # p <= 0 or p >= 1: no finite se, see .pval_or_na()
   z_rr <- qnorm(rr_pval / 2, lower.tail = FALSE)
   logrr_se <- abs(log(rr) / z_rr)
 

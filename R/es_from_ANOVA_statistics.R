@@ -116,6 +116,8 @@ es_from_student_t_pval <- function(student_t_pval, n_exp, n_nexp,
   if (missing(reverse_student_t_pval)) reverse_student_t_pval <- rep(FALSE, length(student_t_pval))
   reverse_student_t_pval[is.na(reverse_student_t_pval)] <- FALSE
 
+  # p <= 0 inverts to t = Inf (d = Inf, se = Inf); p = 1 is the ordinary t = 0 and is kept.
+  student_t_pval <- .pval_or_na(student_t_pval, se_from_ratio = FALSE)
   t <- qt(p = student_t_pval / 2, df = n_exp + n_nexp - 2, lower.tail = FALSE)
 
   es <- es_from_student_t(

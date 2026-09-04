@@ -347,11 +347,29 @@ test_that("AUDIT-467: convert_df honours a per-row pre_post_to_smd column on the
       convert_df(dat2, measure = "g", verbose = FALSE, split_adjusted = FALSE)
     ))
   )))
-  # Scalar reference values through the same pipeline.
-  expect_equal(out2$es[match("A", out2$study_id)], 0.3299357, tolerance = 1e-6) # morris_dz
-  expect_equal(out2$se[match("A", out2$study_id)], 0.2682760, tolerance = 1e-6)
-  expect_equal(out2$es[match("B", out2$study_id)], 0.2951035, tolerance = 1e-6) # morris_drm
+  # Reference values: per-arm d = change / sd_change (morris_dz) or that times
+  # sqrt(2(1 - r)) (morris_drm), differenced; g = J(n - 1) d per arm; the SE on the
+  # package default smd_var = "borenstein", J^2 (L + d^2 C) per arm, added. The former
+  # pin 0.2682760 for morris_dz was the metafor-form (LS) variance that this branch
+  # carried while morris_drm carried the J^2 form -- the inconsistency smd_var now
+  # resolves on every branch. Under smd_var = "hedges_olkin" the old value returns.
+  J1 <- metaConvert:::.d_j(29); J2 <- metaConvert:::.d_j(31)
+  dz1 <- 5 / 8; dz2 <- 2 / 7; k <- sqrt(2 * (1 - 0.6))
+  expect_equal(out2$es[match("A", out2$study_id)], J1 * dz1 - J2 * dz2, tolerance = 1e-6) # morris_dz
+  expect_equal(out2$se[match("A", out2$study_id)],
+               sqrt(J1^2 * (1 / 30 + dz1^2 / 60) + J2^2 * (1 / 32 + dz2^2 / 64)), tolerance = 1e-6)
+  expect_equal(out2$es[match("B", out2$study_id)], J1 * dz1 * k - J2 * dz2 * k, tolerance = 1e-6) # morris_drm
   expect_equal(out2$se[match("B", out2$study_id)], 0.2345127, tolerance = 1e-6)
+  out3 <- NULL
+  invisible(utils::capture.output(suppressMessages(
+    out3 <- as.data.frame(summary(
+      convert_df(dat2, measure = "g", verbose = FALSE, split_adjusted = FALSE,
+                 smd_var = "hedges_olkin")
+    ))
+  )))
+  expect_equal(out3$se[match("A", out3$study_id)], 0.2682760, tolerance = 1e-6)
+  expect_equal(out3$se[match("A", out3$study_id)],
+               sqrt(1 / 30 + (J1 * dz1)^2 / 60 + 1 / 32 + (J2 * dz2)^2 / 64), tolerance = 1e-6)
 })
 
 # --------------------------------------------------------------------------------
